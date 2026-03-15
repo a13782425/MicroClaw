@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+**/.idea/
+**/.vscode/
+.git/
+.gitignore
+README.md
+PRODUCT_ROADMAP.md
+LICENSE

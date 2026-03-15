@@ -1,0 +1,13 @@
+services:
+  microclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: all-in-one
+    container_name: microclaw
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "5080:8080"
+    restart: unless-stopped
