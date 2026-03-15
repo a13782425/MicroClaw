@@ -5,9 +5,18 @@ services:
       dockerfile: Dockerfile
       target: all-in-one
     container_name: microclaw
+    working_dir: /app
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
+      MICROCLAW_CONFIG_FILE: /app/microclaw.json
+      MICROCLAW_WEBUI_PATH: /app/webui
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./data:/app/.microclaw
+      - ./microclaw.json:/app/microclaw.json:ro
     ports:
       - "5080:8080"
     restart: unless-stopped

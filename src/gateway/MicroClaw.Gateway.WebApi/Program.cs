@@ -13,7 +13,24 @@ public class Program
 {
 	public static void Main(string[] args)
 	{
-		var builder = WebApplication.CreateBuilder(args);
+		var options = new WebApplicationOptions
+		{
+			Args = args
+		};
+
+		var webRootPath = Environment.GetEnvironmentVariable("MICROCLAW_WEBUI_PATH");
+		if (!string.IsNullOrWhiteSpace(webRootPath))
+		{
+			options.WebRootPath = webRootPath;
+		}
+
+		var builder = WebApplication.CreateBuilder(options);
+
+		var configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
+		if (!string.IsNullOrWhiteSpace(configFile))
+		{
+			builder.Configuration.AddJsonFile(configFile, optional: true, reloadOnChange: true);
+		}
 
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();

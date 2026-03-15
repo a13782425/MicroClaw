@@ -1,0 +1,6 @@
+{
+  "Features": {
+    "Providers": ["OpenAI", "Claude"],
+    "Channels": ["Feishu", "WeCom", "WeChat"]
+  }
+}

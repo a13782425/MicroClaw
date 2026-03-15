@@ -190,6 +190,19 @@ docker compose up -d --build
 - 统一入口：`http://localhost:5080`
 - API 健康检查：`http://localhost:5080/api/health`
 
+### 自动发布到 ghcr.io（提交后）
+
+仓库已提供 GitHub Actions 工作流：`.github/workflows/publish-ghcr.yml`。
+
+- 触发条件：push 到 `main`/`master`，或 push `v*` tag（也支持手动触发）
+- 镜像地址：`ghcr.io/<你的组织或用户名>/microclaw`
+- 标签策略：分支名、tag 名、提交 SHA，默认分支额外生成 `latest`
+
+首次启用请确认：
+
+1. 仓库 `Settings -> Actions -> General -> Workflow permissions` 为 `Read and write permissions`
+2. 仓库 `Settings -> Packages` 允许由 Actions 发布包
+
 ## 规划与路线图
 
 - 产品路线图请见：`PRODUCT_ROADMAP.md`
