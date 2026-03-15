@@ -13,16 +13,13 @@ public class Program
 {
 	public static void Main(string[] args)
 	{
+		var webRootPath = Environment.GetEnvironmentVariable("MICROCLAW_WEBUI_PATH");
+
 		var options = new WebApplicationOptions
 		{
-			Args = args
+			Args = args,
+			WebRootPath = string.IsNullOrWhiteSpace(webRootPath) ? null : webRootPath
 		};
-
-		var webRootPath = Environment.GetEnvironmentVariable("MICROCLAW_WEBUI_PATH");
-		if (!string.IsNullOrWhiteSpace(webRootPath))
-		{
-			options.WebRootPath = webRootPath;
-		}
 
 		var builder = WebApplication.CreateBuilder(options);
 
