@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '镜像版本号（例如 v1.0.0）'
+        required: true
+      branch:
+        description: '要构建的分支名（例如 main）'
+        required: true
+        default: 'main'
 
 permissions:
   contents: read
@@ -15,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Prepare image name
         id: prep
@@ -40,6 +51,7 @@ jobs:
           images: ${{ steps.prep.outputs.image }}
           tags: |
             type=ref,event=tag
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

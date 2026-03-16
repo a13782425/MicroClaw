@@ -1,0 +1,10 @@
+# AI 模型提供商配置
+# api_key 建议通过环境变量注入：DOTNET_Providers__OpenAI__ApiKey=sk-...
+
+providers:
+  openai:
+    api_key: ""
+    model_id: "gpt-4o-mini"
+  claude:
+    api_key: ""
+    model_id: "claude-opus-4-5"

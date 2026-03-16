@@ -1,0 +1,11 @@
+# MicroClaw 主配置文件
+# 通过 $imports 导入子配置文件，支持具体路径和通配符（如 ./config/*.yaml）
+# 规则：
+#   - 主配置作为默认值层，子配置覆盖主配置中的同名 key
+#   - 多个子配置文件之间不允许出现相同的 key（冲突时启动报错）
+
+$imports:
+  - ./config/providers.yaml
+  - ./config/channels.yaml
+  - ./config/logging.yaml
+  - ./config/auth.yaml

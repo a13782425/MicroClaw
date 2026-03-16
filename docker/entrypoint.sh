@@ -7,4 +7,4 @@ if [ -f /app/.env ]; then
 	set +a
 fi
 
-exec dotnet /app/gateway/MicroClaw.Gateway.WebApi.dll
+exec dotnet /app/gateway/microclaw.dll

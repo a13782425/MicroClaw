@@ -4,8 +4,7 @@
   <Project Path="MicroClaw.Channel.WeChat/MicroClaw.Channel.WeChat.csproj" />
   <Project Path="MicroClaw.Channel.WeCom/MicroClaw.Channel.WeCom.csproj" />
   <Project Path="MicroClaw.Gateway.Contracts/MicroClaw.Gateway.Contracts.csproj" />
-  <Project Path="MicroClaw.Gateway.Hub/MicroClaw.Gateway.Hub.csproj" />
-  <Project Path="MicroClaw.Gateway.WebApi/MicroClaw.Gateway.WebApi.csproj" />
+  <Project Path="MicroClaw/MicroClaw.csproj" />
   <Project Path="MicroClaw.Infrastructure/MicroClaw.Infrastructure.csproj" />
   <Project Path="MicroClaw.Provider.Abstractions/MicroClaw.Provider.Abstractions.csproj" />
   <Project Path="MicroClaw.Provider.Claude/MicroClaw.Provider.Claude.csproj" />

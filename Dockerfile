@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS gateway-build
 WORKDIR /src
 COPY src/gateway/ ./src/gateway/
 RUN dotnet restore ./src/gateway/MicroClaw.sln
-RUN dotnet publish ./src/gateway/MicroClaw.Gateway.WebApi/MicroClaw.Gateway.WebApi.csproj -c Release -o /out/gateway /p:UseAppHost=false
+RUN dotnet publish ./src/gateway/MicroClaw/MicroClaw.csproj -c Release -o /out/gateway /p:UseAppHost=false
 
 FROM node:22-bookworm-slim AS webui-build
 WORKDIR /src/webui
