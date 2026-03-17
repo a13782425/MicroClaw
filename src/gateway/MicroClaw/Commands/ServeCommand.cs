@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using Serilog.Events;
 
 namespace MicroClaw.Commands;
 
@@ -58,8 +59,29 @@ public class ServeCommand : Command
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
 
-		builder.Host.UseSerilog((ctx, cfg) =>
-			cfg.ReadFrom.Configuration(ctx.Configuration));
+		builder.Host.UseSerilog((ctx, lc) =>
+		{
+			IConfiguration cfg = ctx.Configuration;
+			string logFilePath = ResolveLogFilePath(home, configFile);
+			string consoleTemplate = cfg["serilog:write_to:0:args:output_template"]
+				?? "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+			string fileTemplate = cfg["serilog:write_to:1:args:output_template"]
+				?? "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+
+			lc.MinimumLevel.Is(ParseLevel(cfg["serilog:minimum_level:default"], LogEventLevel.Information))
+			  .MinimumLevel.Override("Microsoft.AspNetCore",
+				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.aspnetcore"], LogEventLevel.Warning))
+			  .MinimumLevel.Override("Microsoft.Extensions.AI",
+				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.extensions.ai"], LogEventLevel.Debug))
+			  .Enrich.FromLogContext()
+			  .Enrich.WithMachineName()
+			  .Enrich.WithThreadId()
+			  .WriteTo.Console(outputTemplate: consoleTemplate)
+			  .WriteTo.File(logFilePath,
+				  rollingInterval: RollingInterval.Day,
+				  retainedFileCountLimit: 7,
+				  outputTemplate: fileTemplate);
+		});
 
 		builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("auth"));
 
@@ -187,6 +209,25 @@ public class ServeCommand : Command
 
 		await app.RunAsync(ct);
 	}
+
+	private static string ResolveLogFilePath(string? home, string? configFile)
+	{
+		string logsDir;
+		if (!string.IsNullOrWhiteSpace(home))
+			logsDir = Path.Combine(home, "logs");
+		else if (!string.IsNullOrWhiteSpace(configFile))
+			logsDir = Path.Combine(Path.GetDirectoryName(configFile)!, "logs");
+		else
+			logsDir = Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "logs");
+
+		Directory.CreateDirectory(logsDir);
+		return Path.Combine(logsDir, "microclaw-.log");
+	}
+
+	private static LogEventLevel ParseLevel(string? value, LogEventLevel fallback) =>
+		Enum.TryParse<LogEventLevel>(value, ignoreCase: true, out LogEventLevel result)
+			? result
+			: fallback;
 
 	private static string ResolveProvidersYamlPath(string? home, string? configFile)
 	{
