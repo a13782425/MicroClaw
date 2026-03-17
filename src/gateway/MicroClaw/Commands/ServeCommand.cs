@@ -1,10 +1,10 @@
 using System.CommandLine;
 using System.Text;
-using MicroClaw.Channel.Abstractions;
+using MicroClaw.Channels;
+using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels.WeChat;
+using MicroClaw.Channels.WeCom;
 using Microsoft.AspNetCore.StaticFiles;
-using MicroClaw.Channel.Feishu;
-using MicroClaw.Channel.WeChat;
-using MicroClaw.Channel.WeCom;
 using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
 using MicroClaw.Hubs;

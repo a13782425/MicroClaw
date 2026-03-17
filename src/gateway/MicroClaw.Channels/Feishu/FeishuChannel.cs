@@ -1,7 +1,6 @@
-using MicroClaw.Channel.Abstractions;
-using MicroClaw.Channel.Abstractions.Models;
+using MicroClaw.Channels.Models;
 
-namespace MicroClaw.Channel.Feishu;
+namespace MicroClaw.Channels.Feishu;
 
 public sealed class FeishuChannel : IChannel
 {

@@ -2,20 +2,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
-    <ProjectReference Include="..\MicroClaw.Provider.Abstractions\MicroClaw.Provider.Abstractions.csproj" />
-    <ProjectReference Include="..\MicroClaw.Provider.OpenAI\MicroClaw.Provider.OpenAI.csproj" />
-    <ProjectReference Include="..\MicroClaw.Provider.Claude\MicroClaw.Provider.Claude.csproj" />
-    <ProjectReference Include="..\MicroClaw.Channel.Abstractions\MicroClaw.Channel.Abstractions.csproj" />
-    <ProjectReference Include="..\MicroClaw.Channel.Feishu\MicroClaw.Channel.Feishu.csproj" />
-    <ProjectReference Include="..\MicroClaw.Channel.WeCom\MicroClaw.Channel.WeCom.csproj" />
-    <ProjectReference Include="..\MicroClaw.Channel.WeChat\MicroClaw.Channel.WeChat.csproj" />
+    <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
+    <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0-preview.2.25164.1" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />

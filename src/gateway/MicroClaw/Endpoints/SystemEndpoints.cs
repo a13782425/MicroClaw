@@ -1,5 +1,4 @@
-using MicroClaw.Channel.Abstractions;
-using MicroClaw.Provider.Abstractions;
+using MicroClaw.Channels;
 using MicroClaw.Providers;
 
 namespace MicroClaw.Endpoints;

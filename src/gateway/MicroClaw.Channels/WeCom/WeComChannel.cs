@@ -1,7 +1,6 @@
-using MicroClaw.Channel.Abstractions;
-using MicroClaw.Channel.Abstractions.Models;
+using MicroClaw.Channels.Models;
 
-namespace MicroClaw.Channel.WeCom;
+namespace MicroClaw.Channels.WeCom;
 
 public sealed class WeComChannel : IChannel
 {

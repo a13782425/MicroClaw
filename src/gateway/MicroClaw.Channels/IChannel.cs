@@ -1,6 +1,6 @@
-using MicroClaw.Channel.Abstractions.Models;
+using MicroClaw.Channels.Models;
 
-namespace MicroClaw.Channel.Abstractions;
+namespace MicroClaw.Channels;
 
 public interface IChannel
 {
