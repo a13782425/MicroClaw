@@ -1,62 +1,30 @@
-using Anthropic.SDK;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
-using OpenAI;
-using OpenAI.Chat;
-using System.ClientModel;
 
 namespace MicroClaw.Providers;
 
+/// <summary>
+/// Dispatches IChatClient creation to the registered <see cref="IModelProvider"/> that
+/// supports the requested <see cref="ProviderProtocol"/>.
+/// Each provider implementation (OpenAI, OpenAICompatible, Claude …) lives in its own
+/// project and can independently add Memory / RAG middleware to the ChatClientBuilder.
+/// </summary>
 public sealed class ProviderClientFactory
 {
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly IEnumerable<IModelProvider> _providers;
 
-    public ProviderClientFactory(ILoggerFactory loggerFactory)
+    public ProviderClientFactory(IEnumerable<IModelProvider> providers)
     {
-        _loggerFactory = loggerFactory;
+        _providers = providers;
     }
 
-    public IChatClient Create(ProviderConfig config) =>
-        config.Protocol switch
-        {
-            ProviderProtocol.OpenAI => CreateOpenAI(config),
-            ProviderProtocol.OpenAIResponses => CreateOpenAIResponses(config),
-            ProviderProtocol.Anthropic => CreateAnthropic(config),
-            _ => throw new NotSupportedException($"Protocol '{config.Protocol}' is not supported.")
-        };
-
-    private IChatClient CreateOpenAI(ProviderConfig config)
+    public IChatClient Create(ProviderConfig config)
     {
-        OpenAIClientOptions options = new();
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            options.Endpoint = new Uri(config.BaseUrl);
+        IModelProvider? provider = _providers.FirstOrDefault(p => p.Supports(config.Protocol));
+        if (provider is null)
+            throw new NotSupportedException(
+                $"Protocol '{config.Protocol}' is not supported. " +
+                "Ensure the corresponding IModelProvider is registered in DI.");
 
-        ChatClient client = new(config.ModelName, new ApiKeyCredential(config.ApiKey), options);
-        return new ChatClientBuilder(client.AsIChatClient())
-            .UseLogging(_loggerFactory)
-            .Build();
-    }
-
-    private IChatClient CreateOpenAIResponses(ProviderConfig config)
-    {
-        OpenAIClientOptions options = new();
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            options.Endpoint = new Uri(config.BaseUrl);
-
-        ChatClient client = new(config.ModelName, new ApiKeyCredential(config.ApiKey), options);
-        return new ChatClientBuilder(client.AsIChatClient())
-            .UseLogging(_loggerFactory)
-            .Build();
-    }
-
-    private IChatClient CreateAnthropic(ProviderConfig config)
-    {
-        AnthropicClient client = new(new APIAuthentication(config.ApiKey));
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            client.ApiUrlFormat = config.BaseUrl.TrimEnd('/') + "/{0}/{1}";
-
-        return new ChatClientBuilder(client.Messages)
-            .UseLogging(_loggerFactory)
-            .Build();
+        return provider.Create(config);
     }
 }

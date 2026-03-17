@@ -9,6 +9,9 @@ using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
 using MicroClaw.Hubs;
 using MicroClaw.Providers;
+using MicroClaw.Providers.Claude;
+using MicroClaw.Providers.OpenAI;
+using MicroClaw.Providers.OpenAICompatible;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.FileProviders;
@@ -32,6 +35,13 @@ public class ServeCommand : Command
 	internal static async Task RunAsync(CancellationToken ct = default)
 	{
 		var home = Environment.GetEnvironmentVariable("MICROCLAW_HOME");
+		var configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
+		if (string.IsNullOrWhiteSpace(configFile) && !string.IsNullOrWhiteSpace(home))
+			configFile = Path.Combine(home, "microclaw.yaml");
+
+		// 确保工作目录和默认配置文件存在（不覆盖用户已有文件）
+		HomeInitializer.EnsureInitialized(home, configFile, force: false, verbose: false);
+
 		if (!string.IsNullOrWhiteSpace(home))
 			LoadDotEnv(Path.Combine(home, ".env"));
 
@@ -53,9 +63,6 @@ public class ServeCommand : Command
 
 		var builder = WebApplication.CreateBuilder(options);
 
-		var configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
-		if (string.IsNullOrWhiteSpace(configFile) && !string.IsNullOrWhiteSpace(home))
-			configFile = Path.Combine(home, "microclaw.yaml");
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
 
@@ -110,6 +117,9 @@ public class ServeCommand : Command
 
 		builder.Services.AddSingleton(new ProviderConfigStore(providersYamlPath));
 		builder.Services.AddSingleton(new SessionStore(sessionsDir));
+		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
+		builder.Services.AddSingleton<IModelProvider, OpenAICompatibleModelProvider>();
+		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
 		builder.Services.AddSingleton<ProviderClientFactory>();
 
 		var enabledChannels = builder.Configuration.GetSection("Features:Channels").Get<string[]>() ?? [];
