@@ -1,10 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-if [ -f /app/.env ]; then
+MICROCLAW_HOME="${MICROCLAW_HOME:-/app/.microclaw}"
+
+if [ -f "${MICROCLAW_HOME}/.env" ]; then
 	set -a
-	. /app/.env
+	. "${MICROCLAW_HOME}/.env"
 	set +a
 fi
 
-exec dotnet /app/gateway/microclaw.dll
+exec dotnet /app/gateway/microclaw.dll serve

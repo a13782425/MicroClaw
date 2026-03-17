@@ -1,13 +1,22 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import DashboardPage from '@/views/DashboardPage.vue'
-import LoginPage from '@/views/LoginPage.vue'
+
+const DashboardPage = () => import('@/views/DashboardPage.vue')
+const LoginPage     = () => import('@/views/LoginPage.vue')
+const SessionsPage  = () => import('@/views/SessionsPage.vue')
+const CronPage      = () => import('@/views/CronPage.vue')
+const ModelsPage    = () => import('@/views/ModelsPage.vue')
+const ConfigPage    = () => import('@/views/ConfigPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'dashboard', component: DashboardPage },
-    { path: '/login', name: 'login', component: LoginPage }
+    { path: '/login', name: 'login', component: LoginPage },
+    { path: '/sessions', name: 'sessions', component: SessionsPage },
+    { path: '/cron', name: 'cron', component: CronPage },
+    { path: '/models', name: 'models', component: ModelsPage },
+    { path: '/config', name: 'config', component: ConfigPage },
   ]
 })
 

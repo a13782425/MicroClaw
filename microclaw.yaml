@@ -5,7 +5,4 @@
 #   - 多个子配置文件之间不允许出现相同的 key（冲突时启动报错）
 
 $imports:
-  - ./config/providers.yaml
-  - ./config/channels.yaml
-  - ./config/logging.yaml
-  - ./config/auth.yaml
+  - ./config/*.yaml

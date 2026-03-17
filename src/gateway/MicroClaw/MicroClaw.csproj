@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\MicroClaw.Provider.Abstractions\MicroClaw.Provider.Abstractions.csproj" />
     <ProjectReference Include="..\MicroClaw.Provider.OpenAI\MicroClaw.Provider.OpenAI.csproj" />
     <ProjectReference Include="..\MicroClaw.Provider.Claude\MicroClaw.Provider.Claude.csproj" />
     <ProjectReference Include="..\MicroClaw.Channel.Abstractions\MicroClaw.Channel.Abstractions.csproj" />
@@ -30,6 +31,7 @@
     <AssemblyName>microclaw</AssemblyName>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>microclaw</ToolCommandName>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
 
 </Project>

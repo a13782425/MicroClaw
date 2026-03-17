@@ -1,0 +1,15 @@
+providers:
+- id: 2f26b5fa8b814668ab204aa69b9bb1b0
+  display_name: MiniMax2.5
+  protocol: openai
+  base_url: https://api.minimaxi.com/v1
+  api_key: sk-cp-jfWGB8wW6k9URirHGAqoubWLaiD0vPOiljI3rq6irH1h4MIQQwYS1uJe2g4NqZ_5ATfrpd9AZRAmWJJWLB9t0XAVva1gmqH4JGt_BX40r8sCdeqGtu7p6YI
+  model_name: MiniMax-M2.5
+  enabled: true
+- id: 2f70ca1df35549c7925e388c08fe186c
+  display_name: Test
+  protocol: anthropic
+  base_url: https://api.minimaxi.com/anthropic
+  api_key: sk-cp-jfWGB8wW6k9URirHGAqoubWLaiD0vPOiljI3rq6irH1h4MIQQwYS1uJe2g4NqZ_5ATfrpd9AZRAmWJJWLB9t0XAVva1gmqH4JGt_BX40r8sCdeqGtu7p6YI
+  model_name: MiniMax-M2.5
+  enabled: true

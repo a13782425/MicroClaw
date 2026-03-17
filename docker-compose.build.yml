@@ -1,6 +1,9 @@
 services:
   microclaw:
-    image: ghcr.io/a13782425/microclaw:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: all-in-one
     container_name: microclaw
     working_dir: /app
     environment:
