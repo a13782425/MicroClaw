@@ -12,7 +12,7 @@ internal static class HomeInitializer
         ("config/channels.yaml",   InitDefaults.ChannelsYaml),
         ("config/logging.yaml",    InitDefaults.LoggingYaml),
         ("config/providers.yaml",  InitDefaults.ProvidersYaml),
-        (".env.example",           InitDefaults.DotEnvExample),
+        (".env",           InitDefaults.DotEnvExample),
     ];
 
     private static readonly string[] SubDirectories =
