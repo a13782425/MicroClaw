@@ -28,6 +28,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>microclaw</AssemblyName>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>microclaw</ToolCommandName>
   </PropertyGroup>
 
 </Project>
