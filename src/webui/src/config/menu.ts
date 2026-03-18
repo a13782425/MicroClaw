@@ -2,7 +2,6 @@ import type { Component } from 'vue'
 import {
   Grid,
   Tools,
-  Monitor,
   ChatDotRound,
   Timer,
   Cpu,
@@ -28,7 +27,6 @@ export const menuGroups: MenuGroup[] = [
     label: '功能',
     icon: Grid,
     items: [
-      { label: '控制台', icon: Monitor, route: '/' },
       { label: '会话', icon: ChatDotRound, route: '/sessions' },
       { label: '计时任务', icon: Timer, route: '/cron' },
     ],

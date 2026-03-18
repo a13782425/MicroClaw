@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-const DashboardPage = () => import('@/views/DashboardPage.vue')
 const LoginPage     = () => import('@/views/LoginPage.vue')
 const SessionsPage  = () => import('@/views/SessionsPage.vue')
 const CronPage      = () => import('@/views/CronPage.vue')
@@ -11,7 +10,7 @@ const ConfigPage    = () => import('@/views/ConfigPage.vue')
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'dashboard', component: DashboardPage },
+    { path: '/', redirect: '/sessions' },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/sessions', name: 'sessions', component: SessionsPage },
     { path: '/cron', name: 'cron', component: CronPage },
@@ -23,5 +22,5 @@ export const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.name !== 'login' && !auth.isLoggedIn) return { name: 'login' }
-  if (to.name === 'login' && auth.isLoggedIn) return { name: 'dashboard' }
+  if (to.name === 'login' && auth.isLoggedIn) return { name: 'sessions' }
 })
