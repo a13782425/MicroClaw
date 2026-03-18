@@ -134,95 +134,111 @@
           <el-switch v-model="form.isEnabled" />
         </el-form-item>
 
-        <!-- 能力配置 -->
-        <el-divider content-position="left">能力配置（可选）</el-divider>
+        <!-- 渐进式折叠：能力配置 + 价格备注 -->
+        <el-collapse v-model="sectionCollapse" class="section-collapse">
+          <!-- 能力配置 -->
+          <el-collapse-item name="caps">
+            <template #title>
+              <span class="section-title">能力配置</span>
+              <span class="section-subtitle">输入/输出模态、Function Calling 等</span>
+            </template>
+            <div class="section-body">
+              <div class="field-group">
+                <div class="field-title">输入模态</div>
+                <el-checkbox-group v-model="form.inputModalities">
+                  <el-checkbox value="inputImage">图片</el-checkbox>
+                  <el-checkbox value="inputAudio">音频</el-checkbox>
+                  <el-checkbox value="inputVideo">视频</el-checkbox>
+                  <el-checkbox value="inputFile">文件</el-checkbox>
+                </el-checkbox-group>
+              </div>
 
-        <el-form-item label="输入模态">
-          <el-checkbox-group v-model="form.inputModalities">
-            <el-checkbox value="inputImage">图片</el-checkbox>
-            <el-checkbox value="inputAudio">音频</el-checkbox>
-            <el-checkbox value="inputVideo">视频</el-checkbox>
-            <el-checkbox value="inputFile">文件</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
+              <div class="field-group">
+                <div class="field-title">输出模态</div>
+                <el-checkbox-group v-model="form.outputModalities">
+                  <el-checkbox value="outputImage">图片</el-checkbox>
+                  <el-checkbox value="outputAudio">音频</el-checkbox>
+                  <el-checkbox value="outputVideo">视频</el-checkbox>
+                </el-checkbox-group>
+              </div>
 
-        <el-form-item label="输出模态">
-          <el-checkbox-group v-model="form.outputModalities">
-            <el-checkbox value="outputImage">图片</el-checkbox>
-            <el-checkbox value="outputAudio">音频</el-checkbox>
-            <el-checkbox value="outputVideo">视频</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-
-        <el-form-item label="特殊能力">
-          <div class="switches-row">
-            <div class="switch-item">
-              <el-switch v-model="form.supportsFunctionCalling" size="small" />
-              <span>Function Calling</span>
+              <div class="field-group">
+                <div class="field-title">特殊能力</div>
+                <div class="switches-row">
+                  <div class="switch-item">
+                    <el-switch v-model="form.supportsFunctionCalling" size="small" />
+                    <span>Function Calling</span>
+                  </div>
+                  <div class="switch-item">
+                    <el-switch v-model="form.supportsResponsesApi" size="small" />
+                    <span>Responses API</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="switch-item">
-              <el-switch v-model="form.supportsResponsesApi" size="small" />
-              <span>Responses API</span>
+          </el-collapse-item>
+
+          <!-- 价格备注 -->
+          <el-collapse-item name="price">
+            <template #title>
+              <span class="section-title">价格 &amp; 备注</span>
+              <span class="section-subtitle">计费单价（$/1M tokens）及说明</span>
+            </template>
+            <div class="section-body">
+              <div class="field-group">
+                <div class="field-title">计费单价 <span class="field-hint">$/1M tokens</span></div>
+                <div class="price-grid">
+                  <div class="price-cell">
+                    <span class="price-label">输入</span>
+                    <el-input-number
+                      v-model="form.inputPricePerMToken"
+                      :precision="4" :step="0.1" :min="0"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </div>
+                  <div class="price-cell">
+                    <span class="price-label">输出</span>
+                    <el-input-number
+                      v-model="form.outputPricePerMToken"
+                      :precision="4" :step="0.1" :min="0"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </div>
+                  <div class="price-cell">
+                    <span class="price-label">缓存输入</span>
+                    <el-input-number
+                      v-model="form.cacheInputPricePerMToken"
+                      :precision="4" :step="0.1" :min="0"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </div>
+                  <div class="price-cell">
+                    <span class="price-label">缓存输出</span>
+                    <el-input-number
+                      v-model="form.cacheOutputPricePerMToken"
+                      :precision="4" :step="0.1" :min="0"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="field-group">
+                <div class="field-title">备注</div>
+                <el-input
+                  v-model="form.notes"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="模型说明、使用限制等"
+                />
+              </div>
             </div>
-          </div>
-        </el-form-item>
-
-        <el-form-item label="输入价格">
-          <el-input-number
-            v-model="form.inputPricePerMToken"
-            :precision="4"
-            :step="0.1"
-            :min="0"
-            placeholder="$/1M tokens"
-            style="width: 180px"
-          />
-          <span class="price-unit">$/1M tokens</span>
-        </el-form-item>
-
-        <el-form-item label="输出价格">
-          <el-input-number
-            v-model="form.outputPricePerMToken"
-            :precision="4"
-            :step="0.1"
-            :min="0"
-            placeholder="$/1M tokens"
-            style="width: 180px"
-          />
-          <span class="price-unit">$/1M tokens</span>
-        </el-form-item>
-
-        <el-form-item label="缓存输入价格">
-          <el-input-number
-            v-model="form.cacheInputPricePerMToken"
-            :precision="4"
-            :step="0.1"
-            :min="0"
-            placeholder="$/1M tokens"
-            style="width: 180px"
-          />
-          <span class="price-unit">$/1M tokens</span>
-        </el-form-item>
-
-        <el-form-item label="缓存输出价格">
-          <el-input-number
-            v-model="form.cacheOutputPricePerMToken"
-            :precision="4"
-            :step="0.1"
-            :min="0"
-            placeholder="$/1M tokens"
-            style="width: 180px"
-          />
-          <span class="price-unit">$/1M tokens</span>
-        </el-form-item>
-
-        <el-form-item label="备注">
-          <el-input
-            v-model="form.notes"
-            type="textarea"
-            :rows="2"
-            placeholder="模型说明、使用限制等"
-          />
-        </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
 
       <template #footer>
@@ -255,6 +271,7 @@ const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingId = ref('')
 const formRef = ref<FormInstance>()
+const sectionCollapse = ref<string[]>([])
 
 const form = reactive({
   displayName: '',
@@ -639,9 +656,115 @@ onMounted(loadProviders)
   color: #374151;
 }
 
-.price-unit {
-  margin-left: 8px;
+/* 渐进式折叠 */
+.section-collapse {
+  border-left: none;
+  border-right: none;
+  margin-top: 8px;
+}
+
+.section-collapse :deep(.el-collapse-item__header) {
+  height: 40px;
+  line-height: 40px;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 0 12px;
+  margin-bottom: 2px;
+  font-size: 13px;
+  color: #374151;
+  border-bottom: none;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.section-collapse :deep(.el-collapse-item__header.is-active) {
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 6px 6px 0 0;
+}
+
+.section-collapse :deep(.el-collapse-item__arrow) {
+  margin-left: auto;
+}
+
+.section-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+  background: transparent;
+}
+
+.section-collapse :deep(.el-collapse-item__content) {
+  padding: 0;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.section-subtitle {
   font-size: 12px;
   color: #9ca3af;
+  margin-left: 8px;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+.section-collapse :deep(.el-collapse-item__header.is-active) .section-subtitle {
+  color: #93c5fd;
+}
+
+.section-body {
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 14px 16px;
+  margin-bottom: 4px;
+}
+
+.field-group {
+  margin-bottom: 14px;
+}
+
+.field-group:last-child {
+  margin-bottom: 0;
+}
+
+.field-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.field-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9ca3af;
+  margin-left: 6px;
+}
+
+/* 价格 2×2 网格 */
+.price-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.price-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.price-label {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1;
+}
+
 </style>
