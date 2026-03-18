@@ -17,7 +17,8 @@ public static class SystemEndpoints
                 p.BaseUrl,
                 ApiKey = MaskApiKey(p.ApiKey),
                 p.ModelName,
-                p.IsEnabled
+                p.IsEnabled,
+                p.Capabilities
             });
             return Results.Ok(result);
         })
@@ -39,7 +40,8 @@ public static class SystemEndpoints
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey.Trim(),
                 ModelName = req.ModelName.Trim(),
-                IsEnabled = req.IsEnabled
+                IsEnabled = req.IsEnabled,
+                Capabilities = req.Capabilities ?? new()
             };
 
             ProviderConfig created = store.Add(config);
@@ -59,7 +61,8 @@ public static class SystemEndpoints
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey?.Trim() ?? string.Empty,
                 ModelName = req.ModelName?.Trim() ?? string.Empty,
-                IsEnabled = req.IsEnabled
+                IsEnabled = req.IsEnabled,
+                Capabilities = req.Capabilities ?? new()
             };
 
             ProviderConfig? updated = store.Update(req.Id, incoming);
@@ -107,7 +110,8 @@ public static class SystemEndpoints
         value?.ToLowerInvariant() switch
         {
             "openai" => ProviderProtocol.OpenAI,
-            "openai-responses" => ProviderProtocol.OpenAIResponses,
+            // 历史兼容：openai-responses 静默降级
+            "openai-responses" => ProviderProtocol.OpenAI,
             "anthropic" => ProviderProtocol.Anthropic,
             _ => ProviderProtocol.OpenAI
         };
@@ -116,7 +120,6 @@ public static class SystemEndpoints
         protocol switch
         {
             ProviderProtocol.OpenAI => "openai",
-            ProviderProtocol.OpenAIResponses => "openai-responses",
             ProviderProtocol.Anthropic => "anthropic",
             _ => "openai"
         };
@@ -128,7 +131,8 @@ public sealed record ProviderCreateRequest(
     string? BaseUrl,
     string ApiKey,
     string ModelName,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    ProviderCapabilities? Capabilities = null);
 
 public sealed record ProviderUpdateRequest(
     string Id,
@@ -137,6 +141,7 @@ public sealed record ProviderUpdateRequest(
     string? BaseUrl,
     string? ApiKey,
     string? ModelName,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    ProviderCapabilities? Capabilities = null);
 
 public sealed record ProviderDeleteRequest(string Id);

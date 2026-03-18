@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2 class="page-title">模型</h2>
-        <p class="page-desc">管理 AI 模型提供方，支持 OpenAI、OpenAI Responses、Anthropic 协议</p>
+        <p class="page-desc">管理 AI 模型提供方，支持 OpenAI（兼容）和 Anthropic 协议</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="openCreateDialog">添加提供方</el-button>
     </div>
@@ -34,6 +34,34 @@
           <div v-if="p.baseUrl" class="card-url">
             <el-icon><Link /></el-icon>
             {{ p.baseUrl }}
+          </div>
+          <!-- 模态能力 badges -->
+          <div class="card-modalities">
+            <el-tooltip v-if="p.capabilities?.inputImage" content="支持图片输入" placement="top">
+              <el-tag size="small" type="info" effect="plain">图片</el-tag>
+            </el-tooltip>
+            <el-tooltip v-if="p.capabilities?.inputAudio" content="支持音频输入" placement="top">
+              <el-tag size="small" type="info" effect="plain">音频</el-tag>
+            </el-tooltip>
+            <el-tooltip v-if="p.capabilities?.inputVideo" content="支持视频输入" placement="top">
+              <el-tag size="small" type="info" effect="plain">视频</el-tag>
+            </el-tooltip>
+            <el-tooltip v-if="p.capabilities?.inputFile" content="支持文件输入" placement="top">
+              <el-tag size="small" type="info" effect="plain">文件</el-tag>
+            </el-tooltip>
+            <el-tooltip v-if="p.capabilities?.supportsFunctionCalling" content="支持 Function Calling" placement="top">
+              <el-tag size="small" type="warning" effect="plain">Functions</el-tag>
+            </el-tooltip>
+            <el-tooltip v-if="p.capabilities?.supportsResponsesApi" content="支持 Responses API" placement="top">
+              <el-tag size="small" type="success" effect="plain">Responses</el-tag>
+            </el-tooltip>
+            <template v-if="p.capabilities?.inputPricePerMToken != null || p.capabilities?.outputPricePerMToken != null">
+              <span class="card-price">
+                <template v-if="p.capabilities?.inputPricePerMToken != null">输入 ${{ p.capabilities.inputPricePerMToken }}/1M</template>
+                <template v-if="p.capabilities?.inputPricePerMToken != null && p.capabilities?.outputPricePerMToken != null"> · </template>
+                <template v-if="p.capabilities?.outputPricePerMToken != null">输出 ${{ p.capabilities.outputPricePerMToken }}/1M</template>
+              </span>
+            </template>
           </div>
         </div>
 
@@ -75,8 +103,7 @@
 
         <el-form-item label="协议类型" prop="protocol">
           <el-select v-model="form.protocol" style="width: 100%">
-            <el-option label="OpenAI (Chat Completions)" value="openai" />
-            <el-option label="OpenAI Responses API" value="openai-responses" />
+            <el-option label="OpenAI / OpenAI 兼容" value="openai" />
             <el-option label="Anthropic (Claude)" value="anthropic" />
           </el-select>
         </el-form-item>
@@ -106,6 +133,96 @@
         <el-form-item label="启用">
           <el-switch v-model="form.isEnabled" />
         </el-form-item>
+
+        <!-- 能力配置 -->
+        <el-divider content-position="left">能力配置（可选）</el-divider>
+
+        <el-form-item label="输入模态">
+          <el-checkbox-group v-model="form.inputModalities">
+            <el-checkbox value="inputImage">图片</el-checkbox>
+            <el-checkbox value="inputAudio">音频</el-checkbox>
+            <el-checkbox value="inputVideo">视频</el-checkbox>
+            <el-checkbox value="inputFile">文件</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+
+        <el-form-item label="输出模态">
+          <el-checkbox-group v-model="form.outputModalities">
+            <el-checkbox value="outputImage">图片</el-checkbox>
+            <el-checkbox value="outputAudio">音频</el-checkbox>
+            <el-checkbox value="outputVideo">视频</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+
+        <el-form-item label="特殊能力">
+          <div class="switches-row">
+            <div class="switch-item">
+              <el-switch v-model="form.supportsFunctionCalling" size="small" />
+              <span>Function Calling</span>
+            </div>
+            <div class="switch-item">
+              <el-switch v-model="form.supportsResponsesApi" size="small" />
+              <span>Responses API</span>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="输入价格">
+          <el-input-number
+            v-model="form.inputPricePerMToken"
+            :precision="4"
+            :step="0.1"
+            :min="0"
+            placeholder="$/1M tokens"
+            style="width: 180px"
+          />
+          <span class="price-unit">$/1M tokens</span>
+        </el-form-item>
+
+        <el-form-item label="输出价格">
+          <el-input-number
+            v-model="form.outputPricePerMToken"
+            :precision="4"
+            :step="0.1"
+            :min="0"
+            placeholder="$/1M tokens"
+            style="width: 180px"
+          />
+          <span class="price-unit">$/1M tokens</span>
+        </el-form-item>
+
+        <el-form-item label="缓存输入价格">
+          <el-input-number
+            v-model="form.cacheInputPricePerMToken"
+            :precision="4"
+            :step="0.1"
+            :min="0"
+            placeholder="$/1M tokens"
+            style="width: 180px"
+          />
+          <span class="price-unit">$/1M tokens</span>
+        </el-form-item>
+
+        <el-form-item label="缓存输出价格">
+          <el-input-number
+            v-model="form.cacheOutputPricePerMToken"
+            :precision="4"
+            :step="0.1"
+            :min="0"
+            placeholder="$/1M tokens"
+            style="width: 180px"
+          />
+          <span class="price-unit">$/1M tokens</span>
+        </el-form-item>
+
+        <el-form-item label="备注">
+          <el-input
+            v-model="form.notes"
+            type="textarea"
+            :rows="2"
+            placeholder="模型说明、使用限制等"
+          />
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -130,7 +247,6 @@ import {
   deleteProvider,
 } from '@/services/gatewayApi'
 import type { ProviderConfig, ProviderProtocol } from '@/services/gatewayApi'
-
 const loading = ref(false)
 const submitting = ref(false)
 const providers = ref<ProviderConfig[]>([])
@@ -147,6 +263,16 @@ const form = reactive({
   apiKey: '',
   modelName: '',
   isEnabled: true,
+  // capabilities
+  inputModalities: [] as string[],
+  outputModalities: [] as string[],
+  supportsFunctionCalling: false,
+  supportsResponsesApi: false,
+  inputPricePerMToken: undefined as number | undefined,
+  outputPricePerMToken: undefined as number | undefined,
+  cacheInputPricePerMToken: undefined as number | undefined,
+  cacheOutputPricePerMToken: undefined as number | undefined,
+  notes: '',
 })
 
 const rules: FormRules = {
@@ -170,7 +296,6 @@ const rules: FormRules = {
 const modelNamePlaceholder = computed(() => {
   const placeholders: Record<ProviderProtocol, string> = {
     openai: 'gpt-4o',
-    'openai-responses': 'gpt-4o',
     anthropic: 'claude-opus-4-5',
   }
   return placeholders[form.protocol] ?? 'gpt-4o'
@@ -179,16 +304,14 @@ const modelNamePlaceholder = computed(() => {
 function protocolLabel(protocol: ProviderProtocol): string {
   const labels: Record<ProviderProtocol, string> = {
     openai: 'OpenAI',
-    'openai-responses': 'OAI Responses',
     anthropic: 'Anthropic',
   }
   return labels[protocol] ?? protocol
 }
 
-function protocolTagType(protocol: ProviderProtocol): 'success' | 'warning' | 'primary' {
-  const types: Record<ProviderProtocol, 'success' | 'warning' | 'primary'> = {
+function protocolTagType(protocol: ProviderProtocol): 'success' | 'primary' {
+  const types: Record<ProviderProtocol, 'success' | 'primary'> = {
     openai: 'success',
-    'openai-responses': 'warning',
     anthropic: 'primary',
   }
   return types[protocol] ?? 'primary'
@@ -215,6 +338,15 @@ function openCreateDialog() {
     apiKey: '',
     modelName: '',
     isEnabled: true,
+    inputModalities: [],
+    outputModalities: [],
+    supportsFunctionCalling: false,
+    supportsResponsesApi: false,
+    inputPricePerMToken: undefined,
+    outputPricePerMToken: undefined,
+    cacheInputPricePerMToken: undefined,
+    cacheOutputPricePerMToken: undefined,
+    notes: '',
   })
   dialogVisible.value = true
 }
@@ -222,6 +354,16 @@ function openCreateDialog() {
 function openEditDialog(p: ProviderConfig) {
   isEditing.value = true
   editingId.value = p.id
+  const cap = p.capabilities
+  const inputModalities: string[] = []
+  const outputModalities: string[] = []
+  if (cap?.inputImage) inputModalities.push('inputImage')
+  if (cap?.inputAudio) inputModalities.push('inputAudio')
+  if (cap?.inputVideo) inputModalities.push('inputVideo')
+  if (cap?.inputFile) inputModalities.push('inputFile')
+  if (cap?.outputImage) outputModalities.push('outputImage')
+  if (cap?.outputAudio) outputModalities.push('outputAudio')
+  if (cap?.outputVideo) outputModalities.push('outputVideo')
   Object.assign(form, {
     displayName: p.displayName,
     protocol: p.protocol,
@@ -229,6 +371,15 @@ function openEditDialog(p: ProviderConfig) {
     apiKey: '',
     modelName: p.modelName,
     isEnabled: p.isEnabled,
+    inputModalities,
+    outputModalities,
+    supportsFunctionCalling: cap?.supportsFunctionCalling ?? false,
+    supportsResponsesApi: cap?.supportsResponsesApi ?? false,
+    inputPricePerMToken: cap?.inputPricePerMToken ?? undefined,
+    outputPricePerMToken: cap?.outputPricePerMToken ?? undefined,
+    cacheInputPricePerMToken: cap?.cacheInputPricePerMToken ?? undefined,
+    cacheOutputPricePerMToken: cap?.cacheOutputPricePerMToken ?? undefined,
+    notes: cap?.notes ?? '',
   })
   dialogVisible.value = true
 }
@@ -237,6 +388,25 @@ async function submitForm() {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
+
+  const capabilities = {
+    inputText: true,
+    inputImage: form.inputModalities.includes('inputImage'),
+    inputAudio: form.inputModalities.includes('inputAudio'),
+    inputVideo: form.inputModalities.includes('inputVideo'),
+    inputFile: form.inputModalities.includes('inputFile'),
+    outputText: true,
+    outputImage: form.outputModalities.includes('outputImage'),
+    outputAudio: form.outputModalities.includes('outputAudio'),
+    outputVideo: form.outputModalities.includes('outputVideo'),
+    supportsFunctionCalling: form.supportsFunctionCalling,
+    supportsResponsesApi: form.supportsResponsesApi,
+    inputPricePerMToken: form.inputPricePerMToken ?? null,
+    outputPricePerMToken: form.outputPricePerMToken ?? null,
+    cacheInputPricePerMToken: form.cacheInputPricePerMToken ?? null,
+    cacheOutputPricePerMToken: form.cacheOutputPricePerMToken ?? null,
+    notes: form.notes || null,
+  }
 
   submitting.value = true
   try {
@@ -249,6 +419,7 @@ async function submitForm() {
         apiKey: form.apiKey || undefined,
         modelName: form.modelName,
         isEnabled: form.isEnabled,
+        capabilities,
       })
       ElMessage.success('提供方已更新')
     } else {
@@ -259,6 +430,7 @@ async function submitForm() {
         apiKey: form.apiKey,
         modelName: form.modelName,
         isEnabled: form.isEnabled,
+        capabilities,
       })
       ElMessage.success('提供方已添加')
     }
@@ -438,5 +610,38 @@ onMounted(loadProviders)
   color: #9ca3af;
   margin-top: 4px;
   line-height: 1.4;
+}
+
+.card-modalities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.card-price {
+  font-size: 11px;
+  color: #9ca3af;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.switches-row {
+  display: flex;
+  gap: 24px;
+}
+
+.switch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.price-unit {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #9ca3af;
 }
 </style>

@@ -9,7 +9,31 @@ export type GatewayHealth = {
   version: string
 }
 
-export type ProviderProtocol = 'openai' | 'openai-responses' | 'anthropic'
+export type ProviderProtocol = 'openai' | 'anthropic'
+
+export type ProviderCapabilities = {
+  // 输入模态
+  inputText: boolean
+  inputImage: boolean
+  inputAudio: boolean
+  inputVideo: boolean
+  inputFile: boolean
+  // 输出模态
+  outputText: boolean
+  outputImage: boolean
+  outputAudio: boolean
+  outputVideo: boolean
+  // 特殊能力
+  supportsFunctionCalling: boolean
+  supportsResponsesApi: boolean
+  // 价格（$/1M tokens）
+  inputPricePerMToken: number | null
+  outputPricePerMToken: number | null
+  cacheInputPricePerMToken: number | null
+  cacheOutputPricePerMToken: number | null
+  // 备注
+  notes: string | null
+}
 
 export type ProviderConfig = {
   id: string
@@ -19,6 +43,7 @@ export type ProviderConfig = {
   apiKey: string
   modelName: string
   isEnabled: boolean
+  capabilities: ProviderCapabilities
 }
 
 export type ProviderCreateRequest = {
@@ -28,6 +53,7 @@ export type ProviderCreateRequest = {
   apiKey: string
   modelName: string
   isEnabled: boolean
+  capabilities?: Partial<ProviderCapabilities>
 }
 
 export type ProviderUpdateRequest = {
@@ -38,6 +64,7 @@ export type ProviderUpdateRequest = {
   apiKey?: string
   modelName?: string
   isEnabled: boolean
+  capabilities?: Partial<ProviderCapabilities>
 }
 
 export type ProviderDeleteRequest = {

@@ -1,0 +1,13 @@
+namespace MicroClaw.Infrastructure.Data;
+
+public sealed class ProviderConfigEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Protocol { get; set; } = string.Empty;
+    public string? BaseUrl { get; set; }
+    public string ApiKey { get; set; } = string.Empty;
+    public string ModelName { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public string? CapabilitiesJson { get; set; }
+}
