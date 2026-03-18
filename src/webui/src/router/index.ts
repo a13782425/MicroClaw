@@ -5,7 +5,7 @@ const LoginPage     = () => import('@/views/LoginPage.vue')
 const SessionsPage  = () => import('@/views/SessionsPage.vue')
 const CronPage      = () => import('@/views/CronPage.vue')
 const ModelsPage    = () => import('@/views/ModelsPage.vue')
-const ConfigPage    = () => import('@/views/ConfigPage.vue')
+const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -15,7 +15,7 @@ export const router = createRouter({
     { path: '/sessions', name: 'sessions', component: SessionsPage },
     { path: '/cron', name: 'cron', component: CronPage },
     { path: '/models', name: 'models', component: ModelsPage },
-    { path: '/config', name: 'config', component: ConfigPage },
+    { path: '/channels', name: 'channels', component: ChannelsPage },
   ]
 })
 

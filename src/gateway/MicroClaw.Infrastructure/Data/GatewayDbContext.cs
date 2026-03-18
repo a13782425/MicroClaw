@@ -6,6 +6,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
 {
     public DbSet<SessionEntity> Sessions => Set<SessionEntity>();
     public DbSet<ProviderConfigEntity> Providers => Set<ProviderConfigEntity>();
+    public DbSet<ChannelConfigEntity> Channels => Set<ChannelConfigEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -17,6 +18,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Title).HasColumnName("title");
             b.Property(e => e.ProviderId).HasColumnName("provider_id");
             b.Property(e => e.IsApproved).HasColumnName("is_approved");
+            b.Property(e => e.ChannelType).HasColumnName("channel_type");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
         });
 
@@ -32,6 +34,18 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ModelName).HasColumnName("model_name");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CapabilitiesJson).HasColumnName("capabilities_json");
+        });
+
+        modelBuilder.Entity<ChannelConfigEntity>(b =>
+        {
+            b.ToTable("channels");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.DisplayName).HasColumnName("display_name");
+            b.Property(e => e.ChannelType).HasColumnName("channel_type");
+            b.Property(e => e.ProviderId).HasColumnName("provider_id");
+            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.SettingsJson).HasColumnName("settings_json");
         });
     }
 }

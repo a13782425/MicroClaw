@@ -5,6 +5,7 @@ public sealed record SessionInfo(
     string Title,
     string ProviderId,
     bool IsApproved,
+    ChannelType ChannelType,
     DateTimeOffset CreatedAt);
 
 public sealed record SessionMessage(
@@ -26,6 +27,8 @@ public sealed record CreateSessionRequest(
 public sealed record DeleteSessionRequest(string Id);
 
 public sealed record ApproveSessionRequest(string Id);
+
+public sealed record DisableSessionRequest(string Id);
 
 public sealed record ChatRequest(
     string Content,

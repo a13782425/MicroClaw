@@ -8,9 +8,11 @@ public static class GatewayEndpointRouteBuilderExtensions
 
 		api.MapHealthEndpoints();
 		api.MapAuthEndpoints();
+		api.MapChannelWebhookEndpoints();
 
 		var protectedApi = api.RequireAuthorization();
 		protectedApi.MapSystemEndpoints();
+		protectedApi.MapChannelEndpoints();
 		protectedApi.MapAdminEndpoints();
 		protectedApi.MapSessionEndpoints();
 

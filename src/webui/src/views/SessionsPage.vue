@@ -21,6 +21,13 @@
             </el-icon>
             <span class="session-title">{{ session.title }}</span>
             <el-tag
+              v-if="session.channelType !== 'web'"
+              size="small"
+              type="info"
+              effect="plain"
+              class="channel-tag"
+            >{{ channelLabel(session.channelType) }}</el-tag>
+            <el-tag
               v-if="!session.isApproved"
               size="small"
               type="warning"
@@ -37,6 +44,15 @@
               :icon="Check"
               title="批准会话"
               @click.stop="handleApprove(session.id)"
+            />
+            <el-button
+              v-if="session.isApproved"
+              link
+              type="warning"
+              size="small"
+              :icon="CircleClose"
+              title="禁用会话"
+              @click.stop="handleDisable(session.id)"
             />
             <el-button
               link
@@ -207,9 +223,10 @@ import { listProviders, type ProviderConfig, type MessageAttachment } from '@/se
 import ChatMessage from '@/components/ChatMessage.vue'
 import {
   Plus, Delete, Check, ChatDotRound, Lock, Paperclip,
-  Promotion, VideoPause, Close
+  Promotion, VideoPause, Close, CircleClose
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { ChannelType } from '@/services/gatewayApi'
 
 const store = useSessionStore()
 
@@ -279,6 +296,27 @@ async function handleDelete(id: string) {
 async function handleApprove(id: string) {
   await store.approve(id)
   ElMessage.success('会话已批准')
+}
+
+async function handleDisable(id: string) {
+  await ElMessageBox.confirm('禁用后该会话将无法继续对话，确定禁用？', '禁用确认', {
+    type: 'warning',
+    confirmButtonText: '禁用',
+    cancelButtonText: '取消'
+  })
+  await store.disable(id)
+  ElMessage.success('会话已禁用')
+}
+
+const channelLabelMap: Record<ChannelType, string> = {
+  web: 'Web',
+  feishu: '飞书',
+  wecom: '企微',
+  wechat: '微信'
+}
+
+function channelLabel(type: ChannelType): string {
+  return channelLabelMap[type] ?? type
 }
 
 async function handleSend() {
@@ -400,7 +438,8 @@ function removeAttachment(idx: number) {
   flex: 1;
 }
 
-.status-tag {
+.status-tag,
+.channel-tag {
   flex-shrink: 0;
   font-size: 10px;
   padding: 0 4px;

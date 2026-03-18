@@ -7,6 +7,7 @@ using MicroClaw.Channels.WeCom;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
+using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
@@ -161,25 +162,25 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderConfigStore>();
 		builder.Services.AddSingleton<SessionStore>(sp =>
 			new SessionStore(sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>(), sessionsDir));
+		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
 		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
 		builder.Services.AddSingleton<ProviderClientFactory>();
 	}
 
-	/// <summary>读取 Features:Channels 配置，按需注册飞书、企业微信、微信渠道。</summary>
+	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
-		var enabledChannels = builder.Configuration.GetSection("Features:Channels").Get<string[]>() ?? [];
+		builder.Services.AddSingleton<ChannelConfigStore>();
 
-		if (enabledChannels.Contains("Feishu", StringComparer.OrdinalIgnoreCase))
-			builder.Services.AddSingleton<IChannel, FeishuChannel>();
+		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
+		builder.Services.AddSingleton<FeishuMessageProcessor>();
+		builder.Services.AddSingleton<IChannel, FeishuChannel>();
+		builder.Services.AddHostedService<FeishuWebSocketManager>();
 
-		if (enabledChannels.Contains("WeCom", StringComparer.OrdinalIgnoreCase))
-			builder.Services.AddSingleton<IChannel, WeComChannel>();
-
-		if (enabledChannels.Contains("WeChat", StringComparer.OrdinalIgnoreCase))
-			builder.Services.AddSingleton<IChannel, WeChatChannel>();
+		builder.Services.AddSingleton<IChannel, WeComChannel>();
+		builder.Services.AddSingleton<IChannel, WeChatChannel>();
 	}
 
 	/// <summary>在应用启动时执行 EF Core 迁移，确保数据库 schema 与当前模型一致。</summary>

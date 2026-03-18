@@ -31,7 +31,11 @@
             <el-icon><Cpu /></el-icon>
             {{ providerName(c.providerId) || c.providerId }}
           </div>
-          <div class="card-webhook">
+          <div class="card-mode">
+            <el-tag v-if="parseConnectionMode(c) === 'websocket'" type="success" size="small">WebSocket 长连接</el-tag>
+            <el-tag v-else type="info" size="small">Webhook 回调</el-tag>
+          </div>
+          <div v-if="parseConnectionMode(c) === 'webhook'" class="card-webhook">
             <el-icon><Link /></el-icon>
             <span class="webhook-url">{{ webhookUrl(c) }}</span>
             <el-button link size="small" @click="copyWebhook(c)">
@@ -115,6 +119,18 @@
             <span class="section-subtitle">在飞书开放平台获取以下信息</span>
           </div>
           <div class="section-body">
+            <el-form-item label="连接模式">
+              <el-radio-group v-model="form.feishu.connectionMode">
+                <el-radio value="websocket">WebSocket 长连接</el-radio>
+                <el-radio value="webhook">Webhook 回调</el-radio>
+              </el-radio-group>
+              <div class="form-hint">
+                {{ form.feishu.connectionMode === 'websocket'
+                  ? '推荐：无需公网 IP，飞书主动推送消息到本服务'
+                  : '需要公网可访问的 Webhook URL，飞书通过 HTTP POST 回调' }}
+              </div>
+            </el-form-item>
+
             <el-form-item label="App ID" prop="feishu.appId">
               <el-input v-model="form.feishu.appId" placeholder="飞书应用的 App ID" />
             </el-form-item>
@@ -128,12 +144,12 @@
               />
             </el-form-item>
 
-            <el-form-item label="Encrypt Key">
+            <el-form-item v-if="form.feishu.connectionMode === 'webhook'" label="Encrypt Key">
               <el-input v-model="form.feishu.encryptKey" placeholder="事件订阅的加密密钥（可选）" />
               <div class="form-hint">在飞书开放平台 → 事件订阅 → 加密策略中配置</div>
             </el-form-item>
 
-            <el-form-item label="Verification Token">
+            <el-form-item v-if="form.feishu.connectionMode === 'webhook'" label="Verification Token">
               <el-input v-model="form.feishu.verificationToken" placeholder="事件订阅的验证 Token（可选）" />
             </el-form-item>
           </div>
@@ -184,6 +200,7 @@ const form = reactive({
     appSecret: '',
     encryptKey: '',
     verificationToken: '',
+    connectionMode: 'websocket' as 'websocket' | 'webhook',
   },
 })
 
@@ -227,6 +244,15 @@ function webhookUrl(c: ChannelConfig): string {
   return `${base}/api/channels/${c.channelType}/${c.id}/webhook`
 }
 
+function parseConnectionMode(c: ChannelConfig): 'websocket' | 'webhook' {
+  try {
+    const parsed = typeof c.settings === 'string' ? JSON.parse(c.settings) : c.settings
+    return parsed?.connectionMode === 'webhook' ? 'webhook' : 'websocket'
+  } catch {
+    return 'websocket'
+  }
+}
+
 async function copyWebhook(c: ChannelConfig) {
   try {
     await navigator.clipboard.writeText(webhookUrl(c))
@@ -255,7 +281,7 @@ function resetForm() {
     channelType: 'feishu' as ChannelType,
     providerId: '',
     isEnabled: true,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '' },
+    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook' },
   })
 }
 
@@ -275,7 +301,7 @@ function openEditDialog(c: ChannelConfig) {
     channelType: c.channelType,
     providerId: c.providerId,
     isEnabled: c.isEnabled,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '' },
+    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook' },
   })
 
   // 解析渠道特定设置
@@ -286,6 +312,7 @@ function openEditDialog(c: ChannelConfig) {
       form.feishu.appSecret = '***' // 编辑时预填掩码值，留原值则保留原有 Secret
       form.feishu.encryptKey = parsed.encryptKey ?? ''
       form.feishu.verificationToken = parsed.verificationToken ?? ''
+      form.feishu.connectionMode = parsed.connectionMode ?? 'websocket'
     } catch { /* ignore */ }
   }
 
@@ -299,6 +326,7 @@ function buildSettingsJson(): string {
       appSecret: form.feishu.appSecret || (isEditing.value ? '***' : ''),
       encryptKey: form.feishu.encryptKey,
       verificationToken: form.feishu.verificationToken,
+      connectionMode: form.feishu.connectionMode,
     })
   }
   return '{}'
@@ -481,6 +509,12 @@ onMounted(loadData)
 .card-provider .el-icon {
   flex-shrink: 0;
   font-size: 13px;
+}
+
+.card-mode {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .card-webhook {

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
@@ -34,7 +35,7 @@ public static class SessionEndpoints
             if (provider is null)
                 return Results.NotFound(new { message = $"Provider '{req.ProviderId}' not found." });
 
-            SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId);
+            SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId, ChannelType.Web);
             return Results.Ok(created);
         })
         .WithTags("Sessions");
@@ -59,6 +60,21 @@ public static class SessionEndpoints
                 return Results.BadRequest(new { message = "Id is required." });
 
             SessionInfo? updated = store.Approve(req.Id);
+            return updated is null
+                ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
+                : Results.Ok(updated);
+        })
+        .WithTags("Sessions");
+
+        // POST /api/sessions/disable — 禁用会话（仅 admin）
+        endpoints.MapPost("/sessions/disable", (DisableSessionRequest req, SessionStore store, ClaimsPrincipal user) =>
+        {
+            if (!user.IsInRole("admin"))
+                return Results.Forbid();
+            if (string.IsNullOrWhiteSpace(req.Id))
+                return Results.BadRequest(new { message = "Id is required." });
+
+            SessionInfo? updated = store.Disable(req.Id);
             return updated is null
                 ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
                 : Results.Ok(updated);

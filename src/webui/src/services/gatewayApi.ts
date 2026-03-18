@@ -124,6 +124,63 @@ export async function deleteProvider(id: string): Promise<void> {
   await axios.post('/api/providers/delete', { id })
 }
 
+// ─── Channels ────────────────────────────────────────────────────────────────
+
+export type ChannelType = 'web' | 'feishu' | 'wecom' | 'wechat'
+
+export type FeishuChannelSettings = {
+  appId: string
+  appSecret: string
+  encryptKey: string
+  verificationToken: string
+  connectionMode: 'websocket' | 'webhook'
+}
+
+export type ChannelConfig = {
+  id: string
+  displayName: string
+  channelType: ChannelType
+  providerId: string
+  isEnabled: boolean
+  settings: string // JSON string, parsed per channel type
+}
+
+export type ChannelCreateRequest = {
+  displayName: string
+  channelType: ChannelType
+  providerId: string
+  isEnabled: boolean
+  settings?: string
+}
+
+export type ChannelUpdateRequest = {
+  id: string
+  displayName?: string
+  channelType?: ChannelType
+  providerId?: string
+  isEnabled: boolean
+  settings?: string
+}
+
+export async function listChannels(): Promise<ChannelConfig[]> {
+  const { data } = await axios.get<ChannelConfig[]>('/api/channels')
+  return data
+}
+
+export async function createChannel(req: ChannelCreateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/channels', req)
+  return data
+}
+
+export async function updateChannel(req: ChannelUpdateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/channels/update', req)
+  return data
+}
+
+export async function deleteChannel(id: string): Promise<void> {
+  await axios.post('/api/channels/delete', { id })
+}
+
 // ─── Sessions ────────────────────────────────────────────────────────────────
 
 export type MessageAttachment = {
@@ -145,6 +202,7 @@ export type SessionInfo = {
   title: string
   providerId: string
   isApproved: boolean
+  channelType: ChannelType
   createdAt: string
 }
 
@@ -179,6 +237,11 @@ export async function deleteSession(id: string): Promise<void> {
 
 export async function approveSession(id: string): Promise<SessionInfo> {
   const { data } = await axios.post<SessionInfo>('/api/sessions/approve', { id })
+  return data
+}
+
+export async function disableSession(id: string): Promise<SessionInfo> {
+  const { data } = await axios.post<SessionInfo>('/api/sessions/disable', { id })
   return data
 }
 

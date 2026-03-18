@@ -5,7 +5,7 @@ import {
   ChatDotRound,
   Timer,
   Cpu,
-  Setting,
+  Connection,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -37,7 +37,7 @@ export const menuGroups: MenuGroup[] = [
     icon: Tools,
     items: [
       { label: '模型', icon: Cpu, route: '/models' },
-      { label: '配置', icon: Setting, route: '/config' },
+      { label: '渠道', icon: Connection, route: '/channels' },
     ],
   },
 ]

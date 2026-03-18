@@ -2,6 +2,7 @@
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -9,12 +10,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MicroClaw.Infrastructure.Migrations
 {
     [DbContext(typeof(GatewayDbContext))]
-    partial class GatewayDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260318072629_AddChannelConfig")]
+    partial class AddChannelConfig
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.3");
 
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.ChannelConfigEntity", b =>
                 {
@@ -101,11 +104,6 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
-
-                    b.Property<string>("ChannelType")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("channel_type");
 
                     b.Property<string>("CreatedAtUtc")
                         .IsRequired()

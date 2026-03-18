@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MicroClaw.Channels;
+using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -38,14 +40,15 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return entity is null ? null : ToInfo(entity);
     }
 
-    public SessionInfo Create(string title, string providerId)
+    public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null)
     {
         SessionEntity entity = new()
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = id ?? Guid.NewGuid().ToString("N"),
             Title = title,
             ProviderId = providerId,
             IsApproved = false,
+            ChannelType = ChannelConfigStore.SerializeChannelType(channelType),
             CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O")
         };
 
@@ -82,6 +85,16 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return ToInfo(entity);
     }
 
+    public SessionInfo? Disable(string id)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        SessionEntity? entity = db.Sessions.Find(id);
+        if (entity is null) return null;
+        entity.IsApproved = false;
+        db.SaveChanges();
+        return ToInfo(entity);
+    }
+
     public void AddMessage(string sessionId, SessionMessage message)
     {
         string dir = GetSessionDir(sessionId);
@@ -113,6 +126,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
 
     private static SessionInfo ToInfo(SessionEntity e) =>
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,
+            ChannelConfigStore.ParseChannelType(e.ChannelType),
             DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue);
 }
 

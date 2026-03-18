@@ -5,6 +5,7 @@ import {
   createSession,
   deleteSession,
   approveSession,
+  disableSession,
   getMessages,
   streamChat,
   type SessionInfo,
@@ -52,6 +53,12 @@ export const useSessionStore = defineStore('session', () => {
 
   async function approve(id: string) {
     const updated = await approveSession(id)
+    const idx = sessions.value.findIndex((s) => s.id === id)
+    if (idx >= 0) sessions.value[idx] = updated
+  }
+
+  async function disable(id: string) {
+    const updated = await disableSession(id)
     const idx = sessions.value.findIndex((s) => s.id === id)
     if (idx >= 0) sessions.value[idx] = updated
   }
@@ -146,6 +153,7 @@ export const useSessionStore = defineStore('session', () => {
     addSession,
     removeSession,
     approve,
+    disable,
     selectSession,
     sendMessage,
     abortChat

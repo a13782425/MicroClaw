@@ -1,4 +1,3 @@
-using MicroClaw.Channels;
 using MicroClaw.Providers;
 
 namespace MicroClaw.Endpoints;
@@ -85,16 +84,6 @@ public static class SystemEndpoints
             return Results.Ok();
         })
         .WithTags("Providers");
-
-        endpoints.MapGet("/channels", (IEnumerable<IChannel> channels) =>
-        {
-            return Results.Ok(channels
-                .Select(c => c.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
-        })
-        .WithTags("System");
 
         return endpoints;
     }

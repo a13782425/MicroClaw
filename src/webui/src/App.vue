@@ -70,12 +70,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getGatewayHealth } from '@/services/gatewayApi'
 import { menuGroups } from '@/config/menu'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr'
+import { ElNotification, ElButton } from 'element-plus'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -86,6 +88,7 @@ const gatewayOk = ref(false)
 const gatewayVersion = ref('')
 const gatewayError = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let hubConnection: HubConnection | null = null
 
 async function fetchGatewayStatus() {
   try {
@@ -100,14 +103,64 @@ async function fetchGatewayStatus() {
 }
 
 function logout() {
+  stopSignalR()
   auth.clearAuth()
   router.push({ name: 'login' })
 }
+
+function startSignalR() {
+  if (hubConnection) return
+  const connection = new HubConnectionBuilder()
+    .withUrl('/ws/gateway', { accessTokenFactory: () => auth.token ?? '' })
+    .withAutomaticReconnect()
+    .configureLogging(LogLevel.Warning)
+    .build()
+
+  connection.on('sessionPendingApproval', (payload: { sessionId: string; sessionTitle: string; channelType: string; timestamp: string }) => {
+    ElNotification({
+      title: '新会话待审批',
+      message: h('div', [
+        h('p', { style: 'margin:0 0 8px' }, `来自 ${payload.channelType} 的会话「${payload.sessionTitle}」需要审批`),
+        h(ElButton, {
+          type: 'primary',
+          size: 'small',
+          onClick: () => {
+            router.push('/sessions')
+          }
+        }, () => '前往审批')
+      ]),
+      type: 'warning',
+      duration: 10000,
+      position: 'bottom-right'
+    })
+  })
+
+  connection.start().catch(() => {
+    // 连接失败时静默，自动重连会处理
+  })
+  hubConnection = connection
+}
+
+function stopSignalR() {
+  if (hubConnection) {
+    hubConnection.stop()
+    hubConnection = null
+  }
+}
+
+watch(() => auth.isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    startSignalR()
+  } else {
+    stopSignalR()
+  }
+})
 
 onMounted(() => {
   if (auth.isLoggedIn) {
     fetchGatewayStatus()
     pollTimer = setInterval(fetchGatewayStatus, 30000)
+    startSignalR()
   }
 })
 
@@ -115,6 +168,7 @@ onUnmounted(() => {
   if (pollTimer !== null) {
     clearInterval(pollTimer)
   }
+  stopSignalR()
 })
 </script>
 
