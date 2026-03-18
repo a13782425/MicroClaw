@@ -21,39 +21,14 @@
             </el-icon>
             <span class="session-title">{{ session.title }}</span>
             <el-tag
-              v-if="session.channelType !== 'web'"
+              v-if="!isWebChannel(session.channelType)"
               size="small"
               type="info"
               effect="plain"
               class="channel-tag"
             >{{ channelLabel(session.channelType) }}</el-tag>
-            <el-tag
-              v-if="!session.isApproved"
-              size="small"
-              type="warning"
-              effect="plain"
-              class="status-tag"
-            >待审批</el-tag>
           </div>
           <div class="session-actions">
-            <el-button
-              v-if="!session.isApproved"
-              link
-              type="success"
-              size="small"
-              :icon="Check"
-              title="批准会话"
-              @click.stop="handleApprove(session.id)"
-            />
-            <el-button
-              v-if="session.isApproved"
-              link
-              type="warning"
-              size="small"
-              :icon="CircleClose"
-              title="禁用会话"
-              @click.stop="handleDisable(session.id)"
-            />
             <el-button
               link
               type="danger"
@@ -87,15 +62,6 @@
             <el-icon><ChatDotRound /></el-icon>
             <span>{{ store.currentSession()?.title }}</span>
           </div>
-          <div class="chat-meta">
-            <el-tag
-              v-if="store.currentSession()?.isApproved"
-              type="success"
-              effect="plain"
-              size="small"
-            >已批准</el-tag>
-            <el-tag v-else type="warning" effect="plain" size="small">待审批</el-tag>
-          </div>
         </div>
 
         <!-- 消息列表 -->
@@ -113,14 +79,8 @@
           </template>
         </div>
 
-        <!-- 未审批提示 -->
-        <div v-if="!store.currentSession()?.isApproved" class="locked-banner">
-          <el-icon><Lock /></el-icon>
-          <span>此会话尚未获得批准，请点击侧边栏"批准"按钮后再发言</span>
-        </div>
-
         <!-- 输入区 -->
-        <div v-else class="input-area">
+        <div class="input-area">
           <!-- 附件预览 -->
           <div v-if="pendingAttachments.length > 0" class="pending-attachments">
             <div
@@ -222,11 +182,10 @@ import { useSessionStore } from '@/stores/sessionStore'
 import { listProviders, type ProviderConfig, type MessageAttachment } from '@/services/gatewayApi'
 import ChatMessage from '@/components/ChatMessage.vue'
 import {
-  Plus, Delete, Check, ChatDotRound, Lock, Paperclip,
-  Promotion, VideoPause, Close, CircleClose
+  Plus, Delete, ChatDotRound, Paperclip,
+  Promotion, VideoPause, Close,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { ChannelType } from '@/services/gatewayApi'
 
 const store = useSessionStore()
 
@@ -293,30 +252,19 @@ async function handleDelete(id: string) {
   ElMessage.success('已删除')
 }
 
-async function handleApprove(id: string) {
-  await store.approve(id)
-  ElMessage.success('会话已批准')
-}
-
-async function handleDisable(id: string) {
-  await ElMessageBox.confirm('禁用后该会话将无法继续对话，确定禁用？', '禁用确认', {
-    type: 'warning',
-    confirmButtonText: '禁用',
-    cancelButtonText: '取消'
-  })
-  await store.disable(id)
-  ElMessage.success('会话已禁用')
-}
-
-const channelLabelMap: Record<ChannelType, string> = {
+const channelLabelMap: Record<string, string> = {
   web: 'Web',
   feishu: '飞书',
   wecom: '企微',
-  wechat: '微信'
+  wechat: '微信',
 }
 
-function channelLabel(type: ChannelType): string {
+function channelLabel(type: string): string {
   return channelLabelMap[type] ?? type
+}
+
+function isWebChannel(type: string): boolean {
+  return !type || type === 'web'
 }
 
 async function handleSend() {
@@ -438,7 +386,6 @@ function removeAttachment(idx: number) {
   flex: 1;
 }
 
-.status-tag,
 .channel-tag {
   flex-shrink: 0;
   font-size: 10px;
@@ -510,20 +457,6 @@ function removeAttachment(idx: number) {
 
 .loading-wrap {
   padding: 20px;
-}
-
-/* 锁定横幅 */
-.locked-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: var(--el-color-warning-light-9);
-  border-top: 1px solid var(--el-color-warning-light-7);
-  color: var(--el-color-warning-dark-2);
-  font-size: 13px;
-  flex-shrink: 0;
 }
 
 /* 输入区 */

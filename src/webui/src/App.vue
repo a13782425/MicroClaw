@@ -125,7 +125,7 @@ function startSignalR() {
           type: 'primary',
           size: 'small',
           onClick: () => {
-            router.push('/sessions')
+            router.push('/approvals')
           }
         }, () => '前往审批')
       ]),

@@ -6,6 +6,7 @@ import {
   Timer,
   Cpu,
   Connection,
+  DocumentChecked,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -38,6 +39,7 @@ export const menuGroups: MenuGroup[] = [
     items: [
       { label: '模型', icon: Cpu, route: '/models' },
       { label: '渠道', icon: Connection, route: '/channels' },
+      { label: '会话审批', icon: DocumentChecked, route: '/approvals' },
     ],
   },
 ]

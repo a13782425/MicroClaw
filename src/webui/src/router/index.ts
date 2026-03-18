@@ -6,6 +6,7 @@ const SessionsPage  = () => import('@/views/SessionsPage.vue')
 const CronPage      = () => import('@/views/CronPage.vue')
 const ModelsPage    = () => import('@/views/ModelsPage.vue')
 const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
+const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +17,7 @@ export const router = createRouter({
     { path: '/cron', name: 'cron', component: CronPage },
     { path: '/models', name: 'models', component: ModelsPage },
     { path: '/channels', name: 'channels', component: ChannelsPage },
+    { path: '/approvals', name: 'approvals', component: ApprovalsPage },
   ]
 })
 
