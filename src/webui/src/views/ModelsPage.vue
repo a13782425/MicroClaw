@@ -94,45 +94,53 @@
         ref="formRef"
         :model="form"
         :rules="rules"
-        label-width="110px"
-        label-position="right"
+        label-position="top"
       >
-        <el-form-item label="显示名称" prop="displayName">
-          <el-input v-model="form.displayName" placeholder="例如：My GPT-4o" />
-        </el-form-item>
+        <!-- 基础配置（常开） -->
+        <div class="section-static">
+          <div class="section-static-header">
+            <span class="section-title">基础配置</span>
+            <span class="section-subtitle">名称、协议、密钥等</span>
+          </div>
+          <div class="section-body">
+            <el-form-item label="显示名称" prop="displayName">
+              <el-input v-model="form.displayName" placeholder="例如：My GPT-4o" />
+            </el-form-item>
 
-        <el-form-item label="协议类型" prop="protocol">
-          <el-select v-model="form.protocol" style="width: 100%">
-            <el-option label="OpenAI / OpenAI 兼容" value="openai" />
-            <el-option label="Anthropic (Claude)" value="anthropic" />
-          </el-select>
-        </el-form-item>
+            <el-form-item label="协议类型" prop="protocol">
+              <el-select v-model="form.protocol" style="width: 100%">
+                <el-option label="OpenAI / OpenAI 兼容" value="openai" />
+                <el-option label="Anthropic (Claude)" value="anthropic" />
+              </el-select>
+            </el-form-item>
 
-        <el-form-item label="Base URL" prop="baseUrl">
-          <el-input
-            v-model="form.baseUrl"
-            placeholder="留空使用默认端点"
-            clearable
-          />
-          <div class="form-hint">留空使用官方默认端点，填写可接入兼容 API 或代理</div>
-        </el-form-item>
+            <el-form-item label="Base URL" prop="baseUrl">
+              <el-input
+                v-model="form.baseUrl"
+                placeholder="留空使用默认端点"
+                clearable
+              />
+              <div class="form-hint">留空使用官方默认端点，填写可接入兼容 API 或代理</div>
+            </el-form-item>
 
-        <el-form-item label="API Key" prop="apiKey">
-          <el-input
-            v-model="form.apiKey"
-            type="password"
-            show-password
-            :placeholder="isEditing ? '留空保留原有 Key' : '请输入 API Key'"
-          />
-        </el-form-item>
+            <el-form-item label="API Key" prop="apiKey">
+              <el-input
+                v-model="form.apiKey"
+                type="password"
+                show-password
+                :placeholder="isEditing ? '留空保留原有 Key' : '请输入 API Key'"
+              />
+            </el-form-item>
 
-        <el-form-item label="模型名称" prop="modelName">
-          <el-input v-model="form.modelName" :placeholder="modelNamePlaceholder" />
-        </el-form-item>
+            <el-form-item label="模型名称" prop="modelName">
+              <el-input v-model="form.modelName" :placeholder="modelNamePlaceholder" />
+            </el-form-item>
 
-        <el-form-item label="启用">
-          <el-switch v-model="form.isEnabled" />
-        </el-form-item>
+            <el-form-item label="启用" class="form-item-inline">
+              <el-switch v-model="form.isEnabled" />
+            </el-form-item>
+          </div>
+        </div>
 
         <!-- 渐进式折叠：能力配置 + 价格备注 -->
         <el-collapse v-model="sectionCollapse" class="section-collapse">
@@ -656,6 +664,48 @@ onMounted(loadProviders)
   color: #374151;
 }
 
+/* 基础配置（常开 section） */
+.section-static {
+  margin-bottom: 8px;
+}
+
+.section-static-header {
+  height: 40px;
+  line-height: 40px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 6px 6px 0 0;
+  padding: 0 12px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-static-header .section-subtitle {
+  color: #93c5fd;
+}
+
+/* section-body 内 el-form-item 适配 label-position="top" */
+.section-body :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.section-body :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+.section-body :deep(.el-form-item__label) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  padding-bottom: 4px;
+}
+
+.form-item-inline :deep(.el-form-item__label) {
+  padding-bottom: 0;
+}
+
 /* 渐进式折叠 */
 .section-collapse {
   border-left: none;
@@ -735,8 +785,8 @@ onMounted(loadProviders)
 
 .field-title {
   font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: #1f2937;
   margin-bottom: 8px;
 }
 
