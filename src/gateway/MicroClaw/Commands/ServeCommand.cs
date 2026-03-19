@@ -1,5 +1,7 @@
 using System.CommandLine;
 using System.Text;
+using MicroClaw.Agent;
+using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.WeChat;
@@ -9,7 +11,9 @@ using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Jobs;
 using MicroClaw.Providers;
 using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
@@ -18,6 +22,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Quartz;
 using Serilog;
 using Serilog.Events;
 
@@ -167,6 +172,25 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
 		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
 		builder.Services.AddSingleton<ProviderClientFactory>();
+
+		// Agent 服务
+		string agentsDataDir = ResolveAgentsDataDir(home, configFile);
+		builder.Services.AddSingleton<AgentStore>();
+		builder.Services.AddSingleton<DNAService>(_ => new DNAService(agentsDataDir));
+		builder.Services.AddSingleton<AgentRunner>();
+		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
+
+		// Quartz.NET 定时任务调度
+		builder.Services.AddQuartz();
+		builder.Services.AddQuartzHostedService(opt =>
+		{
+			opt.WaitForJobsToComplete = true;
+		});
+		builder.Services.AddSingleton<CronJobStore>();
+		builder.Services.AddSingleton<SessionChatService>();
+		builder.Services.AddSingleton<CronJobScheduler>();
+		builder.Services.AddSingleton<ICronJobScheduler>(sp => sp.GetRequiredService<CronJobScheduler>());
+		builder.Services.AddHostedService<CronJobStartupService>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
@@ -326,6 +350,16 @@ public class ServeCommand : Command
 		if (!string.IsNullOrWhiteSpace(configFile))
 			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "sessions");
 		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "sessions");
+	}
+
+	/// <summary>返回 Agent DNA 基因文件的存储根目录路径（workspace/agents/）。</summary>
+	private static string ResolveAgentsDataDir(string? home, string? configFile)
+	{
+		if (!string.IsNullOrWhiteSpace(home))
+			return Path.Combine(home, "workspace", "agents");
+		if (!string.IsNullOrWhiteSpace(configFile))
+			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "agents");
+		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "agents");
 	}
 
 	/// <summary>根据原始文件扩展名为 Brotli 压缩响应设置正确的 Content-Type 头。</summary>

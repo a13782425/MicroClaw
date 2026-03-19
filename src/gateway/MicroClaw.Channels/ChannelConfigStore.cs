@@ -124,7 +124,7 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
             "feishu" => ChannelType.Feishu,
             "wecom" => ChannelType.WeCom,
             "wechat" => ChannelType.WeChat,
-            _ => ChannelType.Feishu
+            _ => ChannelType.Web
         };
 
     public static string SerializeChannelType(ChannelType type) =>
@@ -134,7 +134,7 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
             ChannelType.Feishu => "feishu",
             ChannelType.WeCom => "wecom",
             ChannelType.WeChat => "wechat",
-            _ => "feishu"
+            _ => "web"
         };
 
     public static string MaskSettingsSecrets(string? settingsJson, ChannelType type)

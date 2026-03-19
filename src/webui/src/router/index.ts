@@ -7,6 +7,7 @@ const CronPage      = () => import('@/views/CronPage.vue')
 const ModelsPage    = () => import('@/views/ModelsPage.vue')
 const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
 const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
+const AgentsPage    = () => import('@/views/AgentsPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -18,6 +19,7 @@ export const router = createRouter({
     { path: '/models', name: 'models', component: ModelsPage },
     { path: '/channels', name: 'channels', component: ChannelsPage },
     { path: '/approvals', name: 'approvals', component: ApprovalsPage },
+    { path: '/agents', name: 'agents', component: AgentsPage },
   ]
 })
 

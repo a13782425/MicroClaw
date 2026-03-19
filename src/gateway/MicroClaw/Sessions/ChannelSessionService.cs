@@ -32,7 +32,17 @@ public sealed class ChannelSessionService(
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
 
-        return store.Create(title, providerId, channelType, id: sessionId);
+        SessionInfo created = store.Create(title, providerId, channelType, id: sessionId);
+
+        // 通知前端新会话已创建（fire-and-forget）
+        _ = hubContext.Clients.All.SendAsync("sessionCreated", new
+        {
+            sessionId = created.Id,
+            title = created.Title,
+            channelType = channelLabel
+        });
+
+        return created;
     }
 
     public void AddMessage(string sessionId, SessionMessage message)

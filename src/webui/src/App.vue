@@ -78,6 +78,7 @@ import { menuGroups } from '@/config/menu'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr'
 import { ElNotification, ElButton } from 'element-plus'
+import { eventBus } from '@/services/eventBus'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -117,6 +118,7 @@ function startSignalR() {
     .build()
 
   connection.on('sessionPendingApproval', (payload: { sessionId: string; sessionTitle: string; channelType: string; timestamp: string }) => {
+    eventBus.emit('session:pendingApproval', payload)
     ElNotification({
       title: '新会话待审批',
       message: h('div', [
@@ -133,6 +135,18 @@ function startSignalR() {
       duration: 10000,
       position: 'bottom-right'
     })
+  })
+
+  connection.on('sessionCreated', (payload: { sessionId: string; title: string; channelType: string }) => {
+    eventBus.emit('session:created', payload)
+  })
+
+  connection.on('sessionApproved', (payload: { sessionId: string; title: string }) => {
+    eventBus.emit('session:approved', payload)
+  })
+
+  connection.on('sessionDisabled', (payload: { sessionId: string; title: string }) => {
+    eventBus.emit('session:disabled', payload)
   })
 
   connection.start().catch(() => {

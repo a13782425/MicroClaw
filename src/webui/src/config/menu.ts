@@ -7,6 +7,7 @@ import {
   Cpu,
   Connection,
   DocumentChecked,
+  Promotion,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -30,6 +31,14 @@ export const menuGroups: MenuGroup[] = [
     items: [
       { label: '会话', icon: ChatDotRound, route: '/sessions' },
       { label: '计时任务', icon: Timer, route: '/cron' },
+    ],
+  },
+  {
+    id: 'group-agent',
+    label: '智能体',
+    icon: Promotion,
+    items: [
+       { label: 'Agent', icon: Promotion, route: '/agents' },
     ],
   },
   {

@@ -3,4 +3,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MicroClaw.Tests" />
+  </ItemGroup>
 </Project>

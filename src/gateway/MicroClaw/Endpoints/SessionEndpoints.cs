@@ -2,10 +2,16 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using MicroClaw.Agent.Tools;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Hubs;
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Endpoints;
 
@@ -52,7 +58,7 @@ public static class SessionEndpoints
         .WithTags("Sessions");
 
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", (ApproveSessionRequest req, SessionStore store, ClaimsPrincipal user) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -60,14 +66,16 @@ public static class SessionEndpoints
                 return Results.BadRequest(new { message = "Id is required." });
 
             SessionInfo? updated = store.Approve(req.Id);
-            return updated is null
-                ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
-                : Results.Ok(updated);
+            if (updated is null)
+                return Results.NotFound(new { message = $"Session '{req.Id}' not found." });
+
+            await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = updated.Id, title = updated.Title });
+            return Results.Ok(updated);
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/disable — 禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable", (DisableSessionRequest req, SessionStore store, ClaimsPrincipal user) =>
+        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -75,9 +83,11 @@ public static class SessionEndpoints
                 return Results.BadRequest(new { message = "Id is required." });
 
             SessionInfo? updated = store.Disable(req.Id);
-            return updated is null
-                ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
-                : Results.Ok(updated);
+            if (updated is null)
+                return Results.NotFound(new { message = $"Session '{req.Id}' not found." });
+
+            await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = updated.Id, title = updated.Title });
+            return Results.Ok(updated);
         })
         .WithTags("Sessions");
 
@@ -97,6 +107,8 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/{id}/chat",
             async (string id, ChatRequest req, SessionStore store,
                    ProviderConfigStore providerStore, ProviderClientFactory factory,
+                   CronJobStore cronJobStore, ICronJobScheduler cronScheduler,
+                   ILoggerFactory loggerFactory,
                    HttpContext ctx, CancellationToken ct) =>
             {
                 SessionInfo? session = store.Get(id);
@@ -141,14 +153,22 @@ public static class SessionEndpoints
                 ctx.Response.Headers.Connection = "keep-alive";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                IChatClient client = factory.Create(provider);
+                // 构建定时任务 AI 工具，供用户在对话中管理定时任务
+                IReadOnlyList<AIFunction> cronTools = CronTools.CreateForSession(id, cronJobStore, cronScheduler);
+                ChatOptions chatOptions = new() { Tools = [.. cronTools] };
+
+                IChatClient innerClient = factory.Create(provider);
+                // UseFunctionInvocation 自动处理定时任务工具调用
+                IChatClient client = innerClient.AsBuilder()
+                    .UseFunctionInvocation(loggerFactory)
+                    .Build();
                 StringBuilder fullContent = new();
                 StringBuilder thinkBuffer = new();
 
                 try
                 {
                     await foreach (ChatResponseUpdate update in
-                        client.GetStreamingResponseAsync(chatMessages, cancellationToken: ct))
+                        client.GetStreamingResponseAsync(chatMessages, chatOptions, ct))
                     {
                         string token = update.Text ?? string.Empty;
                         if (string.IsNullOrEmpty(token)) continue;
@@ -201,6 +221,7 @@ public static class SessionEndpoints
                 finally
                 {
                     client.Dispose();
+                    innerClient.Dispose();
                 }
             })
         .WithTags("Sessions");

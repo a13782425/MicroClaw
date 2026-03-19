@@ -387,11 +387,15 @@ async function toggleEnabled(c: ChannelConfig, val: boolean) {
 }
 
 async function confirmDelete(c: ChannelConfig) {
-  await ElMessageBox.confirm(
-    `确认删除渠道「${c.displayName}」？此操作不可撤销。`,
-    '删除确认',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
-  ).catch(() => null)
+  try {
+    await ElMessageBox.confirm(
+      `确认删除渠道「${c.displayName}」？此操作不可撤销。`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
+    )
+  } catch {
+    return
+  }
 
   try {
     await deleteChannel(c.id)

@@ -93,7 +93,7 @@ async function submit() {
     const data = await login(form.username, form.password)
     auth.setAuth(data.token, data.username)
     ElMessage.success('登录成功')
-    router.push({ name: 'dashboard' })
+    router.push({ name: 'sessions' })
   } catch (err: any) {
     const msg = err.response?.status === 401 ? '用户名或密码错误' : '登录失败，请稍后重试'
     ElMessage.error(msg)

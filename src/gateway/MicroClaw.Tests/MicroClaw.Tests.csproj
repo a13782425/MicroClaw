@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="FluentAssertions" Version="8.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0-preview.2.25164.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MicroClaw\MicroClaw.csproj" />
+    <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
+    <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
+    <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

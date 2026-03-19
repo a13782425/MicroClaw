@@ -323,3 +323,186 @@ export function streamChat(
 
   return controller
 }
+
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
+export type McpTransportType = 'stdio' | 'sse'
+
+export type McpServerConfig = {
+  name: string
+  transportType: McpTransportType
+  command?: string | null
+  args?: string[] | null
+  env?: Record<string, string | null> | null
+  url?: string | null
+}
+
+export type AgentConfig = {
+  id: string
+  name: string
+  systemPrompt: string
+  providerId: string
+  isEnabled: boolean
+  boundChannelIds: string[]
+  mcpServers: McpServerConfig[]
+  createdAtUtc: string
+}
+
+export type AgentCreateRequest = {
+  name: string
+  systemPrompt?: string
+  providerId: string
+  isEnabled?: boolean
+  boundChannelIds?: string[]
+  mcpServers?: McpServerConfig[]
+}
+
+export type AgentUpdateRequest = {
+  id: string
+  name?: string
+  systemPrompt?: string
+  providerId?: string
+  isEnabled?: boolean
+  boundChannelIds?: string[]
+  mcpServers?: McpServerConfig[]
+}
+
+export type GeneFile = {
+  fileName: string
+  category: string
+  content: string
+  updatedAt: string
+}
+
+export type McpTool = {
+  name: string
+  description: string
+}
+
+export async function listAgents(): Promise<AgentConfig[]> {
+  const { data } = await axios.get<AgentConfig[]>('/api/agents')
+  return data
+}
+
+export async function getAgent(id: string): Promise<AgentConfig> {
+  const { data } = await axios.get<AgentConfig>(`/api/agents/${id}`)
+  return data
+}
+
+export async function createAgent(req: AgentCreateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/agents', req)
+  return data
+}
+
+export async function updateAgent(req: AgentUpdateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/agents/update', req)
+  return data
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+  await axios.post('/api/agents/delete', { id })
+}
+
+export async function listAgentDna(agentId: string): Promise<GeneFile[]> {
+  const { data } = await axios.get<GeneFile[]>(`/api/agents/${agentId}/dna`)
+  return data
+}
+
+export async function writeAgentDna(
+  agentId: string,
+  fileName: string,
+  content: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>(`/api/agents/${agentId}/dna`, {
+    fileName,
+    content,
+    category,
+  })
+  return data
+}
+
+export async function deleteAgentDna(
+  agentId: string,
+  fileName: string,
+  category = ''
+): Promise<void> {
+  await axios.post(`/api/agents/${agentId}/dna/delete`, { fileName, category })
+}
+
+export async function listAgentTools(agentId: string): Promise<McpTool[]> {
+  const { data } = await axios.get<McpTool[]>(`/api/agents/${agentId}/tools`)
+  return data
+}
+
+/**
+ * Agent SSE 流式对话（直接对话，用于测试/调试）。
+ */
+export function streamAgentChat(
+  agentId: string,
+  content: string,
+  history: { role: string; content: string }[],
+  onChunk: (token: string) => void,
+  onError: (err: string) => void,
+  onDone: () => void
+): AbortController {
+  const controller = new AbortController()
+  const auth = useAuthStore()
+
+  ;(async () => {
+    try {
+      const response = await fetch(`/api/agents/${agentId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + auth.token,
+        },
+        body: JSON.stringify({ content, history }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ message: response.statusText }))
+        onError(body.message ?? response.statusText)
+        return
+      }
+
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const raw = trimmed.slice(5).trim()
+          if (raw === '[DONE]') {
+            onDone()
+            return
+          }
+          try {
+            const chunk = JSON.parse(raw) as { type: string; content?: string; message?: string }
+            if (chunk.type === 'error') { onError(chunk.message ?? '未知错误'); return }
+            if (chunk.type === 'token' && chunk.content) onChunk(chunk.content)
+            else if (chunk.type === 'done') { onDone(); return }
+          } catch {
+            // 忽略非法 JSON
+          }
+        }
+      }
+      onDone()
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      onError(String(err))
+    }
+  })()
+
+  return controller
+}

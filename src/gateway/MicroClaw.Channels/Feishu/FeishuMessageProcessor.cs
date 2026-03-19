@@ -20,7 +20,8 @@ public sealed class FeishuMessageProcessor(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IChannelSessionService sessionService,
-    ILogger<FeishuMessageProcessor> logger)
+    ILogger<FeishuMessageProcessor> logger,
+    IAgentMessageHandler? agentHandler = null)
 {
     /// <summary>处理一条飞书文本消息：管理会话 → 查找 Provider → 调用 AI → 回复飞书。</summary>
     public async Task ProcessMessageAsync(
@@ -61,21 +62,30 @@ public sealed class FeishuMessageProcessor(
         SessionMessage userMessage = new("user", userText, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, userMessage);
 
-        // 构建历史消息上下文
+        // 获取历史消息上下文
         IReadOnlyList<SessionMessage> history = sessionService.GetMessages(session.Id);
-        List<ChatMessage> chatMessages = [];
-        foreach (SessionMessage msg in history)
-        {
-            ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
-            chatMessages.Add(new ChatMessage(role, msg.Content));
-        }
 
         string aiReply;
         try
         {
-            IChatClient chatClient = clientFactory.Create(providerConfig);
-            ChatResponse response = await chatClient.GetResponseAsync(chatMessages, cancellationToken: ct);
-            aiReply = response.Text ?? "（无回复）";
+            // 优先路由到 Agent（如有绑定）
+            if (agentHandler?.HasAgentForChannel(channel.Id) == true)
+            {
+                logger.LogInformation("渠道 {ChannelId} 路由到 Agent", channel.Id);
+                aiReply = await agentHandler.HandleMessageAsync(channel.Id, session.Id, history, ct);
+            }
+            else
+            {
+                List<ChatMessage> chatMessages = [];
+                foreach (SessionMessage msg in history)
+                {
+                    ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
+                    chatMessages.Add(new ChatMessage(role, msg.Content));
+                }
+                IChatClient chatClient = clientFactory.Create(providerConfig);
+                ChatResponse response = await chatClient.GetResponseAsync(chatMessages, cancellationToken: ct);
+                aiReply = response.Text ?? "（无回复）";
+            }
         }
         catch (Exception ex)
         {

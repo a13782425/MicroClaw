@@ -177,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { listProviders, type ProviderConfig, type MessageAttachment } from '@/services/gatewayApi'
 import ChatMessage from '@/components/ChatMessage.vue'
@@ -186,6 +186,7 @@ import {
   Promotion, VideoPause, Close,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { eventBus } from '@/services/eventBus'
 
 const store = useSessionStore()
 
@@ -203,6 +204,19 @@ onMounted(async () => {
   await store.fetchSessions()
   providers.value = await listProviders()
   enabledProviders.value = providers.value.filter((p) => p.isEnabled)
+  eventBus.on('session:created', onSessionEvent)
+  eventBus.on('session:approved', onSessionEvent)
+  eventBus.on('session:disabled', onSessionEvent)
+})
+
+function onSessionEvent() {
+  store.fetchSessions()
+}
+
+onUnmounted(() => {
+  eventBus.off('session:created', onSessionEvent)
+  eventBus.off('session:approved', onSessionEvent)
+  eventBus.off('session:disabled', onSessionEvent)
 })
 
 // 滚动到底部

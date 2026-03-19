@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import {
   listSessions,
   listProviders,
@@ -80,6 +80,7 @@ import {
   Check, CircleClose, Connection, Clock, Cpu, Refresh,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { eventBus } from '@/services/eventBus'
 
 const sessions = ref<SessionInfo[]>([])
 const providers = ref<ProviderConfig[]>([])
@@ -137,15 +138,24 @@ async function handleApprove(id: string) {
 }
 
 async function handleDisable(id: string) {
-  await ElMessageBox.confirm('禁用后该会话将无法继续对话，确定禁用？', '禁用确认', {
-    type: 'warning',
-    confirmButtonText: '禁用',
-    cancelButtonText: '取消',
-  })
-  const updated = await disableSession(id)
-  const idx = sessions.value.findIndex((s) => s.id === id)
-  if (idx >= 0) sessions.value[idx] = updated
-  ElMessage.success('会话已禁用')
+  try {
+    await ElMessageBox.confirm('禁用后该会话将无法继续对话，确定禁用？', '禁用确认', {
+      type: 'warning',
+      confirmButtonText: '禁用',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+
+  try {
+    const updated = await disableSession(id)
+    const idx = sessions.value.findIndex((s) => s.id === id)
+    if (idx >= 0) sessions.value[idx] = updated
+    ElMessage.success('会话已禁用')
+  } catch {
+    ElMessage.error('禁用失败，请重试')
+  }
 }
 
 onMounted(async () => {
@@ -155,6 +165,21 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  eventBus.on('session:created', onSessionEvent)
+  eventBus.on('session:pendingApproval', onSessionEvent)
+  eventBus.on('session:approved', onSessionEvent)
+  eventBus.on('session:disabled', onSessionEvent)
+})
+
+function onSessionEvent() {
+  fetchSessions()
+}
+
+onUnmounted(() => {
+  eventBus.off('session:created', onSessionEvent)
+  eventBus.off('session:pendingApproval', onSessionEvent)
+  eventBus.off('session:approved', onSessionEvent)
+  eventBus.off('session:disabled', onSessionEvent)
 })
 </script>
 

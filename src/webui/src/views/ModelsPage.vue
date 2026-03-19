@@ -486,11 +486,15 @@ async function toggleEnabled(p: ProviderConfig, val: boolean) {
 }
 
 async function confirmDelete(p: ProviderConfig) {
-  await ElMessageBox.confirm(
-    `确认删除提供方「${p.displayName}」？此操作不可撤销。`,
-    '删除确认',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
-  ).catch(() => null)
+  try {
+    await ElMessageBox.confirm(
+      `确认删除提供方「${p.displayName}」？此操作不可撤销。`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
+    )
+  } catch {
+    return
+  }
 
   try {
     await deleteProvider(p.id)
