@@ -16,6 +16,7 @@ public static class SystemEndpoints
                 p.BaseUrl,
                 ApiKey = MaskApiKey(p.ApiKey),
                 p.ModelName,
+                p.MaxOutputTokens,
                 p.IsEnabled,
                 p.Capabilities
             });
@@ -39,6 +40,7 @@ public static class SystemEndpoints
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey.Trim(),
                 ModelName = req.ModelName.Trim(),
+                MaxOutputTokens = req.MaxOutputTokens,
                 IsEnabled = req.IsEnabled,
                 Capabilities = req.Capabilities ?? new()
             };
@@ -60,6 +62,7 @@ public static class SystemEndpoints
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey?.Trim() ?? string.Empty,
                 ModelName = req.ModelName?.Trim() ?? string.Empty,
+                MaxOutputTokens = req.MaxOutputTokens ?? 8192,
                 IsEnabled = req.IsEnabled,
                 Capabilities = req.Capabilities ?? new()
             };
@@ -120,6 +123,7 @@ public sealed record ProviderCreateRequest(
     string? BaseUrl,
     string ApiKey,
     string ModelName,
+    int MaxOutputTokens = 8192,
     bool IsEnabled = true,
     ProviderCapabilities? Capabilities = null);
 
@@ -130,6 +134,7 @@ public sealed record ProviderUpdateRequest(
     string? BaseUrl,
     string? ApiKey,
     string? ModelName,
+    int? MaxOutputTokens = null,
     bool IsEnabled = true,
     ProviderCapabilities? Capabilities = null);
 

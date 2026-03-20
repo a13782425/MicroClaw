@@ -31,6 +31,9 @@
             <el-icon><Cpu /></el-icon>
             {{ p.modelName }}
           </div>
+          <div class="card-model" style="color: #6b7280; font-size: 13px;">
+            最大输出 {{ p.maxOutputTokens.toLocaleString() }} tokens
+          </div>
           <div v-if="p.baseUrl" class="card-url">
             <el-icon><Link /></el-icon>
             {{ p.baseUrl }}
@@ -134,6 +137,18 @@
 
             <el-form-item label="模型名称" prop="modelName">
               <el-input v-model="form.modelName" :placeholder="modelNamePlaceholder" />
+            </el-form-item>
+
+            <el-form-item label="最大输出 Tokens" prop="maxOutputTokens">
+              <el-input-number
+                v-model="form.maxOutputTokens"
+                :min="256"
+                :max="131072"
+                :step="1024"
+                controls-position="right"
+                style="width: 100%"
+              />
+              <div class="form-hint">Anthropic 协议必填，OpenAI 兼容协议可选。默认 8192</div>
             </el-form-item>
 
             <el-form-item label="启用" class="form-item-inline">
@@ -287,6 +302,7 @@ const form = reactive({
   baseUrl: '',
   apiKey: '',
   modelName: '',
+  maxOutputTokens: 8192,
   isEnabled: true,
   // capabilities
   inputModalities: [] as string[],
@@ -362,6 +378,7 @@ function openCreateDialog() {
     baseUrl: '',
     apiKey: '',
     modelName: '',
+    maxOutputTokens: 8192,
     isEnabled: true,
     inputModalities: [],
     outputModalities: [],
@@ -395,6 +412,7 @@ function openEditDialog(p: ProviderConfig) {
     baseUrl: p.baseUrl ?? '',
     apiKey: '',
     modelName: p.modelName,
+    maxOutputTokens: p.maxOutputTokens ?? 8192,
     isEnabled: p.isEnabled,
     inputModalities,
     outputModalities,
@@ -443,6 +461,7 @@ async function submitForm() {
         baseUrl: form.baseUrl || undefined,
         apiKey: form.apiKey || undefined,
         modelName: form.modelName,
+        maxOutputTokens: form.maxOutputTokens,
         isEnabled: form.isEnabled,
         capabilities,
       })
@@ -454,6 +473,7 @@ async function submitForm() {
         baseUrl: form.baseUrl || undefined,
         apiKey: form.apiKey,
         modelName: form.modelName,
+        maxOutputTokens: form.maxOutputTokens,
         isEnabled: form.isEnabled,
         capabilities,
       })
@@ -477,6 +497,7 @@ async function toggleEnabled(p: ProviderConfig, val: boolean) {
       baseUrl: p.baseUrl ?? undefined,
       apiKey: undefined,
       modelName: p.modelName,
+      maxOutputTokens: p.maxOutputTokens,
       isEnabled: val,
     })
   } catch {

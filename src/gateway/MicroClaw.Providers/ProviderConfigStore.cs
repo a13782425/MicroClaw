@@ -38,6 +38,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
         entity.Protocol = SerializeProtocol(incoming.Protocol);
         entity.BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl;
         entity.ModelName = incoming.ModelName;
+        entity.MaxOutputTokens = incoming.MaxOutputTokens;
         entity.IsEnabled = incoming.IsEnabled;
         entity.CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities);
 
@@ -67,6 +68,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             BaseUrl = string.IsNullOrWhiteSpace(e.BaseUrl) ? null : e.BaseUrl,
             ApiKey = ResolveEnvVars(e.ApiKey) ?? string.Empty,
             ModelName = ResolveEnvVars(e.ModelName) ?? string.Empty,
+            MaxOutputTokens = e.MaxOutputTokens,
             IsEnabled = e.IsEnabled,
             Capabilities = DeserializeCapabilities(e.CapabilitiesJson)
         };
@@ -80,6 +82,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             BaseUrl = string.IsNullOrWhiteSpace(c.BaseUrl) ? null : c.BaseUrl,
             ApiKey = c.ApiKey,
             ModelName = c.ModelName,
+            MaxOutputTokens = c.MaxOutputTokens,
             IsEnabled = c.IsEnabled,
             CapabilitiesJson = JsonSerializer.Serialize(c.Capabilities)
         };

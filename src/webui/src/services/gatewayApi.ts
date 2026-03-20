@@ -42,6 +42,7 @@ export type ProviderConfig = {
   baseUrl: string | null
   apiKey: string
   modelName: string
+  maxOutputTokens: number
   isEnabled: boolean
   capabilities: ProviderCapabilities
 }
@@ -52,6 +53,7 @@ export type ProviderCreateRequest = {
   baseUrl?: string
   apiKey: string
   modelName: string
+  maxOutputTokens?: number
   isEnabled: boolean
   capabilities?: Partial<ProviderCapabilities>
 }
@@ -63,6 +65,7 @@ export type ProviderUpdateRequest = {
   baseUrl?: string
   apiKey?: string
   modelName?: string
+  maxOutputTokens?: number
   isEnabled: boolean
   capabilities?: Partial<ProviderCapabilities>
 }

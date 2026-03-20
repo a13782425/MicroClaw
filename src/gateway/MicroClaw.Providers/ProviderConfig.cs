@@ -47,6 +47,7 @@ public sealed record ProviderConfig
     public string? BaseUrl { get; init; }
     public string ApiKey { get; init; } = string.Empty;
     public string ModelName { get; init; } = string.Empty;
+    public int MaxOutputTokens { get; init; } = 8192;
     public bool IsEnabled { get; init; } = true;
     public ProviderCapabilities Capabilities { get; init; } = new();
 }

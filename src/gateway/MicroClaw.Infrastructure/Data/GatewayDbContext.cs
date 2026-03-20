@@ -38,6 +38,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.BaseUrl).HasColumnName("base_url");
             b.Property(e => e.ApiKey).HasColumnName("api_key");
             b.Property(e => e.ModelName).HasColumnName("model_name");
+            b.Property(e => e.MaxOutputTokens).HasColumnName("max_output_tokens").HasDefaultValue(8192);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CapabilitiesJson).HasColumnName("capabilities_json");
         });

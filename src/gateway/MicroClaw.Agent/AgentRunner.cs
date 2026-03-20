@@ -98,7 +98,7 @@ public sealed class AgentRunner(
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions? chatOptions = BuildChatOptions(allTools);
+            ChatOptions chatOptions = BuildChatOptions(allTools, provider);
             ChatResponse response = await client.GetResponseAsync(messages, chatOptions, ct);
 
             await TrackUsageAsync(response.Usage, sessionId, provider, source, ct);
@@ -152,7 +152,7 @@ public sealed class AgentRunner(
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions? chatOptions = BuildChatOptions(allTools);
+            ChatOptions chatOptions = BuildChatOptions(allTools, provider);
 
             await foreach (ChatResponseUpdate update in
                 client.GetStreamingResponseAsync(messages, chatOptions, ct))
@@ -241,10 +241,16 @@ public sealed class AgentRunner(
             .Build();
     }
 
-    private static ChatOptions? BuildChatOptions(IReadOnlyList<AITool> tools)
+    private static ChatOptions BuildChatOptions(IReadOnlyList<AITool> tools, ProviderConfig provider)
     {
-        if (tools.Count == 0) return null;
-        return new ChatOptions { Tools = [.. tools] };
+        var options = new ChatOptions
+        {
+            ModelId = provider.ModelName,
+            MaxOutputTokens = provider.MaxOutputTokens,
+        };
+        if (tools.Count > 0)
+            options.Tools = [.. tools];
+        return options;
     }
 
     private async Task DisposeConnectionsAsync(IAsyncDisposable[] connections)

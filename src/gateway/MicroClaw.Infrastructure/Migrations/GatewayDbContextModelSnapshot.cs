@@ -180,6 +180,12 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");
 
+                    b.Property<int>("MaxOutputTokens")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(8192)
+                        .HasColumnName("max_output_tokens");
+
                     b.Property<string>("ModelName")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -286,7 +292,7 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("id");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                    b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at_utc");
 
