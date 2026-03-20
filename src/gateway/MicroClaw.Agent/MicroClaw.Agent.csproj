@@ -9,15 +9,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
-    <PackageReference Include="Quartz" Version="3.13.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
+    <ProjectReference Include="..\MicroClaw.Skills\MicroClaw.Skills.csproj" />
   </ItemGroup>
 
 </Project>

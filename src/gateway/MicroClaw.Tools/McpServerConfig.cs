@@ -1,4 +1,4 @@
-namespace MicroClaw.Agent.Tools;
+namespace MicroClaw.Tools;
 
 /// <summary>MCP Server 连接配置，支持 stdio（本地进程）和 SSE（HTTP 远程）两种传输方式。</summary>
 /// <remarks>

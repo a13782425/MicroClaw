@@ -5,4 +5,7 @@
   <Project Path="MicroClaw.Infrastructure/MicroClaw.Infrastructure.csproj" />
   <Project Path="MicroClaw.Providers/MicroClaw.Providers.csproj" />
   <Project Path="MicroClaw.Tests/MicroClaw.Tests.csproj" />
+  <Project Path="MicroClaw.Agent/MicroClaw.Agent.csproj" />
+  <Project Path="MicroClaw.Tools/MicroClaw.Tools.csproj" />
+  <Project Path="MicroClaw.Skills/MicroClaw.Skills.csproj" />
 </Solution>

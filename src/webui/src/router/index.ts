@@ -8,6 +8,7 @@ const ModelsPage    = () => import('@/views/ModelsPage.vue')
 const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
 const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
 const AgentsPage    = () => import('@/views/AgentsPage.vue')
+const SkillsPage    = () => import('@/views/SkillsPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,7 @@ export const router = createRouter({
     { path: '/channels', name: 'channels', component: ChannelsPage },
     { path: '/approvals', name: 'approvals', component: ApprovalsPage },
     { path: '/agents', name: 'agents', component: AgentsPage },
+    { path: '/skills', name: 'skills', component: SkillsPage },
   ]
 })
 

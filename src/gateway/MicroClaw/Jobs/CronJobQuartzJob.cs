@@ -1,3 +1,4 @@
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -8,6 +9,7 @@ namespace MicroClaw.Jobs;
 [DisallowConcurrentExecution]
 public sealed class CronJobQuartzJob(
     CronJobStore cronJobStore,
+    ICronJobScheduler cronJobScheduler,
     SessionChatService sessionChatService,
     ILogger<CronJobQuartzJob> logger) : IJob
 {
@@ -42,10 +44,27 @@ public sealed class CronJobQuartzJob(
         {
             await sessionChatService.ExecuteAsync(job.TargetSessionId, job.Prompt, context.CancellationToken);
             cronJobStore.UpdateLastRun(jobId, DateTimeOffset.UtcNow);
+            logger.LogInformation("CronJobQuartzJob: job '{JobId}' completed successfully.", jobId);
+        }
+        catch (OperationCanceledException)
+        {
+            cronJobStore.UpdateLastRun(jobId, DateTimeOffset.UtcNow);
+            logger.LogWarning("CronJobQuartzJob: job '{JobId}' was cancelled.", jobId);
         }
         catch (Exception ex)
         {
+            cronJobStore.UpdateLastRun(jobId, DateTimeOffset.UtcNow);
             logger.LogError(ex, "CronJobQuartzJob: error executing job '{JobId}'.", jobId);
+        }
+        finally
+        {
+            // 一次性任务执行完毕后自动删除（无论成功失败）
+            if (job.RunAtUtc is not null)
+            {
+                cronJobStore.Delete(jobId);
+                await cronJobScheduler.UnscheduleJobAsync(jobId, context.CancellationToken);
+                logger.LogInformation("CronJobQuartzJob: one-time job '{JobId}' cleaned up after execution.", jobId);
+            }
         }
     }
 }

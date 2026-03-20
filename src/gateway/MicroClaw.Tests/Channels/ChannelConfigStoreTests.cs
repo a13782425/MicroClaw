@@ -229,7 +229,7 @@ public sealed class ChannelConfigStoreTests : IDisposable
     [InlineData("wecom", ChannelType.WeCom)]
     [InlineData("wechat", ChannelType.WeChat)]
     [InlineData("FEISHU", ChannelType.Feishu)]
-    [InlineData("unknown", ChannelType.Feishu)]
+    [InlineData("unknown", ChannelType.Web)]
     public void ParseChannelType_ProducesExpectedEnum(string input, ChannelType expected)
     {
         ChannelConfigStore.ParseChannelType(input).Should().Be(expected);

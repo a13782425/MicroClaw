@@ -2,7 +2,8 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using MicroClaw.Agent.Tools;
+using MicroClaw.Agent;
+using MicroClaw.Tools;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -91,6 +92,25 @@ public static class SessionEndpoints
         })
         .WithTags("Sessions");
 
+        // POST /api/sessions/switch-provider — 切换会话绑定的 Provider
+        endpoints.MapPost("/sessions/switch-provider", (SwitchProviderRequest req, SessionStore store, ProviderConfigStore providerStore) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Id))
+                return Results.BadRequest(new { message = "Id is required." });
+            if (string.IsNullOrWhiteSpace(req.ProviderId))
+                return Results.BadRequest(new { message = "ProviderId is required." });
+
+            ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
+            if (provider is null || !provider.IsEnabled)
+                return Results.NotFound(new { message = $"Provider '{req.ProviderId}' not found or disabled." });
+
+            SessionInfo? updated = store.UpdateProvider(req.Id, req.ProviderId);
+            return updated is null
+                ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
+                : Results.Ok(updated);
+        })
+        .WithTags("Sessions");
+
         // GET /api/sessions/{id}/messages — 获取消息历史
         endpoints.MapGet("/sessions/{id}/messages", (string id, SessionStore store) =>
         {
@@ -108,6 +128,7 @@ public static class SessionEndpoints
             async (string id, ChatRequest req, SessionStore store,
                    ProviderConfigStore providerStore, ProviderClientFactory factory,
                    CronJobStore cronJobStore, ICronJobScheduler cronScheduler,
+                   AgentStore agentStore,
                    ILoggerFactory loggerFactory,
                    HttpContext ctx, CancellationToken ct) =>
             {
@@ -153,15 +174,19 @@ public static class SessionEndpoints
                 ctx.Response.Headers.Connection = "keep-alive";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                // 构建定时任务 AI 工具，供用户在对话中管理定时任务
-                IReadOnlyList<AIFunction> cronTools = CronTools.CreateForSession(id, cronJobStore, cronScheduler);
-                ChatOptions chatOptions = new() { Tools = [.. cronTools] };
+                // 构建定时任务 AI 工具，根据默认 Agent 的工具分组配置决定是否启用
+                IReadOnlyList<AIFunction> allCronTools = CronTools.CreateForSession(id, cronJobStore, cronScheduler);
+                AgentConfig? defaultAgent = agentStore.GetDefault();
+                IReadOnlyList<AIFunction> cronTools = FilterCronTools(defaultAgent, allCronTools);
+                ChatOptions? chatOptions = cronTools.Count > 0
+                    ? new ChatOptions { Tools = [.. cronTools] }
+                    : null;
 
                 IChatClient innerClient = factory.Create(provider);
-                // UseFunctionInvocation 自动处理定时任务工具调用
-                IChatClient client = innerClient.AsBuilder()
-                    .UseFunctionInvocation(loggerFactory)
-                    .Build();
+                // 仅在有工具时启用 UseFunctionInvocation
+                IChatClient client = cronTools.Count > 0
+                    ? innerClient.AsBuilder().UseFunctionInvocation(loggerFactory).Build()
+                    : innerClient;
                 StringBuilder fullContent = new();
                 StringBuilder thinkBuffer = new();
 
@@ -276,6 +301,19 @@ public static class SessionEndpoints
         }
 
         return (think, main);
+    }
+
+    /// <summary>根据默认 Agent 的工具分组配置过滤内置定时工具。</summary>
+    private static IReadOnlyList<AIFunction> FilterCronTools(
+        AgentConfig? agent,
+        IReadOnlyList<AIFunction> cronTools)
+    {
+        if (agent is null) return cronTools;
+        ToolGroupConfig? cronCfg =
+            agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "cron");
+        if (cronCfg is not null && !cronCfg.IsEnabled) return [];
+        if (cronCfg is null) return cronTools;
+        return cronTools.Where(t => !cronCfg.DisabledToolNames.Contains(t.Name)).ToList().AsReadOnly();
     }
 
     private static async Task WriteSseAsync(HttpResponse response, string data, CancellationToken ct)

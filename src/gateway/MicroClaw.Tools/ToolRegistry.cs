@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 
-namespace MicroClaw.Agent.Tools;
+namespace MicroClaw.Tools;
 
 /// <summary>
 /// MCP 工具注册表：按需创建 MCP Client 连接，获取工具列表。

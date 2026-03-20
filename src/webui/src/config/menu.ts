@@ -8,6 +8,7 @@ import {
   Connection,
   DocumentChecked,
   Promotion,
+  MagicStick,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -39,6 +40,7 @@ export const menuGroups: MenuGroup[] = [
     icon: Promotion,
     items: [
        { label: 'Agent', icon: Promotion, route: '/agents' },
+       { label: '技能', icon: MagicStick, route: '/skills' },
     ],
   },
   {

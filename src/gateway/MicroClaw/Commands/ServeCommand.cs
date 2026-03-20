@@ -8,6 +8,7 @@ using MicroClaw.Channels.WeChat;
 using MicroClaw.Channels.WeCom;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
+using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -63,6 +64,7 @@ public class ServeCommand : Command
 		var app = builder.Build();
 
 		MigrateDatabase(app);
+		SeedDefaultAgent(app);
 		ConfigureMiddleware(app);
 		MapEndpoints(app);
 
@@ -167,6 +169,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderConfigStore>();
 		builder.Services.AddSingleton<SessionStore>(sp =>
 			new SessionStore(sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>(), sessionsDir));
+		builder.Services.AddSingleton<ISessionReader>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
@@ -177,8 +180,24 @@ public class ServeCommand : Command
 		string agentsDataDir = ResolveAgentsDataDir(home, configFile);
 		builder.Services.AddSingleton<AgentStore>();
 		builder.Services.AddSingleton<DNAService>(_ => new DNAService(agentsDataDir));
+		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
+		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
+			sp.GetRequiredService<SessionStore>(),
+			sp.GetRequiredService<AgentStore>(),
+			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>())));
 		builder.Services.AddSingleton<AgentRunner>();
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
+
+		// Skills 服务
+		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
+		builder.Services.AddSingleton<SkillStore>();
+		builder.Services.AddSingleton<SkillService>(_ => new SkillService(workspaceRoot));
+		builder.Services.AddSingleton<SkillRunner>();
+		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
+			sp.GetRequiredService<SkillStore>(),
+			sp.GetRequiredService<SkillService>(),
+			sp.GetRequiredService<SkillRunner>(),
+			workspaceRoot));
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();
@@ -214,6 +233,14 @@ public class ServeCommand : Command
 		var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
 		using var db = dbFactory.CreateDbContext();
 		db.Database.Migrate();
+	}
+
+	/// <summary>确保系统默认代理（main）存在。</summary>
+	private static void SeedDefaultAgent(WebApplication app)
+	{
+		using var scope = app.Services.CreateScope();
+		var agentStore = scope.ServiceProvider.GetRequiredService<AgentStore>();
+		agentStore.EnsureMainAgent();
 	}
 
 	/// <summary>配置中间件管道：请求日志、认证授权、Swagger UI、默认文件、Brotli 预压缩及静态文件服务。</summary>
@@ -360,6 +387,16 @@ public class ServeCommand : Command
 		if (!string.IsNullOrWhiteSpace(configFile))
 			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "agents");
 		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "agents");
+	}
+
+	/// <summary>返回 workspace 根目录路径，供 Skills 等子目录使用。</summary>
+	private static string ResolveWorkspaceRoot(string? home, string? configFile)
+	{
+		if (!string.IsNullOrWhiteSpace(home))
+			return Path.Combine(home, "workspace");
+		if (!string.IsNullOrWhiteSpace(configFile))
+			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace");
+		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace");
 	}
 
 	/// <summary>根据原始文件扩展名为 Brotli 压缩响应设置正确的 Content-Type 头。</summary>

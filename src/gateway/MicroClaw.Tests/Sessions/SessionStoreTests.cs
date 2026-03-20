@@ -208,8 +208,8 @@ public sealed class SessionStoreTests : IDisposable
         messages.Should().ContainSingle();
         messages[0].Attachments.Should().ContainSingle();
         messages[0].Attachments![0].FileName.Should().Be("test.png");
-        messages[0].Attachments[0].MimeType.Should().Be("image/png");
-        messages[0].Attachments[0].Base64Data.Should().Be("iVBORw0KGgo=");
+        messages[0].Attachments![0].MimeType.Should().Be("image/png");
+        messages[0].Attachments![0].Base64Data.Should().Be("iVBORw0KGgo=");
     }
 
     [Fact]
@@ -224,5 +224,48 @@ public sealed class SessionStoreTests : IDisposable
 
         Directory.Exists(sessionDir).Should().BeTrue();
         File.Exists(Path.Combine(sessionDir, "messages.json")).Should().BeTrue();
+    }
+
+    // --- Sub-Agent 字段测试 ---
+
+    [Fact]
+    public void Create_WithoutAgentId_AgentIdIsNull()
+    {
+        var session = _store.Create("Normal Session", "p1");
+
+        session.AgentId.Should().BeNull();
+        _store.Get(session.Id)!.AgentId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Create_WithAgentId_PreservesAgentId()
+    {
+        var session = _store.Create("Sub Task", "p1", agentId: "agent-123");
+
+        session.AgentId.Should().Be("agent-123");
+        _store.Get(session.Id)!.AgentId.Should().Be("agent-123");
+    }
+
+    [Fact]
+    public void Create_WithParentSessionId_PreservesParentSessionId()
+    {
+        var parent = _store.Create("Parent", "p1");
+        var child = _store.Create("Child", "p1", parentSessionId: parent.Id);
+
+        child.ParentSessionId.Should().Be(parent.Id);
+        _store.Get(child.Id)!.ParentSessionId.Should().Be(parent.Id);
+    }
+
+    [Fact]
+    public void Create_SubAgentSession_BothFieldsPersisted()
+    {
+        var parent = _store.Create("Parent Task", "p1");
+        var child = _store.Create("[子代理] helper", "p1",
+            agentId: "agent-456",
+            parentSessionId: parent.Id);
+
+        var retrieved = _store.Get(child.Id)!;
+        retrieved.AgentId.Should().Be("agent-456");
+        retrieved.ParentSessionId.Should().Be(parent.Id);
     }
 }

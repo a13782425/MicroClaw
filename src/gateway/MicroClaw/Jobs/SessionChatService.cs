@@ -36,13 +36,14 @@ public sealed class SessionChatService(
             return null;
         }
 
-        // 保存定时触发的用户消息
+        // 保存定时触发的用户消息（标记来源为 cron，前端可据此过滤不显示）
         SessionMessage userMsg = new(
             Role: "user",
             Content: prompt,
             ThinkContent: null,
             Timestamp: DateTimeOffset.UtcNow,
-            Attachments: null);
+            Attachments: null,
+            Source: "cron");
         sessionStore.AddMessage(sessionId, userMsg);
 
         // 构建消息历史（含刚添加的用户消息）

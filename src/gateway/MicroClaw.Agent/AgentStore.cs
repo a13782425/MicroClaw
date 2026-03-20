@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MicroClaw.Agent.Tools;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Tools;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Agent;
@@ -31,6 +31,51 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         return entity is null ? null : ToConfig(entity);
     }
 
+    /// <summary>返回 IsDefault=true 的代理（系统默认代理 main），不存在时返回 null。</summary>
+    public AgentConfig? GetDefault()
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        AgentConfigEntity? entity = db.Agents.FirstOrDefault(a => a.IsDefault);
+        return entity is null ? null : ToConfig(entity);
+    }
+
+    /// <summary>
+    /// 确保存在默认代理（main）。若已有 IsDefault=true 的代理则直接返回，否则创建。
+    /// 幂等：多次调用不会创建重复记录。
+    /// </summary>
+    public AgentConfig EnsureMainAgent()
+    {
+        AgentConfig? existing = GetDefault();
+        if (existing is not null) return existing;
+
+        AgentConfig main = new(
+            Id: string.Empty,
+            Name: "main",
+            SystemPrompt: string.Empty,
+            IsEnabled: true,
+            BoundSkillIds: [],
+            McpServers: [],
+            ToolGroupConfigs: [],
+            CreatedAtUtc: DateTimeOffset.UtcNow,
+            IsDefault: true);
+
+        return Add(main);
+    }
+
+    /// <summary>更新 Agent 的工具分组启用配置。</summary>
+    public AgentConfig? UpdateToolGroupConfigs(string id, IReadOnlyList<ToolGroupConfig> configs)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        AgentConfigEntity? entity = db.Agents.Find(id);
+        if (entity is null) return null;
+
+        entity.ToolGroupConfigsJson = configs.Count > 0
+            ? JsonSerializer.Serialize(configs, JsonOpts)
+            : null;
+        db.SaveChanges();
+        return ToConfig(entity);
+    }
+
     public AgentConfig Add(AgentConfig config)
     {
         AgentConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
@@ -46,26 +91,33 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         AgentConfigEntity? entity = db.Agents.Find(id);
         if (entity is null) return null;
 
-        entity.Name = incoming.Name;
+        // 默认代理的名称受保护，不允许修改
+        if (!entity.IsDefault)
+            entity.Name = incoming.Name;
+
         entity.SystemPrompt = incoming.SystemPrompt;
-        entity.ProviderId = incoming.ProviderId;
         entity.IsEnabled = incoming.IsEnabled;
-        entity.BoundChannelIdsJson = incoming.BoundChannelIds.Count > 0
-            ? JsonSerializer.Serialize(incoming.BoundChannelIds, JsonOpts)
+        entity.BoundSkillIdsJson = incoming.BoundSkillIds.Count > 0
+            ? JsonSerializer.Serialize(incoming.BoundSkillIds, JsonOpts)
             : null;
         entity.McpServersJson = incoming.McpServers.Count > 0
             ? JsonSerializer.Serialize(incoming.McpServers, JsonOpts)
+            : null;
+        entity.ToolGroupConfigsJson = incoming.ToolGroupConfigs.Count > 0
+            ? JsonSerializer.Serialize(incoming.ToolGroupConfigs, JsonOpts)
             : null;
 
         db.SaveChanges();
         return ToConfig(entity);
     }
 
+    /// <summary>删除代理。若代理为默认代理（IsDefault=true）则拒绝删除并返回 false。</summary>
     public bool Delete(string id)
     {
         using GatewayDbContext db = factory.CreateDbContext();
         AgentConfigEntity? entity = db.Agents.Find(id);
         if (entity is null) return false;
+        if (entity.IsDefault) return false;
 
         db.Agents.Remove(entity);
         db.SaveChanges();
@@ -76,26 +128,30 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         e.Id,
         e.Name,
         e.SystemPrompt,
-        e.ProviderId,
         e.IsEnabled,
-        DeserializeList<string>(e.BoundChannelIdsJson),
+        DeserializeList<string>(e.BoundSkillIdsJson),
         DeserializeList<McpServerConfig>(e.McpServersJson),
-        e.CreatedAtUtc);
+        DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
+        e.CreatedAtUtc,
+        e.IsDefault);
 
     private static AgentConfigEntity ToEntity(AgentConfig c) => new()
     {
         Id = c.Id,
         Name = c.Name,
         SystemPrompt = c.SystemPrompt,
-        ProviderId = c.ProviderId,
         IsEnabled = c.IsEnabled,
-        BoundChannelIdsJson = c.BoundChannelIds.Count > 0
-            ? JsonSerializer.Serialize(c.BoundChannelIds, JsonOpts)
+        BoundSkillIdsJson = c.BoundSkillIds.Count > 0
+            ? JsonSerializer.Serialize(c.BoundSkillIds, JsonOpts)
             : null,
         McpServersJson = c.McpServers.Count > 0
             ? JsonSerializer.Serialize(c.McpServers, JsonOpts)
             : null,
+        ToolGroupConfigsJson = c.ToolGroupConfigs.Count > 0
+            ? JsonSerializer.Serialize(c.ToolGroupConfigs, JsonOpts)
+            : null,
         CreatedAtUtc = c.CreatedAtUtc,
+        IsDefault = c.IsDefault,
     };
 
     private static IReadOnlyList<T> DeserializeList<T>(string? json)

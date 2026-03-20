@@ -8,4 +8,6 @@ public sealed class SessionEntity
     public bool IsApproved { get; set; }
     public string ChannelType { get; set; } = "web";
     public string CreatedAtUtc { get; set; } = string.Empty;
+    public string? AgentId { get; set; }
+    public string? ParentSessionId { get; set; }
 }

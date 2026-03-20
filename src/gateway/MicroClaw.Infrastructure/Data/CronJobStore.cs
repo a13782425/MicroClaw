@@ -22,7 +22,8 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         return entity is null ? null : ToRecord(entity);
     }
 
-    public CronJob Add(string name, string? description, string cronExpression, string targetSessionId, string prompt)
+    /// <summary>创建定时任务。cronExpression 与 runAtUtc 二选一，不可同时填写。</summary>
+    public CronJob Add(string name, string? description, string? cronExpression, string targetSessionId, string prompt, DateTimeOffset? runAtUtc = null)
     {
         CronJobEntity entity = new()
         {
@@ -30,6 +31,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
             Name = name,
             Description = description,
             CronExpression = cronExpression,
+            RunAtUtc = runAtUtc?.ToString("O"),
             TargetSessionId = targetSessionId,
             Prompt = prompt,
             IsEnabled = true,
@@ -88,5 +90,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         e.IsEnabled,
         DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset created) ? created : DateTimeOffset.MinValue,
         string.IsNullOrWhiteSpace(e.LastRunAtUtc) ? null
-            : DateTimeOffset.TryParse(e.LastRunAtUtc, out DateTimeOffset last) ? last : null);
+            : DateTimeOffset.TryParse(e.LastRunAtUtc, out DateTimeOffset last) ? last : null,
+        string.IsNullOrWhiteSpace(e.RunAtUtc) ? null
+            : DateTimeOffset.TryParse(e.RunAtUtc, out DateTimeOffset runAt) ? runAt : null);
 }

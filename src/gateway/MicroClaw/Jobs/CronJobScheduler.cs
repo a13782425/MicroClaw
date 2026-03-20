@@ -16,7 +16,11 @@ public sealed class CronJobScheduler(ISchedulerFactory schedulerFactory, ILogger
 
     public async Task ScheduleJobAsync(CronJob job, CancellationToken ct = default)
     {
-        if (!job.IsEnabled) return;
+        if (!job.IsEnabled)
+        {
+            logger.LogDebug("CronJobScheduler: job '{Name}' ({Id}) is disabled, skipping schedule.", job.Name, job.Id);
+            return;
+        }
 
         IScheduler scheduler = await schedulerFactory.GetScheduler(ct);
 
@@ -26,15 +30,36 @@ public sealed class CronJobScheduler(ISchedulerFactory schedulerFactory, ILogger
             .StoreDurably()
             .Build();
 
-        ITrigger trigger = TriggerBuilder.Create()
-            .WithIdentity(TriggerKey(job.Id))
-            .ForJob(jobDetail)
-            .WithCronSchedule(job.CronExpression, x => x.InTimeZone(TimeZoneInfo.Local))
-            .Build();
+        ITrigger trigger = job.RunAtUtc is not null
+            ? BuildOneTimeTrigger(job)
+            : BuildCronTrigger(job);
 
         await scheduler.ScheduleJob(jobDetail, trigger, ct);
-        logger.LogInformation("CronJobScheduler: scheduled job '{Name}' ({Id}) with expression '{Expr}'.",
-            job.Name, job.Id, job.CronExpression);
+        logger.LogInformation("CronJobScheduler: scheduled job '{Name}' ({Id}) [{Type}].",
+            job.Name, job.Id, job.RunAtUtc is not null ? "one-time" : "recurring");
+    }
+
+    private ITrigger BuildOneTimeTrigger(CronJob job)
+    {
+        DateTimeOffset runAt = job.RunAtUtc!.Value;
+        if (runAt <= DateTimeOffset.UtcNow)
+            throw new ArgumentException($"一次性任务的触发时间已过期：{runAt:O}，请指定未来的时间。");
+
+        return TriggerBuilder.Create()
+            .WithIdentity(TriggerKey(job.Id))
+            .ForJob(JobKey(job.Id))
+            .StartAt(runAt)
+            .WithSimpleSchedule(x => x.WithRepeatCount(0))
+            .Build();
+    }
+
+    private ITrigger BuildCronTrigger(CronJob job)
+    {
+        return TriggerBuilder.Create()
+            .WithIdentity(TriggerKey(job.Id))
+            .ForJob(JobKey(job.Id))
+            .WithCronSchedule(job.CronExpression!, x => x.InTimeZone(TimeZoneInfo.Local))
+            .Build();
     }
 
     public async Task UnscheduleJobAsync(string jobId, CancellationToken ct = default)
@@ -57,6 +82,14 @@ public sealed class CronJobScheduler(ISchedulerFactory schedulerFactory, ILogger
         int count = 0;
         foreach (CronJob job in jobs.Where(j => j.IsEnabled))
         {
+            // 一次性任务：若触发时间已过，跳过（不再调度）
+            if (job.RunAtUtc is not null && job.RunAtUtc.Value <= DateTimeOffset.UtcNow)
+            {
+                logger.LogWarning("CronJobScheduler: skipping expired one-time job '{Name}' ({Id}), was scheduled for {RunAt:O}.",
+                    job.Name, job.Id, job.RunAtUtc.Value);
+                continue;
+            }
+
             try
             {
                 await ScheduleJobAsync(job, ct);

@@ -11,7 +11,7 @@ namespace MicroClaw.Sessions;
 /// <summary>
 /// 会话元数据存储在 SQLite，消息历史存储在 {sessionsDir}/{id}/messages.json。
 /// </summary>
-public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir)
+public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -40,7 +40,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return entity is null ? null : ToInfo(entity);
     }
 
-    public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null)
+    public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null)
     {
         SessionEntity entity = new()
         {
@@ -49,7 +49,9 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             ProviderId = providerId,
             IsApproved = false,
             ChannelType = ChannelConfigStore.SerializeChannelType(channelType),
-            CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O")
+            CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            AgentId = agentId,
+            ParentSessionId = parentSessionId,
         };
 
         using GatewayDbContext db = factory.CreateDbContext();
@@ -95,6 +97,17 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return ToInfo(entity);
     }
 
+    /// <summary>更新会话绑定的 Provider（用于中途切换模型）。</summary>
+    public SessionInfo? UpdateProvider(string id, string providerId)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        SessionEntity? entity = db.Sessions.Find(id);
+        if (entity is null) return null;
+        entity.ProviderId = providerId;
+        db.SaveChanges();
+        return ToInfo(entity);
+    }
+
     public void AddMessage(string sessionId, SessionMessage message)
     {
         string dir = GetSessionDir(sessionId);
@@ -127,7 +140,9 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     private static SessionInfo ToInfo(SessionEntity e) =>
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,
             ChannelConfigStore.ParseChannelType(e.ChannelType),
-            DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue);
+            DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue,
+            e.AgentId,
+            e.ParentSessionId);
 }
 
 internal sealed class MessageJson
@@ -137,6 +152,7 @@ internal sealed class MessageJson
     public string? ThinkContent { get; set; }
     public DateTimeOffset Timestamp { get; set; }
     public List<AttachmentJson>? Attachments { get; set; }
+    public string? Source { get; set; }
 
     public static MessageJson From(SessionMessage m) => new()
     {
@@ -144,6 +160,7 @@ internal sealed class MessageJson
         Content = m.Content,
         ThinkContent = m.ThinkContent,
         Timestamp = m.Timestamp,
+        Source = m.Source,
         Attachments = m.Attachments?.Select(a => new AttachmentJson
         {
             FileName = a.FileName,
@@ -155,7 +172,8 @@ internal sealed class MessageJson
     public SessionMessage ToRecord() => new(
         Role, Content, ThinkContent, Timestamp,
         Attachments?.Select(a => new MessageAttachment(a.FileName, a.MimeType, a.Base64Data))
-                   .ToList().AsReadOnly());
+                   .ToList().AsReadOnly(),
+        Source);
 }
 
 internal sealed class AttachmentJson

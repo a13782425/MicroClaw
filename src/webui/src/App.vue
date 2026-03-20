@@ -149,6 +149,17 @@ function startSignalR() {
     eventBus.emit('session:disabled', payload)
   })
 
+  connection.on('cronJobExecuted', (payload: { sessionId: string; content: string }) => {
+    eventBus.emit('cron:jobExecuted', payload)
+    ElNotification({
+      title: '定时任务已执行',
+      message: payload.content.length > 80 ? payload.content.slice(0, 80) + '…' : payload.content,
+      type: 'info',
+      duration: 8000,
+      position: 'bottom-right'
+    })
+  })
+
   connection.start().catch(() => {
     // 连接失败时静默，自动重连会处理
   })

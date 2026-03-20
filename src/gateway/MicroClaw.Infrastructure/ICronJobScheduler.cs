@@ -11,4 +11,5 @@ public interface ICronJobScheduler
     Task ScheduleJobAsync(CronJob job, CancellationToken ct = default);
     Task UnscheduleJobAsync(string jobId, CancellationToken ct = default);
     Task RescheduleJobAsync(CronJob job, CancellationToken ct = default);
+    Task StartupAsync(IReadOnlyList<CronJob> jobs, CancellationToken ct = default);
 }

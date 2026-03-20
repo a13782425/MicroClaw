@@ -189,12 +189,19 @@ export type MessageAttachment = {
   base64Data: string
 }
 
+/** 系统自动触发类消息的来源标记，此类 user 消息不在 Web 界面展示 */
+export type MessageSource = 'cron' | 'skill' | 'tool'
+
+/** source 属于系统触发类型的集合，过滤时使用 */
+export const SYSTEM_SOURCES = new Set<MessageSource>(['cron', 'skill', 'tool'])
+
 export type SessionMessage = {
   role: 'user' | 'assistant'
   content: string
   thinkContent?: string | null
   timestamp: string
   attachments?: MessageAttachment[] | null
+  source?: MessageSource | null
 }
 
 export type SessionInfo = {
@@ -341,9 +348,9 @@ export type AgentConfig = {
   id: string
   name: string
   systemPrompt: string
-  providerId: string
   isEnabled: boolean
-  boundChannelIds: string[]
+  isDefault: boolean
+  boundSkillIds: string[]
   mcpServers: McpServerConfig[]
   createdAtUtc: string
 }
@@ -351,9 +358,8 @@ export type AgentConfig = {
 export type AgentCreateRequest = {
   name: string
   systemPrompt?: string
-  providerId: string
   isEnabled?: boolean
-  boundChannelIds?: string[]
+  boundSkillIds?: string[]
   mcpServers?: McpServerConfig[]
 }
 
@@ -361,10 +367,33 @@ export type AgentUpdateRequest = {
   id: string
   name?: string
   systemPrompt?: string
-  providerId?: string
   isEnabled?: boolean
-  boundChannelIds?: string[]
+  boundSkillIds?: string[]
   mcpServers?: McpServerConfig[]
+}
+
+export type ToolItem = {
+  name: string
+  description: string
+  isEnabled: boolean
+}
+
+export type ToolGroup = {
+  id: string
+  name: string
+  type: 'builtin' | 'mcp'
+  isEnabled: boolean
+  tools: ToolItem[]
+}
+
+export type AgentToolsResponse = {
+  groups: ToolGroup[]
+}
+
+export type ToolGroupConfig = {
+  groupId: string
+  isEnabled: boolean
+  disabledToolNames?: string[]
 }
 
 export type GeneFile = {
@@ -378,6 +407,7 @@ export type McpTool = {
   name: string
   description: string
 }
+
 
 export async function listAgents(): Promise<AgentConfig[]> {
   const { data } = await axios.get<AgentConfig[]>('/api/agents')
@@ -430,79 +460,112 @@ export async function deleteAgentDna(
   await axios.post(`/api/agents/${agentId}/dna/delete`, { fileName, category })
 }
 
-export async function listAgentTools(agentId: string): Promise<McpTool[]> {
-  const { data } = await axios.get<McpTool[]>(`/api/agents/${agentId}/tools`)
+export async function listAgentTools(agentId: string): Promise<AgentToolsResponse> {
+  const { data } = await axios.get<AgentToolsResponse>(`/api/agents/${agentId}/tools`)
   return data
 }
 
-/**
- * Agent SSE 流式对话（直接对话，用于测试/调试）。
- */
-export function streamAgentChat(
+export async function updateAgentToolSettings(
   agentId: string,
-  content: string,
-  history: { role: string; content: string }[],
-  onChunk: (token: string) => void,
-  onError: (err: string) => void,
-  onDone: () => void
-): AbortController {
-  const controller = new AbortController()
-  const auth = useAuthStore()
+  configs: ToolGroupConfig[]
+): Promise<void> {
+  await axios.post(`/api/agents/${agentId}/tools/settings`, configs)
+}
 
-  ;(async () => {
-    try {
-      const response = await fetch(`/api/agents/${agentId}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + auth.token,
-        },
-        body: JSON.stringify({ content, history }),
-        signal: controller.signal,
-      })
+export async function switchSessionProvider(
+  id: string,
+  providerId: string
+): Promise<void> {
+  await axios.post('/api/sessions/switch-provider', { id, providerId })
+}
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({ message: response.statusText }))
-        onError(body.message ?? response.statusText)
-        return
-      }
+// ─── Skills ───────────────────────────────────────────────────────────────────
 
-      const reader = response.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+export type SkillType = 'python' | 'nodejs' | 'shell'
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+export type SkillConfig = {
+  id: string
+  name: string
+  description: string
+  skillType: SkillType
+  entryPoint: string
+  isEnabled: boolean
+  createdAtUtc: string
+}
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
+export type SkillCreateRequest = {
+  name: string
+  description?: string
+  skillType: SkillType
+  entryPoint: string
+  isEnabled?: boolean
+}
 
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data:')) continue
-          const raw = trimmed.slice(5).trim()
-          if (raw === '[DONE]') {
-            onDone()
-            return
-          }
-          try {
-            const chunk = JSON.parse(raw) as { type: string; content?: string; message?: string }
-            if (chunk.type === 'error') { onError(chunk.message ?? '未知错误'); return }
-            if (chunk.type === 'token' && chunk.content) onChunk(chunk.content)
-            else if (chunk.type === 'done') { onDone(); return }
-          } catch {
-            // 忽略非法 JSON
-          }
-        }
-      }
-      onDone()
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      onError(String(err))
-    }
-  })()
+export type SkillUpdateRequest = {
+  id: string
+  name?: string
+  description?: string
+  skillType?: SkillType
+  entryPoint?: string
+  isEnabled?: boolean
+}
 
-  return controller
+export type SkillFileInfo = {
+  path: string
+  sizeBytes: number
+}
+
+export async function listSkills(): Promise<SkillConfig[]> {
+  const { data } = await axios.get<SkillConfig[]>('/api/skills')
+  return data
+}
+
+export async function getSkill(id: string): Promise<SkillConfig> {
+  const { data } = await axios.get<SkillConfig>(`/api/skills/${id}`)
+  return data
+}
+
+export async function createSkill(req: SkillCreateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/skills', req)
+  return data
+}
+
+export async function updateSkill(req: SkillUpdateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/skills/update', req)
+  return data
+}
+
+export async function deleteSkill(id: string): Promise<void> {
+  await axios.post('/api/skills/delete', { id })
+}
+
+export async function listSkillFiles(skillId: string): Promise<SkillFileInfo[]> {
+  const { data } = await axios.get<SkillFileInfo[]>(`/api/skills/${skillId}/files`)
+  return data
+}
+
+export async function getSkillFileContent(skillId: string, filePath: string): Promise<string> {
+  const { data } = await axios.get<{ content: string }>(`/api/skills/${skillId}/files/${filePath}`)
+  return data.content
+}
+
+export async function writeSkillFile(
+  skillId: string,
+  fileName: string,
+  content: string
+): Promise<void> {
+  await axios.post(`/api/skills/${skillId}/files`, { fileName, content })
+}
+
+export async function deleteSkillFile(skillId: string, fileName: string): Promise<void> {
+  await axios.post(`/api/skills/${skillId}/files/delete`, { fileName })
+}
+
+export async function getAgentSkills(agentId: string): Promise<string[]> {
+  const agent = await getAgent(agentId)
+  return agent.boundSkillIds ?? []
+}
+
+export async function updateAgentSkills(agentId: string, skillIds: string[]): Promise<void> {
+  await axios.post('/api/agents/update', { id: agentId, boundSkillIds: skillIds })
 }

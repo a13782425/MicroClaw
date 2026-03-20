@@ -1,8 +1,6 @@
-using System.Text;
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Agent.Tools;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -40,17 +38,15 @@ public static class AgentEndpoints
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { message = "Name is required." });
-            if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return Results.BadRequest(new { message = "ProviderId is required." });
 
             AgentConfig config = new(
                 Id: string.Empty,
                 Name: req.Name.Trim(),
                 SystemPrompt: req.SystemPrompt ?? string.Empty,
-                ProviderId: req.ProviderId.Trim(),
                 IsEnabled: req.IsEnabled,
-                BoundChannelIds: req.BoundChannelIds ?? [],
+                BoundSkillIds: req.BoundSkillIds ?? [],
                 McpServers: req.McpServers ?? [],
+                ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow);
 
             AgentConfig created = store.Add(config);
@@ -71,9 +67,8 @@ public static class AgentEndpoints
             {
                 Name = req.Name?.Trim() ?? existing.Name,
                 SystemPrompt = req.SystemPrompt ?? existing.SystemPrompt,
-                ProviderId = req.ProviderId?.Trim() ?? existing.ProviderId,
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
-                BoundChannelIds = req.BoundChannelIds ?? existing.BoundChannelIds,
+                BoundSkillIds = req.BoundSkillIds ?? existing.BoundSkillIds,
                 McpServers = req.McpServers ?? existing.McpServers,
             };
 
@@ -87,8 +82,14 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { message = "Id is required." });
 
-            bool deleted = store.Delete(req.Id);
-            return deleted ? Results.Ok() : Results.NotFound(new { message = $"Agent '{req.Id}' not found." });
+            AgentConfig? agent = store.GetById(req.Id);
+            if (agent is null)
+                return Results.NotFound(new { message = $"Agent '{req.Id}' not found." });
+            if (agent.IsDefault)
+                return Results.BadRequest(new { message = "Cannot delete the default agent." });
+
+            store.Delete(req.Id);
+            return Results.Ok();
         })
         .WithTags("Agents");
 
@@ -130,7 +131,7 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        // ── MCP 工具列表 ─────────────────────────────────────────────────────
+        // ── 工具列表（内置分组 + MCP 分组，含启用状态）────────────────────
 
         endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
@@ -138,77 +139,109 @@ public static class AgentEndpoints
             if (agent is null)
                 return Results.NotFound(new { message = $"Agent '{id}' not found." });
 
-            var (tools, connections) = await ToolRegistry.LoadToolsAsync(agent.McpServers, loggerFactory, ct);
-            try
+            var groups = new List<object>();
+
+            // ── 内置分组：cron ──────────────────────────────────────────────
+            ToolGroupConfig? cronCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "cron");
+            bool cronGroupEnabled = cronCfg is null || cronCfg.IsEnabled;
+            groups.Add(new
             {
-                var toolList = tools.Select(t => new { t.Name, t.Description }).ToList();
-                return Results.Ok(toolList);
-            }
-            finally
+                id = "cron",
+                name = "定时任务",
+                type = "builtin",
+                isEnabled = cronGroupEnabled,
+                tools = CronTools.GetToolDescriptions().Select(t => new
+                {
+                    name = t.Name,
+                    description = t.Description,
+                    isEnabled = cronGroupEnabled && (cronCfg is null || !cronCfg.DisabledToolNames.Contains(t.Name))
+                }).ToList()
+            });
+
+            // ── MCP Server 分组 ──────────────────────────────────────────────
+            foreach (McpServerConfig srv in agent.McpServers)
             {
-                foreach (IAsyncDisposable conn in connections)
-                    try { await conn.DisposeAsync(); } catch { }
+                ToolGroupConfig? srvCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == srv.Name);
+                bool srvEnabled = srvCfg is null || srvCfg.IsEnabled;
+
+                if (!srvEnabled)
+                {
+                    groups.Add(new
+                    {
+                        id = srv.Name,
+                        name = srv.Name,
+                        type = "mcp",
+                        isEnabled = false,
+                        tools = Array.Empty<object>()
+                    });
+                    continue;
+                }
+
+                // 仅在分组启用时连接 MCP Server 加载工具列表
+                var (tools, connections) = await ToolRegistry.LoadToolsAsync([srv], loggerFactory, ct);
+                try
+                {
+                    groups.Add(new
+                    {
+                        id = srv.Name,
+                        name = srv.Name,
+                        type = "mcp",
+                        isEnabled = true,
+                        tools = tools.Select(t => new
+                        {
+                            name = t.Name,
+                            description = t.Description,
+                            isEnabled = srvCfg is null || !srvCfg.DisabledToolNames.Contains(t.Name)
+                        }).ToList()
+                    });
+                }
+                finally
+                {
+                    foreach (IAsyncDisposable conn in connections)
+                        try { await conn.DisposeAsync(); } catch { }
+                }
             }
+
+            return Results.Ok(new { groups });
         })
         .WithTags("Agents");
 
-        // ── Agent 流式对话（SSE）───────────────────────────────────────────
+        // ── 更新工具分组启用配置 ─────────────────────────────────────────────
 
-        endpoints.MapPost("/agents/{id}/chat",
-            async (string id, AgentChatRequest req, AgentStore store, AgentRunner runner,
-                   HttpContext ctx, CancellationToken ct) =>
-            {
-                AgentConfig? agent = store.GetById(id);
-                if (agent is null)
-                {
-                    ctx.Response.StatusCode = 404;
-                    await ctx.Response.WriteAsJsonAsync(new { message = $"Agent '{id}' not found." }, ct);
-                    return;
-                }
+        endpoints.MapPost("/agents/{id}/tools/settings", (string id, IReadOnlyList<ToolGroupConfigRequest> req, AgentStore store) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { message = $"Agent '{id}' not found." });
 
-                if (string.IsNullOrWhiteSpace(req.Content))
-                {
-                    ctx.Response.StatusCode = 400;
-                    await ctx.Response.WriteAsJsonAsync(new { message = "Content is required." }, ct);
-                    return;
-                }
+            IReadOnlyList<ToolGroupConfig> configs = req
+                .Select(r => new ToolGroupConfig(r.GroupId, r.IsEnabled, r.DisabledToolNames ?? []))
+                .ToList()
+                .AsReadOnly();
 
-                List<SessionMessage> history = (req.History ?? [])
-                    .Append(new SessionMessage("user", req.Content, null, DateTimeOffset.UtcNow, null))
-                    .ToList();
+            AgentConfig? updated = store.UpdateToolGroupConfigs(id, configs);
+            return updated is null ? Results.NotFound() : Results.Ok(new { updated.Id });
+        })
+        .WithTags("Agents");
 
-                ctx.Response.ContentType = "text/event-stream; charset=utf-8";
-                ctx.Response.Headers.CacheControl = "no-cache";
-                ctx.Response.Headers.Connection = "keep-alive";
-                ctx.Response.Headers["X-Accel-Buffering"] = "no";
+        // ── 技能绑定管理 ─────────────────────────────────────────────────────
 
-                try
-                {
-                    var fullContent = new StringBuilder();
-                    await foreach (string token in runner.StreamReActAsync(agent, history, sessionId: null, ct))
-                    {
-                        fullContent.Append(token);
-                        string sseData = JsonSerializer.Serialize(new { type = "token", content = token }, JsonOpts);
-                        await WriteSseAsync(ctx.Response, sseData, ct);
-                    }
+        endpoints.MapGet("/agents/{id}/skills", (string id, AgentStore store) =>
+        {
+            AgentConfig? agent = store.GetById(id);
+            return agent is null ? Results.NotFound() : Results.Ok(agent.BoundSkillIds);
+        })
+        .WithTags("Agents");
 
-                    string doneData = JsonSerializer.Serialize(new { type = "done" }, JsonOpts);
-                    await WriteSseAsync(ctx.Response, doneData, ct);
-                    await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        string errData = JsonSerializer.Serialize(new { type = "error", message = ex.Message }, JsonOpts);
-                        await WriteSseAsync(ctx.Response, errData, CancellationToken.None);
-                        await ctx.Response.WriteAsync("data: [DONE]\n\n", CancellationToken.None);
-                        await ctx.Response.Body.FlushAsync(CancellationToken.None);
-                    }
-                    catch { }
-                }
-            })
+        endpoints.MapPost("/agents/{id}/skills", (string id, AgentBoundSkillsRequest req, AgentStore store) =>
+        {
+            AgentConfig? existing = store.GetById(id);
+            if (existing is null)
+                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+
+            AgentConfig updated = existing with { BoundSkillIds = req.SkillIds ?? [] };
+            AgentConfig? result = store.Update(id, updated);
+            return result is null ? Results.NotFound() : Results.Ok(new { result.Id });
+        })
         .WithTags("Agents");
 
         return endpoints;
@@ -235,11 +268,12 @@ public static class AgentEndpoints
         a.Id,
         a.Name,
         a.SystemPrompt,
-        a.ProviderId,
         a.IsEnabled,
-        a.BoundChannelIds,
+        a.BoundSkillIds,
         a.McpServers,
+        a.ToolGroupConfigs,
         a.CreatedAtUtc,
+        a.IsDefault,
     };
 }
 
@@ -248,19 +282,19 @@ public static class AgentEndpoints
 public sealed record AgentCreateRequest(
     string Name,
     string? SystemPrompt,
-    string ProviderId,
     bool IsEnabled = true,
-    IReadOnlyList<string>? BoundChannelIds = null,
+    IReadOnlyList<string>? BoundSkillIds = null,
     IReadOnlyList<McpServerConfig>? McpServers = null);
 
 public sealed record AgentUpdateRequest(
     string Id,
     string? Name = null,
     string? SystemPrompt = null,
-    string? ProviderId = null,
     bool? IsEnabled = null,
-    IReadOnlyList<string>? BoundChannelIds = null,
+    IReadOnlyList<string>? BoundSkillIds = null,
     IReadOnlyList<McpServerConfig>? McpServers = null);
+
+public sealed record AgentBoundSkillsRequest(IReadOnlyList<string>? SkillIds);
 
 public sealed record AgentDeleteRequest(string Id);
 
@@ -273,6 +307,7 @@ public sealed record GeneFileDeleteRequest(
     string FileName,
     string? Category);
 
-public sealed record AgentChatRequest(
-    string Content,
-    IReadOnlyList<SessionMessage>? History = null);
+public sealed record ToolGroupConfigRequest(
+    string GroupId,
+    bool IsEnabled,
+    IReadOnlyList<string>? DisabledToolNames = null);

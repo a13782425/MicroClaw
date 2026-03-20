@@ -6,6 +6,8 @@
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
+    <ProjectReference Include="..\MicroClaw.Skills\MicroClaw.Skills.csproj" />
+    <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,7 +34,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>microclaw</AssemblyName>
+    <AssemblyName>Tools</AssemblyName>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>microclaw</ToolCommandName>
     <NoWarn>$(NoWarn);OPENAI001</NoWarn>

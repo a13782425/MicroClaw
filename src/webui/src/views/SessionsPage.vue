@@ -62,6 +62,23 @@
             <el-icon><ChatDotRound /></el-icon>
             <span>{{ store.currentSession()?.title }}</span>
           </div>
+          <div class="chat-header-actions">
+            <el-select
+              :model-value="store.currentSession()?.providerId"
+              placeholder="切换模型"
+              size="small"
+              style="width:200px"
+              :disabled="store.chatting"
+              @change="handleSwitchProvider"
+            >
+              <el-option
+                v-for="p in enabledProviders"
+                :key="p.id"
+                :label="p.displayName + ' (' + p.modelName + ')'"
+                :value="p.id"
+              />
+            </el-select>
+          </div>
         </div>
 
         <!-- 消息列表 -->
@@ -71,10 +88,10 @@
           </div>
           <template v-else>
             <ChatMessage
-              v-for="(msg, idx) in store.messages"
+              v-for="(msg, idx) in displayMessages"
               :key="idx"
               :msg="msg"
-              :is-streaming="store.chatting && idx === store.messages.length - 1"
+              :is-streaming="store.chatting && idx === displayMessages.length - 1"
             />
           </template>
         </div>
@@ -177,10 +194,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
-import { listProviders, type ProviderConfig, type MessageAttachment } from '@/services/gatewayApi'
+import { listProviders, switchSessionProvider, type ProviderConfig, type MessageAttachment } from '@/services/gatewayApi'
 import ChatMessage from '@/components/ChatMessage.vue'
+import { SYSTEM_SOURCES } from '@/services/gatewayApi'
 import {
   Plus, Delete, ChatDotRound, Paperclip,
   Promotion, VideoPause, Close,
@@ -200,6 +218,11 @@ const enabledProviders = ref<ProviderConfig[]>([])
 
 const createForm = ref({ title: '', providerId: '' })
 
+// 过滤掉所有系统自动触发的用户消息（cron/skill/tool 等），不在 Web 界面显示
+const displayMessages = computed(() =>
+  store.messages.filter((m) => !(m.role === 'user' && m.source != null && SYSTEM_SOURCES.has(m.source)))
+)
+
 onMounted(async () => {
   await store.fetchSessions()
   providers.value = await listProviders()
@@ -207,32 +230,43 @@ onMounted(async () => {
   eventBus.on('session:created', onSessionEvent)
   eventBus.on('session:approved', onSessionEvent)
   eventBus.on('session:disabled', onSessionEvent)
+  eventBus.on('cron:jobExecuted', onCronJobExecuted)
 })
 
 function onSessionEvent() {
   store.fetchSessions()
 }
 
+async function onCronJobExecuted(payload: unknown) {
+  const { sessionId } = payload as { sessionId: string; content: string }
+  if (sessionId === store.currentSessionId) {
+    await store.selectSession(sessionId)
+    scrollToBottom()
+  }
+}
+
 onUnmounted(() => {
   eventBus.off('session:created', onSessionEvent)
   eventBus.off('session:approved', onSessionEvent)
   eventBus.off('session:disabled', onSessionEvent)
+  eventBus.off('cron:jobExecuted', onCronJobExecuted)
 })
 
-// 滚动到底部
+// 滚动到底部（使用 flush: 'post' 确保 DOM 已更新后再执行）
 function scrollToBottom() {
-  nextTick(() => {
-    if (messagesEl.value) {
-      messagesEl.value.scrollTop = messagesEl.value.scrollHeight
-    }
-  })
+  if (messagesEl.value) {
+    messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  }
 }
 
-watch(() => store.messages.length, scrollToBottom)
-watch(() => store.chatting, scrollToBottom)
+watch(() => store.messages.length, scrollToBottom, { flush: 'post' })
+watch(() => store.chatting, scrollToBottom, { flush: 'post' })
+// loading 变为 false 时（骨架屏 → 消息列表切换），确保滚到底部
+watch(() => store.loading, (loading) => { if (!loading) nextTick(scrollToBottom) }, { flush: 'post' })
 
 async function handleSelect(id: string) {
   await store.selectSession(id)
+  await nextTick()
   scrollToBottom()
 }
 
@@ -252,6 +286,18 @@ async function handleCreate() {
     ElMessage.error('创建失败，请重试')
   } finally {
     creating.value = false
+  }
+}
+
+async function handleSwitchProvider(newProviderId: string) {
+  const sessionId = store.currentSessionId
+  if (!sessionId) return
+  try {
+    await switchSessionProvider(sessionId, newProviderId)
+    await store.fetchSessions()
+    ElMessage.success('模型已切换')
+  } catch {
+    ElMessage.error('切换失败，请重试')
   }
 }
 
@@ -457,6 +503,12 @@ function removeAttachment(idx: number) {
   gap: 8px;
   font-weight: 600;
   font-size: 15px;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* 消息列表 */

@@ -9,6 +9,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<ChannelConfigEntity> Channels => Set<ChannelConfigEntity>();
     public DbSet<AgentConfigEntity> Agents => Set<AgentConfigEntity>();
     public DbSet<CronJobEntity> CronJobs => Set<CronJobEntity>();
+    public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.IsApproved).HasColumnName("is_approved");
             b.Property(e => e.ChannelType).HasColumnName("channel_type");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.AgentId).HasColumnName("agent_id");
+            b.Property(e => e.ParentSessionId).HasColumnName("parent_session_id");
         });
 
         modelBuilder.Entity<ProviderConfigEntity>(b =>
@@ -57,11 +60,12 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.Name).HasColumnName("name");
             b.Property(e => e.SystemPrompt).HasColumnName("system_prompt");
-            b.Property(e => e.ProviderId).HasColumnName("provider_id");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.BoundChannelIdsJson).HasColumnName("bound_channel_ids_json");
+            b.Property(e => e.BoundSkillIdsJson).HasColumnName("bound_skill_ids_json");
             b.Property(e => e.McpServersJson).HasColumnName("mcp_servers_json");
+            b.Property(e => e.ToolGroupConfigsJson).HasColumnName("tool_group_configs_json");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.IsDefault).HasColumnName("is_default");
         });
 
         modelBuilder.Entity<CronJobEntity>(b =>
@@ -71,12 +75,26 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.Name).HasColumnName("name");
             b.Property(e => e.Description).HasColumnName("description");
-            b.Property(e => e.CronExpression).HasColumnName("cron_expression");
+            b.Property(e => e.CronExpression).HasColumnName("cron_expression").IsRequired(false);
+            b.Property(e => e.RunAtUtc).HasColumnName("run_at_utc");
             b.Property(e => e.TargetSessionId).HasColumnName("target_session_id").HasMaxLength(64);
             b.Property(e => e.Prompt).HasColumnName("prompt");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.Property(e => e.LastRunAtUtc).HasColumnName("last_run_at_utc");
+        });
+
+        modelBuilder.Entity<SkillConfigEntity>(b =>
+        {
+            b.ToTable("skills");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.Name).HasColumnName("name");
+            b.Property(e => e.Description).HasColumnName("description");
+            b.Property(e => e.SkillType).HasColumnName("skill_type");
+            b.Property(e => e.EntryPoint).HasColumnName("entry_point");
+            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
         });
     }
 }

@@ -24,13 +24,17 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<string>("BoundChannelIdsJson")
+                    b.Property<string>("BoundSkillIdsJson")
                         .HasColumnType("TEXT")
-                        .HasColumnName("bound_channel_ids_json");
+                        .HasColumnName("bound_skill_ids_json");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_default");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER")
@@ -45,15 +49,14 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
 
-                    b.Property<string>("ProviderId")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("provider_id");
-
                     b.Property<string>("SystemPrompt")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("system_prompt");
+
+                    b.Property<string>("ToolGroupConfigsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tool_group_configs_json");
 
                     b.HasKey("Id");
 
@@ -108,7 +111,6 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnName("created_at_utc");
 
                     b.Property<string>("CronExpression")
-                        .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("cron_expression");
 
@@ -133,6 +135,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("prompt");
+
+                    b.Property<string>("RunAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_at_utc");
 
                     b.Property<string>("TargetSessionId")
                         .IsRequired()
@@ -196,6 +202,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("AgentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_id");
+
                     b.Property<string>("ChannelType")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -210,6 +220,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_approved");
 
+                    b.Property<string>("ParentSessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_session_id");
+
                     b.Property<string>("ProviderId")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -223,6 +237,46 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("sessions", (string)null);
+                });
+
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.SkillConfigEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EntryPoint")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entry_point");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SkillType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("skill_type");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("skills", (string)null);
                 });
 #pragma warning restore 612, 618
         }

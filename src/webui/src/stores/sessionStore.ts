@@ -112,8 +112,12 @@ export const useSessionStore = defineStore('session', () => {
         } else if (chunk.type === 'done') {
           if (chunk.thinkContent) {
             streamingThink.value = chunk.thinkContent
+            // 从 content 中剔除 <think>...</think> 块，避免思考内容重复显示
+            const rawContent = messages.value[assistantIdx].content
+            const cleanContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
             messages.value[assistantIdx] = {
               ...messages.value[assistantIdx],
+              content: cleanContent,
               thinkContent: chunk.thinkContent
             }
           }

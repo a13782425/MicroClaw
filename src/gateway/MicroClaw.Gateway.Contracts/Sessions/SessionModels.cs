@@ -6,14 +6,17 @@ public sealed record SessionInfo(
     string ProviderId,
     bool IsApproved,
     ChannelType ChannelType,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? AgentId = null,
+    string? ParentSessionId = null);
 
 public sealed record SessionMessage(
     string Role,
     string Content,
     string? ThinkContent,
     DateTimeOffset Timestamp,
-    IReadOnlyList<MessageAttachment>? Attachments);
+    IReadOnlyList<MessageAttachment>? Attachments,
+    string? Source = null);
 
 public sealed record MessageAttachment(
     string FileName,
@@ -33,3 +36,7 @@ public sealed record DisableSessionRequest(string Id);
 public sealed record ChatRequest(
     string Content,
     IReadOnlyList<MessageAttachment>? Attachments);
+
+public sealed record SwitchProviderRequest(
+    string Id,
+    string ProviderId);
