@@ -10,6 +10,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<AgentConfigEntity> Agents => Set<AgentConfigEntity>();
     public DbSet<CronJobEntity> CronJobs => Set<CronJobEntity>();
     public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
+    public DbSet<UsageEntity> Usages => Set<UsageEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -95,6 +96,23 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.EntryPoint).HasColumnName("entry_point");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+        });
+
+        modelBuilder.Entity<UsageEntity>(b =>
+        {
+            b.ToTable("usages");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id");
+            b.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64).IsRequired(false);
+            b.Property(e => e.ProviderId).HasColumnName("provider_id").HasMaxLength(64);
+            b.Property(e => e.ProviderName).HasColumnName("provider_name");
+            b.Property(e => e.Source).HasColumnName("source").HasMaxLength(32);
+            b.Property(e => e.InputTokens).HasColumnName("input_tokens");
+            b.Property(e => e.OutputTokens).HasColumnName("output_tokens");
+            b.Property(e => e.InputPricePerMToken).HasColumnName("input_price_per_m_token").IsRequired(false);
+            b.Property(e => e.OutputPricePerMToken).HasColumnName("output_price_per_m_token").IsRequired(false);
+            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.HasIndex(e => e.CreatedAtUtc).HasDatabaseName("ix_usages_created_at_utc");
         });
     }
 }

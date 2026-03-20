@@ -9,6 +9,7 @@ import {
   DocumentChecked,
   Promotion,
   MagicStick,
+  TrendCharts,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -32,6 +33,7 @@ export const menuGroups: MenuGroup[] = [
     items: [
       { label: '会话', icon: ChatDotRound, route: '/sessions' },
       { label: '计时任务', icon: Timer, route: '/cron' },
+      { label: '用量统计', icon: TrendCharts, route: '/usage' },
     ],
   },
   {

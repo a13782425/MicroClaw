@@ -21,6 +21,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapAgentEndpoints();
 		protectedApi.MapCronEndpoints();
 		protectedApi.MapSkillEndpoints();
+		protectedApi.MapUsageEndpoints();
 
 		return endpoints;
 	}

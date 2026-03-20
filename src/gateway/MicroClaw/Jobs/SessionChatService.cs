@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
+using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.SignalR;
@@ -17,6 +18,7 @@ public sealed class SessionChatService(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IHubContext<GatewayHub> hub,
+    IUsageTracker usageTracker,
     ILogger<SessionChatService> logger)
 {
     public async Task<string?> ExecuteAsync(string sessionId, string prompt, CancellationToken ct = default)
@@ -63,6 +65,28 @@ public sealed class SessionChatService(
                 Timestamp: DateTimeOffset.UtcNow,
                 Attachments: null);
             sessionStore.AddMessage(sessionId, assistantMsg);
+
+            // 记录 Token 用量
+            if (response.Usage is { } usage)
+            {
+                try
+                {
+                    await usageTracker.TrackAsync(
+                        sessionId,
+                        provider.Id,
+                        provider.DisplayName,
+                        source: "cron",
+                        inputTokens: (int)(usage.InputTokenCount ?? 0L),
+                        outputTokens: (int)(usage.OutputTokenCount ?? 0L),
+                        inputPricePerMToken: provider.Capabilities.InputPricePerMToken,
+                        outputPricePerMToken: provider.Capabilities.OutputPricePerMToken,
+                        ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to track cron token usage for session {SessionId}", sessionId);
+                }
+            }
 
             // 通知前端刷新该 Session 的消息
             await hub.Clients.All.SendAsync("cronJobExecuted",

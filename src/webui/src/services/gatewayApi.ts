@@ -569,3 +569,44 @@ export async function getAgentSkills(agentId: string): Promise<string[]> {
 export async function updateAgentSkills(agentId: string, skillIds: string[]): Promise<void> {
   await axios.post('/api/agents/update', { id: agentId, boundSkillIds: skillIds })
 }
+
+// ─── Usage Statistics ─────────────────────────────────────────────────────────
+
+export type DailyUsage = {
+  date: string
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+}
+
+export type ProviderUsage = {
+  providerId: string
+  providerName: string
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+}
+
+export type SourceUsage = {
+  source: string
+  inputTokens: number
+  outputTokens: number
+}
+
+export type UsageSummary = {
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCostUsd: number
+}
+
+export type UsageQueryResult = {
+  daily: DailyUsage[]
+  byProvider: ProviderUsage[]
+  bySource: SourceUsage[]
+  summary: UsageSummary
+}
+
+export async function fetchUsageStats(startDate: string, endDate: string): Promise<UsageQueryResult> {
+  const { data } = await axios.post<UsageQueryResult>('/api/usage/query', { startDate, endDate })
+  return data
+}

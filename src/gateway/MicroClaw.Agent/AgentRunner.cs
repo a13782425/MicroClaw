@@ -8,6 +8,7 @@ using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
+using UsageResult = (int InputTokens, int OutputTokens);
 
 namespace MicroClaw.Agent;
 
@@ -26,6 +27,7 @@ public sealed class AgentRunner(
     ICronJobScheduler cronScheduler,
     SkillToolFactory skillToolFactory,
     ISubAgentRunner subAgentRunner,
+    IUsageTracker usageTracker,
     ILoggerFactory loggerFactory) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
@@ -53,7 +55,7 @@ public sealed class AgentRunner(
         SessionInfo? session = sessionReader.Get(sessionId);
         string providerId = session?.ProviderId ?? string.Empty;
 
-        return await RunReActAsync(agent, providerId, history, sessionId, ct);
+        return await RunReActAsync(agent, providerId, history, sessionId, ct, source: "channel");
     }
 
     // ── 核心 ReAct 循环（非流式）────────────────────────────────────────────
@@ -63,7 +65,8 @@ public sealed class AgentRunner(
         string providerId,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string source = "subagent")
     {
         ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == providerId);
         if (provider is null || !provider.IsEnabled)
@@ -97,6 +100,9 @@ public sealed class AgentRunner(
             IChatClient client = BuildClient(provider, allTools.Count > 0);
             ChatOptions? chatOptions = BuildChatOptions(allTools);
             ChatResponse response = await client.GetResponseAsync(messages, chatOptions, ct);
+
+            await TrackUsageAsync(response.Usage, sessionId, provider, source, ct);
+
             return response.Text ?? "（无回复）";
         }
         finally
@@ -141,6 +147,8 @@ public sealed class AgentRunner(
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
+        UsageDetails? lastUsage = null;
+        List<ChatResponseUpdate> collectedUpdates = [];
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
@@ -149,14 +157,21 @@ public sealed class AgentRunner(
             await foreach (ChatResponseUpdate update in
                 client.GetStreamingResponseAsync(messages, chatOptions, ct))
             {
+                collectedUpdates.Add(update);
+
                 string token = update.Text ?? string.Empty;
                 if (!string.IsNullOrEmpty(token))
                     yield return token;
             }
+
+            // 流式结束后从收集到的 updates 合并出完整 ChatResponse 以获取 Usage
+            if (collectedUpdates.Count > 0)
+                lastUsage = collectedUpdates.ToChatResponse().Usage;
         }
         finally
         {
             await DisposeConnectionsAsync(connections);
+            await TrackUsageAsync(lastUsage, sessionId, provider, "chat", CancellationToken.None);
         }
     }
 
@@ -238,6 +253,37 @@ public sealed class AgentRunner(
         {
             try { await conn.DisposeAsync(); }
             catch (Exception ex) { _logger.LogWarning(ex, "Error disposing MCP connection"); }
+        }
+    }
+
+    private async Task TrackUsageAsync(
+        UsageDetails? usage,
+        string? sessionId,
+        ProviderConfig provider,
+        string source,
+        CancellationToken ct)
+    {
+        if (usage is null) return;
+        int inputTokens = (int)(usage.InputTokenCount ?? 0L);
+        int outputTokens = (int)(usage.OutputTokenCount ?? 0L);
+        if (inputTokens <= 0 && outputTokens <= 0) return;
+
+        try
+        {
+            await usageTracker.TrackAsync(
+                sessionId,
+                provider.Id,
+                provider.DisplayName,
+                source,
+                inputTokens,
+                outputTokens,
+                provider.Capabilities.InputPricePerMToken,
+                provider.Capabilities.OutputPricePerMToken,
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to track token usage for session {SessionId}", sessionId);
         }
     }
 }

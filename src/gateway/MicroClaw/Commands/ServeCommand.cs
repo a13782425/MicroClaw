@@ -210,6 +210,9 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<CronJobScheduler>();
 		builder.Services.AddSingleton<ICronJobScheduler>(sp => sp.GetRequiredService<CronJobScheduler>());
 		builder.Services.AddHostedService<CronJobStartupService>();
+
+		// Token 用量追踪
+		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>

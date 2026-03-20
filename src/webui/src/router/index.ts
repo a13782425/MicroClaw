@@ -9,6 +9,7 @@ const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
 const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
 const AgentsPage    = () => import('@/views/AgentsPage.vue')
 const SkillsPage    = () => import('@/views/SkillsPage.vue')
+const UsagePage     = () => import('@/views/UsagePage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +18,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/sessions', name: 'sessions', component: SessionsPage },
     { path: '/cron', name: 'cron', component: CronPage },
+    { path: '/usage', name: 'usage', component: UsagePage },
     { path: '/models', name: 'models', component: ModelsPage },
     { path: '/channels', name: 'channels', component: ChannelsPage },
     { path: '/approvals', name: 'approvals', component: ApprovalsPage },
