@@ -1,18 +1,13 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 using MicroClaw.Agent;
-using MicroClaw.Tools;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
-using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Endpoints;
 
@@ -126,10 +121,8 @@ public static class SessionEndpoints
         // POST /api/sessions/{id}/chat — SSE 流式对话
         endpoints.MapPost("/sessions/{id}/chat",
             async (string id, ChatRequest req, SessionStore store,
-                   ProviderConfigStore providerStore, ProviderClientFactory factory,
-                   CronJobStore cronJobStore, ICronJobScheduler cronScheduler,
-                   AgentStore agentStore,
-                   ILoggerFactory loggerFactory,
+                   ProviderConfigStore providerStore,
+                   AgentStore agentStore, AgentRunner agentRunner,
                    HttpContext ctx, CancellationToken ct) =>
             {
                 SessionInfo? session = store.Get(id);
@@ -166,7 +159,15 @@ public static class SessionEndpoints
 
                 // 构建历史消息上下文
                 IReadOnlyList<SessionMessage> history = store.GetMessages(id);
-                List<ChatMessage> chatMessages = BuildChatMessages(history);
+
+                // 获取默认 Agent（技能、MCP、DNA 等能力均通过 AgentRunner 注入）
+                AgentConfig? defaultAgent = agentStore.GetDefault();
+                if (defaultAgent is null || !defaultAgent.IsEnabled)
+                {
+                    ctx.Response.StatusCode = 503;
+                    await ctx.Response.WriteAsJsonAsync(new { message = "No enabled default agent found." }, ct);
+                    return;
+                }
 
                 // 设置 SSE 响应头
                 ctx.Response.ContentType = "text/event-stream; charset=utf-8";
@@ -174,30 +175,13 @@ public static class SessionEndpoints
                 ctx.Response.Headers.Connection = "keep-alive";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                // 构建定时任务 AI 工具，根据默认 Agent 的工具分组配置决定是否启用
-                IReadOnlyList<AIFunction> allCronTools = CronTools.CreateForSession(id, cronJobStore, cronScheduler);
-                AgentConfig? defaultAgent = agentStore.GetDefault();
-                IReadOnlyList<AIFunction> cronTools = FilterCronTools(defaultAgent, allCronTools);
-                ChatOptions? chatOptions = cronTools.Count > 0
-                    ? new ChatOptions { Tools = [.. cronTools] }
-                    : null;
-
-                IChatClient innerClient = factory.Create(provider);
-                // 仅在有工具时启用 UseFunctionInvocation
-                IChatClient client = cronTools.Count > 0
-                    ? innerClient.AsBuilder().UseFunctionInvocation(loggerFactory).Build()
-                    : innerClient;
                 StringBuilder fullContent = new();
-                StringBuilder thinkBuffer = new();
 
                 try
                 {
-                    await foreach (ChatResponseUpdate update in
-                        client.GetStreamingResponseAsync(chatMessages, chatOptions, ct))
+                    await foreach (string token in
+                        agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
                     {
-                        string token = update.Text ?? string.Empty;
-                        if (string.IsNullOrEmpty(token)) continue;
-
                         fullContent.Append(token);
 
                         string sseData = JsonSerializer.Serialize(new { type = "token", content = token }, JsonOpts);
@@ -243,47 +227,11 @@ public static class SessionEndpoints
                         // 响应已关闭，忽略
                     }
                 }
-                finally
-                {
-                    client.Dispose();
-                    innerClient.Dispose();
-                }
+
             })
         .WithTags("Sessions");
 
         return endpoints;
-    }
-
-    private static List<ChatMessage> BuildChatMessages(IReadOnlyList<SessionMessage> history)
-    {
-        List<ChatMessage> messages = [];
-
-        foreach (SessionMessage msg in history)
-        {
-            ChatRole role = msg.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
-                ? ChatRole.User
-                : ChatRole.Assistant;
-
-            if (msg.Attachments is { Count: > 0 })
-            {
-                List<AIContent> contents = [new TextContent(msg.Content)];
-                foreach (MessageAttachment attachment in msg.Attachments)
-                {
-                    if (attachment.MimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        byte[] bytes = Convert.FromBase64String(attachment.Base64Data);
-                        contents.Add(new DataContent(bytes, attachment.MimeType));
-                    }
-                }
-                messages.Add(new ChatMessage(role, contents));
-            }
-            else
-            {
-                messages.Add(new ChatMessage(role, msg.Content));
-            }
-        }
-
-        return messages;
     }
 
     private static (string Think, string Main) ExtractThinkContent(string raw)
@@ -301,19 +249,6 @@ public static class SessionEndpoints
         }
 
         return (think, main);
-    }
-
-    /// <summary>根据默认 Agent 的工具分组配置过滤内置定时工具。</summary>
-    private static IReadOnlyList<AIFunction> FilterCronTools(
-        AgentConfig? agent,
-        IReadOnlyList<AIFunction> cronTools)
-    {
-        if (agent is null) return cronTools;
-        ToolGroupConfig? cronCfg =
-            agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "cron");
-        if (cronCfg is not null && !cronCfg.IsEnabled) return [];
-        if (cronCfg is null) return cronTools;
-        return cronTools.Where(t => !cronCfg.DisabledToolNames.Contains(t.Name)).ToList().AsReadOnly();
     }
 
     private static async Task WriteSseAsync(HttpResponse response, string data, CancellationToken ct)
