@@ -98,6 +98,12 @@
         <el-tab-pane label="文件" name="files">
           <div class="tab-toolbar">
             <el-button type="primary" :icon="Plus" size="small" @click="openNewGeneDialog">新建文件</el-button>
+            <el-button
+              link
+              size="small"
+              type="primary"
+              @click="$router.push({ path: '/dna', query: { tab: 'agent', id: selectedAgent!.id } })"
+            >在 DNA 管理页中查看 →</el-button>
           </div>
           <div v-if="dnaLoading" class="tab-loading"><el-skeleton :rows="3" animated /></div>
           <el-empty v-else-if="geneFiles.length === 0" description="暂无 DNA 文件" :image-size="80" />
@@ -112,9 +118,10 @@
             <el-table-column label="更新时间" width="140">
               <template #default="{ row }">{{ formatDate(row.updatedAt) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="110">
+            <el-table-column label="操作" width="160">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="openEditGeneDialog(row)">编辑</el-button>
+                <el-button link size="small" @click="openSnapshotDrawer(row)">历史</el-button>
                 <el-button link type="danger" size="small" @click="deleteGene(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -309,6 +316,38 @@
       </template>
     </el-dialog>
 
+    <!-- ── DNA 版本快照 Drawer ───────────────────────────── -->
+    <el-drawer
+      v-model="snapshotDrawerVisible"
+      :title="`历史版本 — ${snapshotTarget?.fileName ?? ''}`"
+      size="600px"
+      direction="rtl"
+    >
+      <div v-if="snapshotLoading" class="tab-loading"><el-skeleton :rows="4" animated /></div>
+      <el-empty v-else-if="snapshots.length === 0" description="暂无历史版本" :image-size="80" />
+      <div v-else class="snapshot-list">
+        <el-card
+          v-for="snap in snapshots"
+          :key="snap.snapshotId"
+          shadow="never"
+          class="snapshot-card"
+          :class="{ 'snapshot-selected': previewingSnapshot?.snapshotId === snap.snapshotId }"
+          @click="previewingSnapshot = snap"
+        >
+          <div class="snapshot-card-header">
+            <span class="snapshot-time">{{ formatDate(snap.savedAt) }}</span>
+            <el-button
+              type="primary"
+              size="small"
+              :loading="restoringSnapshotId === snap.snapshotId"
+              @click.stop="restoreSnapshot(snap)"
+            >回滚至此版本</el-button>
+          </div>
+          <pre v-if="previewingSnapshot?.snapshotId === snap.snapshotId" class="snapshot-preview">{{ snap.content }}</pre>
+        </el-card>
+      </div>
+    </el-drawer>
+
     <!-- ── 基因文件编辑 Dialog ──────────────────────────── -->
     <el-dialog
       v-model="geneEditDialogVisible"
@@ -357,7 +396,8 @@ import {
   listAgents, createAgent, updateAgent, deleteAgent,
   listAgentDna, writeAgentDna, deleteAgentDna, listAgentTools, updateAgentToolSettings,
   listSkills, updateAgentSkills,
-  type AgentConfig, type GeneFile, type ToolGroup, type ToolGroupConfig, type McpServerConfig, type SkillConfig,
+  listDnaSnapshots, restoreDnaSnapshot,
+  type AgentConfig, type GeneFile, type GeneFileSnapshot, type ToolGroup, type ToolGroupConfig, type McpServerConfig, type SkillConfig,
 } from '@/services/gatewayApi'
 
 // ── 列表状态 ──────────────────────────────────────────────────────────────────
@@ -603,6 +643,47 @@ async function deleteGene(g: GeneFile) {
     await loadGeneFiles()
   } catch {
     // 删除失败由全局拦截器展示后端错误信息
+  }
+}
+
+// ── DNA 版本快照 ──────────────────────────────────────────────────────────────
+const snapshotDrawerVisible = ref(false)
+const snapshotLoading = ref(false)
+const snapshotTarget = ref<GeneFile | null>(null)
+const snapshots = ref<GeneFileSnapshot[]>([])
+const previewingSnapshot = ref<GeneFileSnapshot | null>(null)
+const restoringSnapshotId = ref<string | null>(null)
+
+async function openSnapshotDrawer(g: GeneFile) {
+  snapshotTarget.value = g
+  previewingSnapshot.value = null
+  snapshotDrawerVisible.value = true
+  snapshotLoading.value = true
+  try {
+    if (!selectedAgent.value) return
+    snapshots.value = await listDnaSnapshots(selectedAgent.value.id, g.fileName, g.category)
+  } finally {
+    snapshotLoading.value = false
+  }
+}
+
+async function restoreSnapshot(snap: GeneFileSnapshot) {
+  if (!selectedAgent.value || !snapshotTarget.value) return
+  await ElMessageBox.confirm(
+    `确定将「${snapshotTarget.value.fileName}」回滚至 ${formatDate(snap.savedAt)} 的版本？当前内容将被保存为新快照。`,
+    '回滚确认',
+    { confirmButtonText: '确认回滚', cancelButtonText: '取消', type: 'warning' }
+  )
+  restoringSnapshotId.value = snap.snapshotId
+  try {
+    await restoreDnaSnapshot(selectedAgent.value.id, snapshotTarget.value.fileName, snap.snapshotId, snapshotTarget.value.category)
+    ElMessage.success('已回滚至历史版本')
+    snapshotDrawerVisible.value = false
+    await loadGeneFiles()
+  } catch {
+    // 回滚失败由全局拦截器展示后端错误信息
+  } finally {
+    restoringSnapshotId.value = null
   }
 }
 
@@ -955,6 +1036,49 @@ async function saveAgentSkills() {
 .file-preview {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.snapshot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snapshot-card {
+  cursor: pointer;
+  border: 1px solid var(--el-border-color);
+  transition: border-color 0.2s;
+}
+
+.snapshot-card:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.snapshot-selected {
+  border-color: var(--el-color-primary);
+}
+
+.snapshot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.snapshot-time {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.snapshot-preview {
+  margin-top: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  padding: 8px;
 }
 
 .tools-section {

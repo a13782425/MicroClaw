@@ -48,13 +48,12 @@ public sealed class FeishuMessageProcessor(
         SessionInfo session = sessionService.FindOrCreateSession(
             ChannelType.Feishu, channel.Id, senderId ?? chatId, channel.DisplayName, channel.ProviderId);
 
-        // 会话未批准：回复提示并通知管理员
-        if (!session.IsApproved)
+        // 会话审批检查：未通过时自动通知管理员（含限流），并向用户回复拒绝提示
+        if (!await sessionService.CheckApprovalAsync(session, ChannelType.Feishu))
         {
             logger.LogInformation("会话 {SessionId} 未批准，拒绝处理 channel={ChannelId}", session.Id, channel.Id);
             await ReplyMessageAsync(settings, messageId,
                 "此会话尚未获得批准，请联系管理员登录后台进行审批。", tenantApi, ct);
-            _ = sessionService.NotifyPendingApprovalAsync(session.Id, session.Title, ChannelType.Feishu);
             return;
         }
 

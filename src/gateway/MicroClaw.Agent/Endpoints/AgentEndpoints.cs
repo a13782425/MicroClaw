@@ -150,6 +150,70 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
+        // ── DNA 版本快照 ──────────────────────────────────────────────────────
+
+        endpoints.MapGet("/agents/{id}/dna/snapshots", (string id, string fileName, string? category, AgentStore store, DNAService dna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Results.BadRequest(new { success = false, message = "fileName query parameter is required.", errorCode = "BAD_REQUEST" });
+
+            string safeName = Path.GetFileName(fileName);
+            string safeCategory = SanitizeCategory(category);
+            IReadOnlyList<GeneFileSnapshot> snapshots = dna.ListSnapshots(id, safeCategory, safeName);
+            return Results.Ok(snapshots);
+        })
+        .WithTags("Agents");
+
+        endpoints.MapPost("/agents/{id}/dna/restore", (string id, GeneFileRestoreRequest req, AgentStore store, DNAService dna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
+            if (string.IsNullOrWhiteSpace(req.SnapshotId))
+                return Results.BadRequest(new { success = false, message = "SnapshotId is required.", errorCode = "BAD_REQUEST" });
+
+            string safeName = Path.GetFileName(req.FileName);
+            string safeCategory = SanitizeCategory(req.Category);
+
+            try
+            {
+                GeneFile restored = dna.RestoreSnapshot(id, safeCategory, safeName, req.SnapshotId);
+                return Results.Ok(restored);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return Results.NotFound(new { success = false, message = ex.Message, errorCode = "SNAPSHOT_NOT_FOUND" });
+            }
+        })
+        .WithTags("Agents");
+
+        // ── DNA 导出/导入 Markdown ────────────────────────────────────────
+
+        endpoints.MapGet("/agents/{id}/dna/export", (string id, AgentStore store, DNAService dna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            string markdown = dna.ExportToMarkdown(id);
+            return Results.Text(markdown, "text/plain; charset=utf-8");
+        })
+        .WithTags("Agents");
+
+        endpoints.MapPost("/agents/{id}/dna/import", (string id, DnaMarkdownImportRequest req, AgentStore store, DNAService dna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(req.Content))
+                return Results.BadRequest(new { success = false, message = "Content is required.", errorCode = "BAD_REQUEST" });
+
+            IReadOnlyList<DnaImportEntryResult> entries = dna.ImportFromMarkdown(id, req.Content);
+            return Results.Ok(new { imported = entries.Count(r => r.Success), total = entries.Count, entries });
+        })
+        .WithTags("Agents");
+
         // ── 工具列表（内置分组 + MCP 分组，含启用状态）────────────────────
 
         endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
@@ -341,6 +405,13 @@ public sealed record GeneFileWriteRequest(
 public sealed record GeneFileDeleteRequest(
     string FileName,
     string? Category);
+
+public sealed record GeneFileRestoreRequest(
+    string FileName,
+    string? Category,
+    string SnapshotId);
+
+public sealed record DnaMarkdownImportRequest(string Content);
 
 public sealed record ToolGroupConfigRequest(
     string GroupId,

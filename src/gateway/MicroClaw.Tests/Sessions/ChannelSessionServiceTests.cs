@@ -157,4 +157,55 @@ public sealed class ChannelSessionServiceTests : IDisposable
             Arg.Any<object?[]>(),
             Arg.Any<CancellationToken>());
     }
+
+    // --- CheckApprovalAsync ---
+
+    [Fact]
+    public async Task CheckApprovalAsync_ApprovedSession_ReturnsTrueWithoutNotify()
+    {
+        // 创建会话后手动审批
+        var session = _service.FindOrCreateSession(
+            ChannelType.Feishu, "channel-1", "sender-approved", "Bot", "provider-1");
+        _sessionStore.Approve(session.Id);
+        var approved = _sessionStore.Get(session.Id)!;
+
+        bool result = await _service.CheckApprovalAsync(approved, ChannelType.Feishu);
+
+        result.Should().BeTrue();
+        await _hubContext.Clients.All.DidNotReceive().SendCoreAsync(
+            "sessionPendingApproval",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckApprovalAsync_PendingSession_ReturnsFalseAndNotifiesAdmin()
+    {
+        var session = _service.FindOrCreateSession(
+            ChannelType.Feishu, "channel-2", "sender-pending", "Bot", "provider-1");
+
+        bool result = await _service.CheckApprovalAsync(session, ChannelType.Feishu);
+
+        result.Should().BeFalse();
+        await _hubContext.Clients.All.Received(1).SendCoreAsync(
+            "sessionPendingApproval",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CheckApprovalAsync_PendingSession_NotificationIsThrottled()
+    {
+        var session = _service.FindOrCreateSession(
+            ChannelType.Feishu, "channel-3", "sender-throttle", "Bot", "provider-1");
+
+        // 连续两次调用，第二次应被限流
+        await _service.CheckApprovalAsync(session, ChannelType.Feishu);
+        await _service.CheckApprovalAsync(session, ChannelType.Feishu);
+
+        await _hubContext.Clients.All.Received(1).SendCoreAsync(
+            "sessionPendingApproval",
+            Arg.Any<object?[]>(),
+            Arg.Any<CancellationToken>());
+    }
 }

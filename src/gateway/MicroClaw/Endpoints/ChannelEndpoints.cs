@@ -1,6 +1,8 @@
 using System.Text.Json;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels.WeCom;
+using MicroClaw.Channels.WeChat;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Providers;
 using Microsoft.Extensions.Logging;
@@ -176,7 +178,248 @@ public static class ChannelEndpoints
         })
         .WithTags("Webhooks");
 
+        // ─── 企业微信（WeCom）Webhook ───────────────────────────────────────────
+
+        // GET：URL 接入验证（企微后台配置时发送，返回 echostr）
+        endpoints.MapGet("/channels/wecom/{channelId}/webhook", (
+            string channelId,
+            HttpContext context,
+            ChannelConfigStore store,
+            ILoggerFactory loggerFactory) =>
+        {
+            ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeCom");
+
+            ChannelConfig? config = store.GetById(channelId);
+            if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeCom)
+            {
+                logger.LogWarning("企业微信渠道未找到或已禁用 channelId={ChannelId}", channelId);
+                return Results.NotFound();
+            }
+
+            WeComChannelSettings settings = WeComChannelSettings.TryParse(config.SettingsJson) ?? new();
+            if (string.IsNullOrWhiteSpace(settings.Token))
+            {
+                logger.LogWarning("企业微信渠道未配置 Token，拒绝 URL 验证 channelId={ChannelId}", channelId);
+                return Results.BadRequest();
+            }
+
+            string? msgSignature = context.Request.Query["msg_signature"];
+            string? timestamp    = context.Request.Query["timestamp"];
+            string? nonce        = context.Request.Query["nonce"];
+            string? echostr      = context.Request.Query["echostr"];
+
+            if (!WeComChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            {
+                logger.LogWarning("企业微信 URL 验证时间戳过期 channelId={ChannelId}", channelId);
+                return Results.Unauthorized();
+            }
+
+            // URL 验证阶段无 msg_encrypt，使用基础三字段签名
+            if (!WeComChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature))
+            {
+                logger.LogWarning("企业微信 URL 验证签名失败 channelId={ChannelId}", channelId);
+                return Results.Unauthorized();
+            }
+
+            logger.LogInformation("企业微信 URL 验证成功 channelId={ChannelId}", channelId);
+            return Results.Text(echostr ?? string.Empty);
+        })
+        .WithTags("Webhooks");
+
+        // POST：消息与事件回调（验证签名后转发至 HandleWebhookAsync）
+        endpoints.MapPost("/channels/wecom/{channelId}/webhook", async (
+            string channelId,
+            HttpContext context,
+            ChannelConfigStore store,
+            IEnumerable<IChannel> channels,
+            ILoggerFactory loggerFactory) =>
+        {
+            ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeCom");
+            logger.LogInformation("收到企业微信 Webhook 请求 channelId={ChannelId}", channelId);
+
+            ChannelConfig? config = store.GetById(channelId);
+            if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeCom)
+            {
+                logger.LogWarning("企业微信渠道未找到或已禁用 channelId={ChannelId}", channelId);
+                return ApiErrors.NotFound("Channel not found or disabled.");
+            }
+
+            if (string.IsNullOrWhiteSpace(WeComChannelSettings.TryParse(config.SettingsJson)?.Token))
+            {
+                logger.LogWarning("企业微信渠道未配置 Token channelId={ChannelId}", channelId);
+                return ApiErrors.BadRequest("Token is not configured.");
+            }
+
+            WeComChannelSettings settings = WeComChannelSettings.TryParse(config.SettingsJson)!;
+
+            string? msgSignature = context.Request.Query["msg_signature"];
+            string? timestamp    = context.Request.Query["timestamp"];
+            string? nonce        = context.Request.Query["nonce"];
+
+            if (!WeComChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            {
+                logger.LogWarning("企业微信 Webhook 时间戳过期 channelId={ChannelId}", channelId);
+                return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
+            }
+
+            using StreamReader reader = new(context.Request.Body);
+            string body = await reader.ReadToEndAsync();
+            logger.LogDebug("企业微信 Webhook body: {Body}", body);
+
+            // 从 XML 中提取 Encrypt 字段用于签名（SafeMode）；明文模式下 msgEncrypt 为 null
+            string? msgEncrypt = ExtractXmlField(body, "Encrypt");
+
+            if (!WeComChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature, msgEncrypt))
+            {
+                logger.LogWarning("企业微信 Webhook 签名验证失败 channelId={ChannelId}", channelId);
+                return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
+            }
+
+            IChannel? weComChannel = channels.FirstOrDefault(c => c.Type == ChannelType.WeCom);
+            if (weComChannel is null)
+            {
+                logger.LogError("企业微信渠道服务未注册");
+                return Results.StatusCode(503);
+            }
+
+            string? response = await weComChannel.HandleWebhookAsync(body, config, context.RequestAborted);
+            return response is null ? Results.Ok() : Results.Content(response, "application/xml");
+        })
+        .WithTags("Webhooks");
+
+        // ─── 微信公众号（WeChat）Webhook ────────────────────────────────────────
+
+        // GET：URL 接入验证
+        endpoints.MapGet("/channels/wechat/{channelId}/webhook", (
+            string channelId,
+            HttpContext context,
+            ChannelConfigStore store,
+            ILoggerFactory loggerFactory) =>
+        {
+            ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeChat");
+
+            ChannelConfig? config = store.GetById(channelId);
+            if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeChat)
+            {
+                logger.LogWarning("微信渠道未找到或已禁用 channelId={ChannelId}", channelId);
+                return Results.NotFound();
+            }
+
+            WeChatChannelSettings settings = WeChatChannelSettings.TryParse(config.SettingsJson) ?? new();
+            if (string.IsNullOrWhiteSpace(settings.Token))
+            {
+                logger.LogWarning("微信渠道未配置 Token，拒绝 URL 验证 channelId={ChannelId}", channelId);
+                return Results.BadRequest();
+            }
+
+            string? signature = context.Request.Query["signature"];
+            string? timestamp = context.Request.Query["timestamp"];
+            string? nonce     = context.Request.Query["nonce"];
+            string? echostr   = context.Request.Query["echostr"];
+
+            if (!WeChatChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            {
+                logger.LogWarning("微信 URL 验证时间戳过期 channelId={ChannelId}", channelId);
+                return Results.Unauthorized();
+            }
+
+            if (!WeChatChannel.VerifySignature(settings.Token, timestamp, nonce, signature))
+            {
+                logger.LogWarning("微信 URL 验证签名失败 channelId={ChannelId}", channelId);
+                return Results.Unauthorized();
+            }
+
+            logger.LogInformation("微信 URL 验证成功 channelId={ChannelId}", channelId);
+            return Results.Text(echostr ?? string.Empty);
+        })
+        .WithTags("Webhooks");
+
+        // POST：消息与事件回调
+        endpoints.MapPost("/channels/wechat/{channelId}/webhook", async (
+            string channelId,
+            HttpContext context,
+            ChannelConfigStore store,
+            IEnumerable<IChannel> channels,
+            ILoggerFactory loggerFactory) =>
+        {
+            ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeChat");
+            logger.LogInformation("收到微信 Webhook 请求 channelId={ChannelId}", channelId);
+
+            ChannelConfig? config = store.GetById(channelId);
+            if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeChat)
+            {
+                logger.LogWarning("微信渠道未找到或已禁用 channelId={ChannelId}", channelId);
+                return ApiErrors.NotFound("Channel not found or disabled.");
+            }
+
+            WeChatChannelSettings settings = WeChatChannelSettings.TryParse(config.SettingsJson) ?? new();
+            if (string.IsNullOrWhiteSpace(settings.Token))
+            {
+                logger.LogWarning("微信渠道未配置 Token channelId={ChannelId}", channelId);
+                return ApiErrors.BadRequest("Token is not configured.");
+            }
+
+            // 安全模式下使用 msg_signature，明文模式使用 signature
+            string? msgSignature = context.Request.Query["msg_signature"];
+            string? signature    = context.Request.Query["signature"];
+            string? timestamp    = context.Request.Query["timestamp"];
+            string? nonce        = context.Request.Query["nonce"];
+
+            if (!WeChatChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            {
+                logger.LogWarning("微信 Webhook 时间戳过期 channelId={ChannelId}", channelId);
+                return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
+            }
+
+            using StreamReader reader = new(context.Request.Body);
+            string body = await reader.ReadToEndAsync();
+            logger.LogDebug("微信 Webhook body: {Body}", body);
+
+            if (!string.IsNullOrEmpty(msgSignature))
+            {
+                // 安全模式：从 XML 中提取 Encrypt 字段
+                string? msgEncrypt = ExtractXmlField(body, "Encrypt");
+                if (!WeChatChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature, msgEncrypt))
+                {
+                    logger.LogWarning("微信 Webhook 签名验证失败（安全模式） channelId={ChannelId}", channelId);
+                    return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
+                }
+            }
+            else
+            {
+                // 明文模式：仅三字段签名
+                if (!WeChatChannel.VerifySignature(settings.Token, timestamp, nonce, signature))
+                {
+                    logger.LogWarning("微信 Webhook 签名验证失败（明文模式） channelId={ChannelId}", channelId);
+                    return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
+                }
+            }
+
+            IChannel? weChatChannel = channels.FirstOrDefault(c => c.Type == ChannelType.WeChat);
+            if (weChatChannel is null)
+            {
+                logger.LogError("微信渠道服务未注册");
+                return Results.StatusCode(503);
+            }
+
+            string? response = await weChatChannel.HandleWebhookAsync(body, config, context.RequestAborted);
+            return response is null ? Results.Ok() : Results.Content(response, "application/xml");
+        })
+        .WithTags("Webhooks");
+
         return endpoints;
+    }
+
+    /// <summary>从 XML 字符串中提取指定标签内的文本内容（简单字符串解析，无需完整 XML 解析器）。</summary>
+    private static string? ExtractXmlField(string xml, string tagName)
+    {
+        string open  = $"<{tagName}>";
+        string close = $"</{tagName}>";
+        int start = xml.IndexOf(open, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += open.Length;
+        int end = xml.IndexOf(close, start, StringComparison.Ordinal);
+        return end < 0 ? null : xml[start..end].Trim();
     }
 }
 

@@ -17,4 +17,10 @@ public interface IChannelSessionService
 
     /// <summary>通过 SignalR 通知管理员待批准会话（含限流）。</summary>
     Task NotifyPendingApprovalAsync(string sessionId, string sessionTitle, ChannelType channelType);
+
+    /// <summary>
+    /// 统一审批检查入口：若会话已审批返回 true；若未审批，自动触发限流通知并返回 false。
+    /// 渠道处理器应在调用方返回 false 后自行发送渠道特定的拒绝提示。
+    /// </summary>
+    Task<bool> CheckApprovalAsync(SessionInfo session, ChannelType channelType);
 }

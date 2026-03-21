@@ -70,6 +70,15 @@ public sealed class ChannelSessionService(
         });
     }
 
+    public async Task<bool> CheckApprovalAsync(SessionInfo session, ChannelType channelType)
+    {
+        if (session.IsApproved) return true;
+
+        // 未审批：通知管理员（含限流），由调用方负责发送渠道特定的拒绝回复
+        await NotifyPendingApprovalAsync(session.Id, session.Title, channelType);
+        return false;
+    }
+
     /// <summary>生成确定性会话 ID：SHA256(channelType + channelId + senderId) 的前 32 个十六进制字符。</summary>
     internal static string GenerateSessionId(ChannelType channelType, string channelId, string senderId)
     {

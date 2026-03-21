@@ -45,6 +45,7 @@ export type ProviderConfig = {
   modelName: string
   maxOutputTokens: number
   isEnabled: boolean
+  isDefault: boolean
   capabilities: ProviderCapabilities
 }
 
@@ -132,6 +133,10 @@ export async function updateProvider(req: ProviderUpdateRequest): Promise<{ id: 
 
 export async function deleteProvider(id: string): Promise<void> {
   await axios.post('/api/providers/delete', { id })
+}
+
+export async function setDefaultProvider(id: string): Promise<void> {
+  await axios.post('/api/providers/set-default', { id })
 }
 
 // ─── Channels ────────────────────────────────────────────────────────────────
@@ -424,6 +429,14 @@ export type GeneFile = {
   updatedAt: string
 }
 
+export type GeneFileSnapshot = {
+  snapshotId: string
+  fileName: string
+  category: string
+  savedAt: string
+  content: string
+}
+
 export type McpTool = {
   name: string
   description: string
@@ -479,6 +492,31 @@ export async function deleteAgentDna(
   category = ''
 ): Promise<void> {
   await axios.post(`/api/agents/${agentId}/dna/delete`, { fileName, category })
+}
+
+export async function listDnaSnapshots(
+  agentId: string,
+  fileName: string,
+  category = ''
+): Promise<GeneFileSnapshot[]> {
+  const { data } = await axios.get<GeneFileSnapshot[]>(`/api/agents/${agentId}/dna/snapshots`, {
+    params: { fileName, category },
+  })
+  return data
+}
+
+export async function restoreDnaSnapshot(
+  agentId: string,
+  fileName: string,
+  snapshotId: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>(`/api/agents/${agentId}/dna/restore`, {
+    fileName,
+    snapshotId,
+    category,
+  })
+  return data
 }
 
 export async function listAgentTools(agentId: string): Promise<AgentToolsResponse> {
@@ -629,5 +667,141 @@ export type UsageQueryResult = {
 
 export async function fetchUsageStats(startDate: string, endDate: string): Promise<UsageQueryResult> {
   const { data } = await axios.post<UsageQueryResult>('/api/usage/query', { startDate, endDate })
+  return data
+}
+
+// ─── 全局 DNA（三层架构第一层）──────────────────────────────────────────────────
+
+export async function listGlobalDna(): Promise<GeneFile[]> {
+  const { data } = await axios.get<GeneFile[]>('/api/dna')
+  return data
+}
+
+export async function writeGlobalDna(
+  fileName: string,
+  content: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>('/api/dna', { fileName, content, category })
+  return data
+}
+
+export async function deleteGlobalDna(fileName: string, category = ''): Promise<void> {
+  await axios.post('/api/dna/delete', { fileName, category })
+}
+
+export async function listGlobalDnaSnapshots(
+  fileName: string,
+  category = ''
+): Promise<GeneFileSnapshot[]> {
+  const { data } = await axios.get<GeneFileSnapshot[]>('/api/dna/snapshots', {
+    params: { fileName, category },
+  })
+  return data
+}
+
+export async function restoreGlobalDnaSnapshot(
+  fileName: string,
+  snapshotId: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>('/api/dna/restore', {
+    fileName,
+    snapshotId,
+    category,
+  })
+  return data
+}
+
+// ─── DNA 导出/导入 Markdown ───────────────────────────────────────────────────
+
+export type DnaImportEntryResult = {
+  fileName: string
+  category: string
+  success: boolean
+  error?: string | null
+}
+
+export type DnaImportResponse = {
+  imported: number
+  total: number
+  entries: DnaImportEntryResult[]
+}
+
+export async function exportAgentDna(agentId: string): Promise<string> {
+  const { data } = await axios.get<string>(`/api/agents/${agentId}/dna/export`, {
+    responseType: 'text',
+  })
+  return data
+}
+
+export async function importAgentDna(agentId: string, content: string): Promise<DnaImportResponse> {
+  const { data } = await axios.post<DnaImportResponse>(`/api/agents/${agentId}/dna/import`, {
+    content,
+  })
+  return data
+}
+
+export async function exportGlobalDna(): Promise<string> {
+  const { data } = await axios.get<string>('/api/dna/export', { responseType: 'text' })
+  return data
+}
+
+export async function importGlobalDna(content: string): Promise<DnaImportResponse> {
+  const { data } = await axios.post<DnaImportResponse>('/api/dna/import', { content })
+  return data
+}
+
+// ─── 会话 DNA（三层架构第三层）──────────────────────────────────────────────────
+
+export async function listSessionDna(sessionId: string): Promise<GeneFile[]> {
+  const { data } = await axios.get<GeneFile[]>(`/api/sessions/${sessionId}/dna`)
+  return data
+}
+
+export async function writeSessionDna(
+  sessionId: string,
+  fileName: string,
+  content: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>(`/api/sessions/${sessionId}/dna`, {
+    fileName,
+    content,
+    category,
+  })
+  return data
+}
+
+export async function deleteSessionDna(
+  sessionId: string,
+  fileName: string,
+  category = ''
+): Promise<void> {
+  await axios.post(`/api/sessions/${sessionId}/dna/delete`, { fileName, category })
+}
+
+export async function listSessionDnaSnapshots(
+  sessionId: string,
+  fileName: string,
+  category = ''
+): Promise<GeneFileSnapshot[]> {
+  const { data } = await axios.get<GeneFileSnapshot[]>(`/api/sessions/${sessionId}/dna/snapshots`, {
+    params: { fileName, category },
+  })
+  return data
+}
+
+export async function restoreSessionDnaSnapshot(
+  sessionId: string,
+  fileName: string,
+  snapshotId: string,
+  category = ''
+): Promise<GeneFile> {
+  const { data } = await axios.post<GeneFile>(`/api/sessions/${sessionId}/dna/restore`, {
+    fileName,
+    snapshotId,
+    category,
+  })
   return data
 }
