@@ -34,7 +34,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>Tools</AssemblyName>
+    <AssemblyName>microclaw</AssemblyName>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>microclaw</ToolCommandName>
     <NoWarn>$(NoWarn);OPENAI001</NoWarn>

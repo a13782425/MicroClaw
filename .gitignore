@@ -421,3 +421,4 @@ FodyWeavers.xsd
 # MicroClaw 运行时数据目录（含凭证、API Key、会话数据）
 .microclaw/
 tmp
+dist
