@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MicroClaw.Channels;
@@ -9,16 +10,34 @@ using Microsoft.EntityFrameworkCore;
 namespace MicroClaw.Sessions;
 
 /// <summary>
-/// 会话元数据存储在 SQLite，消息历史存储在 {sessionsDir}/{id}/messages.json。
+/// 会话元数据存储在 SQLite，消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
+/// 旧版 messages.json 在首次读写时自动迁移并重命名为 messages.json.bak。
 /// </summary>
 public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader
 {
+    // 旧格式（JSON 数组，全量读写）
+    private const string LegacyFileName = "messages.json";
+    // 新格式（JSON Lines，追加写入）
+    private const string JsonlFileName = "messages.jsonl";
+
+    // 读取旧 JSON 数组时使用（兼容迁移）
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
+    // 写入 JSONL 单行时使用（紧凑、不换行）
+    private static readonly JsonSerializerOptions JsonLinesOptions = new()
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    // 每个 sessionId 对应一把写锁，防止并发追加写造成文件损坏
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
 
     public IReadOnlyList<SessionInfo> All
     {
@@ -112,23 +131,82 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     {
         string dir = GetSessionDir(sessionId);
         Directory.CreateDirectory(dir);
-        string filePath = Path.Combine(dir, "messages.json");
 
-        List<MessageJson> messages = LoadMessages(filePath);
-        messages.Add(MessageJson.From(message));
-        File.WriteAllText(filePath, JsonSerializer.Serialize(messages, JsonOptions));
+        string legacyPath = Path.Combine(dir, LegacyFileName);
+        string jsonlPath = Path.Combine(dir, JsonlFileName);
+
+        SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
+        sem.Wait();
+        try
+        {
+            // 若存在旧版 JSON 数组文件，先迁移再追加
+            if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
+                MigrateToJsonLines(legacyPath, jsonlPath);
+
+            string line = JsonSerializer.Serialize(MessageJson.From(message), JsonLinesOptions);
+            File.AppendAllText(jsonlPath, line + "\n");
+        }
+        finally
+        {
+            sem.Release();
+        }
     }
 
     public IReadOnlyList<SessionMessage> GetMessages(string sessionId)
     {
-        string filePath = Path.Combine(GetSessionDir(sessionId), "messages.json");
-        return LoadMessages(filePath)
+        string dir = GetSessionDir(sessionId);
+        string legacyPath = Path.Combine(dir, LegacyFileName);
+        string jsonlPath = Path.Combine(dir, JsonlFileName);
+
+        // 若存在旧版文件但无新版文件，自动迁移
+        if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
+        {
+            SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
+            sem.Wait();
+            try
+            {
+                // 二次判断（DCL），防止并发情况下重复迁移
+                if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
+                    MigrateToJsonLines(legacyPath, jsonlPath);
+            }
+            finally
+            {
+                sem.Release();
+            }
+        }
+
+        if (!File.Exists(jsonlPath)) return [];
+
+        return File.ReadLines(jsonlPath)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<MessageJson>(line, JsonLinesOptions)!)
+            .Where(m => m is not null)
             .Select(m => m.ToRecord())
             .ToList()
             .AsReadOnly();
     }
 
     private string GetSessionDir(string id) => Path.Combine(sessionsDir, id);
+
+    /// <summary>
+    /// 将旧版 JSON 数组文件迁移为 JSONL 格式。
+    /// 迁移完成后将旧文件重命名为 .bak（不删除，保留运维底稿）。
+    /// 调用方须在写锁内调用此方法。
+    /// </summary>
+    private static void MigrateToJsonLines(string legacyPath, string jsonlPath)
+    {
+        string json = File.ReadAllText(legacyPath);
+        List<MessageJson> messages = JsonSerializer.Deserialize<List<MessageJson>>(json, JsonOptions) ?? [];
+
+        using (StreamWriter writer = new(jsonlPath, append: false))
+        {
+            foreach (MessageJson msg in messages)
+                writer.WriteLine(JsonSerializer.Serialize(msg, JsonLinesOptions));
+        }
+
+        // 重命名为 .bak 保留备份，不直接删除
+        File.Move(legacyPath, legacyPath + ".bak", overwrite: true);
+    }
 
     private static List<MessageJson> LoadMessages(string filePath)
     {

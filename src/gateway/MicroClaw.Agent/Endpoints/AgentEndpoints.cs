@@ -48,7 +48,8 @@ public static class AgentEndpoints
                 BoundSkillIds: req.BoundSkillIds ?? [],
                 McpServers: req.McpServers ?? [],
                 ToolGroupConfigs: [],
-                CreatedAtUtc: DateTimeOffset.UtcNow);
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                ContextWindowMessages: req.ContextWindowMessages);
 
             try
             {
@@ -78,6 +79,7 @@ public static class AgentEndpoints
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
                 BoundSkillIds = req.BoundSkillIds ?? existing.BoundSkillIds,
                 McpServers = req.McpServers ?? existing.McpServers,
+                ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
             };
 
             try
@@ -304,6 +306,7 @@ public static class AgentEndpoints
         a.ToolGroupConfigs,
         a.CreatedAtUtc,
         a.IsDefault,
+        a.ContextWindowMessages,
     };
 }
 
@@ -314,7 +317,8 @@ public sealed record AgentCreateRequest(
     string? SystemPrompt,
     bool IsEnabled = true,
     IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<McpServerConfig>? McpServers = null);
+    IReadOnlyList<McpServerConfig>? McpServers = null,
+    int? ContextWindowMessages = null);
 
 public sealed record AgentUpdateRequest(
     string Id,
@@ -322,7 +326,8 @@ public sealed record AgentUpdateRequest(
     string? SystemPrompt = null,
     bool? IsEnabled = null,
     IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<McpServerConfig>? McpServers = null);
+    IReadOnlyList<McpServerConfig>? McpServers = null,
+    int? ContextWindowMessages = null);
 
 public sealed record AgentBoundSkillsRequest(IReadOnlyList<string>? SkillIds);
 

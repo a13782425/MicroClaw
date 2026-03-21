@@ -46,6 +46,7 @@ public sealed class SkillStore(IDbContextFactory<GatewayDbContext> factory)
         entity.SkillType = incoming.SkillType;
         entity.EntryPoint = incoming.EntryPoint;
         entity.IsEnabled = incoming.IsEnabled;
+        entity.TimeoutSeconds = incoming.TimeoutSeconds;
 
         db.SaveChanges();
         return ToConfig(entity);
@@ -69,7 +70,8 @@ public sealed class SkillStore(IDbContextFactory<GatewayDbContext> factory)
         e.SkillType,
         e.EntryPoint,
         e.IsEnabled,
-        e.CreatedAtUtc);
+        e.CreatedAtUtc,
+        e.TimeoutSeconds);
 
     private static SkillConfigEntity ToEntity(SkillConfig c) => new()
     {
@@ -80,5 +82,6 @@ public sealed class SkillStore(IDbContextFactory<GatewayDbContext> factory)
         EntryPoint = c.EntryPoint,
         IsEnabled = c.IsEnabled,
         CreatedAtUtc = c.CreatedAtUtc,
+        TimeoutSeconds = c.TimeoutSeconds,
     };
 }

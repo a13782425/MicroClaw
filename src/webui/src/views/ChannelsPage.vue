@@ -53,10 +53,32 @@
             @change="(val: boolean) => toggleEnabled(c, val)"
           />
           <div class="card-actions">
+            <el-button
+              link
+              :loading="testResults[c.id]?.loading"
+              @click="testConnection(c)"
+            >测试</el-button>
+            <el-divider direction="vertical" />
             <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
             <el-divider direction="vertical" />
             <el-button link type="danger" :icon="Delete" @click="confirmDelete(c)">删除</el-button>
           </div>
+        </div>
+        <div
+          v-if="testResults[c.id] && !testResults[c.id].loading"
+          class="card-test-result"
+        >
+          <el-tag
+            :type="testResults[c.id]?.success ? 'success' : 'danger'"
+            size="small"
+            effect="plain"
+          >
+            {{
+              testResults[c.id]?.success
+                ? `✓ 连通 ${testResults[c.id]?.latencyMs}ms`
+                : `✗ ${testResults[c.id]?.message}`
+            }}
+          </el-tag>
         </div>
       </div>
     </div>
@@ -176,14 +198,18 @@ import {
   createChannel,
   updateChannel,
   deleteChannel,
+  testChannel,
   listProviders,
 } from '@/services/gatewayApi'
-import type { ChannelConfig, ChannelType, ProviderConfig } from '@/services/gatewayApi'
+import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult } from '@/services/gatewayApi'
 
 const loading = ref(false)
 const submitting = ref(false)
 const channels = ref<ChannelConfig[]>([])
 const providers = ref<ProviderConfig[]>([])
+
+type TestState = { loading: boolean } & Partial<ChannelTestResult>
+const testResults = reactive<Record<string, TestState>>({})
 
 const dialogVisible = ref(false)
 const isEditing = ref(false)
@@ -405,6 +431,21 @@ async function confirmDelete(c: ChannelConfig) {
   }
 }
 
+async function testConnection(c: ChannelConfig) {
+  testResults[c.id] = { loading: true }
+  try {
+    const result = await testChannel(c.id)
+    testResults[c.id] = { loading: false, ...result }
+    if (result.success) {
+      ElMessage.success(`${c.displayName} 连接正常，延迟 ${result.latencyMs}ms`)
+    } else {
+      ElMessage.warning(`${c.displayName} 连接失败：${result.message}`)
+    }
+  } catch {
+    testResults[c.id] = { loading: false, success: false, message: '请求失败', latencyMs: 0 }
+  }
+}
+
 onMounted(loadData)
 </script>
 
@@ -548,6 +589,11 @@ onMounted(loadData)
   justify-content: space-between;
   padding-top: 10px;
   border-top: 1px solid #f3f4f6;
+}
+
+.card-test-result {
+  padding: 6px 0 0;
+  font-size: 12px;
 }
 
 .card-actions {

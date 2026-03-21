@@ -68,6 +68,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ToolGroupConfigsJson).HasColumnName("tool_group_configs_json");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.Property(e => e.IsDefault).HasColumnName("is_default");
+            b.Property(e => e.ContextWindowMessages).HasColumnName("context_window_messages");
         });
 
         modelBuilder.Entity<CronJobEntity>(b =>
@@ -97,6 +98,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.EntryPoint).HasColumnName("entry_point");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.TimeoutSeconds).HasColumnName("timeout_seconds").HasDefaultValue(30);
         });
 
         modelBuilder.Entity<UsageEntity>(b =>

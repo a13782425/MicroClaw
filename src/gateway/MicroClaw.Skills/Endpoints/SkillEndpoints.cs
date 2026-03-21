@@ -40,7 +40,8 @@ public static class SkillEndpoints
                 SkillType: req.SkillType.ToLowerInvariant(),
                 EntryPoint: req.EntryPoint.Trim(),
                 IsEnabled: req.IsEnabled,
-                CreatedAtUtc: DateTimeOffset.UtcNow);
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                TimeoutSeconds: req.TimeoutSeconds);
 
             SkillConfig created = store.Add(config);
             // 创建 workspace 目录并生成模板文件
@@ -66,6 +67,7 @@ public static class SkillEndpoints
                 SkillType = req.SkillType?.ToLowerInvariant() ?? existing.SkillType,
                 EntryPoint = req.EntryPoint?.Trim() ?? existing.EntryPoint,
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
+                TimeoutSeconds = req.TimeoutSeconds ?? existing.TimeoutSeconds,
             };
 
             SkillConfig? result = store.Update(req.Id, updated);
@@ -156,6 +158,7 @@ public static class SkillEndpoints
         s.EntryPoint,
         s.IsEnabled,
         s.CreatedAtUtc,
+        s.TimeoutSeconds,
     };
 
     /// <summary>
@@ -343,7 +346,8 @@ public sealed record SkillCreateRequest(
     string? Description,
     string SkillType,
     string EntryPoint,
-    bool IsEnabled = true);
+    bool IsEnabled = true,
+    int TimeoutSeconds = 30);
 
 public sealed record SkillUpdateRequest(
     string Id,
@@ -351,7 +355,8 @@ public sealed record SkillUpdateRequest(
     string? Description = null,
     string? SkillType = null,
     string? EntryPoint = null,
-    bool? IsEnabled = null);
+    bool? IsEnabled = null,
+    int? TimeoutSeconds = null);
 
 public sealed record SkillDeleteRequest(string Id);
 

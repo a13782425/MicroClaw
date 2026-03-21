@@ -6,11 +6,10 @@ namespace MicroClaw.Skills;
 /// <summary>
 /// Skill 脚本执行引擎。
 /// 根据 SkillType 启动子进程（python/node/bash），通过 stdin 传递参数 JSON，
-/// 捕获 stdout 作为返回值，注入环境变量并强制 30 秒超时。
+/// 捕获 stdout 作为返回値，注入环境变量并应用可配置超时（默认 30 秒）。
 /// </summary>
 public sealed class SkillRunner(SkillService skillService, ILogger<SkillRunner> logger)
 {
-    private static readonly TimeSpan ExecutionTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// 执行技能脚本并返回输出内容。
@@ -48,7 +47,7 @@ public sealed class SkillRunner(SkillService skillService, ILogger<SkillRunner> 
         psi.Environment["MICROCLAW_WORKSPACE_DIR"] = workspaceRoot;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(ExecutionTimeout);
+        cts.CancelAfter(TimeSpan.FromSeconds(skill.TimeoutSeconds));
 
         using Process process = new() { StartInfo = psi };
         process.Start();
@@ -67,8 +66,8 @@ public sealed class SkillRunner(SkillService skillService, ILogger<SkillRunner> 
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             process.Kill(entireProcessTree: true);
-            logger.LogWarning("Skill {SkillId} execution timed out after {Timeout}s", skill.Id, ExecutionTimeout.TotalSeconds);
-            throw new TimeoutException($"Skill '{skill.Name}' execution timed out after {ExecutionTimeout.TotalSeconds} seconds.");
+            logger.LogWarning("Skill {SkillId} execution timed out after {Timeout}s", skill.Id, skill.TimeoutSeconds);
+            throw new TimeoutException($"Skill '{skill.Name}' execution timed out after {skill.TimeoutSeconds} seconds.");
         }
 
         if (!string.IsNullOrWhiteSpace(stderr))

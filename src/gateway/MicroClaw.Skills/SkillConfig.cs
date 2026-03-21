@@ -12,4 +12,6 @@ public sealed record SkillConfig(
     /// <summary>入口脚本文件名（相对于 workspace/skills/{id}/ 目录）</summary>
     string EntryPoint,
     bool IsEnabled,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    /// <summary>执行超时秒数（默认 30 秒）</summary>
+    int TimeoutSeconds = 30);

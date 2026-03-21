@@ -43,3 +43,6 @@ public sealed record ChannelConfig
     public bool IsEnabled { get; init; } = true;
     public string SettingsJson { get; init; } = "{}";
 }
+
+/// <summary>渠道连通性测试结果。</summary>
+public sealed record ChannelTestResult(bool Success, string Message, long LatencyMs);

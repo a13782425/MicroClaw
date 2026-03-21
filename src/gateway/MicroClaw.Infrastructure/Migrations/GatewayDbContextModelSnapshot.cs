@@ -28,6 +28,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("bound_skill_ids_json");
 
+                    b.Property<int?>("ContextWindowMessages")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("context_window_messages");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at_utc");
@@ -279,6 +283,12 @@ namespace MicroClaw.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("skill_type");
+
+                    b.Property<int>("TimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(30)
+                        .HasColumnName("timeout_seconds");
 
                     b.HasKey("Id");
 

@@ -116,6 +116,7 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         entity.ToolGroupConfigsJson = incoming.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(incoming.ToolGroupConfigs, JsonOpts)
             : null;
+        entity.ContextWindowMessages = incoming.ContextWindowMessages;
 
         db.SaveChanges();
         return ToConfig(entity);
@@ -143,7 +144,8 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         DeserializeList<McpServerConfig>(e.McpServersJson),
         DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
         e.CreatedAtUtc,
-        e.IsDefault);
+        e.IsDefault,
+        e.ContextWindowMessages);
 
     private static AgentConfigEntity ToEntity(AgentConfig c) => new()
     {
@@ -162,6 +164,7 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
             : null,
         CreatedAtUtc = c.CreatedAtUtc,
         IsDefault = c.IsDefault,
+        ContextWindowMessages = c.ContextWindowMessages,
     };
 
     private static IReadOnlyList<T> DeserializeList<T>(string? json)

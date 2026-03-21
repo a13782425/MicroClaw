@@ -223,7 +223,7 @@ public sealed class SessionStoreTests : IDisposable
         _store.AddMessage(customId, new SessionMessage("user", "hi", null, DateTimeOffset.UtcNow, null));
 
         Directory.Exists(sessionDir).Should().BeTrue();
-        File.Exists(Path.Combine(sessionDir, "messages.json")).Should().BeTrue();
+        File.Exists(Path.Combine(sessionDir, "messages.jsonl")).Should().BeTrue();
     }
 
     // --- Sub-Agent 字段测试 ---

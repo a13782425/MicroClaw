@@ -191,6 +191,17 @@ export async function deleteChannel(id: string): Promise<void> {
   await axios.post('/api/channels/delete', { id })
 }
 
+export type ChannelTestResult = {
+  success: boolean
+  message: string
+  latencyMs: number
+}
+
+export async function testChannel(id: string): Promise<ChannelTestResult> {
+  const { data } = await axios.post<ChannelTestResult>(`/api/channels/${id}/test`)
+  return data
+}
+
 // ─── Sessions ────────────────────────────────────────────────────────────────
 
 export type MessageAttachment = {

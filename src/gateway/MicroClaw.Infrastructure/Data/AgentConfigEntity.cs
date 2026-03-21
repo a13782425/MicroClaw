@@ -11,4 +11,5 @@ public sealed class AgentConfigEntity
     public string? ToolGroupConfigsJson { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public bool IsDefault { get; set; }
+    public int? ContextWindowMessages { get; set; }
 }

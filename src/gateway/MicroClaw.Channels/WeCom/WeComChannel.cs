@@ -18,4 +18,9 @@ public sealed class WeComChannel : IChannel
     {
         return Task.FromResult<string?>(null);
     }
+
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelConfig config, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new ChannelTestResult(false, "企业微信渠道连通性测试尚未实现", 0));
+    }
 }

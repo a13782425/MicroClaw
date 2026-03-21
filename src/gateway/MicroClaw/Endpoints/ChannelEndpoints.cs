@@ -90,6 +90,29 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
+        endpoints.MapPost("/channels/{id}/test", async (
+            string id,
+            ChannelConfigStore store,
+            IEnumerable<IChannel> channels,
+            CancellationToken ct) =>
+        {
+            ChannelConfig? config = store.GetById(id);
+            if (config is null)
+                return ApiErrors.NotFound($"Channel '{id}' not found.");
+
+            // Web 渠道为内部渠道，无需外部连通性测试
+            if (config.ChannelType == ChannelType.Web)
+                return Results.Ok(new ChannelTestResult(true, "Web 渠道无需外部连接测试", 0L));
+
+            IChannel? channel = channels.FirstOrDefault(c => c.Type == config.ChannelType);
+            if (channel is null)
+                return ApiErrors.BadRequest($"未找到类型 '{config.ChannelType}' 的渠道服务实现。");
+
+            ChannelTestResult result = await channel.TestConnectionAsync(config, ct);
+            return Results.Ok(result);
+        })
+        .WithTags("Channels");
+
         return endpoints;
     }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -57,6 +58,46 @@ public sealed class FeishuChannel(
         }
 
         return JsonSerializer.Serialize(new { code = 0, msg = "ok" });
+    }
+
+    /// <summary>
+    /// 通过飞书 OpenAPI 获取租户访问令牌来验证 AppId + AppSecret 凭据的有效性。
+    /// </summary>
+    public async Task<ChannelTestResult> TestConnectionAsync(ChannelConfig config, CancellationToken cancellationToken = default)
+    {
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingsJson) ?? new();
+
+        if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
+            return new ChannelTestResult(false, "未配置 AppId 或 AppSecret", 0);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            string payload = JsonSerializer.Serialize(new { app_id = settings.AppId, app_secret = settings.AppSecret });
+            using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            using var response = await client.PostAsync(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                content, cancellationToken);
+            sw.Stop();
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            int code = doc.RootElement.GetProperty("code").GetInt32();
+
+            if (code == 0)
+                return new ChannelTestResult(true, "连接成功", sw.ElapsedMilliseconds);
+
+            doc.RootElement.TryGetProperty("msg", out JsonElement msgEl);
+            return new ChannelTestResult(false, $"飞书 API 返回错误 code={code}：{msgEl.GetString()}", sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", config.Id);
+            return new ChannelTestResult(false, $"连接失败：{ex.Message}", sw.ElapsedMilliseconds);
+        }
     }
 
     /// <summary>验证飞书 Webhook 签名：SHA256(timestamp + nonce + encryptKey + body) == expectedSignature。</summary>

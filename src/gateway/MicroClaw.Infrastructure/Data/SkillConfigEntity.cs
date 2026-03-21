@@ -11,4 +11,6 @@ public sealed class SkillConfigEntity
     public string EntryPoint { get; set; } = string.Empty;
     public bool IsEnabled { get; set; } = true;
     public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>执行超时秒数（默认 30 秒）</summary>
+    public int TimeoutSeconds { get; set; } = 30;
 }

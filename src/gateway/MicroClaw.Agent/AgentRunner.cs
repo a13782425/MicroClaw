@@ -253,7 +253,12 @@ public sealed class AgentRunner(
         if (!string.IsNullOrWhiteSpace(systemPrompt))
             messages.Add(new ChatMessage(ChatRole.System, systemPrompt));
 
-        foreach (SessionMessage msg in history)
+        // 应用滑动窗口：若配置了 ContextWindowMessages，只取最近 N 条消息传给 LLM
+        IEnumerable<SessionMessage> windowed = agent.ContextWindowMessages.HasValue
+            ? history.TakeLast(agent.ContextWindowMessages.Value)
+            : history;
+
+        foreach (SessionMessage msg in windowed)
         {
             ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
             messages.Add(new ChatMessage(role, msg.Content));
