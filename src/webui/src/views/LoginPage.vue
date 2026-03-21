@@ -95,8 +95,10 @@ async function submit() {
     ElMessage.success('登录成功')
     router.push({ name: 'sessions' })
   } catch (err: any) {
-    const msg = err.response?.status === 401 ? '用户名或密码错误' : '登录失败，请稍后重试'
-    ElMessage.error(msg)
+    // 非 401 错误由全局拦截器统一展示；仅针对 401 显示业务级友好提示
+    if (err.response?.status === 401) {
+      ElMessage.error('用户名或密码错误')
+    }
   } finally {
     loading.value = false
   }

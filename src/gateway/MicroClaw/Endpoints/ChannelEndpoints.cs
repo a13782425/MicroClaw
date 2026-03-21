@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Channels;
+using MicroClaw.Channels.Feishu;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Providers;
 using Microsoft.Extensions.Logging;
@@ -28,13 +29,13 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelConfigStore store, ProviderConfigStore providerStore) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
-                return Results.BadRequest("DisplayName is required.");
+                return ApiErrors.BadRequest("DisplayName is required.");
             if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return Results.BadRequest("ProviderId is required.");
+                return ApiErrors.BadRequest("ProviderId is required.");
 
             // 验证 Provider 存在
             if (providerStore.All.All(p => p.Id != req.ProviderId))
-                return Results.BadRequest($"Provider '{req.ProviderId}' not found.");
+                return ApiErrors.BadRequest($"Provider '{req.ProviderId}' not found.");
 
             ChannelConfig config = new()
             {
@@ -53,11 +54,11 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelConfigStore store, ProviderConfigStore providerStore) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest("Id is required.");
+                return ApiErrors.BadRequest("Id is required.");
 
             // 验证 Provider 存在（如果指定了新的 ProviderId）
             if (!string.IsNullOrWhiteSpace(req.ProviderId) && providerStore.All.All(p => p.Id != req.ProviderId))
-                return Results.BadRequest($"Provider '{req.ProviderId}' not found.");
+                return ApiErrors.BadRequest($"Provider '{req.ProviderId}' not found.");
 
             ChannelConfig incoming = new()
             {
@@ -70,7 +71,7 @@ public static class ChannelEndpoints
 
             ChannelConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
-                return Results.NotFound($"Channel '{req.Id}' not found.");
+                return ApiErrors.NotFound($"Channel '{req.Id}' not found.");
 
             return Results.Ok(new { updated.Id });
         })
@@ -79,11 +80,11 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels/delete", (ChannelDeleteRequest req, ChannelConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest("Id is required.");
+                return ApiErrors.BadRequest("Id is required.");
 
             bool deleted = store.Delete(req.Id);
             if (!deleted)
-                return Results.NotFound($"Channel '{req.Id}' not found.");
+                return ApiErrors.NotFound($"Channel '{req.Id}' not found.");
 
             return Results.Ok();
         })
@@ -108,7 +109,7 @@ public static class ChannelEndpoints
             if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.Feishu)
             {
                 logger.LogWarning("渠道未找到或已禁用 channelId={ChannelId}", channelId);
-                return Results.NotFound("Channel not found or disabled.");
+                return ApiErrors.NotFound("Channel not found or disabled.");
             }
 
             IChannel? feishuChannel = channels.FirstOrDefault(c => c.Type == ChannelType.Feishu);
@@ -121,6 +122,28 @@ public static class ChannelEndpoints
             using StreamReader reader = new(context.Request.Body);
             string body = await reader.ReadToEndAsync();
             logger.LogDebug("飞书 Webhook body: {Body}", body);
+
+            // 签名验证（仅在配置了 EncryptKey 时启用）
+            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingsJson) ?? new();
+            if (!string.IsNullOrWhiteSpace(settings.EncryptKey))
+            {
+                string? signature = context.Request.Headers["X-Lark-Signature"];
+                string? timestamp = context.Request.Headers["X-Lark-Request-Timestamp"];
+                string? nonce = context.Request.Headers["X-Lark-Request-Nonce"];
+
+                if (!FeishuChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+                {
+                    logger.LogWarning("飞书 Webhook 时间戳过期或无效 channelId={ChannelId} timestamp={Timestamp}",
+                        channelId, timestamp);
+                    return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
+                }
+
+                if (!FeishuChannel.VerifyWebhookSignature(timestamp, nonce, settings.EncryptKey, body, signature))
+                {
+                    logger.LogWarning("飞书 Webhook 签名验证失败 channelId={ChannelId}", channelId);
+                    return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
+                }
+            }
 
             string? response = await feishuChannel.HandleWebhookAsync(body, config, context.RequestAborted);
             if (response is null)

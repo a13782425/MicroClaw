@@ -78,8 +78,13 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
 
     public AgentConfig Add(AgentConfig config)
     {
-        AgentConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
         using GatewayDbContext db = factory.CreateDbContext();
+
+        // 0-B-5: 检查 Name 唯一性
+        if (db.Agents.Any(a => a.Name == config.Name))
+            throw new InvalidOperationException($"Agent with name '{config.Name}' already exists.");
+
+        AgentConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
         db.Agents.Add(entity);
         db.SaveChanges();
         return ToConfig(entity);
@@ -93,7 +98,12 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
 
         // 默认代理的名称受保护，不允许修改
         if (!entity.IsDefault)
+        {
+            // 0-B-5: 名称变更时检查唯一性（排除自身）
+            if (incoming.Name != entity.Name && db.Agents.Any(a => a.Name == incoming.Name && a.Id != id))
+                throw new InvalidOperationException($"Agent with name '{incoming.Name}' already exists.");
             entity.Name = incoming.Name;
+        }
 
         entity.SystemPrompt = incoming.SystemPrompt;
         entity.IsEnabled = incoming.IsEnabled;

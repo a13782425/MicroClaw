@@ -29,13 +29,13 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions", (CreateSessionRequest req, SessionStore store, ProviderConfigStore providerStore) =>
         {
             if (string.IsNullOrWhiteSpace(req.Title))
-                return Results.BadRequest(new { message = "Title is required." });
+                return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
             if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return Results.BadRequest(new { message = "ProviderId is required." });
+                return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
 
             ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null)
-                return Results.NotFound(new { message = $"Provider '{req.ProviderId}' not found." });
+                return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
 
             SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId, ChannelType.Web);
             return Results.Ok(created);
@@ -46,10 +46,10 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             bool deleted = store.Delete(req.Id);
-            return deleted ? Results.Ok() : Results.NotFound(new { message = $"Session '{req.Id}' not found." });
+            return deleted ? Results.Ok() : Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
         })
         .WithTags("Sessions");
 
@@ -59,11 +59,11 @@ public static class SessionEndpoints
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             SessionInfo? updated = store.Approve(req.Id);
             if (updated is null)
-                return Results.NotFound(new { message = $"Session '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
@@ -76,11 +76,11 @@ public static class SessionEndpoints
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             SessionInfo? updated = store.Disable(req.Id);
             if (updated is null)
-                return Results.NotFound(new { message = $"Session '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
@@ -91,17 +91,17 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/switch-provider", (SwitchProviderRequest req, SessionStore store, ProviderConfigStore providerStore) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
             if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return Results.BadRequest(new { message = "ProviderId is required." });
+                return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
 
             ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null || !provider.IsEnabled)
-                return Results.NotFound(new { message = $"Provider '{req.ProviderId}' not found or disabled." });
+                return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found or disabled.", errorCode = "NOT_FOUND" });
 
             SessionInfo? updated = store.UpdateProvider(req.Id, req.ProviderId);
             return updated is null
-                ? Results.NotFound(new { message = $"Session '{req.Id}' not found." })
+                ? Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" })
                 : Results.Ok(updated);
         })
         .WithTags("Sessions");
@@ -111,7 +111,7 @@ public static class SessionEndpoints
         {
             SessionInfo? session = store.Get(id);
             if (session is null)
-                return Results.NotFound(new { message = $"Session '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<SessionMessage> messages = store.GetMessages(id);
             return Results.Ok(messages);

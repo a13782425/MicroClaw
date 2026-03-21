@@ -10,6 +10,7 @@ const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
 const AgentsPage    = () => import('@/views/AgentsPage.vue')
 const SkillsPage    = () => import('@/views/SkillsPage.vue')
 const UsagePage     = () => import('@/views/UsagePage.vue')
+const ConfigPage    = () => import('@/views/ConfigPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,6 +25,7 @@ export const router = createRouter({
     { path: '/approvals', name: 'approvals', component: ApprovalsPage },
     { path: '/agents', name: 'agents', component: AgentsPage },
     { path: '/skills', name: 'skills', component: SkillsPage },
+    { path: '/config', name: 'config', component: ConfigPage },
   ]
 })
 

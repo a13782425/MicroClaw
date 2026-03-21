@@ -2,379 +2,123 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">渠道</h2>
-        <p class="page-desc">管理消息接入渠道，支持飞书、企业微信、微信等多渠道接入</p>
-      </div>
-      <el-button type="primary" :icon="Plus" @click="openCreateDialog">添加渠道</el-button>
-    </div>
-
-    <div v-if="loading" class="loading-wrap">
-      <el-skeleton :rows="3" animated />
-    </div>
-
-    <el-empty v-else-if="channels.length === 0" description="暂无渠道，点击右上角添加" :image-size="100">
-      <template #image>
-        <el-icon class="placeholder-icon"><Connection /></el-icon>
-      </template>
-    </el-empty>
-
-    <div v-else class="channel-grid">
-      <div v-for="c in channels" :key="c.id" class="channel-card" :class="{ disabled: !c.isEnabled }">
-        <div class="card-top">
-          <div class="card-title-row">
-            <span class="card-name">{{ c.displayName }}</span>
-            <el-tag :type="channelTagType(c.channelType)" size="small" class="channel-tag">
-              {{ channelLabel(c.channelType) }}
-            </el-tag>
-          </div>
-          <div class="card-provider">
-            <el-icon><Cpu /></el-icon>
-            {{ providerName(c.providerId) || c.providerId }}
-          </div>
-          <div class="card-webhook">
-            <el-icon><Link /></el-icon>
-            <span class="webhook-url">{{ webhookUrl(c) }}</span>
-            <el-button link size="small" @click="copyWebhook(c)">
-              <el-icon><CopyDocument /></el-icon>
-            </el-button>
-          </div>
-        </div>
-
-        <div class="card-bottom">
-          <el-switch
-            v-model="c.isEnabled"
-            size="small"
-            active-text="启用"
-            inactive-text="停用"
-            @change="(val: boolean) => toggleEnabled(c, val)"
-          />
-          <div class="card-actions">
-            <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
-            <el-divider direction="vertical" />
-            <el-button link type="danger" :icon="Delete" @click="confirmDelete(c)">删除</el-button>
-          </div>
-        </div>
+        <h2 class="page-title">系统配置</h2>
+        <p class="page-desc">配置参考手册——所有设置通过 <code>microclaw.yaml</code> 及 <code>config/*.yaml</code> 文件管理</p>
       </div>
     </div>
 
-    <!-- 新增 / 编辑 Dialog -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEditing ? '编辑渠道' : '添加渠道'"
-      width="520px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-position="top"
-      >
-        <!-- 基础配置 -->
-        <div class="section-static">
-          <div class="section-static-header">
-            <span class="section-title">基础配置</span>
-            <span class="section-subtitle">名称、渠道类型、关联模型</span>
-          </div>
-          <div class="section-body">
-            <el-form-item label="显示名称" prop="displayName">
-              <el-input v-model="form.displayName" placeholder="例如：飞书客服机器人" />
-            </el-form-item>
-
-            <el-form-item label="渠道类型" prop="channelType">
-              <el-select v-model="form.channelType" style="width: 100%" :disabled="isEditing">
-                <el-option label="飞书" value="feishu" />
-                <el-option label="企业微信" value="wecom" disabled />
-                <el-option label="微信" value="wechat" disabled />
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="关联模型" prop="providerId">
-              <el-select v-model="form.providerId" style="width: 100%" placeholder="选择一个 AI 模型提供方">
-                <el-option
-                  v-for="p in providers"
-                  :key="p.id"
-                  :label="`${p.displayName} (${p.modelName})`"
-                  :value="p.id"
-                  :disabled="!p.isEnabled"
-                />
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="启用" class="form-item-inline">
-              <el-switch v-model="form.isEnabled" />
-            </el-form-item>
-          </div>
+    <!-- 快速导航 -->
+    <p class="section-label">快速导航</p>
+    <div class="nav-grid">
+      <router-link v-for="nav in navItems" :key="nav.route" :to="nav.route" class="nav-card">
+        <el-icon class="nav-icon" :style="{ color: nav.color }">
+          <component :is="nav.icon" />
+        </el-icon>
+        <div class="nav-body">
+          <div class="nav-title">{{ nav.title }}</div>
+          <div class="nav-desc">{{ nav.desc }}</div>
         </div>
+        <el-icon class="nav-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
 
-        <!-- 飞书特定配置 -->
-        <div v-if="form.channelType === 'feishu'" class="section-static" style="margin-top: 8px">
-          <div class="section-static-header section-header-feishu">
-            <span class="section-title">飞书配置</span>
-            <span class="section-subtitle">在飞书开放平台获取以下信息</span>
-          </div>
-          <div class="section-body">
-            <el-form-item label="App ID" prop="feishu.appId">
-              <el-input v-model="form.feishu.appId" placeholder="飞书应用的 App ID" />
-            </el-form-item>
-
-            <el-form-item label="App Secret" prop="feishu.appSecret">
-              <el-input
-                v-model="form.feishu.appSecret"
-                type="password"
-                show-password
-                :placeholder="isEditing ? '清空后重新输入新 Secret，不修改则保留原值' : '飞书应用的 App Secret'"
-              />
-            </el-form-item>
-
-            <el-form-item label="Encrypt Key">
-              <el-input v-model="form.feishu.encryptKey" placeholder="事件订阅的加密密钥（可选）" />
-              <div class="form-hint">在飞书开放平台 → 事件订阅 → 加密策略中配置</div>
-            </el-form-item>
-
-            <el-form-item label="Verification Token">
-              <el-input v-model="form.feishu.verificationToken" placeholder="事件订阅的验证 Token（可选）" />
-            </el-form-item>
-          </div>
+    <!-- 配置项说明 -->
+    <p class="section-label" style="margin-top: 28px">配置项说明</p>
+    <div class="config-grid">
+      <!-- 认证 -->
+      <div class="config-card">
+        <div class="config-card-header" style="background: #eff6ff; color: #2563eb">
+          <el-icon><Lock /></el-icon>
+          <span>认证（auth）</span>
         </div>
-      </el-form>
+        <table class="config-table">
+          <tbody>
+            <tr>
+              <td class="key-cell"><code>auth:jwt_secret</code></td>
+              <td class="val-cell">JWT 签名密钥，<strong>建议 ≥ 32 字符</strong>的随机字符串，长度不足时系统启动将输出安全警告</td>
+            </tr>
+            <tr>
+              <td class="key-cell"><code>auth:username</code></td>
+              <td class="val-cell">管理员账号（默认 <code>admin</code>）</td>
+            </tr>
+            <tr>
+              <td class="key-cell"><code>auth:password</code></td>
+              <td class="val-cell">管理员登录密码，生产环境必须设置强密码</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">
-          {{ isEditing ? '保存' : '添加' }}
-        </el-button>
-      </template>
-    </el-dialog>
+      <!-- 数据库 -->
+      <div class="config-card">
+        <div class="config-card-header" style="background: #f0fdf4; color: #16a34a">
+          <el-icon><Coin /></el-icon>
+          <span>数据库（database）</span>
+        </div>
+        <table class="config-table">
+          <tbody>
+            <tr>
+              <td class="key-cell"><code>database:path</code></td>
+              <td class="val-cell">SQLite 数据库文件路径，默认 <code>./data/microclaw.db</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 配置文件机制 -->
+      <div class="config-card config-card-wide">
+        <div class="config-card-header" style="background: #fefce8; color: #ca8a04">
+          <el-icon><Document /></el-icon>
+          <span>配置文件导入机制（$imports）</span>
+        </div>
+        <div class="config-note">
+          <p>主配置文件 <code>microclaw.yaml</code> 通过 <code>$imports</code> 字段导入子配置：</p>
+          <pre class="code-snippet">$imports:
+  - ./config/*.yaml</pre>
+          <ul class="tip-list">
+            <li>主配置作为默认值层，子配置可覆盖同名键</li>
+            <li>多个子配置文件之间<strong>不允许出现相同的键</strong>，冲突时启动报错</li>
+            <li>支持通配符（如 <code>./config/*.yaml</code>）和具体路径混用</li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Edit, Delete, Cpu, Link, Connection, CopyDocument } from '@element-plus/icons-vue'
-import {
-  listChannels,
-  createChannel,
-  updateChannel,
-  deleteChannel,
-  listProviders,
-} from '@/services/gatewayApi'
-import type { ChannelConfig, ChannelType, ProviderConfig } from '@/services/gatewayApi'
+import { ArrowRight, Lock, Coin, Document, Cpu, Connection, Promotion, MagicStick } from '@element-plus/icons-vue'
 
-const loading = ref(false)
-const submitting = ref(false)
-const channels = ref<ChannelConfig[]>([])
-const providers = ref<ProviderConfig[]>([])
-
-const dialogVisible = ref(false)
-const isEditing = ref(false)
-const editingId = ref('')
-const formRef = ref<FormInstance>()
-
-const form = reactive({
-  displayName: '',
-  channelType: 'feishu' as ChannelType,
-  providerId: '',
-  isEnabled: true,
-  feishu: {
-    appId: '',
-    appSecret: '',
-    encryptKey: '',
-    verificationToken: '',
+const navItems = [
+  {
+    route: '/models',
+    icon: Cpu,
+    color: '#6366f1',
+    title: '模型提供方',
+    desc: '管理 OpenAI / Anthropic 等 AI 模型接入',
   },
-})
-
-const rules: FormRules = {
-  displayName: [{ required: true, message: '请输入显示名称', trigger: 'blur' }],
-  channelType: [{ required: true, message: '请选择渠道类型', trigger: 'change' }],
-  providerId: [{ required: true, message: '请选择关联模型', trigger: 'change' }],
-  'feishu.appId': [{ required: true, message: '请输入 App ID', trigger: 'blur' }],
-  'feishu.appSecret': [
-    { required: true, message: '请输入 App Secret', trigger: 'blur' },
-  ],
-}
-
-function channelLabel(type: ChannelType): string {
-  const labels: Record<ChannelType, string> = {
-    web: 'Web',
-    feishu: '飞书',
-    wecom: '企业微信',
-    wechat: '微信',
-  }
-  return labels[type] ?? type
-}
-
-function channelTagType(type: ChannelType): 'primary' | 'success' | 'warning' {
-  const types: Record<ChannelType, 'primary' | 'success' | 'warning'> = {
-    web: 'primary',
-    feishu: 'primary',
-    wecom: 'success',
-    wechat: 'warning',
-  }
-  return types[type] ?? 'primary'
-}
-
-function providerName(providerId: string): string {
-  const p = providers.value.find(p => p.id === providerId)
-  return p ? `${p.displayName} (${p.modelName})` : ''
-}
-
-function webhookUrl(c: ChannelConfig): string {
-  const base = window.location.origin
-  return `${base}/api/channels/${c.channelType}/${c.id}/webhook`
-}
-
-async function copyWebhook(c: ChannelConfig) {
-  try {
-    await navigator.clipboard.writeText(webhookUrl(c))
-    ElMessage.success('Webhook URL 已复制')
-  } catch {
-    ElMessage.error('复制失败')
-  }
-}
-
-async function loadData() {
-  loading.value = true
-  try {
-    const [channelList, providerList] = await Promise.all([listChannels(), listProviders()])
-    channels.value = channelList
-    providers.value = providerList
-  } catch {
-    ElMessage.error('加载数据失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-function resetForm() {
-  Object.assign(form, {
-    displayName: '',
-    channelType: 'feishu' as ChannelType,
-    providerId: '',
-    isEnabled: true,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '' },
-  })
-}
-
-function openCreateDialog() {
-  isEditing.value = false
-  editingId.value = ''
-  resetForm()
-  dialogVisible.value = true
-}
-
-function openEditDialog(c: ChannelConfig) {
-  isEditing.value = true
-  editingId.value = c.id
-
-  Object.assign(form, {
-    displayName: c.displayName,
-    channelType: c.channelType,
-    providerId: c.providerId,
-    isEnabled: c.isEnabled,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '' },
-  })
-
-  // 解析渠道特定设置
-  if (c.channelType === 'feishu' && c.settings) {
-    try {
-      const parsed = typeof c.settings === 'string' ? JSON.parse(c.settings) : c.settings
-      form.feishu.appId = parsed.appId ?? ''
-      form.feishu.appSecret = '***' // 编辑时预填掩码值，留原值则保留原有 Secret
-      form.feishu.encryptKey = parsed.encryptKey ?? ''
-      form.feishu.verificationToken = parsed.verificationToken ?? ''
-    } catch { /* ignore */ }
-  }
-
-  dialogVisible.value = true
-}
-
-function buildSettingsJson(): string {
-  if (form.channelType === 'feishu') {
-    return JSON.stringify({
-      appId: form.feishu.appId,
-      appSecret: form.feishu.appSecret || (isEditing.value ? '***' : ''),
-      encryptKey: form.feishu.encryptKey,
-      verificationToken: form.feishu.verificationToken,
-    })
-  }
-  return '{}'
-}
-
-async function submitForm() {
-  if (!formRef.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-
-  const settings = buildSettingsJson()
-
-  submitting.value = true
-  try {
-    if (isEditing.value) {
-      await updateChannel({
-        id: editingId.value,
-        displayName: form.displayName,
-        channelType: form.channelType,
-        providerId: form.providerId,
-        isEnabled: form.isEnabled,
-        settings,
-      })
-      ElMessage.success('渠道已更新')
-    } else {
-      await createChannel({
-        displayName: form.displayName,
-        channelType: form.channelType,
-        providerId: form.providerId,
-        isEnabled: form.isEnabled,
-        settings,
-      })
-      ElMessage.success('渠道已添加')
-    }
-    dialogVisible.value = false
-    await loadData()
-  } catch {
-    ElMessage.error(isEditing.value ? '更新失败，请重试' : '添加失败，请重试')
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function toggleEnabled(c: ChannelConfig, val: boolean) {
-  try {
-    await updateChannel({
-      id: c.id,
-      displayName: c.displayName,
-      channelType: c.channelType,
-      providerId: c.providerId,
-      isEnabled: val,
-      settings: c.settings,
-    })
-  } catch {
-    ElMessage.error('状态更新失败')
-    c.isEnabled = !val
-  }
-}
-
-async function confirmDelete(c: ChannelConfig) {
-  await ElMessageBox.confirm(
-    `确认删除渠道「${c.displayName}」？此操作不可撤销。`,
-    '删除确认',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
-  ).catch(() => null)
-
-  try {
-    await deleteChannel(c.id)
-    ElMessage.success('已删除')
-    await loadData()
-  } catch {
-    ElMessage.error('删除失败，请重试')
-  }
-}
-
-onMounted(loadData)
+  {
+    route: '/channels',
+    icon: Connection,
+    color: '#0ea5e9',
+    title: '消息渠道',
+    desc: '配置飞书、企业微信、微信等接入渠道',
+  },
+  {
+    route: '/agents',
+    icon: Promotion,
+    color: '#f59e0b',
+    title: 'Agent',
+    desc: '管理 AI 智能体及 DNA 系统配置',
+  },
+  {
+    route: '/skills',
+    icon: MagicStick,
+    color: '#10b981',
+    title: '技能',
+    desc: '管理 AI 调用的外部技能与 MCP 工具',
+  },
+]
 </script>
 
 <style scoped>
@@ -406,196 +150,198 @@ onMounted(loadData)
   color: #6b7280;
 }
 
-.loading-wrap {
-  padding: 24px 0;
+.page-desc code {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #374151;
 }
 
-.placeholder-icon {
-  font-size: 80px;
-  color: #d1d5db;
+.section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
 }
 
-.channel-grid {
+/* ---- 快速导航 ---- */
+.nav-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
 }
 
-.channel-card {
+.nav-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 18px 20px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: box-shadow 0.2s;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
 
-.channel-card:hover {
+.nav-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #d1d5db;
 }
 
-.channel-card.disabled {
-  opacity: 0.55;
+.nav-icon {
+  font-size: 26px;
+  flex-shrink: 0;
 }
 
-.card-top {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.nav-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.card-name {
-  font-size: 16px;
+.nav-title {
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-bottom: 2px;
 }
 
-.channel-tag {
-  flex-shrink: 0;
-}
-
-.card-provider {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
+.nav-desc {
+  font-size: 12px;
   color: #6b7280;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.card-provider .el-icon {
+.nav-arrow {
+  font-size: 14px;
+  color: #9ca3af;
   flex-shrink: 0;
+}
+
+/* ---- 配置项说明 ---- */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.config-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.config-card-wide {
+  grid-column: 1 / -1;
+}
+
+.config-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
 }
 
-.card-webhook {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.card-webhook .el-icon {
-  flex-shrink: 0;
-  font-size: 12px;
-}
-
-.webhook-url {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-}
-
-.card-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 10px;
+.config-table tr {
   border-top: 1px solid #f3f4f6;
 }
 
-.card-actions {
-  display: flex;
-  align-items: center;
-}
-
-.form-hint {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-top: 4px;
-  line-height: 1.4;
-}
-
-/* 基础配置（常开 section） */
-.section-static {
-  margin-bottom: 8px;
-}
-
-.section-static-header {
-  height: 40px;
-  line-height: 40px;
-  background: #eff6ff;
-  color: #2563eb;
-  border-radius: 6px 6px 0 0;
-  padding: 0 12px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.section-header-feishu {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.section-header-feishu .section-subtitle {
-  color: #86efac;
-}
-
-.section-static-header .section-subtitle {
-  color: #93c5fd;
-}
-
-.section-body :deep(.el-form-item) {
-  margin-bottom: 12px;
-}
-
-.section-body :deep(.el-form-item:last-child) {
-  margin-bottom: 0;
-}
-
-.section-body :deep(.el-form-item__label) {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2937;
-  padding-bottom: 4px;
-}
-
-.form-item-inline :deep(.el-form-item__label) {
-  padding-bottom: 0;
-}
-
-.section-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: inherit;
-}
-
-.section-subtitle {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-left: 8px;
-  font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.section-body {
-  border: 1px solid #e5e7eb;
+.config-table tr:first-child {
   border-top: none;
-  border-radius: 0 0 6px 6px;
-  padding: 14px 16px;
-  margin-bottom: 4px;
+}
+
+.key-cell {
+  padding: 10px 14px;
+  vertical-align: top;
+  white-space: nowrap;
+  width: 1%;
+  color: #374151;
+}
+
+.key-cell code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.val-cell {
+  padding: 10px 14px 10px 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.val-cell code {
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #374151;
+}
+
+/* ---- 配置说明 note ---- */
+.config-note {
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.config-note p {
+  margin: 0 0 10px;
+}
+
+.config-note p code {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.code-snippet {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.tip-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #6b7280;
+  line-height: 1.8;
+}
+
+.tip-list li strong {
+  color: #374151;
+}
+
+.tip-list li code {
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #374151;
 }
 </style>
+

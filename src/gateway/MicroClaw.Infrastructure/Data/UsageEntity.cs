@@ -16,8 +16,8 @@ public sealed class UsageEntity
     /// <summary>调用来源：chat / cron / channel / subagent</summary>
     public string Source { get; set; } = string.Empty;
 
-    public int InputTokens { get; set; }
-    public int OutputTokens { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
 
     /// <summary>记录时快照的输入单价（USD/1M tokens），可 null 表示未配置。</summary>
     public decimal? InputPricePerMToken { get; set; }

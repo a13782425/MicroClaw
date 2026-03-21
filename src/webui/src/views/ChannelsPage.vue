@@ -269,7 +269,7 @@ async function loadData() {
     channels.value = channelList
     providers.value = providerList
   } catch {
-    ElMessage.error('加载数据失败')
+    // 失败由全局拦截器展示后端错误信息
   } finally {
     loading.value = false
   }
@@ -364,7 +364,7 @@ async function submitForm() {
     dialogVisible.value = false
     await loadData()
   } catch {
-    ElMessage.error(isEditing.value ? '更新失败，请重试' : '添加失败，请重试')
+    // 失败由全局拦截器展示后端错误信息
   } finally {
     submitting.value = false
   }
@@ -381,8 +381,7 @@ async function toggleEnabled(c: ChannelConfig, val: boolean) {
       settings: c.settings,
     })
   } catch {
-    ElMessage.error('状态更新失败')
-    c.isEnabled = !val
+    c.isEnabled = !val  // 回滚开关状态
   }
 }
 
@@ -402,7 +401,7 @@ async function confirmDelete(c: ChannelConfig) {
     ElMessage.success('已删除')
     await loadData()
   } catch {
-    ElMessage.error('删除失败，请重试')
+    // 删除失败由全局拦截器展示后端错误信息
   }
 }
 

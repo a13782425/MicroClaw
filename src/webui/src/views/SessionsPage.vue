@@ -20,6 +20,14 @@
               <ChatDotRound />
             </el-icon>
             <span class="session-title">{{ session.title }}</span>
+            <el-icon
+              v-if="runningSessionIds.has(session.id) && store.currentSessionId !== session.id"
+              class="session-running-icon"
+              :size="12"
+              title="Agent 处理中"
+            >
+              <Loading />
+            </el-icon>
             <el-tag
               v-if="!isWebChannel(session.channelType)"
               size="small"
@@ -201,7 +209,7 @@ import ChatMessage from '@/components/ChatMessage.vue'
 import { SYSTEM_SOURCES } from '@/services/gatewayApi'
 import {
   Plus, Delete, ChatDotRound, Paperclip,
-  Promotion, VideoPause, Close,
+  Promotion, VideoPause, Close, Loading,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { eventBus } from '@/services/eventBus'
@@ -215,6 +223,9 @@ const pendingAttachments = ref<MessageAttachment[]>([])
 const messagesEl = ref<HTMLElement | null>(null)
 const providers = ref<ProviderConfig[]>([])
 const enabledProviders = ref<ProviderConfig[]>([])
+
+// sessionId → 当前是否有 Agent 在后台运行（非流式，如渠道消息触发的对话）
+const runningSessionIds = ref<Set<string>>(new Set())
 
 const createForm = ref({ title: '', providerId: '' })
 
@@ -231,6 +242,7 @@ onMounted(async () => {
   eventBus.on('session:approved', onSessionEvent)
   eventBus.on('session:disabled', onSessionEvent)
   eventBus.on('cron:jobExecuted', onCronJobExecuted)
+  eventBus.on('agent:statusChanged', onAgentStatusChanged)
 })
 
 function onSessionEvent() {
@@ -245,11 +257,27 @@ async function onCronJobExecuted(payload: unknown) {
   }
 }
 
+function onAgentStatusChanged(payload: unknown) {
+  const { sessionId, status } = payload as { sessionId: string; agentId: string; status: string }
+  if (status === 'running') {
+    runningSessionIds.value = new Set([...runningSessionIds.value, sessionId])
+  } else {
+    const next = new Set(runningSessionIds.value)
+    next.delete(sessionId)
+    runningSessionIds.value = next
+    // 状态完成后刷新当前会话消息（支持非流式渠道消息场景）
+    if (sessionId === store.currentSessionId && !store.chatting) {
+      store.selectSession(sessionId).then(scrollToBottom)
+    }
+  }
+}
+
 onUnmounted(() => {
   eventBus.off('session:created', onSessionEvent)
   eventBus.off('session:approved', onSessionEvent)
   eventBus.off('session:disabled', onSessionEvent)
   eventBus.off('cron:jobExecuted', onCronJobExecuted)
+  eventBus.off('agent:statusChanged', onAgentStatusChanged)
 })
 
 // 滚动到底部（使用 flush: 'post' 确保 DOM 已更新后再执行）
@@ -283,7 +311,7 @@ async function handleCreate() {
     await store.selectSession(session.id)
     ElMessage.success('会话已创建，请等待管理员批准后方可对话')
   } catch {
-    ElMessage.error('创建失败，请重试')
+    // 失败由全局拦截器展示后端错误信息
   } finally {
     creating.value = false
   }
@@ -297,7 +325,7 @@ async function handleSwitchProvider(newProviderId: string) {
     await store.fetchSessions()
     ElMessage.success('模型已切换')
   } catch {
-    ElMessage.error('切换失败，请重试')
+    // 失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -436,6 +464,17 @@ function removeAttachment(idx: number) {
 .session-icon {
   flex-shrink: 0;
   color: var(--el-text-color-secondary);
+}
+
+.session-running-icon {
+  flex-shrink: 0;
+  color: var(--el-color-primary);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .session-title {

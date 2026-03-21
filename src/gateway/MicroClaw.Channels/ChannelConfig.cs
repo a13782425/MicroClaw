@@ -22,6 +22,10 @@ public sealed record FeishuChannelSettings
     [JsonPropertyName("connectionMode")]
     public string ConnectionMode { get; init; } = "websocket";
 
+    /// <summary>Webhook 时间戳防重放容差（秒），默认 300（5 分钟）。</summary>
+    [JsonPropertyName("webhookTimestampToleranceSeconds")]
+    public int WebhookTimestampToleranceSeconds { get; init; } = 300;
+
     public static FeishuChannelSettings? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;

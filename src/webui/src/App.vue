@@ -160,6 +160,10 @@ function startSignalR() {
     })
   })
 
+  connection.on('agentStatus', (payload: { sessionId: string; agentId: string; status: 'running' | 'completed' | 'failed' }) => {
+    eventBus.emit('agent:statusChanged', payload)
+  })
+
   connection.start().catch(() => {
     // 连接失败时静默，自动重连会处理
   })

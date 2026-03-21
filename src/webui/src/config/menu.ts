@@ -10,6 +10,7 @@ import {
   Promotion,
   MagicStick,
   TrendCharts,
+  Setting,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -53,6 +54,7 @@ export const menuGroups: MenuGroup[] = [
       { label: '模型', icon: Cpu, route: '/models' },
       { label: '渠道', icon: Connection, route: '/channels' },
       { label: '会话审批', icon: DocumentChecked, route: '/approvals' },
+      { label: '系统配置', icon: Setting, route: '/config' },
     ],
   },
 ]

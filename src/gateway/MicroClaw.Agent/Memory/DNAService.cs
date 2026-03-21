@@ -8,6 +8,9 @@ namespace MicroClaw.Agent.Memory;
 /// </summary>
 public sealed class DNAService(string agentsDataDir)
 {
+    /// <summary>单次注入 SystemPrompt 的 DNA 上下文最大字节数（50 KB）。</summary>
+    public const int MaxDnaSizeBytes = 50 * 1024;
+
     private string AgentDir(string agentId) => Path.Combine(agentsDataDir, agentId, "dna");
 
     public IReadOnlyList<GeneFile> List(string agentId)
@@ -56,7 +59,8 @@ public sealed class DNAService(string agentsDataDir)
         return true;
     }
 
-    /// <summary>将所有基因文件拼接为可注入 SystemPrompt 的 Markdown 字符串。</summary>
+    /// <summary>将所有基因文件拼接为可注入 SystemPrompt 的 Markdown 字符串。
+    /// 总大小超过 <see cref="MaxDnaSizeBytes"/>（50KB）时按列举顺序截取，优先保留靠前的文件。</summary>
     public string BuildSystemPromptContext(string agentId)
     {
         IReadOnlyList<GeneFile> files = List(agentId);
@@ -64,15 +68,26 @@ public sealed class DNAService(string agentsDataDir)
 
         var sb = new StringBuilder();
         sb.AppendLine("## DNA 记忆");
+        int included = 0;
+
         foreach (GeneFile gene in files)
         {
             string label = string.IsNullOrWhiteSpace(gene.Category)
                 ? gene.FileName
                 : $"{gene.Category}/{gene.FileName}";
-            sb.AppendLine($"### {label}");
-            sb.AppendLine(gene.Content);
-            sb.AppendLine();
+            string section = $"### {label}\n{gene.Content}\n\n";
+
+            // 超出大小上限时停止追加，优先保留已包含的文件
+            if (Encoding.UTF8.GetByteCount(sb.ToString()) + Encoding.UTF8.GetByteCount(section) > MaxDnaSizeBytes)
+                break;
+
+            sb.Append(section);
+            included++;
         }
+
+        if (included < files.Count)
+            sb.AppendLine($"\n> ⚠️ 因 DNA 大小超过 50 KB 上限，仅注入 {included}/{files.Count} 个基因文件，剩余文件已跳过。");
+
         return sb.ToString();
     }
 

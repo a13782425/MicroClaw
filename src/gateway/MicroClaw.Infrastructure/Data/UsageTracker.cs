@@ -12,8 +12,8 @@ public interface IUsageTracker
         string providerId,
         string providerName,
         string source,
-        int inputTokens,
-        int outputTokens,
+        long inputTokens,
+        long outputTokens,
         decimal? inputPricePerMToken,
         decimal? outputPricePerMToken,
         CancellationToken ct = default);
@@ -29,8 +29,8 @@ public sealed class UsageTracker(IDbContextFactory<GatewayDbContext> dbFactory) 
         string providerId,
         string providerName,
         string source,
-        int inputTokens,
-        int outputTokens,
+        long inputTokens,
+        long outputTokens,
         decimal? inputPricePerMToken,
         decimal? outputPricePerMToken,
         CancellationToken ct = default)

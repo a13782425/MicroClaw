@@ -27,11 +27,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers", (ProviderCreateRequest req, ProviderConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
-                return Results.BadRequest("DisplayName is required.");
+                return ApiErrors.BadRequest("DisplayName is required.");
             if (string.IsNullOrWhiteSpace(req.ModelName))
-                return Results.BadRequest("ModelName is required.");
+                return ApiErrors.BadRequest("ModelName is required.");
             if (string.IsNullOrWhiteSpace(req.ApiKey))
-                return Results.BadRequest("ApiKey is required.");
+                return ApiErrors.BadRequest("ApiKey is required.");
 
             ProviderConfig config = new()
             {
@@ -53,7 +53,7 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers/update", (ProviderUpdateRequest req, ProviderConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest("Id is required.");
+                return ApiErrors.BadRequest("Id is required.");
 
             ProviderConfig incoming = new()
             {
@@ -69,7 +69,7 @@ public static class SystemEndpoints
 
             ProviderConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
-                return Results.NotFound($"Provider '{req.Id}' not found.");
+                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 
             return Results.Ok(new { updated.Id });
         })
@@ -78,11 +78,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers/delete", (ProviderDeleteRequest req, ProviderConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest("Id is required.");
+                return ApiErrors.BadRequest("Id is required.");
 
             bool deleted = store.Delete(req.Id);
             if (!deleted)
-                return Results.NotFound($"Provider '{req.Id}' not found.");
+                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 
             return Results.Ok();
         })

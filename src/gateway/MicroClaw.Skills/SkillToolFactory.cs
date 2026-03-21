@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Skills;
 
@@ -9,7 +10,8 @@ public sealed class SkillToolFactory(
     SkillStore skillStore,
     SkillService skillService,
     SkillRunner skillRunner,
-    string workspaceRoot)
+    string workspaceRoot,
+    ILoggerFactory loggerFactory)
 {
     /// <summary>
     /// 为指定技能 ID 列表创建 AIFunction 工具，只加载 IsEnabled 的技能。
@@ -31,7 +33,8 @@ public sealed class SkillToolFactory(
                 skillService,
                 skillRunner,
                 workspaceRoot,
-                sessionId));
+                sessionId,
+                loggerFactory));
         }
 
         return tools.AsReadOnly();

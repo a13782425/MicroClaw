@@ -18,6 +18,7 @@ using MicroClaw.Jobs;
 using MicroClaw.Providers;
 using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
+using MicroClaw.Services;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -63,6 +64,7 @@ public class ServeCommand : Command
 
 		var app = builder.Build();
 
+		ValidateStartupConfiguration(app);
 		MigrateDatabase(app);
 		SeedDefaultAgent(app);
 		ConfigureMiddleware(app);
@@ -185,6 +187,7 @@ public class ServeCommand : Command
 			sp.GetRequiredService<SessionStore>(),
 			sp.GetRequiredService<AgentStore>(),
 			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>())));
+		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		builder.Services.AddSingleton<AgentRunner>();
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
 
@@ -197,7 +200,8 @@ public class ServeCommand : Command
 			sp.GetRequiredService<SkillStore>(),
 			sp.GetRequiredService<SkillService>(),
 			sp.GetRequiredService<SkillRunner>(),
-			workspaceRoot));
+			workspaceRoot,
+			sp.GetRequiredService<ILoggerFactory>()));
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();
@@ -227,6 +231,22 @@ public class ServeCommand : Command
 
 		builder.Services.AddSingleton<IChannel, WeComChannel>();
 		builder.Services.AddSingleton<IChannel, WeChatChannel>();
+	}
+
+	/// <summary>校验关键配置项安全性，不满足要求时记录 Warning 级别日志。</summary>
+	private static void ValidateStartupConfiguration(WebApplication app)
+	{
+		var logger = app.Logger;
+
+		string jwtSecret = app.Configuration["auth:jwt_secret"] ?? "";
+		int jwtSecretBytes = Encoding.UTF8.GetByteCount(jwtSecret);
+		if (jwtSecretBytes < 32)
+		{
+			logger.LogWarning(
+				"JWT secret 强度不足（当前 {Bytes} 字节，要求 ≥32 字节）。" +
+				"请在配置项 auth:jwt_secret 中设置 32 个字符以上的强密钥，否则存在被暴力破解的安全风险。",
+				jwtSecretBytes);
+		}
 	}
 
 	/// <summary>在应用启动时执行 EF Core 迁移，确保数据库 schema 与当前模型一致。</summary>

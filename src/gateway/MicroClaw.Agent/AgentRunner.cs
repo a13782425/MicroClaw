@@ -8,8 +8,6 @@ using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
-using UsageResult = (int InputTokens, int OutputTokens);
-
 namespace MicroClaw.Agent;
 
 /// <summary>
@@ -28,7 +26,8 @@ public sealed class AgentRunner(
     SkillToolFactory skillToolFactory,
     ISubAgentRunner subAgentRunner,
     IUsageTracker usageTracker,
-    ILoggerFactory loggerFactory) : IAgentMessageHandler
+    ILoggerFactory loggerFactory,
+    IAgentStatusNotifier agentStatusNotifier) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
 
@@ -91,10 +90,18 @@ public sealed class AgentRunner(
             // 追加子代理工具
             allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner));
         }
+        else
+        {
+            _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
+        }
 
         _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
+        if (!string.IsNullOrWhiteSpace(sessionId))
+            await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
+
+        bool succeeded = false;
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
@@ -103,11 +110,14 @@ public sealed class AgentRunner(
 
             await TrackUsageAsync(response.Usage, sessionId, provider, source, ct);
 
+            succeeded = true;
             return response.Text ?? "（无回复）";
         }
         finally
         {
             await DisposeConnectionsAsync(connections);
+            if (!string.IsNullOrWhiteSpace(sessionId))
+                await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
         }
     }
 
@@ -143,12 +153,20 @@ public sealed class AgentRunner(
             // 追加子代理工具
             allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner));
         }
+        else
+        {
+            _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
+        }
 
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
+        if (!string.IsNullOrWhiteSpace(sessionId))
+            await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
+
+        bool succeeded = false;
         UsageDetails? lastUsage = null;
-        List<ChatResponseUpdate> collectedUpdates = [];
+        ChatResponseUpdate? lastUpdate = null;
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
@@ -157,21 +175,25 @@ public sealed class AgentRunner(
             await foreach (ChatResponseUpdate update in
                 client.GetStreamingResponseAsync(messages, chatOptions, ct))
             {
-                collectedUpdates.Add(update);
+                // 0-B-4: 仅记录最后一个 update，不积累全量内容（usage 由提供商在末尾报告）
+                lastUpdate = update;
 
                 string token = update.Text ?? string.Empty;
                 if (!string.IsNullOrEmpty(token))
                     yield return token;
             }
 
-            // 流式结束后从收集到的 updates 合并出完整 ChatResponse 以获取 Usage
-            if (collectedUpdates.Count > 0)
-                lastUsage = collectedUpdates.ToChatResponse().Usage;
+            // 从最后一个 update 获取 Usage
+            if (lastUpdate is not null)
+                lastUsage = new List<ChatResponseUpdate> { lastUpdate }.ToChatResponse().Usage;
+            succeeded = true;
         }
         finally
         {
             await DisposeConnectionsAsync(connections);
             await TrackUsageAsync(lastUsage, sessionId, provider, "chat", CancellationToken.None);
+            if (!string.IsNullOrWhiteSpace(sessionId))
+                await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
         }
     }
 
@@ -195,9 +217,12 @@ public sealed class AgentRunner(
     private static IEnumerable<McpClientTool> FilterMcpTools(AgentConfig agent, IReadOnlyList<McpClientTool> tools)
     {
         if (agent.ToolGroupConfigs.Count == 0) return tools;
-        return tools.Where(t =>
+        // 保留未被任何启用分组明确禁用的工具
+        return tools.Where(tool =>
         {
-            return !agent.ToolGroupConfigs.Any(g => g.IsEnabled && g.DisabledToolNames.Contains(t.Name));
+            bool isDisabledByAnyGroup = agent.ToolGroupConfigs
+                .Any(g => g.IsEnabled && g.DisabledToolNames.Contains(tool.Name));
+            return !isDisabledByAnyGroup;
         });
     }
 
@@ -213,6 +238,13 @@ public sealed class AgentRunner(
     private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history)
     {
         string dnaContext = dnaService.BuildSystemPromptContext(agent.Id);
+
+        if (!string.IsNullOrEmpty(dnaContext))
+        {
+            int dnaBytes = System.Text.Encoding.UTF8.GetByteCount(dnaContext);
+            _logger.LogDebug("DNA 上下文注入：{Bytes} 字节，Agent={AgentId}", dnaBytes, agent.Id);
+        }
+
         string systemPrompt = string.IsNullOrWhiteSpace(dnaContext)
             ? agent.SystemPrompt
             : agent.SystemPrompt + "\n\n" + dnaContext;
@@ -236,8 +268,9 @@ public sealed class AgentRunner(
         if (!withTools) return inner;
 
         // UseFunctionInvocation 中间件自动处理 Tool Call → Invoke → Observation 轮次
+        // MaximumIterationsPerRequest=10 防止无限循环（默认为 int.MaxValue）
         return inner.AsBuilder()
-            .UseFunctionInvocation(loggerFactory)
+            .UseFunctionInvocation(loggerFactory, configure: c => c.MaximumIterationsPerRequest = 10)
             .Build();
     }
 
@@ -270,8 +303,8 @@ public sealed class AgentRunner(
         CancellationToken ct)
     {
         if (usage is null) return;
-        int inputTokens = (int)(usage.InputTokenCount ?? 0L);
-        int outputTokens = (int)(usage.OutputTokenCount ?? 0L);
+        long inputTokens = usage.InputTokenCount ?? 0L;
+        long outputTokens = usage.OutputTokenCount ?? 0L;
         if (inputTokens <= 0 && outputTokens <= 0) return;
 
         try

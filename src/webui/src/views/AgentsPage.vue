@@ -419,8 +419,7 @@ async function onToggleEnabled(a: AgentConfig, val: boolean) {
     const updated = agents.value.find(ag => ag.id === a.id)
     if (updated) selectedAgent.value = updated
   } catch {
-    a.isEnabled = !val
-    ElMessage.error('操作失败')
+    a.isEnabled = !val  // 回滚开关状态
   }
 }
 
@@ -523,7 +522,7 @@ async function saveAgent() {
       if (updated) selectedAgent.value = updated
     }
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     saving.value = false
   }
@@ -540,9 +539,8 @@ async function confirmDelete(a: AgentConfig) {
     ElMessage.success('已删除')
     if (selectedAgent.value?.id === a.id) selectedAgent.value = null
     await loadData()
-  } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-    ElMessage.error(msg ?? '删除失败')
+  } catch {
+    // 删除失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -588,7 +586,7 @@ async function saveGene() {
     geneEditDialogVisible.value = false
     await loadGeneFiles()
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     geneSaving.value = false
   }
@@ -604,7 +602,7 @@ async function deleteGene(g: GeneFile) {
     ElMessage.success('已删除')
     await loadGeneFiles()
   } catch {
-    ElMessage.error('删除失败')
+    // 删除失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -622,7 +620,7 @@ async function loadTools(a: AgentConfig) {
     const result = await listAgentTools(a.id)
     toolGroups.value = result.groups
   } catch {
-    ElMessage.error('加载工具列表失败，请检查 MCP Server 配置')
+    // 加载失败由全局拦截器展示后端错误信息
   } finally {
     toolsLoading.value = false
   }
@@ -653,7 +651,7 @@ async function saveToolSettings() {
     toolSettingsDirty.value = false
     ElMessage.success('工具设置已保存')
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     savingToolSettings.value = false
   }
@@ -697,7 +695,7 @@ async function saveAgentSkills() {
     const updated = agents.value.find(a => a.id === selectedAgent.value!.id)
     if (updated) selectedAgent.value = updated
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     savingSkills.value = false
   }

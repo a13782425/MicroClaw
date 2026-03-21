@@ -13,13 +13,13 @@ public static class UsageEndpoints
             {
                 if (!DateOnly.TryParse(req.StartDate, out DateOnly startDate) ||
                     !DateOnly.TryParse(req.EndDate, out DateOnly endDate))
-                    return Results.BadRequest(new { message = "日期格式无效，请使用 yyyy-MM-dd 格式。" });
+                    return Results.BadRequest(new { success = false, message = "日期格式无效，请使用 yyyy-MM-dd 格式。", errorCode = "BAD_REQUEST" });
 
                 if (endDate < startDate)
-                    return Results.BadRequest(new { message = "结束日期不能早于开始日期。" });
+                    return Results.BadRequest(new { success = false, message = "结束日期不能早于开始日期。", errorCode = "BAD_REQUEST" });
 
                 if ((endDate.ToDateTime(TimeOnly.MinValue) - startDate.ToDateTime(TimeOnly.MinValue)).TotalDays > 31)
-                    return Results.BadRequest(new { message = "查询范围最多 31 天。" });
+                    return Results.BadRequest(new { success = false, message = "查询范围最多 31 天。", errorCode = "BAD_REQUEST" });
 
                 DateTime startUtc = startDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
                 DateTime endUtc = endDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
@@ -103,18 +103,18 @@ public static class UsageEndpoints
 
 public sealed record UsageQueryRequest(string StartDate, string EndDate);
 
-public sealed record DailyUsage(string Date, int InputTokens, int OutputTokens, decimal EstimatedCostUsd);
+public sealed record DailyUsage(string Date, long InputTokens, long OutputTokens, decimal EstimatedCostUsd);
 
 public sealed record ProviderUsage(
     string ProviderId,
     string ProviderName,
-    int InputTokens,
-    int OutputTokens,
+    long InputTokens,
+    long OutputTokens,
     decimal EstimatedCostUsd);
 
-public sealed record SourceUsage(string Source, int InputTokens, int OutputTokens);
+public sealed record SourceUsage(string Source, long InputTokens, long OutputTokens);
 
-public sealed record UsageSummary(int TotalInputTokens, int TotalOutputTokens, decimal TotalCostUsd);
+public sealed record UsageSummary(long TotalInputTokens, long TotalOutputTokens, decimal TotalCostUsd);
 
 public sealed record UsageQueryResult(
     IReadOnlyList<DailyUsage> Daily,

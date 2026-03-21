@@ -76,8 +76,8 @@ public sealed class SessionChatService(
                         provider.Id,
                         provider.DisplayName,
                         source: "cron",
-                        inputTokens: (int)(usage.InputTokenCount ?? 0L),
-                        outputTokens: (int)(usage.OutputTokenCount ?? 0L),
+                        inputTokens: usage.InputTokenCount ?? 0L,
+                        outputTokens: usage.OutputTokenCount ?? 0L,
                         inputPricePerMToken: provider.Capabilities.InputPricePerMToken,
                         outputPricePerMToken: provider.Capabilities.OutputPricePerMToken,
                         ct);

@@ -252,8 +252,7 @@ async function onToggleEnabled(s: SkillConfig, val: boolean) {
     const updated = skills.value.find(sk => sk.id === s.id)
     if (updated) selectedSkill.value = updated
   } catch {
-    s.isEnabled = !val
-    ElMessage.error('操作失败')
+    s.isEnabled = !val  // 回滚开关状态
   }
 }
 
@@ -334,7 +333,7 @@ async function saveSkill() {
       if (updated) selectedSkill.value = updated
     }
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     saving.value = false
   }
@@ -350,7 +349,7 @@ async function confirmDelete(s: SkillConfig) {
     if (selectedSkill.value?.id === s.id) selectedSkill.value = null
     await loadSkills()
   } catch {
-    ElMessage.error('删除失败')
+    // 删除失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -388,7 +387,7 @@ async function openFileEditor(f: SkillFileInfo) {
     const content = await getSkillFileContent(selectedSkill.value.id, f.path)
     fileForm.value.content = content
   } catch {
-    ElMessage.error('加载文件内容失败')
+    // 加载失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -404,7 +403,7 @@ async function saveFile() {
     fileDialogVisible.value = false
     await loadFiles()
   } catch {
-    ElMessage.error('保存失败')
+    // 保存失败由全局拦截器展示后端错误信息
   } finally {
     fileSaving.value = false
   }
@@ -420,7 +419,7 @@ async function deleteFile(f: SkillFileInfo) {
     ElMessage.success('已删除')
     await loadFiles()
   } catch {
-    ElMessage.error('删除失败')
+    // 删除失败由全局拦截器展示后端错误信息
   }
 }
 </script>

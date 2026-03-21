@@ -193,8 +193,8 @@ async function handleSave() {
       ElMessage.success('任务已创建')
     }
     dialogVisible.value = false
-  } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message ?? '操作失败，请检查 Cron 表达式格式')
+  } catch {
+    // 失败由全局拦截器展示后端错误信息
   } finally {
     saving.value = false
   }
@@ -207,7 +207,7 @@ async function handleToggle(job: CronJob) {
     if (idx >= 0) jobs.value[idx] = updated
     ElMessage.success(updated.isEnabled ? '任务已启用' : '任务已禁用')
   } catch {
-    ElMessage.error('操作失败')
+    // 失败由全局拦截器展示后端错误信息
   }
 }
 
@@ -217,7 +217,7 @@ async function handleDelete(id: string) {
     jobs.value = jobs.value.filter(j => j.id !== id)
     ElMessage.success('任务已删除')
   } catch {
-    ElMessage.error('删除失败')
+    // 失败由全局拦截器展示后端错误信息
   }
 }
 

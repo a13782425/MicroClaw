@@ -27,11 +27,11 @@ public static class SkillEndpoints
         endpoints.MapPost("/skills", (SkillCreateRequest req, SkillStore store, SkillService skillService) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
-                return Results.BadRequest(new { message = "Name is required." });
+                return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
             if (string.IsNullOrWhiteSpace(req.SkillType))
-                return Results.BadRequest(new { message = "SkillType is required." });
+                return Results.BadRequest(new { success = false, message = "SkillType is required.", errorCode = "BAD_REQUEST" });
             if (string.IsNullOrWhiteSpace(req.EntryPoint))
-                return Results.BadRequest(new { message = "EntryPoint is required." });
+                return Results.BadRequest(new { success = false, message = "EntryPoint is required.", errorCode = "BAD_REQUEST" });
 
             SkillConfig config = new(
                 Id: string.Empty,
@@ -53,11 +53,11 @@ public static class SkillEndpoints
         endpoints.MapPost("/skills/update", (SkillUpdateRequest req, SkillStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             SkillConfig? existing = store.GetById(req.Id);
             if (existing is null)
-                return Results.NotFound(new { message = $"Skill '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             SkillConfig updated = existing with
             {
@@ -76,11 +76,11 @@ public static class SkillEndpoints
         endpoints.MapPost("/skills/delete", (SkillDeleteRequest req, SkillStore store, SkillService skillService) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             SkillConfig? skill = store.GetById(req.Id);
             if (skill is null)
-                return Results.NotFound(new { message = $"Skill '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             store.Delete(req.Id);
             // 删除 workspace 目录
@@ -94,7 +94,7 @@ public static class SkillEndpoints
         endpoints.MapGet("/skills/{id}/files", (string id, SkillStore store, SkillService skillService) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Skill '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{id}' not found.", errorCode = "NOT_FOUND" });
 
             return Results.Ok(skillService.ListFiles(id));
         })
@@ -103,11 +103,11 @@ public static class SkillEndpoints
         endpoints.MapGet("/skills/{id}/files/{*filePath}", (string id, string filePath, SkillStore store, SkillService skillService) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Skill '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{id}' not found.", errorCode = "NOT_FOUND" });
 
             string? content = skillService.GetFile(id, filePath);
             if (content is null)
-                return Results.NotFound(new { message = $"File '{filePath}' not found." });
+                return Results.NotFound(new { success = false, message = $"File '{filePath}' not found.", errorCode = "NOT_FOUND" });
 
             return Results.Ok(new { content });
         })
@@ -116,9 +116,9 @@ public static class SkillEndpoints
         endpoints.MapPost("/skills/{id}/files", (string id, SkillFileWriteRequest req, SkillStore store, SkillService skillService) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Skill '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { message = "FileName is required." });
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
 
             try
             {
@@ -127,7 +127,7 @@ public static class SkillEndpoints
             }
             catch (ArgumentException ex)
             {
-                return Results.BadRequest(new { message = ex.Message });
+                return Results.BadRequest(new { success = false, message = ex.Message, errorCode = "BAD_REQUEST" });
             }
         })
         .WithTags("Skills");
@@ -135,9 +135,9 @@ public static class SkillEndpoints
         endpoints.MapPost("/skills/{id}/files/delete", (string id, SkillFileDeleteRequest req, SkillStore store, SkillService skillService) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Skill '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Skill '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { message = "FileName is required." });
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
 
             bool deleted = skillService.DeleteFile(id, req.FileName);
             return deleted ? Results.Ok() : Results.NotFound();

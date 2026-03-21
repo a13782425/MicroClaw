@@ -154,7 +154,7 @@ async function handleDisable(id: string) {
     if (idx >= 0) sessions.value[idx] = updated
     ElMessage.success('会话已禁用')
   } catch {
-    ElMessage.error('禁用失败，请重试')
+    // 失败由全局拦截器展示后端错误信息
   }
 }
 

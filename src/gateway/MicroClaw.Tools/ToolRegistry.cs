@@ -23,16 +23,28 @@ public static class ToolRegistry
         var tools = new List<McpClientTool>();
         var connections = new List<IAsyncDisposable>();
 
-        foreach (McpServerConfig config in configs)
+        try
         {
-            IClientTransport transport = CreateTransport(config, loggerFactory);
-            // McpClient.CreateAsync 是 v1.1.0 的工厂方法（取代了旧的 McpClientFactory.CreateAsync）
-            McpClient client = await McpClient.CreateAsync(
-                transport, clientOptions: null, loggerFactory: loggerFactory, cancellationToken: ct);
-            connections.Add(client);
+            foreach (McpServerConfig config in configs)
+            {
+                IClientTransport transport = CreateTransport(config, loggerFactory);
+                // McpClient.CreateAsync 是 v1.1.0 的工厂方法（取代了旧的 McpClientFactory.CreateAsync）
+                McpClient client = await McpClient.CreateAsync(
+                    transport, clientOptions: null, loggerFactory: loggerFactory, cancellationToken: ct);
+                connections.Add(client);
 
-            IList<McpClientTool> mcpTools = await client.ListToolsAsync(cancellationToken: ct);
-            tools.AddRange(mcpTools);
+                IList<McpClientTool> mcpTools = await client.ListToolsAsync(cancellationToken: ct);
+                tools.AddRange(mcpTools);
+            }
+        }
+        catch
+        {
+            // 连接中途失败时，释放已建立的连接，避免资源泄漏
+            foreach (IAsyncDisposable conn in connections)
+            {
+                try { await conn.DisposeAsync(); } catch { /* 忽略 dispose 异常，避免掩盖原始异常 */ }
+            }
+            throw;
         }
 
         return (tools.AsReadOnly(), [.. connections]);

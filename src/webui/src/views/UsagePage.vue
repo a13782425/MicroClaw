@@ -183,9 +183,8 @@ async function fetchData() {
     summary.value = result.summary
     await nextTick()
     renderCharts()
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '请求失败'
-    ElMessage.error('获取用量数据失败：' + msg)
+  } catch {
+    // 失败由全局拦截器展示后端错误信息
   } finally {
     loading.value = false
   }

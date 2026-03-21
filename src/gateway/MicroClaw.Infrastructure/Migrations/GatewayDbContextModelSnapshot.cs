@@ -300,7 +300,7 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("input_price_per_m_token");
 
-                    b.Property<int>("InputTokens")
+                    b.Property<long>("InputTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("input_tokens");
 
@@ -308,7 +308,7 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("output_price_per_m_token");
 
-                    b.Property<int>("OutputTokens")
+                    b.Property<long>("OutputTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("output_tokens");
 

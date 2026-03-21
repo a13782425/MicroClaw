@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Skills;
 
@@ -18,6 +19,7 @@ public sealed class SkillAIFunction : AIFunction
     private readonly string _workspaceRoot;
     private readonly string _sessionId;
     private readonly JsonElement _jsonSchema;
+    private readonly ILogger<SkillAIFunction> _logger;
 
     public override string Name { get; }
     public override string Description { get; }
@@ -28,16 +30,18 @@ public sealed class SkillAIFunction : AIFunction
         SkillService skillService,
         SkillRunner runner,
         string workspaceRoot,
-        string sessionId)
+        string sessionId,
+        ILoggerFactory loggerFactory)
     {
         _skill = skill;
         _runner = runner;
         _workspaceRoot = workspaceRoot;
         _sessionId = sessionId;
+        _logger = loggerFactory.CreateLogger<SkillAIFunction>();
 
         Name = SanitizeName(skill.Name);
         Description = skill.Description;
-        _jsonSchema = BuildSchema(skillService, skill);
+        _jsonSchema = BuildSchema(skillService, skill, _logger);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(
@@ -51,7 +55,7 @@ public sealed class SkillAIFunction : AIFunction
         return await _runner.ExecuteAsync(_skill, argsJson, _workspaceRoot, _sessionId, cancellationToken);
     }
 
-    private static JsonElement BuildSchema(SkillService skillService, SkillConfig skill)
+    private static JsonElement BuildSchema(SkillService skillService, SkillConfig skill, ILogger logger)
     {
         string? schemaContent = skillService.GetFile(skill.Id, "schema.json");
         if (!string.IsNullOrWhiteSpace(schemaContent))
@@ -66,9 +70,10 @@ public sealed class SkillAIFunction : AIFunction
                 if (root.TryGetProperty("type", out _))
                     return root;
             }
-            catch
+            catch (Exception ex)
             {
-                // schema.json 解析失败时降级
+                // 0-B-7: schema.json 解析失败时记录 Warning 级日志
+                logger.LogWarning(ex, "schema.json 解析失败，降级使用通用 schema，SkillId={SkillId}", skill.Id);
             }
         }
 

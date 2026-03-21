@@ -15,7 +15,7 @@ public static class AuthEndpoints
 		endpoints.MapPost("/auth/login", (LoginRequest request, IOptions<AuthOptions> authOptions) =>
 		{
 			if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-				return Results.BadRequest(new { message = "用户名和密码不能为空" });
+				return Results.BadRequest(new { success = false, message = "用户名和密码不能为空", errorCode = "BAD_REQUEST" });
 
 			var opts = authOptions.Value;
 

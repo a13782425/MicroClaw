@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MicroClaw.Channels.Models;
@@ -57,6 +59,32 @@ public sealed class FeishuChannel(
         return JsonSerializer.Serialize(new { code = 0, msg = "ok" });
     }
 
+    /// <summary>验证飞书 Webhook 签名：SHA256(timestamp + nonce + encryptKey + body) == expectedSignature。</summary>
+    public static bool VerifyWebhookSignature(string? timestamp, string? nonce, string encryptKey, string body, string? expectedSignature)
+    {
+        if (string.IsNullOrEmpty(timestamp) || string.IsNullOrEmpty(nonce) || string.IsNullOrEmpty(expectedSignature))
+            return false;
+
+        string content = timestamp + nonce + encryptKey + body;
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        string computed = Convert.ToHexStringLower(hash);
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(computed),
+            Encoding.UTF8.GetBytes(expectedSignature));
+    }
+
+    /// <summary>检查时间戳是否在容差范围内（防重放）。</summary>
+    public static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
+    {
+        if (!long.TryParse(timestamp, out long unixSeconds))
+            return false;
+
+        DateTimeOffset requestTime = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+        double diff = Math.Abs((DateTimeOffset.UtcNow - requestTime).TotalSeconds);
+        return diff <= toleranceSeconds;
+    }
+
     private static T? TryDeserialize<T>(string json) where T : class
     {
         try { return JsonSerializer.Deserialize<T>(json); }
@@ -83,21 +111,20 @@ public sealed class FeishuChannel(
 
     private static string AesDecrypt(string key, string encrypted)
     {
-        byte[] keyBytes = System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(key));
+        byte[] keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         byte[] data = Convert.FromBase64String(encrypted);
 
         byte[] iv = data[..16];
         byte[] cipher = data[16..];
 
-        using var aes = System.Security.Cryptography.Aes.Create();
+        using var aes = Aes.Create();
         aes.Key = keyBytes;
         aes.IV = iv;
-        aes.Mode = System.Security.Cryptography.CipherMode.CBC;
-        aes.Padding = System.Security.Cryptography.PaddingMode.PKCS7;
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
 
         using var decryptor = aes.CreateDecryptor();
         byte[] decrypted = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
-        return System.Text.Encoding.UTF8.GetString(decrypted);
+        return Encoding.UTF8.GetString(decrypted);
     }
 }

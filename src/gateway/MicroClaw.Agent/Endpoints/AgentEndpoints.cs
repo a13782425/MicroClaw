@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -37,7 +38,7 @@ public static class AgentEndpoints
         endpoints.MapPost("/agents", (AgentCreateRequest req, AgentStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
-                return Results.BadRequest(new { message = "Name is required." });
+                return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
 
             AgentConfig config = new(
                 Id: string.Empty,
@@ -49,19 +50,26 @@ public static class AgentEndpoints
                 ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow);
 
-            AgentConfig created = store.Add(config);
-            return Results.Ok(new { created.Id });
+            try
+            {
+                AgentConfig created = store.Add(config);
+                return Results.Ok(new { created.Id });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { success = false, message = ex.Message, errorCode = "AGENT_NAME_CONFLICT" });
+            }
         })
         .WithTags("Agents");
 
         endpoints.MapPost("/agents/update", (AgentUpdateRequest req, AgentStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             AgentConfig? existing = store.GetById(req.Id);
             if (existing is null)
-                return Results.NotFound(new { message = $"Agent '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             AgentConfig updated = existing with
             {
@@ -72,21 +80,30 @@ public static class AgentEndpoints
                 McpServers = req.McpServers ?? existing.McpServers,
             };
 
-            AgentConfig? result = store.Update(req.Id, updated);
-            return result is null ? Results.NotFound() : Results.Ok(new { result.Id });
+            try
+            {
+                AgentConfig? result = store.Update(req.Id, updated);
+                return result is null
+                    ? Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" })
+                    : Results.Ok(new { result.Id });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { success = false, message = ex.Message, errorCode = "AGENT_NAME_CONFLICT" });
+            }
         })
         .WithTags("Agents");
 
         endpoints.MapPost("/agents/delete", (AgentDeleteRequest req, AgentStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return Results.BadRequest(new { message = "Id is required." });
+                return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             AgentConfig? agent = store.GetById(req.Id);
             if (agent is null)
-                return Results.NotFound(new { message = $"Agent '{req.Id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             if (agent.IsDefault)
-                return Results.BadRequest(new { message = "Cannot delete the default agent." });
+                return Results.BadRequest(new { success = false, message = "Cannot delete the default agent.", errorCode = "BAD_REQUEST" });
 
             store.Delete(req.Id);
             return Results.Ok();
@@ -98,7 +115,7 @@ public static class AgentEndpoints
         endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, DNAService dna) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             return Results.Ok(dna.List(id));
         })
@@ -107,9 +124,9 @@ public static class AgentEndpoints
         endpoints.MapPost("/agents/{id}/dna", (string id, GeneFileWriteRequest req, AgentStore store, DNAService dna) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { message = "FileName is required." });
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
 
             // 防止路径穿越：sanitize category 和 fileName
             string safeName = Path.GetFileName(req.FileName);
@@ -137,7 +154,7 @@ public static class AgentEndpoints
         {
             AgentConfig? agent = store.GetById(id);
             if (agent is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             var groups = new List<object>();
 
@@ -211,7 +228,7 @@ public static class AgentEndpoints
         endpoints.MapPost("/agents/{id}/tools/settings", (string id, IReadOnlyList<ToolGroupConfigRequest> req, AgentStore store) =>
         {
             if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<ToolGroupConfig> configs = req
                 .Select(r => new ToolGroupConfig(r.GroupId, r.IsEnabled, r.DisabledToolNames ?? []))
@@ -232,15 +249,28 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/{id}/skills", (string id, AgentBoundSkillsRequest req, AgentStore store) =>
+        endpoints.MapPost("/agents/{id}/skills", (string id, AgentBoundSkillsRequest req, AgentStore store, SkillStore skillStore) =>
         {
             AgentConfig? existing = store.GetById(id);
             if (existing is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            AgentConfig updated = existing with { BoundSkillIds = req.SkillIds ?? [] };
+            // 0-B-6: 批量校验 SkillId 是否存在于数据库
+            IReadOnlyList<string> skillIds = req.SkillIds ?? [];
+            List<string> invalidIds = skillIds.Where(sid => skillStore.GetById(sid) is null).ToList();
+            if (invalidIds.Count > 0)
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    message = $"Skill(s) not found: {string.Join(", ", invalidIds)}",
+                    errorCode = "SKILL_NOT_FOUND"
+                });
+
+            AgentConfig updated = existing with { BoundSkillIds = skillIds };
             AgentConfig? result = store.Update(id, updated);
-            return result is null ? Results.NotFound() : Results.Ok(new { result.Id });
+            return result is null
+                ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
+                : Results.Ok(new { result.Id });
         })
         .WithTags("Agents");
 

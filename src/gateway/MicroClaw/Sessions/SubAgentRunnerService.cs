@@ -14,6 +14,8 @@ public sealed class SubAgentRunnerService(
     AgentStore agentStore,
     Lazy<AgentRunner> agentRunnerLazy) : ISubAgentRunner
 {
+    private const int MaxSubAgentDepth = 3;
+
     private AgentRunner AgentRunner => agentRunnerLazy.Value;
 
     public async Task<string> RunSubAgentAsync(
@@ -27,6 +29,32 @@ public sealed class SubAgentRunnerService(
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
         if (!agent.IsEnabled)
             throw new InvalidOperationException($"子代理 '{agent.Name}' 未启用。");
+
+        // 深度检查 + 循环调用检测：沿父会话链向上遍历
+        // depth 仅统计具有 ParentSessionId 的祖先会话（即子代理会话），
+        // 不计入顶层用户会话，从而允许最多 MaxSubAgentDepth 层子代理嵌套。
+        int depth = 0;
+        string? cursor = parentSessionId;
+        while (cursor is not null)
+        {
+            SessionInfo? ancestor = sessionStore.Get(cursor);
+            if (ancestor is null) break;
+
+            if (ancestor.ParentSessionId is not null)
+            {
+                // 该祖先本身也是子代理会话，计入深度
+                depth++;
+                if (depth >= MaxSubAgentDepth)
+                    throw new InvalidOperationException(
+                        $"子代理调用深度已达上限（{MaxSubAgentDepth}），禁止继续派生子代理。");
+            }
+
+            if (ancestor.AgentId == agentId)
+                throw new InvalidOperationException(
+                    $"检测到循环子代理调用：代理 '{agentId}' 已存在于当前调用链中，禁止循环调用。");
+
+            cursor = ancestor.ParentSessionId;
+        }
 
         // 获取父会话 ProviderId（子会话继承同一模型）
         SessionInfo? parentSession = sessionStore.Get(parentSessionId);

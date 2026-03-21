@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { router } from '@/router'
 
@@ -88,6 +89,12 @@ axios.interceptors.response.use(
     if (error.response?.status === 401) {
       useAuthStore().clearAuth()
       router.push({ name: 'login' })
+    } else if (error.response) {
+      // 提取后端标准错误格式 { success: false, message: "...", errorCode: "..." }
+      const message = error.response.data?.message
+      ElMessage.error(message || '操作失败，请稍后重试')
+    } else {
+      ElMessage.error('网络请求失败，请检查连接')
     }
     return Promise.reject(error)
   }
