@@ -11,6 +11,7 @@ const AgentsPage    = () => import('@/views/AgentsPage.vue')
 const SkillsPage    = () => import('@/views/SkillsPage.vue')
 const UsagePage     = () => import('@/views/UsagePage.vue')
 const ConfigPage    = () => import('@/views/ConfigPage.vue')
+const DnaPage       = () => import('@/views/DnaPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -26,6 +27,7 @@ export const router = createRouter({
     { path: '/agents', name: 'agents', component: AgentsPage },
     { path: '/skills', name: 'skills', component: SkillsPage },
     { path: '/config', name: 'config', component: ConfigPage },
+    { path: '/dna', name: 'dna', component: DnaPage },
   ]
 })
 

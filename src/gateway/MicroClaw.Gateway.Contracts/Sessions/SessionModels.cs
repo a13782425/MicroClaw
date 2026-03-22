@@ -8,7 +8,8 @@ public sealed record SessionInfo(
     ChannelType ChannelType,
     DateTimeOffset CreatedAt,
     string? AgentId = null,
-    string? ParentSessionId = null);
+    string? ParentSessionId = null,
+    string? ApprovalReason = null);
 
 public sealed record SessionMessage(
     string Role,
@@ -29,9 +30,13 @@ public sealed record CreateSessionRequest(
 
 public sealed record DeleteSessionRequest(string Id);
 
-public sealed record ApproveSessionRequest(string Id);
+public sealed record ApproveSessionRequest(string Id, string? Reason = null);
 
-public sealed record DisableSessionRequest(string Id);
+public sealed record DisableSessionRequest(string Id, string? Reason = null);
+
+public sealed record BatchApproveSessionRequest(IReadOnlyList<string> Ids, string? Reason = null);
+
+public sealed record BatchDisableSessionRequest(IReadOnlyList<string> Ids, string? Reason = null);
 
 public sealed record ChatRequest(
     string Content,

@@ -96,24 +96,58 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return true;
     }
 
-    public SessionInfo? Approve(string id)
+    public SessionInfo? Approve(string id, string? reason = null)
     {
         using GatewayDbContext db = factory.CreateDbContext();
         SessionEntity? entity = db.Sessions.Find(id);
         if (entity is null) return null;
         entity.IsApproved = true;
+        entity.ApprovalReason = reason;
         db.SaveChanges();
         return ToInfo(entity);
     }
 
-    public SessionInfo? Disable(string id)
+    public SessionInfo? Disable(string id, string? reason = null)
     {
         using GatewayDbContext db = factory.CreateDbContext();
         SessionEntity? entity = db.Sessions.Find(id);
         if (entity is null) return null;
         entity.IsApproved = false;
+        entity.ApprovalReason = reason;
         db.SaveChanges();
         return ToInfo(entity);
+    }
+
+    public IReadOnlyList<SessionInfo> ApproveBatch(IReadOnlyList<string> ids, string? reason = null)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        List<SessionInfo> results = [];
+        foreach (string id in ids)
+        {
+            SessionEntity? entity = db.Sessions.Find(id);
+            if (entity is null) continue;
+            entity.IsApproved = true;
+            entity.ApprovalReason = reason;
+            results.Add(ToInfo(entity));
+        }
+        db.SaveChanges();
+        return results.AsReadOnly();
+    }
+
+    public IReadOnlyList<SessionInfo> DisableBatch(IReadOnlyList<string> ids, string? reason = null)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        List<SessionInfo> results = [];
+        foreach (string id in ids)
+        {
+            SessionEntity? entity = db.Sessions.Find(id);
+            if (entity is null) continue;
+            entity.IsApproved = false;
+            entity.ApprovalReason = reason;
+            results.Add(ToInfo(entity));
+        }
+        db.SaveChanges();
+        return results.AsReadOnly();
     }
 
     /// <summary>更新会话绑定的 Provider（用于中途切换模型）。</summary>
@@ -154,6 +188,27 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
 
     public IReadOnlyList<SessionMessage> GetMessages(string sessionId)
     {
+        return ReadAllMessages(sessionId);
+    }
+
+    /// <summary>
+    /// 分页查询消息历史（从末尾计数）。
+    /// <paramref name="skip"/> = 跳过最新的多少条；<paramref name="limit"/> = 最多返回多少条。
+    /// 例：skip=0,limit=50 → 最新 50 条；skip=50,limit=50 → 往前 50 条。
+    /// </summary>
+    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(string sessionId, int skip, int limit)
+    {
+        List<SessionMessage> all = ReadAllMessages(sessionId);
+        int total = all.Count;
+        // 从末尾方向计算起始位置
+        int endIdx = Math.Max(0, total - skip);
+        int startIdx = Math.Max(0, endIdx - limit);
+        IReadOnlyList<SessionMessage> slice = all.Skip(startIdx).Take(endIdx - startIdx).ToList().AsReadOnly();
+        return (slice, total);
+    }
+
+    private List<SessionMessage> ReadAllMessages(string sessionId)
+    {
         string dir = GetSessionDir(sessionId);
         string legacyPath = Path.Combine(dir, LegacyFileName);
         string jsonlPath = Path.Combine(dir, JsonlFileName);
@@ -182,8 +237,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             .Select(line => JsonSerializer.Deserialize<MessageJson>(line, JsonLinesOptions)!)
             .Where(m => m is not null)
             .Select(m => m.ToRecord())
-            .ToList()
-            .AsReadOnly();
+            .ToList();
     }
 
     private string GetSessionDir(string id) => Path.Combine(sessionsDir, id);
@@ -220,7 +274,8 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             ChannelConfigStore.ParseChannelType(e.ChannelType),
             DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue,
             e.AgentId,
-            e.ParentSessionId);
+            e.ParentSessionId,
+            e.ApprovalReason);
 }
 
 internal sealed class MessageJson

@@ -180,8 +180,10 @@ public class ServeCommand : Command
 
 		// Agent 服务
 		string agentsDataDir = ResolveAgentsDataDir(home, configFile);
+		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
+		string globalDnaDir = Path.Combine(workspaceRoot, "dna");
 		builder.Services.AddSingleton<AgentStore>();
-		builder.Services.AddSingleton<DNAService>(_ => new DNAService(agentsDataDir));
+		builder.Services.AddSingleton<DNAService>(_ => new DNAService(agentsDataDir, globalDnaDir, sessionsDir));
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
 			sp.GetRequiredService<SessionStore>(),
@@ -192,7 +194,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
 
 		// Skills 服务
-		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ => new SkillService(workspaceRoot));
 		builder.Services.AddSingleton<SkillRunner>();

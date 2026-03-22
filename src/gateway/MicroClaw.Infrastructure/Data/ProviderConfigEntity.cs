@@ -10,5 +10,6 @@ public sealed class ProviderConfigEntity
     public string ModelName { get; set; } = string.Empty;
     public int MaxOutputTokens { get; set; } = 8192;
     public bool IsEnabled { get; set; } = true;
+    public bool IsDefault { get; set; } = false;
     public string? CapabilitiesJson { get; set; }
 }

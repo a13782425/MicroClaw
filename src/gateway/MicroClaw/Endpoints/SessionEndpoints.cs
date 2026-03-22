@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using MicroClaw.Agent;
+using MicroClaw.Agent.Endpoints;
+using MicroClaw.Agent.Memory;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -43,13 +45,18 @@ public static class SessionEndpoints
         .WithTags("Sessions");
 
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store) =>
+        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, DNAService dna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             bool deleted = store.Delete(req.Id);
-            return deleted ? Results.Ok() : Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
+            if (!deleted)
+                return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
+
+            // 同步删除会话 DNA 目录
+            dna.DeleteSessionDnaDir(req.Id);
+            return Results.Ok();
         })
         .WithTags("Sessions");
 
@@ -61,12 +68,27 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            SessionInfo? updated = store.Approve(req.Id);
+            SessionInfo? updated = store.Approve(req.Id, req.Reason);
             if (updated is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
+        })
+        .WithTags("Sessions");
+
+        // POST /api/sessions/approve-batch — 批量审批会话（仅 admin）
+        endpoints.MapPost("/sessions/approve-batch", async (BatchApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
+        {
+            if (!user.IsInRole("admin"))
+                return Results.Forbid();
+            if (req.Ids is null || req.Ids.Count == 0)
+                return Results.BadRequest(new { success = false, message = "Ids is required.", errorCode = "BAD_REQUEST" });
+
+            IReadOnlyList<SessionInfo> updated = store.ApproveBatch(req.Ids, req.Reason);
+            foreach (SessionInfo s in updated)
+                await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = s.Id, title = s.Title });
+            return Results.Ok(new { updated, count = updated.Count });
         })
         .WithTags("Sessions");
 
@@ -78,12 +100,27 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            SessionInfo? updated = store.Disable(req.Id);
+            SessionInfo? updated = store.Disable(req.Id, req.Reason);
             if (updated is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
+        })
+        .WithTags("Sessions");
+
+        // POST /api/sessions/disable-batch — 批量禁用会话（仅 admin）
+        endpoints.MapPost("/sessions/disable-batch", async (BatchDisableSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
+        {
+            if (!user.IsInRole("admin"))
+                return Results.Forbid();
+            if (req.Ids is null || req.Ids.Count == 0)
+                return Results.BadRequest(new { success = false, message = "Ids is required.", errorCode = "BAD_REQUEST" });
+
+            IReadOnlyList<SessionInfo> updated = store.DisableBatch(req.Ids, req.Reason);
+            foreach (SessionInfo s in updated)
+                await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = s.Id, title = s.Title });
+            return Results.Ok(new { updated, count = updated.Count });
         })
         .WithTags("Sessions");
 
@@ -107,14 +144,22 @@ public static class SessionEndpoints
         .WithTags("Sessions");
 
         // GET /api/sessions/{id}/messages — 获取消息历史
-        endpoints.MapGet("/sessions/{id}/messages", (string id, SessionStore store) =>
+        // 可选分页参数：?skip=0&limit=50（skip 从末尾计数，省略时返回全量）
+        endpoints.MapGet("/sessions/{id}/messages", (string id, SessionStore store, int? skip, int? limit) =>
         {
             SessionInfo? session = store.Get(id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            IReadOnlyList<SessionMessage> messages = store.GetMessages(id);
-            return Results.Ok(messages);
+            if (limit.HasValue)
+            {
+                int actualSkip = Math.Max(0, skip ?? 0);
+                int actualLimit = Math.Clamp(limit.Value, 1, 500);
+                (IReadOnlyList<SessionMessage> messages, int total) = store.GetMessagesPaged(id, actualSkip, actualLimit);
+                return Results.Ok(new { messages, total, hasMore = total > actualSkip + messages.Count });
+            }
+
+            return Results.Ok(store.GetMessages(id));
         })
         .WithTags("Sessions");
 
@@ -231,7 +276,95 @@ public static class SessionEndpoints
             })
         .WithTags("Sessions");
 
+        // ── 会话 DNA 端点（三层架构第三层）────────────────────────────────────────────────
+
+        // GET /api/sessions/{id}/dna — 列出会话 DNA 文件
+        endpoints.MapGet("/sessions/{id}/dna", (string id, SessionStore store, DNAService dna) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            return Results.Ok(dna.ListSession(id));
+        })
+        .WithTags("SessionDNA");
+
+        // POST /api/sessions/{id}/dna — 写入/更新会话 DNA 文件
+        endpoints.MapPost("/sessions/{id}/dna", (string id, GeneFileWriteRequest req, SessionStore store, DNAService dna) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
+
+            string safeName = Path.GetFileName(req.FileName);
+            string safeCategory = SanitizeCategory(req.Category);
+
+            GeneFile file = dna.WriteSession(id, safeCategory, safeName, req.Content ?? string.Empty);
+            return Results.Ok(file);
+        })
+        .WithTags("SessionDNA");
+
+        // POST /api/sessions/{id}/dna/delete — 删除会话 DNA 文件
+        endpoints.MapPost("/sessions/{id}/dna/delete", (string id, GeneFileDeleteRequest req, SessionStore store, DNAService dna) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            string safeName = Path.GetFileName(req.FileName ?? string.Empty);
+            bool deleted = dna.DeleteSession(id, SanitizeCategory(req.Category), safeName);
+            return deleted ? Results.Ok() : Results.NotFound();
+        })
+        .WithTags("SessionDNA");
+
+        // GET /api/sessions/{id}/dna/snapshots — 快照列表
+        endpoints.MapGet("/sessions/{id}/dna/snapshots", (string id, string fileName, string? category, SessionStore store, DNAService dna) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(fileName))
+                return Results.BadRequest(new { success = false, message = "fileName query parameter is required.", errorCode = "BAD_REQUEST" });
+
+            string safeName = Path.GetFileName(fileName);
+            string safeCategory = SanitizeCategory(category);
+            return Results.Ok(dna.ListSessionSnapshots(id, safeCategory, safeName));
+        })
+        .WithTags("SessionDNA");
+
+        // POST /api/sessions/{id}/dna/restore — 还原快照
+        endpoints.MapPost("/sessions/{id}/dna/restore", (string id, GeneFileRestoreRequest req, SessionStore store, DNAService dna) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
+            if (string.IsNullOrWhiteSpace(req.SnapshotId))
+                return Results.BadRequest(new { success = false, message = "SnapshotId is required.", errorCode = "BAD_REQUEST" });
+
+            string safeName = Path.GetFileName(req.FileName);
+            string safeCategory = SanitizeCategory(req.Category);
+
+            try
+            {
+                GeneFile restored = dna.RestoreSessionSnapshot(id, safeCategory, safeName, req.SnapshotId);
+                return Results.Ok(restored);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return Results.NotFound(new { success = false, message = ex.Message, errorCode = "SNAPSHOT_NOT_FOUND" });
+            }
+        })
+        .WithTags("SessionDNA");
+
         return endpoints;
+    }
+
+    private static string SanitizeCategory(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return string.Empty;
+        return string.Join("/",
+            category.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(Path.GetFileName)
+                    .Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 
     private static (string Think, string Main) ExtractThinkContent(string raw)

@@ -19,6 +19,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapAdminEndpoints();
 		protectedApi.MapSessionEndpoints();
 		protectedApi.MapAgentEndpoints();
+		protectedApi.MapGlobalDnaEndpoints();
 		protectedApi.MapCronEndpoints();
 		protectedApi.MapSkillEndpoints();
 		protectedApi.MapUsageEndpoints();

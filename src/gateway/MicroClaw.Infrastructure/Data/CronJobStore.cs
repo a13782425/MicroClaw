@@ -80,6 +80,40 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         db.SaveChanges();
     }
 
+    /// <summary>记录一次执行日志；status: success / failed / cancelled；source: cron / manual。</summary>
+    public CronJobRunLog AddRunLog(string cronJobId, string status, long durationMs, string? errorMessage, string source = "cron")
+    {
+        CronJobRunLogEntity entity = new()
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            CronJobId = cronJobId,
+            TriggeredAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            Status = status,
+            DurationMs = durationMs,
+            ErrorMessage = errorMessage,
+            Source = source,
+        };
+        using GatewayDbContext db = factory.CreateDbContext();
+        db.CronJobRunLogs.Add(entity);
+        db.SaveChanges();
+        return ToLogRecord(entity);
+    }
+
+    /// <summary>按时间倒序获取指定任务的最近执行日志。</summary>
+    public IReadOnlyList<CronJobRunLog> GetRunLogs(string cronJobId, int limit = 50)
+    {
+        limit = Math.Clamp(limit, 1, 500);
+        using GatewayDbContext db = factory.CreateDbContext();
+        return db.CronJobRunLogs
+            .Where(e => e.CronJobId == cronJobId)
+            .OrderByDescending(e => e.TriggeredAtUtc)
+            .Take(limit)
+            .AsEnumerable()
+            .Select(ToLogRecord)
+            .ToList()
+            .AsReadOnly();
+    }
+
     private static CronJob ToRecord(CronJobEntity e) => new(
         e.Id,
         e.Name,
@@ -93,4 +127,13 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
             : DateTimeOffset.TryParse(e.LastRunAtUtc, out DateTimeOffset last) ? last : null,
         string.IsNullOrWhiteSpace(e.RunAtUtc) ? null
             : DateTimeOffset.TryParse(e.RunAtUtc, out DateTimeOffset runAt) ? runAt : null);
+
+    private static CronJobRunLog ToLogRecord(CronJobRunLogEntity e) => new(
+        e.Id,
+        e.CronJobId,
+        DateTimeOffset.TryParse(e.TriggeredAtUtc, out DateTimeOffset t) ? t : DateTimeOffset.MinValue,
+        e.Status,
+        e.DurationMs,
+        e.ErrorMessage,
+        e.Source);
 }

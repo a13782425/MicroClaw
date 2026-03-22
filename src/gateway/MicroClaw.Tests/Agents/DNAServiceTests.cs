@@ -15,7 +15,8 @@ public sealed class DNAServiceTests : IDisposable
 
     public DNAServiceTests()
     {
-        _svc = new DNAService(_dir.Path);
+        // agentsDataDir, globalDnaDir, sessionsDnaDir ——测试中后两个不使用，指向临时目录即可
+        _svc = new DNAService(_dir.Path, Path.Combine(_dir.Path, "_global"), Path.Combine(_dir.Path, "_sessions"));
     }
 
     public void Dispose() => _dir.Dispose();
@@ -37,7 +38,7 @@ public sealed class DNAServiceTests : IDisposable
 
         string result = _svc.BuildSystemPromptContext("agent1");
 
-        result.Should().Contain("## DNA 记忆");
+        result.Should().Contain("## Agent DNA");
         result.Should().Contain("identity.md");
         result.Should().Contain("I am an assistant.");
     }

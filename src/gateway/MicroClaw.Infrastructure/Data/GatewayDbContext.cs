@@ -9,6 +9,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<ChannelConfigEntity> Channels => Set<ChannelConfigEntity>();
     public DbSet<AgentConfigEntity> Agents => Set<AgentConfigEntity>();
     public DbSet<CronJobEntity> CronJobs => Set<CronJobEntity>();
+    public DbSet<CronJobRunLogEntity> CronJobRunLogs => Set<CronJobRunLogEntity>();
     public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
 
@@ -26,6 +27,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.Property(e => e.AgentId).HasColumnName("agent_id");
             b.Property(e => e.ParentSessionId).HasColumnName("parent_session_id");
+            b.Property(e => e.ApprovalReason).HasColumnName("approval_reason");
         });
 
         modelBuilder.Entity<ProviderConfigEntity>(b =>
@@ -40,6 +42,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ModelName).HasColumnName("model_name");
             b.Property(e => e.MaxOutputTokens).HasColumnName("max_output_tokens").HasDefaultValue(8192);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.IsDefault).HasColumnName("is_default").HasDefaultValue(false);
             b.Property(e => e.CapabilitiesJson).HasColumnName("capabilities_json");
         });
 
@@ -85,6 +88,20 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.Property(e => e.LastRunAtUtc).HasColumnName("last_run_at_utc");
+        });
+
+        modelBuilder.Entity<CronJobRunLogEntity>(b =>
+        {
+            b.ToTable("cron_job_run_logs");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.CronJobId).HasColumnName("cron_job_id").HasMaxLength(64);
+            b.Property(e => e.TriggeredAtUtc).HasColumnName("triggered_at_utc");
+            b.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            b.Property(e => e.DurationMs).HasColumnName("duration_ms");
+            b.Property(e => e.ErrorMessage).HasColumnName("error_message");
+            b.Property(e => e.Source).HasColumnName("source").HasMaxLength(20);
+            b.HasIndex(e => e.CronJobId).HasDatabaseName("ix_cron_job_run_logs_cron_job_id");
         });
 
         modelBuilder.Entity<SkillConfigEntity>(b =>

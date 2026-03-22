@@ -155,6 +155,52 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("cron_jobs", (string)null);
                 });
 
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.CronJobRunLogEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CronJobId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cron_job_id");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TriggeredAtUtc")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("triggered_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CronJobId")
+                        .HasDatabaseName("ix_cron_job_run_logs_cron_job_id");
+
+                    b.ToTable("cron_job_run_logs", (string)null);
+                });
+
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.ProviderConfigEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -179,6 +225,12 @@ namespace MicroClaw.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("display_name");
+
+                    b.Property<bool>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_default");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER")
@@ -215,6 +267,10 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.Property<string>("AgentId")
                         .HasColumnType("TEXT")
                         .HasColumnName("agent_id");
+
+                    b.Property<string>("ApprovalReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approval_reason");
 
                     b.Property<string>("ChannelType")
                         .IsRequired()

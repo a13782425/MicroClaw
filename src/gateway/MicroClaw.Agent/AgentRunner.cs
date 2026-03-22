@@ -71,7 +71,7 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
-        List<ChatMessage> messages = BuildChatMessages(agent, history);
+        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = FilterMcpServers(agent);
@@ -87,8 +87,8 @@ public sealed class AgentRunner(
             allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
             // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner));
+            // 追加子代理工具（含 write_session_dna）
+            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, dnaService));
         }
         else
         {
@@ -134,7 +134,7 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
-        List<ChatMessage> messages = BuildChatMessages(agent, history);
+        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = FilterMcpServers(agent);
@@ -150,8 +150,8 @@ public sealed class AgentRunner(
             allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
             // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner));
+            // 追加子代理工具（含 write_session_dna）
+            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, dnaService));
         }
         else
         {
@@ -235,9 +235,9 @@ public sealed class AgentRunner(
         return cronTools.Where(t => !cronCfg.DisabledToolNames.Contains(t.Name));
     }
 
-    private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history)
+    private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null)
     {
-        string dnaContext = dnaService.BuildSystemPromptContext(agent.Id);
+        string dnaContext = dnaService.BuildFullSystemPromptContext(agent.Id, sessionId);
 
         if (!string.IsNullOrEmpty(dnaContext))
         {

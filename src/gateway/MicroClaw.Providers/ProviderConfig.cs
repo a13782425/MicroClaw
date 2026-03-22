@@ -49,5 +49,6 @@ public sealed record ProviderConfig
     public string ModelName { get; init; } = string.Empty;
     public int MaxOutputTokens { get; init; } = 8192;
     public bool IsEnabled { get; init; } = true;
+    public bool IsDefault { get; init; } = false;
     public ProviderCapabilities Capabilities { get; init; } = new();
 }

@@ -23,6 +23,7 @@
         <div class="card-top">
           <div class="card-title-row">
             <span class="card-name">{{ p.displayName }}</span>
+            <el-tag v-if="p.isDefault" type="warning" size="small" effect="dark" class="default-tag">默认</el-tag>
             <el-tag :type="protocolTagType(p.protocol)" size="small" class="protocol-tag">
               {{ protocolLabel(p.protocol) }}
             </el-tag>
@@ -79,6 +80,8 @@
           <div class="card-actions">
             <el-button link type="primary" :icon="Edit" @click="openEditDialog(p)">编辑</el-button>
             <el-divider direction="vertical" />
+            <el-button v-if="!p.isDefault" link type="warning" @click="setDefault(p)">设为默认</el-button>
+            <el-divider v-if="!p.isDefault" direction="vertical" />
             <el-button link type="danger" :icon="Delete" @click="confirmDelete(p)">删除</el-button>
           </div>
         </div>
@@ -284,6 +287,7 @@ import {
   createProvider,
   updateProvider,
   deleteProvider,
+  setDefaultProvider,
 } from '@/services/gatewayApi'
 import type { ProviderConfig, ProviderProtocol } from '@/services/gatewayApi'
 const loading = ref(false)
@@ -522,6 +526,16 @@ async function confirmDelete(p: ProviderConfig) {
     await loadProviders()
   } catch {
     // 删除失败由全局拦截器展示后端错误信息
+  }
+}
+
+async function setDefault(p: ProviderConfig) {
+  try {
+    await setDefaultProvider(p.id)
+    ElMessage.success(`已将「${p.displayName}」设为默认`)
+    await loadProviders()
+  } catch {
+    // 失败由全局拦截器展示
   }
 }
 

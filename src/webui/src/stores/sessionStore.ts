@@ -7,6 +7,7 @@ import {
   approveSession,
   disableSession,
   getMessages,
+  getMessagesPaged,
   streamChat,
   type SessionInfo,
   type SessionMessage,
@@ -26,6 +27,11 @@ export const useSessionStore = defineStore('session', () => {
   const chatting = ref(false)
   const streamingContent = ref('')
   const streamingThink = ref('')
+  // 懒加载相关状态
+  const messagesTotal = ref(0)
+  const messagesHasMore = ref(false)
+  const loadingEarlier = ref(false)
+  const PAGE_SIZE = 50
 
   let abortController: AbortController | null = null
 
@@ -66,10 +72,32 @@ export const useSessionStore = defineStore('session', () => {
   async function selectSession(id: string) {
     currentSessionId.value = id
     loading.value = true
+    messagesTotal.value = 0
+    messagesHasMore.value = false
     try {
-      messages.value = await getMessages(id)
+      const result = await getMessagesPaged(id, 0, PAGE_SIZE)
+      messages.value = result.messages
+      messagesTotal.value = result.total
+      messagesHasMore.value = result.hasMore
     } finally {
       loading.value = false
+    }
+  }
+
+  async function loadEarlierMessages() {
+    const id = currentSessionId.value
+    if (!id || loadingEarlier.value || !messagesHasMore.value) return
+    loadingEarlier.value = true
+    try {
+      // skip = 已加载的消息数（均为最新侧），下一批即从更早处取
+      const result = await getMessagesPaged(id, messages.value.length, PAGE_SIZE)
+      // 将更早的消息拼接到头部
+      messages.value = [...result.messages, ...messages.value]
+      // 已加载数量达到总数则无更多
+      messagesHasMore.value = result.total > messages.value.length
+      messagesTotal.value = result.total
+    } finally {
+      loadingEarlier.value = false
     }
   }
 
@@ -152,6 +180,9 @@ export const useSessionStore = defineStore('session', () => {
     loading,
     chatting,
     streamingContent,
+    messagesTotal,
+    messagesHasMore,
+    loadingEarlier,
     currentSession,
     fetchSessions,
     addSession,
@@ -159,6 +190,7 @@ export const useSessionStore = defineStore('session', () => {
     approve,
     disable,
     selectSession,
+    loadEarlierMessages,
     sendMessage,
     abortChat
   }

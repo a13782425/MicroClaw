@@ -11,6 +11,7 @@ import {
   MagicStick,
   TrendCharts,
   Setting,
+  Collection,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -44,6 +45,7 @@ export const menuGroups: MenuGroup[] = [
     items: [
        { label: 'Agent', icon: Promotion, route: '/agents' },
        { label: '技能', icon: MagicStick, route: '/skills' },
+       { label: 'DNA 管理', icon: Collection, route: '/dna' },
     ],
   },
   {

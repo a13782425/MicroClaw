@@ -1,5 +1,6 @@
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Jobs;
 using Quartz;
 
 namespace MicroClaw.Endpoints;
@@ -83,6 +84,57 @@ public static class CronEndpoints
         })
         .WithTags("Cron");
 
+        // POST /api/cron/trigger — 手动立即触发定时任务并等待结果
+        endpoints.MapPost("/cron/trigger", async (TriggerCronJobRequest req, CronJobStore store, SessionChatService chatService, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Id))
+                return ApiErrors.BadRequest("Id is required.");
+
+            CronJob? job = store.GetById(req.Id);
+            if (job is null)
+                return ApiErrors.NotFound($"CronJob '{req.Id}' not found.");
+
+            DateTimeOffset startTime = DateTimeOffset.UtcNow;
+            string status = "success";
+            string? errorMessage = null;
+
+            try
+            {
+                await chatService.ExecuteAsync(job.TargetSessionId, job.Prompt, ct);
+                store.UpdateLastRun(req.Id, DateTimeOffset.UtcNow);
+            }
+            catch (OperationCanceledException)
+            {
+                status = "cancelled";
+                errorMessage = "操作已取消";
+                store.UpdateLastRun(req.Id, DateTimeOffset.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                status = "failed";
+                errorMessage = ex.Message;
+                store.UpdateLastRun(req.Id, DateTimeOffset.UtcNow);
+            }
+
+            long durationMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
+            CronJobRunLog log = store.AddRunLog(req.Id, status, durationMs, errorMessage, source: "manual");
+
+            return Results.Ok(new { success = status == "success", status, durationMs, errorMessage, log });
+        })
+        .WithTags("Cron");
+
+        // GET /api/cron/{id}/logs — 获取执行历史日志
+        endpoints.MapGet("/cron/{id}/logs", (string id, int? limit, CronJobStore store) =>
+        {
+            CronJob? job = store.GetById(id);
+            if (job is null)
+                return ApiErrors.NotFound($"CronJob '{id}' not found.");
+
+            IReadOnlyList<CronJobRunLog> logs = store.GetRunLogs(id, limit ?? 50);
+            return Results.Ok(logs);
+        })
+        .WithTags("Cron");
+
         return endpoints;
     }
 }
@@ -108,3 +160,5 @@ public record UpdateCronJobRequest(
 public record DeleteCronJobRequest(string? Id);
 
 public record ToggleCronJobRequest(string? Id);
+
+public record TriggerCronJobRequest(string? Id);

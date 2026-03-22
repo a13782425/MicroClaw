@@ -237,6 +237,7 @@ export type SessionInfo = {
   isApproved: boolean
   channelType: ChannelType
   createdAt: string
+  approvalReason?: string | null
 }
 
 export type CreateSessionRequest = {
@@ -268,18 +269,46 @@ export async function deleteSession(id: string): Promise<void> {
   await axios.post('/api/sessions/delete', { id })
 }
 
-export async function approveSession(id: string): Promise<SessionInfo> {
-  const { data } = await axios.post<SessionInfo>('/api/sessions/approve', { id })
+export async function approveSession(id: string, reason?: string): Promise<SessionInfo> {
+  const { data } = await axios.post<SessionInfo>('/api/sessions/approve', { id, reason })
   return data
 }
 
-export async function disableSession(id: string): Promise<SessionInfo> {
-  const { data } = await axios.post<SessionInfo>('/api/sessions/disable', { id })
+export async function disableSession(id: string, reason?: string): Promise<SessionInfo> {
+  const { data } = await axios.post<SessionInfo>('/api/sessions/disable', { id, reason })
+  return data
+}
+
+export async function batchApproveSession(ids: string[], reason?: string): Promise<{ updated: SessionInfo[]; count: number }> {
+  const { data } = await axios.post('/api/sessions/approve-batch', { ids, reason })
+  return data
+}
+
+export async function batchDisableSession(ids: string[], reason?: string): Promise<{ updated: SessionInfo[]; count: number }> {
+  const { data } = await axios.post('/api/sessions/disable-batch', { ids, reason })
   return data
 }
 
 export async function getMessages(sessionId: string): Promise<SessionMessage[]> {
   const { data } = await axios.get<SessionMessage[]>(`/api/sessions/${sessionId}/messages`)
+  return data
+}
+
+export interface PagedMessagesResponse {
+  messages: SessionMessage[]
+  total: number
+  hasMore: boolean
+}
+
+export async function getMessagesPaged(
+  sessionId: string,
+  skip: number,
+  limit: number
+): Promise<PagedMessagesResponse> {
+  const { data } = await axios.get<PagedMessagesResponse>(
+    `/api/sessions/${sessionId}/messages`,
+    { params: { skip, limit } }
+  )
   return data
 }
 

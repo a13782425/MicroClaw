@@ -10,4 +10,5 @@ public sealed class SessionEntity
     public string CreatedAtUtc { get; set; } = string.Empty;
     public string? AgentId { get; set; }
     public string? ParentSessionId { get; set; }
+    public string? ApprovalReason { get; set; }
 }

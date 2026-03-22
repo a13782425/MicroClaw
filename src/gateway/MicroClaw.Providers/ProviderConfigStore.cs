@@ -59,6 +59,17 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
         return true;
     }
 
+    public bool SetDefault(string id)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        ProviderConfigEntity? target = db.Providers.Find(id);
+        if (target is null) return false;
+        foreach (ProviderConfigEntity e in db.Providers)
+            e.IsDefault = e.Id == id;
+        db.SaveChanges();
+        return true;
+    }
+
     private static ProviderConfig ToConfig(ProviderConfigEntity e) =>
         new()
         {
@@ -70,6 +81,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             ModelName = ResolveEnvVars(e.ModelName) ?? string.Empty,
             MaxOutputTokens = e.MaxOutputTokens,
             IsEnabled = e.IsEnabled,
+            IsDefault = e.IsDefault,
             Capabilities = DeserializeCapabilities(e.CapabilitiesJson)
         };
 
@@ -84,6 +96,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             ModelName = c.ModelName,
             MaxOutputTokens = c.MaxOutputTokens,
             IsEnabled = c.IsEnabled,
+            IsDefault = c.IsDefault,
             CapabilitiesJson = JsonSerializer.Serialize(c.Capabilities)
         };
 

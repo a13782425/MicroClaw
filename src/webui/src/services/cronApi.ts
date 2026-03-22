@@ -12,6 +12,25 @@ export type CronJob = {
   lastRunAtUtc: string | null
 }
 
+export type CronJobRunLog = {
+  id: string
+  cronJobId: string
+  triggeredAtUtc: string
+  /** success / failed / cancelled */
+  status: string
+  durationMs: number
+  errorMessage: string | null
+  /** cron（自动）/ manual（手动） */
+  source: string
+}
+
+export type TriggerResult = {
+  success: boolean
+  status: string
+  durationMs: number
+  errorMessage: string | null
+}
+
 export type CreateCronJobRequest = {
   name: string
   description?: string | null
@@ -49,5 +68,13 @@ export const cronApi = {
 
   toggle(id: string): Promise<CronJob> {
     return axios.post('/api/cron/toggle', { id }).then(r => r.data)
+  },
+
+  trigger(id: string): Promise<TriggerResult> {
+    return axios.post('/api/cron/trigger', { id }).then(r => r.data)
+  },
+
+  getLogs(id: string, limit = 50): Promise<CronJobRunLog[]> {
+    return axios.get(`/api/cron/${id}/logs`, { params: { limit } }).then(r => r.data)
   },
 }

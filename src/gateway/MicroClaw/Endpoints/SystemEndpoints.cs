@@ -18,6 +18,7 @@ public static class SystemEndpoints
                 p.ModelName,
                 p.MaxOutputTokens,
                 p.IsEnabled,
+                p.IsDefault,
                 p.Capabilities
             });
             return Results.Ok(result);
@@ -88,6 +89,19 @@ public static class SystemEndpoints
         })
         .WithTags("Providers");
 
+        endpoints.MapPost("/providers/set-default", (ProviderSetDefaultRequest req, ProviderConfigStore store) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Id))
+                return ApiErrors.BadRequest("Id is required.");
+
+            bool ok = store.SetDefault(req.Id);
+            if (!ok)
+                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+
+            return Results.Ok();
+        })
+        .WithTags("Providers");
+
         return endpoints;
     }
 
@@ -139,3 +153,5 @@ public sealed record ProviderUpdateRequest(
     ProviderCapabilities? Capabilities = null);
 
 public sealed record ProviderDeleteRequest(string Id);
+
+public sealed record ProviderSetDefaultRequest(string Id);

@@ -40,6 +40,10 @@ public sealed class CronJobQuartzJob(
         logger.LogInformation("CronJobQuartzJob: executing job '{JobName}' ({JobId}), target session '{SessionId}'.",
             job.Name, jobId, job.TargetSessionId);
 
+        DateTimeOffset startTime = DateTimeOffset.UtcNow;
+        string status = "success";
+        string? errorMessage = null;
+
         try
         {
             await sessionChatService.ExecuteAsync(job.TargetSessionId, job.Prompt, context.CancellationToken);
@@ -48,16 +52,22 @@ public sealed class CronJobQuartzJob(
         }
         catch (OperationCanceledException)
         {
+            status = "cancelled";
             cronJobStore.UpdateLastRun(jobId, DateTimeOffset.UtcNow);
             logger.LogWarning("CronJobQuartzJob: job '{JobId}' was cancelled.", jobId);
         }
         catch (Exception ex)
         {
+            status = "failed";
+            errorMessage = ex.Message;
             cronJobStore.UpdateLastRun(jobId, DateTimeOffset.UtcNow);
             logger.LogError(ex, "CronJobQuartzJob: error executing job '{JobId}'.", jobId);
         }
         finally
         {
+            long durationMs = (long)(DateTimeOffset.UtcNow - startTime).TotalMilliseconds;
+            cronJobStore.AddRunLog(jobId, status, durationMs, errorMessage, source: "cron");
+
             // 一次性任务执行完毕后自动删除（无论成功失败）
             if (job.RunAtUtc is not null)
             {

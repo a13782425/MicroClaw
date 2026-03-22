@@ -90,11 +90,24 @@
         </div>
 
         <!-- 消息列表 -->
-        <div class="chat-messages" ref="messagesEl">
+        <div class="chat-messages" ref="messagesEl" @scroll="handleMessagesScroll">
           <div v-if="store.loading" class="loading-wrap">
             <el-skeleton :rows="4" animated />
           </div>
           <template v-else>
+            <!-- 加载更早消息的指示器 -->
+            <div v-if="store.messagesHasMore || store.loadingEarlier" class="load-earlier-wrap">
+              <el-button
+                v-if="store.messagesHasMore && !store.loadingEarlier"
+                text
+                type="primary"
+                size="small"
+                @click="handleLoadEarlier"
+              >↑ 加载更早消息</el-button>
+              <span v-else-if="store.loadingEarlier" class="load-earlier-hint">
+                <el-icon class="is-loading"><Loading /></el-icon> 加载中…
+              </span>
+            </div>
             <ChatMessage
               v-for="(msg, idx) in displayMessages"
               :key="idx"
@@ -238,6 +251,10 @@ onMounted(async () => {
   await store.fetchSessions()
   providers.value = await listProviders()
   enabledProviders.value = providers.value.filter((p) => p.isEnabled)
+  const defaultProvider = enabledProviders.value.find((p) => p.isDefault)
+  if (defaultProvider) {
+    createForm.value.providerId = defaultProvider.id
+  }
   eventBus.on('session:created', onSessionEvent)
   eventBus.on('session:approved', onSessionEvent)
   eventBus.on('session:disabled', onSessionEvent)
@@ -287,7 +304,31 @@ function scrollToBottom() {
   }
 }
 
-watch(() => store.messages.length, scrollToBottom, { flush: 'post' })
+// 滚动到顶部附近时自动触发加载更早消息
+function handleMessagesScroll() {
+  if (!messagesEl.value) return
+  if (messagesEl.value.scrollTop < 80 && store.messagesHasMore && !store.loadingEarlier) {
+    handleLoadEarlier()
+  }
+}
+
+// 手动/自动加载更早消息，加载完成后保持滚动位置
+async function handleLoadEarlier() {
+  if (!messagesEl.value) return
+  const el = messagesEl.value
+  const prevScrollHeight = el.scrollHeight
+  await store.loadEarlierMessages()
+  await nextTick()
+  // 将滚动位置补偿回新增内容的高度，避免视觉跳跃
+  el.scrollTop = el.scrollHeight - prevScrollHeight
+}
+
+watch(() => store.messages.length, (newLen, oldLen) => {
+  // 仅在消息从尾部增加时才滚到底部（发送/接收新消息），加载更早的历史消息不触发
+  if (newLen > oldLen && !store.loadingEarlier) {
+    scrollToBottom()
+  }
+}, { flush: 'post' })
 watch(() => store.chatting, scrollToBottom, { flush: 'post' })
 // loading 变为 false 时（骨架屏 → 消息列表切换），确保滚到底部
 watch(() => store.loading, (loading) => { if (!loading) nextTick(scrollToBottom) }, { flush: 'post' })
@@ -307,7 +348,8 @@ async function handleCreate() {
       providerId: createForm.value.providerId
     })
     showCreate.value = false
-    createForm.value = { title: '', providerId: '' }
+    const defaultProvider = enabledProviders.value.find((p) => p.isDefault)
+    createForm.value = { title: '', providerId: defaultProvider?.id ?? '' }
     await store.selectSession(session.id)
     ElMessage.success('会话已创建，请等待管理员批准后方可对话')
   } catch {
@@ -562,6 +604,20 @@ function removeAttachment(idx: number) {
 
 .loading-wrap {
   padding: 20px;
+}
+
+.load-earlier-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.load-earlier-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 /* 输入区 */
