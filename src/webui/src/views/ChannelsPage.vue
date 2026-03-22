@@ -23,6 +23,7 @@
         <div class="card-top">
           <div class="card-title-row">
             <span class="card-name">{{ c.displayName }}</span>
+            <span v-if="c.channelType === 'feishu'" :class="healthDotClass(c.id)" :title="healthLevel(c.id) === 'ok' ? '运行正常' : healthLevel(c.id) === 'warn' ? '最近消息处理失败' : healthLevel(c.id) === 'error' ? '连接已断开' : '状态未知'"></span>
             <el-tag :type="channelTagType(c.channelType)" size="small" class="channel-tag">
               {{ channelLabel(c.channelType) }}
             </el-tag>
@@ -41,6 +42,34 @@
             <el-button link size="small" @click="copyWebhook(c)">
               <el-icon><CopyDocument /></el-icon>
             </el-button>
+          </div>
+
+          <!-- F-F-3: 错误事件统计数字卡 -->
+          <div v-if="c.channelType === 'feishu' && channelStats[c.id]" class="card-stats">
+            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].signatureFailures > 0 }">
+              <span class="stat-label">签名失败</span>
+              <span class="stat-value">{{ channelStats[c.id].signatureFailures }}</span>
+            </div>
+            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].aiCallFailures > 0 }">
+              <span class="stat-label">AI 失败</span>
+              <span class="stat-value">{{ channelStats[c.id].aiCallFailures }}</span>
+            </div>
+            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].replyFailures > 0 }">
+              <span class="stat-label">回复失败</span>
+              <span class="stat-value">{{ channelStats[c.id].replyFailures }}</span>
+            </div>
+          </div>
+
+          <!-- F-G-4: 最近处理时间 -->
+          <div v-if="c.channelType === 'feishu' && channelHealth[c.id]?.lastMessageAt" class="card-last-message">
+            <el-icon><Clock /></el-icon>
+            <span>最近处理：{{ formatRelativeTime(channelHealth[c.id].lastMessageAt) }}</span>
+            <el-tag
+              v-if="channelHealth[c.id].lastMessageSuccess !== null"
+              :type="channelHealth[c.id].lastMessageSuccess ? 'success' : 'danger'"
+              size="small"
+              effect="plain"
+            >{{ channelHealth[c.id].lastMessageSuccess ? '成功' : '失败' }}</el-tag>
           </div>
         </div>
 
@@ -66,6 +95,13 @@
               @click="openPublishDialog(c)"
             >发送消息</el-button>
             <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
+            <el-button
+              v-if="c.channelType === 'feishu'"
+              link
+              type="info"
+              @click="openHealthDrawer(c)"
+            >健康详情</el-button>
+            <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
             <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
             <el-divider direction="vertical" />
             <el-button link type="danger" :icon="Delete" @click="confirmDelete(c)">删除</el-button>
@@ -86,9 +122,126 @@
                 : `✗ ${testResults[c.id]?.message}`
             }}
           </el-tag>
+          <!-- F-E-3: Webhook 内网探测提示 -->
+          <el-alert
+            v-if="testResults[c.id]?.connectivityHint"
+            :title="testResults[c.id]?.connectivityHint"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="card-connectivity-hint"
+          />
         </div>
       </div>
     </div>
+
+    <!-- F-G-4: 渠道健康仪表盘 Drawer -->
+    <el-drawer
+      v-model="healthDrawerVisible"
+      title="渠道健康详情"
+      size="400px"
+      direction="rtl"
+      destroy-on-close
+    >
+      <template v-if="healthDrawerChannel">
+        <div class="health-drawer-content">
+          <!-- 渠道基本信息 -->
+          <div class="health-section">
+            <div class="health-section-title">基本信息</div>
+            <div class="health-row">
+              <span class="health-label">渠道名称</span>
+              <span class="health-value">{{ healthDrawerChannel.displayName }}</span>
+            </div>
+            <div class="health-row">
+              <span class="health-label">渠道 ID</span>
+              <span class="health-value health-mono">{{ healthDrawerChannel.id }}</span>
+            </div>
+          </div>
+
+          <!-- 连接状态 -->
+          <div class="health-section">
+            <div class="health-section-title">连接状态</div>
+            <div v-if="channelHealth[healthDrawerChannel.id]" class="health-rows">
+              <div class="health-row">
+                <span class="health-label">连接模式</span>
+                <el-tag size="small" :type="channelHealth[healthDrawerChannel.id].connectionMode === 'websocket' ? 'success' : 'info'">
+                  {{ channelHealth[healthDrawerChannel.id].connectionMode === 'websocket' ? 'WebSocket 长连接' : 'Webhook 回调' }}
+                </el-tag>
+              </div>
+              <div class="health-row">
+                <span class="health-label">连接状态</span>
+                <el-tag
+                  size="small"
+                  :type="connectionStatusLabel(channelHealth[healthDrawerChannel.id].connectionStatus).type"
+                >
+                  {{ connectionStatusLabel(channelHealth[healthDrawerChannel.id].connectionStatus).label }}
+                </el-tag>
+              </div>
+              <div class="health-row">
+                <span class="health-label">Token 有效期</span>
+                <span class="health-value">{{ formatTokenTtl(channelHealth[healthDrawerChannel.id].tokenRemainingSeconds) }}</span>
+              </div>
+            </div>
+            <div v-else class="health-empty">暂无健康数据</div>
+          </div>
+
+          <!-- 最近消息 -->
+          <div class="health-section">
+            <div class="health-section-title">最近消息</div>
+            <div v-if="channelHealth[healthDrawerChannel.id]?.lastMessageAt" class="health-rows">
+              <div class="health-row">
+                <span class="health-label">处理时间</span>
+                <span class="health-value">{{ formatRelativeTime(channelHealth[healthDrawerChannel.id].lastMessageAt) }}</span>
+              </div>
+              <div class="health-row">
+                <span class="health-label">处理结果</span>
+                <el-tag
+                  size="small"
+                  :type="channelHealth[healthDrawerChannel.id].lastMessageSuccess ? 'success' : 'danger'"
+                >
+                  {{ channelHealth[healthDrawerChannel.id].lastMessageSuccess ? '成功' : '失败' }}
+                </el-tag>
+              </div>
+              <div v-if="channelHealth[healthDrawerChannel.id].lastMessageError" class="health-row health-row-col">
+                <span class="health-label">错误详情</span>
+                <span class="health-value health-error-text">{{ channelHealth[healthDrawerChannel.id].lastMessageError }}</span>
+              </div>
+            </div>
+            <div v-else class="health-empty">暂无消息记录</div>
+          </div>
+
+          <!-- 错误统计 -->
+          <div class="health-section">
+            <div class="health-section-title">错误统计（本次运行累计）</div>
+            <div v-if="channelStats[healthDrawerChannel.id]" class="health-stat-grid">
+              <div class="health-stat-card" :class="{ 'health-stat-error': channelStats[healthDrawerChannel.id].signatureFailures > 0 }">
+                <span class="health-stat-num">{{ channelStats[healthDrawerChannel.id].signatureFailures }}</span>
+                <span class="health-stat-desc">签名验证失败</span>
+              </div>
+              <div class="health-stat-card" :class="{ 'health-stat-error': channelStats[healthDrawerChannel.id].aiCallFailures > 0 }">
+                <span class="health-stat-num">{{ channelStats[healthDrawerChannel.id].aiCallFailures }}</span>
+                <span class="health-stat-desc">AI 调用失败</span>
+              </div>
+              <div class="health-stat-card" :class="{ 'health-stat-error': channelStats[healthDrawerChannel.id].replyFailures > 0 }">
+                <span class="health-stat-num">{{ channelStats[healthDrawerChannel.id].replyFailures }}</span>
+                <span class="health-stat-desc">回复发送失败</span>
+              </div>
+            </div>
+            <div v-else class="health-empty">暂无统计数据</div>
+          </div>
+
+          <!-- 刷新按钮 -->
+          <div class="health-drawer-footer">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              @click="refreshHealthDrawer"
+            >刷新数据</el-button>
+          </div>
+        </div>
+      </template>
+    </el-drawer>
 
     <!-- 发送消息 Dialog -->
     <el-dialog
@@ -253,6 +406,51 @@
             </el-form-item>
           </div>
         </div>
+
+        <!-- F-G-3: 云文档工具配置 -->
+        <div v-if="form.channelType === 'feishu'" class="section-static" style="margin-top: 8px">
+          <div class="section-static-header section-header-doc">
+            <span class="section-title">云文档工具访问控制</span>
+            <span class="section-subtitle">限制 Agent 可访问的文档范围（留空不限制）</span>
+          </div>
+          <div class="section-body">
+            <el-form-item label="文档 Token 白名单">
+              <el-input
+                v-model="form.feishu.allowedDocTokens"
+                type="textarea"
+                :rows="2"
+                placeholder="多个 Token 用英文逗号分隔，留空则 Agent 可访问任意可见文档"
+              />
+              <div class="form-hint">
+                read_feishu_doc 和 write_feishu_doc 工具仅允许访问列出的文档 Token（如 <code>doxcnXXXXX</code>）。留空表示不限制。
+              </div>
+            </el-form-item>
+
+            <el-form-item label="多维表格 App Token 白名单">
+              <el-input
+                v-model="form.feishu.allowedBitableTokens"
+                type="textarea"
+                :rows="2"
+                placeholder="多个 Token 用英文逗号分隔，留空则 Agent 可访问任意可见多维表格"
+              />
+              <div class="form-hint">
+                read_feishu_bitable 和 write_feishu_bitable 工具仅允许访问列出的 App Token。留空表示不限制。
+              </div>
+            </el-form-item>
+
+            <el-form-item label="知识库 Space ID 白名单">
+              <el-input
+                v-model="form.feishu.allowedWikiSpaceIds"
+                type="textarea"
+                :rows="2"
+                placeholder="多个 Space ID 用英文逗号分隔，留空则 Agent 可搜索任意可见知识库"
+              />
+              <div class="form-hint">
+                search_feishu_wiki 工具仅允许搜索列出的知识库 Space ID。留空表示不限制。
+              </div>
+            </el-form-item>
+          </div>
+        </div>
       </el-form>
 
       <template #footer>
@@ -269,7 +467,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Edit, Delete, Cpu, Link, Connection, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Cpu, Link, Connection, CopyDocument, Clock } from '@element-plus/icons-vue'
 import {
   listChannels,
   createChannel,
@@ -277,14 +475,72 @@ import {
   deleteChannel,
   testChannel,
   publishChannelMessage,
+  getChannelStats,
+  getChannelHealth,
   listProviders,
 } from '@/services/gatewayApi'
-import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult } from '@/services/gatewayApi'
+import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult, ChannelStats, ChannelHealth } from '@/services/gatewayApi'
 
 const loading = ref(false)
 const submitting = ref(false)
 const channels = ref<ChannelConfig[]>([])
 const providers = ref<ProviderConfig[]>([])
+const channelStats = reactive<Record<string, ChannelStats>>({})
+const channelHealth = reactive<Record<string, ChannelHealth>>({})
+
+// ── 健康仪表盘 Drawer ────────────────────────────────────────────────────────
+const healthDrawerVisible = ref(false)
+const healthDrawerChannel = ref<ChannelConfig | null>(null)
+
+function openHealthDrawer(c: ChannelConfig) {
+  healthDrawerChannel.value = c
+  healthDrawerVisible.value = true
+}
+
+/** 根据 health 数据返回 ok / warn / error / unknown */
+function healthLevel(id: string): 'ok' | 'warn' | 'error' | 'unknown' {
+  const h = channelHealth[id]
+  if (!h) return 'unknown'
+  const status = h.connectionStatus
+  if (status === 'disabled') return 'unknown'
+  if (status === 'disconnected') return 'error'
+  if (h.lastMessageSuccess === false) return 'warn'
+  return 'ok'
+}
+
+function healthDotClass(id: string): string {
+  const level = healthLevel(id)
+  return `health-dot health-dot-${level}`
+}
+
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return '暂无记录'
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} 小时前`
+  return `${Math.floor(hrs / 24)} 天前`
+}
+
+function formatTokenTtl(secs: number | null): string {
+  if (secs === null || secs === undefined) return '不适用'
+  if (secs <= 0) return '已过期'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins} 分钟`
+  return `${Math.floor(mins / 60)} 小时 ${mins % 60} 分钟`
+}
+
+function connectionStatusLabel(status: string): { label: string; type: 'success' | 'danger' | 'info' | 'warning' } {
+  switch (status) {
+    case 'connected': return { label: '已连接', type: 'success' }
+    case 'disconnected': return { label: '已断开', type: 'danger' }
+    case 'webhook': return { label: 'Webhook 就绪', type: 'info' }
+    case 'disabled': return { label: '已禁用', type: 'warning' }
+    default: return { label: status, type: 'info' }
+  }
+}
 
 // ── 发送消息 Dialog ──────────────────────────────────────────────────────────
 const publishDialogVisible = ref(false)
@@ -321,6 +577,9 @@ const form = reactive({
     verificationToken: '',
     connectionMode: 'websocket' as 'websocket' | 'webhook',
     apiBaseUrl: '',
+    allowedDocTokens: '',
+    allowedBitableTokens: '',
+    allowedWikiSpaceIds: '',
   },
 })
 
@@ -388,6 +647,17 @@ async function loadData() {
     const [channelList, providerList] = await Promise.all([listChannels(), listProviders()])
     channels.value = channelList
     providers.value = providerList
+    // F-F-3: 加载飞书渠道的错误事件统计数据
+    // F-G-4: 同时加载健康数据
+    const feishuChannels = channelList.filter(c => c.channelType === 'feishu')
+    await Promise.allSettled([
+      ...feishuChannels.map(c =>
+        getChannelStats(c.id).then(stats => { channelStats[c.id] = stats }).catch(() => {})
+      ),
+      ...feishuChannels.map(c =>
+        getChannelHealth(c.id).then(h => { channelHealth[c.id] = h }).catch(() => {})
+      ),
+    ])
   } catch {
     // 失败由全局拦截器展示后端错误信息
   } finally {
@@ -401,7 +671,7 @@ function resetForm() {
     channelType: 'feishu' as ChannelType,
     providerId: '',
     isEnabled: true,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook', apiBaseUrl: '' },
+    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook', apiBaseUrl: '', allowedDocTokens: '', allowedBitableTokens: '', allowedWikiSpaceIds: '' },
   })
 }
 
@@ -421,7 +691,7 @@ function openEditDialog(c: ChannelConfig) {
     channelType: c.channelType,
     providerId: c.providerId,
     isEnabled: c.isEnabled,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook' },
+    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook', apiBaseUrl: '', allowedDocTokens: '', allowedBitableTokens: '', allowedWikiSpaceIds: '' },
   })
 
   // 解析渠道特定设置
@@ -434,6 +704,9 @@ function openEditDialog(c: ChannelConfig) {
       form.feishu.verificationToken = parsed.verificationToken ?? ''  // 同上
       form.feishu.connectionMode = parsed.connectionMode ?? 'websocket'
       form.feishu.apiBaseUrl = parsed.apiBaseUrl ?? ''
+      form.feishu.allowedDocTokens = (parsed.allowedDocTokens ?? []).join(', ')
+      form.feishu.allowedBitableTokens = (parsed.allowedBitableTokens ?? []).join(', ')
+      form.feishu.allowedWikiSpaceIds = (parsed.allowedWikiSpaceIds ?? []).join(', ')
     } catch { /* ignore */ }
   }
 
@@ -442,6 +715,10 @@ function openEditDialog(c: ChannelConfig) {
 
 function buildSettingsJson(): string {
   if (form.channelType === 'feishu') {
+    /** 将逗号分隔字符串拆分为清洁 token 数组，过滤空项 */
+    const parseTokenList = (s: string): string[] =>
+      s.split(',').map(t => t.trim()).filter(t => t.length > 0)
+
     return JSON.stringify({
       appId: form.feishu.appId,
       appSecret: form.feishu.appSecret || (isEditing.value ? '***' : ''),
@@ -449,6 +726,9 @@ function buildSettingsJson(): string {
       verificationToken: form.feishu.verificationToken, // 同上
       connectionMode: form.feishu.connectionMode,
       apiBaseUrl: form.feishu.apiBaseUrl || undefined,
+      allowedDocTokens: parseTokenList(form.feishu.allowedDocTokens),
+      allowedBitableTokens: parseTokenList(form.feishu.allowedBitableTokens),
+      allowedWikiSpaceIds: parseTokenList(form.feishu.allowedWikiSpaceIds),
     })
   }
   return '{}'
@@ -572,6 +852,15 @@ async function testConnection(c: ChannelConfig) {
   } catch {
     testResults[c.id] = { loading: false, success: false, message: '请求失败', latencyMs: 0 }
   }
+}
+
+async function refreshHealthDrawer() {
+  if (!healthDrawerChannel.value) return
+  const id = healthDrawerChannel.value.id
+  await Promise.allSettled([
+    getChannelStats(id).then(stats => { channelStats[id] = stats }).catch(() => {}),
+    getChannelHealth(id).then(h => { channelHealth[id] = h }).catch(() => {}),
+  ])
 }
 
 onMounted(loadData)
@@ -724,9 +1013,220 @@ onMounted(loadData)
   font-size: 12px;
 }
 
+.card-connectivity-hint {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+/* F-F-3: 错误事件统计数字卡片 */
+.card-stats {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+.stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  min-width: 0;
+}
+
+.stat-item.stat-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.stat-item.stat-error .stat-label {
+  color: #ef4444;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1;
+}
+
+.stat-item.stat-error .stat-value {
+  color: #dc2626;
+}
+
 .card-actions {
   display: flex;
   align-items: center;
+}
+
+/* F-G-4: 健康状态圆点 */
+.health-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-dot-ok {
+  background-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+}
+
+.health-dot-warn {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
+
+.health-dot-error {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+}
+
+.health-dot-unknown {
+  background-color: #d1d5db;
+}
+
+/* F-G-4: 最近处理时间行 */
+.card-last-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.card-last-message .el-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+/* F-G-4: 健康 Drawer 内容 */
+.health-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 0;
+}
+
+.health-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.health-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.health-row-col {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.health-label {
+  font-size: 13px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.health-value {
+  font-size: 13px;
+  color: #111827;
+  text-align: right;
+  word-break: break-all;
+}
+
+.health-mono {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.health-error-text {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.health-empty {
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 8px 0;
+}
+
+.health-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.health-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.health-stat-card.health-stat-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.health-stat-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1;
+}
+
+.health-stat-card.health-stat-error .health-stat-num {
+  color: #dc2626;
+}
+
+.health-stat-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.health-stat-card.health-stat-error .health-stat-desc {
+  color: #ef4444;
+}
+
+.health-drawer-footer {
+  padding-top: 8px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .form-hint {
@@ -761,6 +1261,16 @@ onMounted(loadData)
 
 .section-header-feishu .section-subtitle {
   color: #86efac;
+}
+
+/* F-G-3: 云文档工具配置区块 */
+.section-header-doc {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.section-header-doc .section-subtitle {
+  color: #fcd34d;
 }
 
 .section-static-header .section-subtitle {

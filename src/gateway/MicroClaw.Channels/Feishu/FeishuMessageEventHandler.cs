@@ -65,12 +65,15 @@ public sealed class FeishuMessageEventHandler(
                 .ToList()
             : [];
 
+        // F-B-3: 提取 rootId，话题内消息 (root_id 非空) 回复时会带 reply_in_thread
+        string? rootId = body.Message?.RootId;
+
         // fire-and-forget：SDK 要求 3 秒内返回，AI 调用可能耗时较长
         // 不传入 tenantApi，因为 scoped 容器会在本方法返回后释放；
         // ProcessMessageAsync 内部会自建 ServiceProvider 来回复消息。
         _ = Task.Run(() => processor.ProcessMessageAsync(
             userText, senderId, chatId, messageId, channel, settings,
-            chatType, mentionedOpenIds, ct: CancellationToken.None));
+            chatType, mentionedOpenIds, rootId: rootId, ct: CancellationToken.None));
 
         return Task.CompletedTask;
     }

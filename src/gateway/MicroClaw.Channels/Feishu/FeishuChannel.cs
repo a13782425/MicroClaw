@@ -83,9 +83,11 @@ public sealed class FeishuChannel(
                     : [];
 
                 // 异步处理消息，不阻塞飞书回调
+                // F-B-3: 提取 rootId，话题内消息 (root_id 非空) 回复时会带 reply_in_thread
+                string? rootId = callback.Event.Message.RootId;
                 _ = Task.Run(() => processor.ProcessMessageAsync(
                     userText, senderId, chatId, messageId, channelConfig, settings,
-                    chatType, mentionedOpenIds, ct: CancellationToken.None));
+                    chatType, mentionedOpenIds, rootId: rootId, ct: CancellationToken.None));
             }
         }
 
@@ -119,7 +121,19 @@ public sealed class FeishuChannel(
             int code = doc.RootElement.GetProperty("code").GetInt32();
 
             if (code == 0)
-                return new ChannelTestResult(true, "连接成功", sw.ElapsedMilliseconds);
+            {
+                // F-E-3: Webhook 模式下探测公网可达性
+                string? hint = null;
+                if (settings.ConnectionMode.Equals("webhook", StringComparison.OrdinalIgnoreCase) &&
+                    IsLikelyPrivateNetworkOnly())
+                {
+                    hint = "当前服务器看起来处于内网环境，飞书可能无法访问您的 Webhook 地址。" +
+                           "建议将连接模式改为「WebSocket 长连接」，无需公网 IP 也可正常接收消息。";
+                    logger.LogInformation(
+                        "F-E-3 Webhook 内网探测提示 channel={ChannelId}", config.Id);
+                }
+                return new ChannelTestResult(true, "连接成功", sw.ElapsedMilliseconds, hint);
+            }
 
             doc.RootElement.TryGetProperty("msg", out JsonElement msgEl);
             return new ChannelTestResult(false, $"飞书 API 返回错误 code={code}：{msgEl.GetString()}", sw.ElapsedMilliseconds);
@@ -130,6 +144,46 @@ public sealed class FeishuChannel(
             logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", config.Id);
             return new ChannelTestResult(false, $"连接失败：{ex.Message}", sw.ElapsedMilliseconds);
         }
+    }
+
+    /// <summary>
+    /// F-E-3: 探测当前服务器是否「仅有内网 IP」，用于判断 Webhook 公网可达性。
+    /// <para>
+    /// 算法：枚举所有非回环网络接口的单播地址；若所有 IPv4 地址均属于私有段
+    /// （10.x、172.16-31.x、192.168.x、169.254.x），则认为处于内网环境，返回 true。
+    /// </para>
+    /// </summary>
+    internal static bool IsLikelyPrivateNetworkOnly()
+    {
+        try
+        {
+            var publicIps = System.Net.NetworkInformation.NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Where(ni =>
+                    ni.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                    ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
+                .Select(ua => ua.Address)
+                .Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Where(ip => !IsPrivateOrLinkLocalIpv4(ip))
+                .ToList();
+
+            return publicIps.Count == 0;
+        }
+        catch
+        {
+            return false; // 探测异常时保守处理，不误报
+        }
+    }
+
+    /// <summary>判断 IPv4 地址是否属于私有/链路本地网段。</summary>
+    private static bool IsPrivateOrLinkLocalIpv4(System.Net.IPAddress ip)
+    {
+        byte[] b = ip.GetAddressBytes();
+        return b[0] == 10 ||                                   // 10.0.0.0/8
+               (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||   // 172.16.0.0/12
+               (b[0] == 192 && b[1] == 168) ||                 // 192.168.0.0/16
+               (b[0] == 169 && b[1] == 254);                   // 169.254.0.0/16 (APIPA)
     }
 
     /// <summary>验证飞书 Webhook 签名：SHA256(timestamp + nonce + encryptKey + body) == expectedSignature。</summary>

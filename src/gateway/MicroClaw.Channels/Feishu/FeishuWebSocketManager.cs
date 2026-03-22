@@ -309,6 +309,12 @@ public sealed class FeishuWebSocketManager(
         await base.StopAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// F-F-2: 返回指定渠道 ID 的 WebSocket 连接状态。
+    /// </summary>
+    public string GetConnectionStatus(string channelId)
+        => _connections.ContainsKey(channelId) ? "connected" : "disconnected";
+
     private sealed record ChannelConnection(
         ServiceProvider ServiceProvider,
         IHostedService[] HostedServices,

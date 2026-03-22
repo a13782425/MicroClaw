@@ -26,7 +26,9 @@ public sealed class FeishuMessageProcessor(
     IAgentMessageHandler? agentHandler = null,
     IChannelRetryQueue? retryQueue = null,
     FeishuRateLimiter? rateLimiter = null,
-    FeishuTokenCache? tokenCache = null)
+    FeishuTokenCache? tokenCache = null,
+    FeishuChannelHealthStore? healthStore = null,
+    FeishuChannelStatsService? statsService = null)
 {
     // F-A-2: 消息去重 — 缓存最近 5 分钟内已处理的 MessageId，防止飞书重复推送触发重复 AI 调用
     private static readonly TimeSpan DeduplicationWindow = TimeSpan.FromMinutes(5);
@@ -43,6 +45,7 @@ public sealed class FeishuMessageProcessor(
         string chatType = "p2p",
         IReadOnlyList<string>? mentionedOpenIds = null,
         IFeishuTenantApi? tenantApi = null,
+        string? rootId = null,
         CancellationToken ct = default)
     {
         // F-B-1: 群聊过滤 — 群聊消息只有 @机器人 时才响应
@@ -104,13 +107,18 @@ public sealed class FeishuMessageProcessor(
         SessionInfo session = sessionService.FindOrCreateSession(
             ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, channel.ProviderId);
 
+        // F-B-3: 话题支持 — root_id 非空表示该消息属于某个话题（Thread），回复时需带 reply_in_thread
+        bool replyInThread = !string.IsNullOrEmpty(rootId);
+        if (replyInThread)
+            logger.LogDebug("[{TraceId}] 消息属于话题 rootId={RootId}，将在话题内回复", traceId, rootId);
+
         // 会话审批检查：未通过时自动通知管理员（含限流），并向用户回复拒绝提示
         if (!await sessionService.CheckApprovalAsync(session, ChannelType.Feishu))
         {
             logger.LogInformation("[{TraceId}] 会话 {SessionId} 未批准，拒绝处理 channel={ChannelId}",
                 traceId, session.Id, channel.Id);
             await ReplyMessageAsync(settings, messageId,
-                "此会话尚未获得批准，请联系管理员登录后台进行审批。", tenantApi, traceId, ct);
+                "此会话尚未获得批准，请联系管理员登录后台进行审批。", tenantApi, traceId, ct, replyInThread: replyInThread);
             return;
         }
 
@@ -121,9 +129,21 @@ public sealed class FeishuMessageProcessor(
         // 获取历史消息上下文
         IReadOnlyList<SessionMessage> history = sessionService.GetMessages(session.Id);
 
+        // F-B-4: 发送方身份透传 — 在 AI 调用前获取用户昵称和职位（可选）
+        (string Name, string? JobTitle)? senderInfo = null;
+        if (settings.InjectSenderInfo && !string.IsNullOrEmpty(senderId))
+        {
+            senderInfo = await GetSenderInfoAsync(senderId, settings, tenantApi, traceId, ct);
+            if (senderInfo is not null)
+                logger.LogDebug("[{TraceId}] 发送方身份已获取 name={Name} title={Title}",
+                    traceId, senderInfo.Value.Name, senderInfo.Value.JobTitle);
+        }
+
         // F-A-8: 添加"思考中"表情回应，让用户知道 AI 正在处理
         string? reactionId = await AddReactionAsync(settings, messageId, tenantApi, traceId, ct);
 
+        bool aiSuccess = true;
+        string? aiError = null;
         string aiReply;
         try
         {
@@ -136,6 +156,16 @@ public sealed class FeishuMessageProcessor(
             else
             {
                 List<ChatMessage> chatMessages = [];
+
+                // F-B-4: 若已获取发送方身份信息，在 System Prompt 中告知 AI 对话对象
+                if (senderInfo is not null)
+                {
+                    string senderContext = string.IsNullOrWhiteSpace(senderInfo.Value.JobTitle)
+                        ? $"当前与你对话的用户：{senderInfo.Value.Name}"
+                        : $"当前与你对话的用户：{senderInfo.Value.Name}，职位：{senderInfo.Value.JobTitle}";
+                    chatMessages.Add(new ChatMessage(ChatRole.System, senderContext));
+                }
+
                 foreach (SessionMessage msg in history)
                 {
                     ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
@@ -148,7 +178,12 @@ public sealed class FeishuMessageProcessor(
         }
         catch (Exception ex)
         {
+            aiSuccess = false;
+            aiError = ex.Message;
             logger.LogError(ex, "[{TraceId}] AI 调用失败", traceId);
+
+            // F-F-3: AI 调用失败计数
+            statsService?.IncrementAiCallFailure(channel.Id);
 
             // F-D-1: AI 失败入队重试（如果有重试队列）
             if (retryQueue is not null)
@@ -160,7 +195,8 @@ public sealed class FeishuMessageProcessor(
                         ex.Message, ct);
                     logger.LogInformation("[{TraceId}] AI 失败已入队重试 messageId={MessageId}", traceId, messageId);
                     await ReplyMessageAsync(settings, messageId,
-                        "AI 暂时无法处理，已加入重试队列，稍后会自动重试。", tenantApi, traceId, ct);
+                        "AI 暂时无法处理，已加入重试队列，稍后会自动重试。", tenantApi, traceId, ct, replyInThread: replyInThread);
+                    healthStore?.Report(channel.Id, false, aiError);
                     return;
                 }
                 catch (Exception enqueueEx)
@@ -182,7 +218,10 @@ public sealed class FeishuMessageProcessor(
         SessionMessage assistantMessage = new("assistant", aiReply, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, assistantMessage);
 
-        await ReplyMessageAsync(settings, messageId, aiReply, tenantApi, traceId, ct);
+        await ReplyMessageAsync(settings, messageId, aiReply, tenantApi, traceId, ct, channel.Id, replyInThread);
+
+        // F-F-2: 上报消息处理结果到健康监控
+        healthStore?.Report(channel.Id, aiSuccess, aiError);
     }
 
     /// <summary>从飞书消息事件中提取用户输入文本（支持 text / image 类型，去除 @mention）。</summary>
@@ -386,7 +425,8 @@ public sealed class FeishuMessageProcessor(
     }
 
     private async Task ReplyMessageAsync(FeishuChannelSettings settings, string messageId,
-        string text, IFeishuTenantApi? tenantApi, string traceId, CancellationToken ct)
+        string text, IFeishuTenantApi? tenantApi, string traceId, CancellationToken ct,
+        string? channelId = null, bool replyInThread = false)
     {
         ServiceProvider? sp = null;
         try
@@ -424,17 +464,23 @@ public sealed class FeishuMessageProcessor(
                 contentJson = JsonSerializer.Serialize(new { text });
             }
 
+            // F-B-3: 若消息属于话题（root_id 非空），设置 ReplyInThread = true 使回复保持在同一话题内
             await tenantApi.PostImV1MessagesByMessageIdReplyAsync(messageId,
                 new PostImV1MessagesByMessageIdReplyBodyDto
                 {
                     Content = contentJson,
-                    MsgType = msgType
+                    MsgType = msgType,
+                    ReplyInThread = replyInThread ? true : null
                 }, ct);
-            logger.LogInformation("[{TraceId}] 飞书回复成功 messageId={MessageId} msgType={MsgType}", traceId, messageId, msgType);
+            logger.LogInformation("[{TraceId}] 飞书回复成功 messageId={MessageId} msgType={MsgType} replyInThread={ReplyInThread}",
+                traceId, messageId, msgType, replyInThread);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "[{TraceId}] 飞书回复失败 messageId={MessageId}", traceId, messageId);
+            // F-F-3: 回复失败计数
+            if (channelId is not null)
+                statsService?.IncrementReplyFailure(channelId);
         }
         finally
         {
@@ -548,6 +594,49 @@ public sealed class FeishuMessageProcessor(
     public Task SendRetryReplyAsync(string messageId, string text,
         FeishuChannelSettings settings, CancellationToken ct = default)
         => ReplyMessageAsync(settings, messageId, text, tenantApi: null, traceId: "retry", ct);
+
+    /// <summary>
+    /// F-B-4: 通过飞书 Contact API 获取发送方的昵称和职位。
+    /// 调用失败时静默返回 null，不影响主消息处理流程。
+    /// 需要应用已申请 <c>contact:user.base:readonly</c> 权限。
+    /// </summary>
+    private async Task<(string Name, string? JobTitle)?> GetSenderInfoAsync(
+        string openId, FeishuChannelSettings settings,
+        IFeishuTenantApi? tenantApi, string traceId, CancellationToken ct)
+    {
+        ServiceProvider? sp = null;
+        try
+        {
+            if (tenantApi is null)
+            {
+                if (tokenCache is not null)
+                    tenantApi = tokenCache.GetOrCreateApi(settings);
+                else
+                {
+                    sp = BuildFeishuServiceProvider(settings);
+                    tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
+                }
+            }
+
+            var result = await tenantApi.GetContactV3UsersByUserIdAsync(
+                openId, "open_id", null, ct);
+
+            var user = result.Data?.User;
+            if (user is null) return null;
+
+            string name = !string.IsNullOrWhiteSpace(user.Name) ? user.Name : openId;
+            return (name, string.IsNullOrWhiteSpace(user.JobTitle) ? null : user.JobTitle);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "[{TraceId}] 获取发送方信息失败，静默降级", traceId);
+            return null;
+        }
+        finally
+        {
+            if (sp is not null) await sp.DisposeAsync();
+        }
+    }
 
     /// <summary>
     /// F-A-1: 主动发送消息到指定飞书用户或群聊（不依赖 messageId，构造新消息）。

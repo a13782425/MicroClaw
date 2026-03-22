@@ -67,6 +67,19 @@ public sealed class FeishuTokenCache(ILogger<FeishuTokenCache> logger) : IDispos
         }
     }
 
+    /// <summary>
+    /// F-F-2: 返回指定 AppId 对应缓存 Token 的剩余有效时间；未缓存时返回 null。
+    /// </summary>
+    public TimeSpan? GetRemainingTtl(string appId)
+    {
+        if (_entries.TryGetValue(appId, out CachedEntry? e))
+        {
+            TimeSpan remaining = e.ExpiresAt - DateTimeOffset.UtcNow;
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+        }
+        return null;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

@@ -16,7 +16,7 @@ public sealed class FeishuToolsFactory(
     /// 返回所有可用飞书工具的元数据描述（不依赖渠道配置）。
     /// </summary>
     public static IReadOnlyList<(string Name, string Description)> GetToolDescriptions() =>
-        [.. FeishuDocTools.GetToolDescriptions(), .. FeishuBitableTools.GetToolDescriptions(), .. FeishuWikiTools.GetToolDescriptions()];
+        [.. FeishuDocTools.GetToolDescriptions(), .. FeishuBitableTools.GetToolDescriptions(), .. FeishuWikiTools.GetToolDescriptions(), .. FeishuCalendarTools.GetToolDescriptions(), .. FeishuApprovalTools.GetToolDescriptions()];
 
     /// <summary>
     /// 使用第一个已启用飞书渠道的凭据创建工具实例列表。
@@ -42,6 +42,6 @@ public sealed class FeishuToolsFactory(
             return [];
         }
 
-        return [.. FeishuDocTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateWriteTools(settings, logger), .. FeishuWikiTools.CreateTools(settings, logger)];
+        return [.. FeishuDocTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateWriteTools(settings, logger), .. FeishuWikiTools.CreateTools(settings, logger), .. FeishuCalendarTools.CreateTools(settings, logger), .. FeishuApprovalTools.CreateTools(settings, logger)];
     }
 }

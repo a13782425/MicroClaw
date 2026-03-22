@@ -51,6 +51,13 @@ public static class FeishuWikiTools
                             return (object)new { success = false, error = "Space ID 格式不正确，只允许字母、数字、下划线和横线。" };
                         }
 
+                        // F-G-3: 白名单校验（配置非空时才限制）
+                        if (settings.AllowedWikiSpaceIds.Length > 0 &&
+                            !settings.AllowedWikiSpaceIds.Contains(spaceId, StringComparer.Ordinal))
+                        {
+                            return (object)new { success = false, error = "该知识库 Space ID 不在渠道允许的白名单内，Agent 无权搜索此知识库。" };
+                        }
+
                         // 3. 关键词非空校验
                         if (string.IsNullOrWhiteSpace(keyword))
                         {

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using MicroClaw.Gateway.Contracts.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -46,6 +47,13 @@ public static class FeishuDocTools
                         if (!IsValidDocToken(docToken))
                         {
                             return (object)new { success = false, error = "文档 Token 格式不正确，只允许字母、数字、下划线和横线。" };
+                        }
+
+                        // F-G-3: 白名单校验（配置非空时才限制）
+                        if (settings.AllowedDocTokens.Length > 0 &&
+                            !settings.AllowedDocTokens.Contains(docToken, StringComparer.Ordinal))
+                        {
+                            return (object)new { success = false, error = "该文档 Token 不在渠道允许的白名单内，Agent 无权访问此文档。" };
                         }
 
                         string? tenantToken = await GetTenantAccessTokenAsync(settings, logger, ct);
@@ -95,6 +103,13 @@ public static class FeishuDocTools
                             return (object)new { success = false, error = "文档 Token 格式不正确，只允许字母、数字、下划线和横线。" };
                         }
 
+                        // F-G-3: 白名单校验（配置非空时才限制）
+                        if (settings.AllowedDocTokens.Length > 0 &&
+                            !settings.AllowedDocTokens.Contains(docToken, StringComparer.Ordinal))
+                        {
+                            return (object)new { success = false, error = "该文档 Token 不在渠道允许的白名单内，Agent 无权写入此文档。" };
+                        }
+
                         if (string.IsNullOrEmpty(content))
                         {
                             return (object)new { success = false, error = "追加内容不能为空。" };
@@ -127,6 +142,34 @@ public static class FeishuDocTools
                 name: "write_feishu_doc",
                 description: "向飞书文档末尾追加内容（支持纯文本段落或代码块）。文档必须对机器人应用有编辑权限。"),
         ];
+    }
+
+    /// <summary>
+    /// F-C-6: 使用指定飞书渠道配置读取文档内容，供 DNA 导入端点复用。
+    /// </summary>
+    /// <returns>成功返回 (true, content, null)；失败返回 (false, null, errorMessage)。</returns>
+    public static async Task<(bool Success, string? Content, string? Error)> ReadDocAsync(
+        FeishuChannelSettings settings,
+        string docUrlOrToken,
+        ILogger logger,
+        CancellationToken ct)
+    {
+        string docToken = ExtractDocToken(docUrlOrToken);
+        if (string.IsNullOrWhiteSpace(docToken))
+            return (false, null, "无法解析文档 Token，请提供有效的飞书文档 URL 或 Token。");
+
+        if (!IsValidDocToken(docToken))
+            return (false, null, "文档 Token 格式不正确，只允许字母、数字、下划线和横线。");
+
+        string? tenantToken = await GetTenantAccessTokenAsync(settings, logger, ct);
+        if (string.IsNullOrWhiteSpace(tenantToken))
+            return (false, null, "获取飞书 Tenant Access Token 失败，请检查渠道 AppId/AppSecret 配置。");
+
+        string? content = await ReadDocumentContentAsync(settings.ApiBaseUrl, docToken, tenantToken, logger, ct);
+        if (content is null)
+            return (false, null, "读取飞书文档内容失败，请确认文档 Token 正确且机器人有访问权限。");
+
+        return (true, content, null);
     }
 
     /// <summary>
@@ -351,4 +394,76 @@ public static class FeishuDocTools
         "yaml" or "yml" => 65,
         _ => 1 // PlainText
     };
+
+    /// <summary>
+    /// F-C-7: 将会话消息增量追加到 <see cref="FeishuChannelSettings.SummaryDocToken"/> 指定的飞书文档。
+    /// 仅追加 <paramref name="fromUtc"/> 之后的非定时任务消息；若无新消息则直接返回成功。
+    /// </summary>
+    /// <param name="settings">已启用的飞书渠道配置（需含有效的 SummaryDocToken/AppId/AppSecret）。</param>
+    /// <param name="sessionTitle">会话标题，用于文档内的分区标题。</param>
+    /// <param name="messages">会话完整消息列表。</param>
+    /// <param name="fromUtc">仅追加该时间戳之后的消息（UTC）。</param>
+    /// <param name="logger">日志器。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>(true, null) 表示成功或无需追加；(false, errorMsg) 表示失败原因。</returns>
+    public static async Task<(bool Success, string? Error)> AppendSessionSummaryAsync(
+        FeishuChannelSettings settings,
+        string sessionTitle,
+        IReadOnlyList<SessionMessage> messages,
+        DateTimeOffset fromUtc,
+        ILogger logger,
+        CancellationToken ct)
+    {
+        string docToken = settings.SummaryDocToken.Trim();
+        if (string.IsNullOrWhiteSpace(docToken) || !IsValidDocToken(docToken))
+            return (false, "SummaryDocToken 未配置或格式无效");
+
+        // 仅追加 fromUtc 之后的新消息（排除定时任务注入的 cron 提示词）
+        var newMessages = messages
+            .Where(m => m.Timestamp > fromUtc
+                     && !string.Equals(m.Source, "cron", StringComparison.Ordinal))
+            .OrderBy(m => m.Timestamp)
+            .ToList();
+
+        if (newMessages.Count == 0)
+            return (true, null); // 无新消息，跳过
+
+        string? tenantToken = await GetTenantAccessTokenAsync(settings, logger, ct);
+        if (string.IsNullOrWhiteSpace(tenantToken))
+            return (false, "获取 Tenant Access Token 失败，请检查 AppId/AppSecret");
+
+        // 构建对话摘要文本
+        var sb = new StringBuilder();
+        string fromStr = fromUtc == DateTimeOffset.MinValue
+            ? "历史"
+            : fromUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm");
+        string toStr = DateTimeOffset.UtcNow.UtcDateTime.ToString("yyyy-MM-dd HH:mm");
+        sb.AppendLine($"--- {sessionTitle} | {fromStr} ~ {toStr} UTC ---");
+        sb.AppendLine();
+
+        foreach (SessionMessage msg in newMessages)
+        {
+            string role = string.Equals(msg.Role, "user", StringComparison.OrdinalIgnoreCase) ? "用户" : "AI";
+            string time = msg.Timestamp.ToLocalTime().ToString("HH:mm");
+            // 多行内容缩进对齐
+            string content = msg.Content.Replace("\n", "\n  ", StringComparison.Ordinal);
+            sb.AppendLine($"[{time}] {role}：{content}");
+        }
+
+        string summaryText = sb.ToString().TrimEnd();
+
+        bool appended = await AppendBlockToDocAsync(
+            settings.ApiBaseUrl, docToken, tenantToken,
+            summaryText, "text", string.Empty, logger, ct);
+
+        if (appended)
+        {
+            logger.LogInformation(
+                "F-C-7 AppendSessionSummaryAsync 成功 docToken={DocToken} session={Session} msgs={Count}",
+                docToken, sessionTitle, newMessages.Count);
+            return (true, null);
+        }
+
+        return (false, "追加内容到飞书文档失败，请确认文档 Token 正确且机器人有编辑权限");
+    }
 }

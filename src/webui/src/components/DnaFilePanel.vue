@@ -2,6 +2,7 @@
   <div class="dna-file-panel">
     <div class="tab-toolbar">
       <el-button type="primary" :icon="Plus" size="small" @click="openNewDialog">新建文件</el-button>
+      <el-button size="small" @click="openFeishuImportDialog">从飞书文档导入</el-button>
       <template v-if="scope !== 'session'">
         <el-button :icon="Download" size="small" :loading="exporting" @click="handleExport">导出 Markdown</el-button>
         <el-button :icon="Upload" size="small" :loading="importing" @click="triggerImport">导入 Markdown</el-button>
@@ -94,6 +95,43 @@
         </el-card>
       </div>
     </el-drawer>
+
+    <!-- ── 从飞书文档导入 Dialog ──────────────────────── -->
+    <el-dialog
+      v-model="feishuImportVisible"
+      title="从飞书文档导入 DNA"
+      width="560px"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="文档 URL/Token" required>
+          <el-input
+            v-model="feishuForm.docUrlOrToken"
+            placeholder="粘贴飞书文档 URL 或文档 Token"
+            clearable
+          />
+          <div class="form-hint">如 https://xxx.feishu.cn/docx/AbCdEF 或直接填写 Token</div>
+        </el-form-item>
+        <el-form-item label="目标文件名" required>
+          <el-input
+            v-model="feishuForm.fileName"
+            placeholder="如 context.md"
+            clearable
+          />
+          <div class="form-hint">保存为 DNA 文件的名称（.md 结尾）</div>
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-input
+            v-model="feishuForm.category"
+            placeholder="如 feishu（可选）"
+            clearable
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="feishuImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="feishuImporting" @click="doFeishuImport">导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -106,6 +144,7 @@ import {
   listGlobalDna, writeGlobalDna, deleteGlobalDna, listGlobalDnaSnapshots, restoreGlobalDnaSnapshot,
   listSessionDna, writeSessionDna, deleteSessionDna, listSessionDnaSnapshots, restoreSessionDnaSnapshot,
   exportAgentDna, importAgentDna, exportGlobalDna, importGlobalDna,
+  importGlobalDnaFromFeishu, importAgentDnaFromFeishu, importSessionDnaFromFeishu,
   type GeneFile, type GeneFileSnapshot,
 } from '@/services/gatewayApi'
 
@@ -315,6 +354,53 @@ async function onImportFileSelected(event: Event) {
     importing.value = false
   }
 }
+// ── 从飞书文档导入 ────────────────────────────────────────────────────────────
+
+const feishuImportVisible = ref(false)
+const feishuImporting = ref(false)
+const feishuForm = ref({ docUrlOrToken: '', fileName: '', category: '' })
+
+function openFeishuImportDialog() {
+  feishuForm.value = { docUrlOrToken: '', fileName: 'feishu-doc.md', category: '' }
+  feishuImportVisible.value = true
+}
+
+async function doFeishuImport() {
+  if (!feishuForm.value.docUrlOrToken.trim()) { ElMessage.warning('请填写飞书文档 URL 或 Token'); return }
+  if (!feishuForm.value.fileName.trim()) { ElMessage.warning('请填写目标文件名'); return }
+  feishuImporting.value = true
+  try {
+    if (props.scope === 'global') {
+      await importGlobalDnaFromFeishu(
+        feishuForm.value.docUrlOrToken.trim(),
+        feishuForm.value.fileName.trim(),
+        feishuForm.value.category.trim()
+      )
+    } else if (props.scope === 'agent') {
+      if (!props.scopeId) { ElMessage.warning('请先选择 Agent'); return }
+      await importAgentDnaFromFeishu(
+        props.scopeId,
+        feishuForm.value.docUrlOrToken.trim(),
+        feishuForm.value.fileName.trim(),
+        feishuForm.value.category.trim()
+      )
+    } else {
+      if (!props.scopeId) { ElMessage.warning('请先选择会话'); return }
+      await importSessionDnaFromFeishu(
+        props.scopeId,
+        feishuForm.value.docUrlOrToken.trim(),
+        feishuForm.value.fileName.trim(),
+        feishuForm.value.category.trim()
+      )
+    }
+    ElMessage.success(`「${feishuForm.value.fileName}」导入成功`)
+    feishuImportVisible.value = false
+    await loadFiles()
+  } finally {
+    feishuImporting.value = false
+  }
+}
+
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 function truncate(str: string, len: number) {

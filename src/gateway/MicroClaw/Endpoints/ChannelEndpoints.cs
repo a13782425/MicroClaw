@@ -142,6 +142,82 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
+        // F-F-2: 渠道健康检查端点
+        endpoints.MapGet("/channels/{id}/health", (
+            string id,
+            ChannelConfigStore store,
+            FeishuWebSocketManager? wsManager = null,
+            FeishuTokenCache? tokenCache = null,
+            FeishuChannelHealthStore? healthStore = null) =>
+        {
+            ChannelConfig? config = store.GetById(id);
+            if (config is null)
+                return ApiErrors.NotFound($"Channel '{id}' not found.");
+
+            // 非飞书渠道只返回基础状态
+            if (config.ChannelType != ChannelType.Feishu)
+                return Results.Ok(new { ChannelId = id, ChannelType = config.ChannelType.ToString(), Status = "ok" });
+
+            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingsJson);
+            string connectionMode = settings?.ConnectionMode ?? "webhook";
+
+            string connectionStatus;
+            if (!config.IsEnabled)
+                connectionStatus = "disabled";
+            else if (string.Equals(connectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
+                connectionStatus = wsManager?.GetConnectionStatus(id) ?? "unknown";
+            else
+                connectionStatus = "webhook"; // Webhook 模式无长连接状态
+
+            TimeSpan? tokenTtl = settings?.AppId is not null
+                ? tokenCache?.GetRemainingTtl(settings.AppId)
+                : null;
+
+            var (lastAt, lastSuccess, lastError) = healthStore is not null
+                ? healthStore.GetLastMessage(id)
+                : ((DateTimeOffset?)null, (bool?)null, (string?)null);
+
+            return Results.Ok(new
+            {
+                ChannelId = id,
+                ConnectionMode = connectionMode,
+                ConnectionStatus = connectionStatus,
+                TokenRemainingSeconds = tokenTtl.HasValue ? (long?)Math.Round(tokenTtl.Value.TotalSeconds) : null,
+                LastMessageAt = lastAt,
+                LastMessageSuccess = lastSuccess,
+                LastMessageError = lastError
+            });
+        })
+        .WithTags("Channels");
+
+        // F-F-3: 渠道错误事件统计端点
+        endpoints.MapGet("/channels/{id}/stats", (
+            string id,
+            ChannelConfigStore store,
+            FeishuChannelStatsService? statsService = null) =>
+        {
+            ChannelConfig? config = store.GetById(id);
+            if (config is null)
+                return ApiErrors.NotFound($"Channel '{id}' not found.");
+
+            // 非飞书渠道只返回基础状态
+            if (config.ChannelType != ChannelType.Feishu)
+                return Results.Ok(new { ChannelId = id, ChannelType = config.ChannelType.ToString(), Status = "ok" });
+
+            var (sigFail, aiFail, replyFail) = statsService is not null
+                ? statsService.GetStats(id)
+                : (0L, 0L, 0L);
+
+            return Results.Ok(new
+            {
+                ChannelId = id,
+                SignatureFailures = sigFail,
+                AiCallFailures = aiFail,
+                ReplyFailures = replyFail
+            });
+        })
+        .WithTags("Channels");
+
         return endpoints;
     }
 
@@ -155,6 +231,9 @@ public static class ChannelEndpoints
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook");
+            // F-F-3: 从 DI 容器解析统计服务（可选，未注册时为 null）
+            FeishuChannelStatsService? statsService =
+                context.RequestServices.GetService(typeof(FeishuChannelStatsService)) as FeishuChannelStatsService;
             logger.LogInformation("收到飞书 Webhook 请求 channelId={ChannelId}", channelId);
 
             ChannelConfig? config = store.GetById(channelId);
@@ -187,12 +266,16 @@ public static class ChannelEndpoints
                 {
                     logger.LogWarning("飞书 Webhook 时间戳过期或无效 channelId={ChannelId} timestamp={Timestamp}",
                         channelId, timestamp);
+                    // F-F-3: 签名验证失败计数
+                    statsService?.IncrementSignatureFailure(channelId);
                     return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
                 }
 
                 if (!FeishuChannel.VerifyWebhookSignature(timestamp, nonce, settings.EncryptKey, body, signature))
                 {
                     logger.LogWarning("飞书 Webhook 签名验证失败 channelId={ChannelId}", channelId);
+                    // F-F-3: 签名验证失败计数
+                    statsService?.IncrementSignatureFailure(channelId);
                     return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
                 }
             }

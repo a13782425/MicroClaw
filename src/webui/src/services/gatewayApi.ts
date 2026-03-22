@@ -150,6 +150,12 @@ export type FeishuChannelSettings = {
   verificationToken: string
   connectionMode: 'websocket' | 'webhook'
   apiBaseUrl?: string
+  /** F-G-3: 允许 Agent 访问的文档 Token 白名单（逗号分隔字符串，空表示不限制） */
+  allowedDocTokens?: string
+  /** F-G-3: 允许 Agent 访问的多维表格 App Token 白名单（逗号分隔字符串，空表示不限制） */
+  allowedBitableTokens?: string
+  /** F-G-3: 允许 Agent 访问的知识库 Space ID 白名单（逗号分隔字符串，空表示不限制） */
+  allowedWikiSpaceIds?: string
 }
 
 export type ChannelConfig = {
@@ -201,6 +207,8 @@ export type ChannelTestResult = {
   success: boolean
   message: string
   latencyMs: number
+  /** F-E-3: Webhook 模式下探测到内网环境时的建议提示，null 表示无提示 */
+  connectivityHint?: string
 }
 
 export async function testChannel(id: string): Promise<ChannelTestResult> {
@@ -215,6 +223,33 @@ export type ChannelPublishRequest = {
 
 export async function publishChannelMessage(id: string, req: ChannelPublishRequest): Promise<void> {
   await axios.post(`/api/channels/${id}/publish`, req)
+}
+
+export type ChannelStats = {
+  channelId: string
+  signatureFailures: number
+  aiCallFailures: number
+  replyFailures: number
+}
+
+export async function getChannelStats(id: string): Promise<ChannelStats> {
+  const { data } = await axios.get<ChannelStats>(`/api/channels/${id}/stats`)
+  return data
+}
+
+export type ChannelHealth = {
+  channelId: string
+  connectionMode: string
+  connectionStatus: string
+  tokenRemainingSeconds: number | null
+  lastMessageAt: string | null
+  lastMessageSuccess: boolean | null
+  lastMessageError: string | null
+}
+
+export async function getChannelHealth(id: string): Promise<ChannelHealth> {
+  const { data } = await axios.get<ChannelHealth>(`/api/channels/${id}/health`)
+  return data
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
@@ -791,7 +826,54 @@ export async function importGlobalDna(content: string): Promise<DnaImportRespons
   return data
 }
 
-// ─── 会话 DNA（三层架构第三层）──────────────────────────────────────────────────
+// ─── DNA 从飞书文档导入（F-C-6）──────────────────────────────────────────────
+
+export type FeishuDocImportResult = {
+  success: boolean
+  file: GeneFile
+  charCount: number
+}
+
+export async function importGlobalDnaFromFeishu(
+  docUrlOrToken: string,
+  fileName: string,
+  category = ''
+): Promise<FeishuDocImportResult> {
+  const { data } = await axios.post<FeishuDocImportResult>('/api/dna/import-from-feishu', {
+    docUrlOrToken,
+    fileName,
+    category,
+  })
+  return data
+}
+
+export async function importAgentDnaFromFeishu(
+  agentId: string,
+  docUrlOrToken: string,
+  fileName: string,
+  category = ''
+): Promise<FeishuDocImportResult> {
+  const { data } = await axios.post<FeishuDocImportResult>(
+    `/api/agents/${agentId}/dna/import-from-feishu`,
+    { docUrlOrToken, fileName, category }
+  )
+  return data
+}
+
+export async function importSessionDnaFromFeishu(
+  sessionId: string,
+  docUrlOrToken: string,
+  fileName: string,
+  category = ''
+): Promise<FeishuDocImportResult> {
+  const { data } = await axios.post<FeishuDocImportResult>(
+    `/api/sessions/${sessionId}/dna/import-from-feishu`,
+    { docUrlOrToken, fileName, category }
+  )
+  return data
+}
+
+
 
 export async function listSessionDna(sessionId: string): Promise<GeneFile[]> {
   const { data } = await axios.get<GeneFile[]>(`/api/sessions/${sessionId}/dna`)

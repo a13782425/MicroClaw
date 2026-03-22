@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     ChatMessage: typeof import('./src/components/ChatMessage.vue')['default']
     DnaFilePanel: typeof import('./src/components/DnaFilePanel.vue')['default']
+    ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
