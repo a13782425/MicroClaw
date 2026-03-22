@@ -12,6 +12,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<CronJobRunLogEntity> CronJobRunLogs => Set<CronJobRunLogEntity>();
     public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
+    public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -133,6 +134,26 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.OutputPricePerMToken).HasColumnName("output_price_per_m_token").IsRequired(false);
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.HasIndex(e => e.CreatedAtUtc).HasDatabaseName("ix_usages_created_at_utc");
+        });
+
+        // F-D-1: 渠道消息失败重试队列
+        modelBuilder.Entity<ChannelRetryQueueEntity>(b =>
+        {
+            b.ToTable("channel_retry_queue");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.ChannelType).HasColumnName("channel_type").HasMaxLength(32);
+            b.Property(e => e.ChannelId).HasColumnName("channel_id").HasMaxLength(64);
+            b.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64);
+            b.Property(e => e.MessageId).HasColumnName("message_id").HasMaxLength(128);
+            b.Property(e => e.UserText).HasColumnName("user_text");
+            b.Property(e => e.RetryCount).HasColumnName("retry_count").HasDefaultValue(0);
+            b.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
+            b.Property(e => e.NextRetryAt).HasColumnName("next_retry_at");
+            b.Property(e => e.CreatedAt).HasColumnName("created_at");
+            b.Property(e => e.LastErrorMessage).HasColumnName("last_error_message");
+            b.HasIndex(e => e.Status).HasDatabaseName("ix_channel_retry_queue_status");
+            b.HasIndex(e => e.MessageId).HasDatabaseName("ix_channel_retry_queue_message_id").IsUnique();
         });
     }
 }

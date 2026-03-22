@@ -19,7 +19,9 @@ public sealed class FeishuWebSocketManager(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IChannelSessionService sessionService,
-    ILoggerFactory loggerFactory) : BackgroundService
+    ILoggerFactory loggerFactory,
+    FeishuTokenCache? tokenCache = null,
+    IAgentMessageHandler? agentHandler = null) : BackgroundService
 {
     private readonly ILogger<FeishuWebSocketManager> _logger = loggerFactory.CreateLogger<FeishuWebSocketManager>();
     private readonly ConcurrentDictionary<string, ChannelConnection> _connections = new();
@@ -100,45 +102,22 @@ public sealed class FeishuWebSocketManager(
 
         try
         {
-            // 构建独立 ServiceProvider，包含 SDK + WebSocket + 事件处理器
-            ServiceCollection services = new();
-
-            // 注册 SDK
-            services.AddFeishuNetSdk(
-                appId: settings.AppId,
-                appSecret: settings.AppSecret,
-                encryptKey: settings.EncryptKey,
-                verificationToken: settings.VerificationToken);
-
-            // 注册 WebSocket 长连接
-            services.AddFeishuWebSocket();
-
-            // 注册渠道上下文（每个子容器独立）
-            services.AddSingleton(new FeishuChannelContext(channel, settings));
-
-            // 共享主容器的 Processor（其中需要 ProviderConfigStore 和 ProviderClientFactory）
-            services.AddSingleton(providerStore);
-            services.AddSingleton(clientFactory);
-            services.AddSingleton(sessionService);
-            services.AddSingleton<FeishuMessageProcessor>();
-
-            // 共享主容器的日志工厂
-            services.AddSingleton(loggerFactory);
-            services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
-
-            // 注册事件处理器（SDK 通过反射发现）
-            services.AddScoped<IEventHandler<EventV2Dto<FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>, FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>, FeishuMessageEventHandler>();
-
-            ServiceProvider sp = services.BuildServiceProvider();
+            ServiceProvider sp = BuildChannelServiceProvider(channel, settings);
 
             // 获取 SDK 注册的 IHostedService（WssService）并启动
-            IEnumerable<IHostedService> hostedServices = sp.GetServices<IHostedService>();
+            IHostedService[] hostedServices = sp.GetServices<IHostedService>().ToArray();
             foreach (IHostedService svc in hostedServices)
             {
                 await svc.StartAsync(ct);
             }
 
-            _connections[channel.Id] = new ChannelConnection(sp, hostedServices.ToArray());
+            // F-D-4: 每条连接启动专属监控任务，WssService 停止时立即触发指数退避重连
+            CancellationTokenSource monitorCts = new();
+            Task monitorTask = Task.Run(
+                () => MonitorConnectionAsync(channel, settings, hostedServices, monitorCts.Token),
+                CancellationToken.None);
+
+            _connections[channel.Id] = new ChannelConnection(sp, hostedServices, monitorCts);
 
             _logger.LogInformation("飞书 WebSocket 已连接 channel={ChannelId}", channel.Id);
         }
@@ -148,11 +127,158 @@ public sealed class FeishuWebSocketManager(
         }
     }
 
+    /// <summary>
+    /// F-D-4: 监控指定渠道的 WssService 生命周期。
+    /// 若 WssService 意外停止（非主动关闭），则使用指数退避（5s→10s→20s→40s→60s 封顶）立即触发重连。
+    /// </summary>
+    private async Task MonitorConnectionAsync(
+        ChannelConfig channel, FeishuChannelSettings settings,
+        IHostedService[] hostedServices, CancellationToken monitorCt)
+    {
+        // 找到 SDK 的 WssService（BackgroundService），监听其 ExecuteTask
+        Task? wssTask = hostedServices
+            .OfType<BackgroundService>()
+            .Select(bs => bs.ExecuteTask)
+            .FirstOrDefault(t => t is not null);
+
+        if (wssTask is not null)
+        {
+            try { await wssTask.WaitAsync(monitorCt); }
+            catch (OperationCanceledException) { return; } // 主动停止，退出监控
+            catch (Exception ex)
+            {
+                // WssService 自身抛异常（真实故障），记录后继续走重连逻辑
+                _logger.LogError(ex, "WssService 异常退出 channel={ChannelId}", channel.Id);
+            }
+
+            // ExecuteTask 正常完成：SDK（WatsonWsClient）在内部线程维持连接，
+            // 不代表断线，在此等待主动停止即可，由 SDK 自行负责重连。
+            if (wssTask.IsCompletedSuccessfully)
+            {
+                try { await Task.Delay(Timeout.Infinite, monitorCt); }
+                catch (OperationCanceledException) { }
+                return;
+            }
+        }
+        else
+        {
+            // 无法取得 ExecuteTask → 回退到轮询，每 5 秒检查一次连接是否仍在字典中
+            try { await Task.Delay(Timeout.Infinite, monitorCt); }
+            catch (OperationCanceledException) { return; }
+        }
+
+        if (monitorCt.IsCancellationRequested) return; // 主动停止期间不触发重连
+
+        _logger.LogWarning("飞书 WebSocket 断线 channel={ChannelId}，准备重连", channel.Id);
+
+        // 从字典移除旧连接（避免 SyncChannels 认为连接正常）
+        if (_connections.TryRemove(channel.Id, out ChannelConnection? old))
+        {
+            old.MonitorCts.Cancel();
+            try
+            {
+                foreach (IHostedService svc in old.HostedServices)
+                    await svc.StopAsync(CancellationToken.None);
+                await old.ServiceProvider.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "释放断线连接资源异常 channel={ChannelId}", channel.Id);
+            }
+        }
+
+        // 指数退避重连：5s → 10s → 20s → 40s → 60s（封顶），最多不限次
+        int delaySeconds = 5;
+        while (!monitorCt.IsCancellationRequested)
+        {
+            _logger.LogInformation("飞书 WebSocket 重连等待 {Delay}s channel={ChannelId}", delaySeconds, channel.Id);
+            try { await Task.Delay(TimeSpan.FromSeconds(delaySeconds), monitorCt); }
+            catch (OperationCanceledException) { return; }
+
+            delaySeconds = Math.Min(delaySeconds * 2, 60);
+
+            // 如果配置已变更（禁用或切换模式），不再重连
+            ChannelConfig? current = channelStore.GetByType(ChannelType.Feishu)
+                .FirstOrDefault(c => c.Id == channel.Id);
+            if (current is null || !current.IsEnabled) return;
+            FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingsJson);
+            if (currentSettings is null ||
+                !string.Equals(currentSettings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // 已由别的路径重连成功，退出
+            if (_connections.ContainsKey(channel.Id)) return;
+
+            try
+            {
+                await StartConnectionAsync(current, currentSettings, monitorCt);
+                _logger.LogInformation("飞书 WebSocket 重连成功 channel={ChannelId}", channel.Id);
+                return; // StartConnectionAsync 内部已启动新的 MonitorTask，本 Task 退出
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "飞书 WebSocket 重连失败 channel={ChannelId}，{Delay}s 后重试",
+                    channel.Id, delaySeconds);
+            }
+        }
+    }
+
+    /// <summary>构建渠道独立 ServiceProvider，包含 SDK、WebSocket、事件处理器。</summary>
+    private ServiceProvider BuildChannelServiceProvider(ChannelConfig channel, FeishuChannelSettings settings)
+    {
+        ServiceCollection services = new();
+
+        // F-E-1: 支持配置化 API Base URL
+        Action<HttpClient>? configureHttpClient = null;
+        if (!string.IsNullOrWhiteSpace(settings.ApiBaseUrl)
+            && !settings.ApiBaseUrl.Equals("https://open.feishu.cn", StringComparison.OrdinalIgnoreCase))
+        {
+            string baseUrl = settings.ApiBaseUrl.TrimEnd('/');
+            configureHttpClient = client => client.BaseAddress = new Uri(baseUrl);
+        }
+
+        // 注册 SDK
+        services.AddFeishuNetSdk(
+            appId: settings.AppId,
+            appSecret: settings.AppSecret,
+            encryptKey: settings.EncryptKey,
+            verificationToken: settings.VerificationToken,
+            httpClientOptions: configureHttpClient);
+
+        // 注册 WebSocket 长连接
+        services.AddFeishuWebSocket();
+
+        // 注册渠道上下文（每个子容器独立）
+        services.AddSingleton(new FeishuChannelContext(channel, settings));
+
+        // 共享主容器的 Processor（其中需要 ProviderConfigStore 和 ProviderClientFactory）
+        services.AddSingleton(providerStore);
+        services.AddSingleton(clientFactory);
+        services.AddSingleton(sessionService);
+        // F-D-3: 共享 Token 缓存（子容器的 FeishuMessageProcessor 也能复用 Token）
+        if (tokenCache is not null) services.AddSingleton(tokenCache);
+        // 共享主容器的 Agent 消息处理器，使子容器的 FeishuMessageProcessor 能路由到 Agent（含工具）
+        if (agentHandler is not null) services.AddSingleton(agentHandler);
+        services.AddSingleton<FeishuMessageProcessor>();
+
+        // 共享主容器的日志工厂
+        services.AddSingleton(loggerFactory);
+        services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+
+        // 注册事件处理器（SDK 通过反射发现）
+        services.AddScoped<IEventHandler<EventV2Dto<FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>, FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>, FeishuMessageEventHandler>();
+
+        return services.BuildServiceProvider();
+    }
+
     private async Task StopConnectionAsync(string channelId)
     {
         if (!_connections.TryRemove(channelId, out ChannelConnection? conn)) return;
 
         _logger.LogInformation("停止飞书 WebSocket 连接 channel={ChannelId}", channelId);
+
+        // F-D-4: 先取消监控任务，防止 StopAsync 期间触发重连
+        conn.MonitorCts.Cancel();
 
         try
         {
@@ -167,6 +293,10 @@ public sealed class FeishuWebSocketManager(
         {
             _logger.LogWarning(ex, "飞书 WebSocket 停止异常 channel={ChannelId}", channelId);
         }
+        finally
+        {
+            conn.MonitorCts.Dispose();
+        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -179,5 +309,8 @@ public sealed class FeishuWebSocketManager(
         await base.StopAsync(cancellationToken);
     }
 
-    private sealed record ChannelConnection(ServiceProvider ServiceProvider, IHostedService[] HostedServices);
+    private sealed record ChannelConnection(
+        ServiceProvider ServiceProvider,
+        IHostedService[] HostedServices,
+        CancellationTokenSource MonitorCts);
 }

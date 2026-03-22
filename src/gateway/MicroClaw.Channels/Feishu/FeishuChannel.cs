@@ -6,20 +6,36 @@ using System.Text.Json.Nodes;
 using MicroClaw.Channels.Models;
 using MicroClaw.Gateway.Contracts;
 using Microsoft.Extensions.Logging;
-
 namespace MicroClaw.Channels.Feishu;
 
 public sealed class FeishuChannel(
     FeishuMessageProcessor processor,
+    ChannelConfigStore configStore,
     ILogger<FeishuChannel> logger) : IChannel
 {
     public string Name => "Feishu";
 
     public ChannelType Type => ChannelType.Feishu;
 
-    public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// F-A-1: 主动发送消息到飞书用户或群聊。
+    /// <para><see cref="ChannelMessage.UserId"/> 填写目标的 open_id（ou_ 前缀）或 chat_id（oc_ 前缀）。</para>
+    /// <para>使用数据库中第一个已启用的飞书渠道配置的凭据发送消息。</para>
+    /// </summary>
+    public async Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
-        return Task.CompletedTask;
+        ChannelConfig? channelConfig = configStore
+            .GetByType(ChannelType.Feishu)
+            .FirstOrDefault(c => c.IsEnabled);
+
+        if (channelConfig is null)
+        {
+            logger.LogWarning("F-A-1 PublishAsync 跳过：未找到已启用的飞书渠道配置");
+            return;
+        }
+
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channelConfig.SettingsJson) ?? new();
+        await processor.SendMessageAsync(message.UserId, message.Content, settings, cancellationToken);
     }
 
     public async Task<string?> HandleWebhookAsync(string body, ChannelConfig channelConfig, CancellationToken ct = default)
@@ -51,9 +67,25 @@ public sealed class FeishuChannel(
                 string chatId = callback.Event.Message.ChatId;
                 string messageId = callback.Event.Message.MessageId;
 
+                // F-F-1: 全链路追踪 — Webhook 接收步骤
+                string traceId = messageId.Length >= 8 ? messageId[..8] : messageId;
+                logger.LogInformation(
+                    "[{TraceId}] Webhook 接收 channel={ChannelId} from={SenderId} messageId={MessageId}",
+                    traceId, channelConfig.Id, senderId, messageId);
+
+                // F-B-1: 提取 chatType 和被 @ 的 open_id 列表
+                string chatType = callback.Event.Message.ChatType ?? "p2p";
+                IReadOnlyList<string> mentionedOpenIds = callback.Event.Message.Mentions is { Length: > 0 }
+                    ? callback.Event.Message.Mentions
+                        .Select(m => m.Id?.OpenId)
+                        .OfType<string>()
+                        .ToList()
+                    : [];
+
                 // 异步处理消息，不阻塞飞书回调
                 _ = Task.Run(() => processor.ProcessMessageAsync(
-                    userText, senderId, chatId, messageId, channelConfig, settings, ct: CancellationToken.None));
+                    userText, senderId, chatId, messageId, channelConfig, settings,
+                    chatType, mentionedOpenIds, ct: CancellationToken.None));
             }
         }
 
@@ -78,7 +110,7 @@ public sealed class FeishuChannel(
             using var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
             using var response = await client.PostAsync(
-                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                $"{settings.ApiBaseUrl.TrimEnd('/')}/open-apis/auth/v3/tenant_access_token/internal",
                 content, cancellationToken);
             sw.Stop();
 

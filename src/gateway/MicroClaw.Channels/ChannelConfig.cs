@@ -26,6 +26,30 @@ public sealed record FeishuChannelSettings
     [JsonPropertyName("webhookTimestampToleranceSeconds")]
     public int WebhookTimestampToleranceSeconds { get; init; } = 300;
 
+    /// <summary>
+    /// F-B-1: 机器人自身的 open_id（ou_ 前缀）。
+    /// 配置后，群聊消息只有 @本机器人 时才会响应；留空则响应群内所有 @mention 消息。
+    /// </summary>
+    [JsonPropertyName("botOpenId")]
+    public string BotOpenId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// F-B-2: 群聊会话隔离模式。
+    /// <list type="bullet">
+    /// <item><term>shared</term><description>（默认）群内所有成员共享同一会话上下文。</description></item>
+    /// <item><term>isolated</term><description>群内每个成员保持独立的私人上下文，与单聊相同。</description></item>
+    /// </list>
+    /// </summary>
+    [JsonPropertyName("groupChatSessionMode")]
+    public string GroupChatSessionMode { get; init; } = "shared";
+
+    /// <summary>
+    /// F-E-1: 飞书 API Base URL，默认为 https://open.feishu.cn。
+    /// 支持私有化部署或代理场景，消除硬编码。
+    /// </summary>
+    [JsonPropertyName("apiBaseUrl")]
+    public string ApiBaseUrl { get; init; } = "https://open.feishu.cn";
+
     public static FeishuChannelSettings? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;

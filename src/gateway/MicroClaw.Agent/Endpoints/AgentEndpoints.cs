@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Channels.Feishu;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
@@ -238,6 +239,40 @@ public static class AgentEndpoints
                     name = t.Name,
                     description = t.Description,
                     isEnabled = cronGroupEnabled && (cronCfg is null || !cronCfg.DisabledToolNames.Contains(t.Name))
+                }).ToList()
+            });
+
+            // ── 内置分组：subagent + DNA ────────────────────────────────────
+            ToolGroupConfig? subagentCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "subagent");
+            bool subagentGroupEnabled = subagentCfg is null || subagentCfg.IsEnabled;
+            groups.Add(new
+            {
+                id = "subagent",
+                name = "子代理 & DNA",
+                type = "builtin",
+                isEnabled = subagentGroupEnabled,
+                tools = SubAgentTools.GetToolDescriptions().Select(t => new
+                {
+                    name = t.Name,
+                    description = t.Description,
+                    isEnabled = subagentGroupEnabled && (subagentCfg is null || !subagentCfg.DisabledToolNames.Contains(t.Name))
+                }).ToList()
+            });
+
+            // ── 内置分组：feishu ────────────────────────────────────────────
+            ToolGroupConfig? feishuCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "feishu");
+            bool feishuGroupEnabled = feishuCfg is null || feishuCfg.IsEnabled;
+            groups.Add(new
+            {
+                id = "feishu",
+                name = "飞书",
+                type = "builtin",
+                isEnabled = feishuGroupEnabled,
+                tools = FeishuToolsFactory.GetToolDescriptions().Select(t => new
+                {
+                    name = t.Name,
+                    description = t.Description,
+                    isEnabled = feishuGroupEnabled && (feishuCfg is null || !feishuCfg.DisabledToolNames.Contains(t.Name))
                 }).ToList()
             });
 

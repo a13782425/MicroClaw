@@ -20,7 +20,9 @@ public sealed class ChannelConfigStoreTests : IDisposable
 
     private static ChannelConfig CreateFeishuConfig(
         string displayName = "Test Feishu",
-        string appSecret = "my-secret-key-12345678") =>
+        string appSecret = "my-secret-key-12345678",
+        string encryptKey = "encrypt-key-1234",
+        string verificationToken = "verify-token-1234") =>
         new()
         {
             DisplayName = displayName,
@@ -31,8 +33,8 @@ public sealed class ChannelConfigStoreTests : IDisposable
             {
                 AppId = "cli_test123",
                 AppSecret = appSecret,
-                EncryptKey = "encrypt-key",
-                VerificationToken = "verify-token",
+                EncryptKey = encryptKey,
+                VerificationToken = verificationToken,
                 ConnectionMode = "websocket"
             })
         };
@@ -150,7 +152,7 @@ public sealed class ChannelConfigStoreTests : IDisposable
         _store.Delete("non-existent").Should().BeFalse();
     }
 
-    // --- Feishu AppSecret Masking ---
+    // --- Feishu Sensitive Fields Masking ---
 
     [Fact]
     public void Update_FeishuWithMaskedSecret_PreservesOriginal()
@@ -161,8 +163,8 @@ public sealed class ChannelConfigStoreTests : IDisposable
         {
             AppId = "cli_test123",
             AppSecret = "***",
-            EncryptKey = "encrypt-key",
-            VerificationToken = "verify-token",
+            EncryptKey = "encrypt-key-1234",
+            VerificationToken = "verify-token-1234",
             ConnectionMode = "websocket"
         });
 
@@ -178,6 +180,50 @@ public sealed class ChannelConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void Update_FeishuWithMaskedEncryptKey_PreservesOriginal()
+    {
+        var added = _store.Add(CreateFeishuConfig(encryptKey: "supersecretencryptkey123"));
+
+        // 模拟前端返回掩码占位符
+        var maskedSettings = JsonSerializer.Serialize(new FeishuChannelSettings
+        {
+            AppId = "cli_test123",
+            AppSecret = "my-secret-key-12345678",
+            EncryptKey = "supe***ey123",
+            VerificationToken = "verify-token-1234",
+            ConnectionMode = "websocket"
+        });
+
+        var incoming = added with { SettingsJson = maskedSettings };
+        var updated = _store.Update(added.Id, incoming);
+
+        var settings = FeishuChannelSettings.TryParse(updated!.SettingsJson);
+        settings!.EncryptKey.Should().Be("supersecretencryptkey123");
+    }
+
+    [Fact]
+    public void Update_FeishuWithMaskedVerificationToken_PreservesOriginal()
+    {
+        var added = _store.Add(CreateFeishuConfig(verificationToken: "supersecretverifytoken123"));
+
+        // 模拟前端返回掩码占位符
+        var maskedSettings = JsonSerializer.Serialize(new FeishuChannelSettings
+        {
+            AppId = "cli_test123",
+            AppSecret = "my-secret-key-12345678",
+            EncryptKey = "encrypt-key-1234",
+            VerificationToken = "supe***en123",
+            ConnectionMode = "websocket"
+        });
+
+        var incoming = added with { SettingsJson = maskedSettings };
+        var updated = _store.Update(added.Id, incoming);
+
+        var settings = FeishuChannelSettings.TryParse(updated!.SettingsJson);
+        settings!.VerificationToken.Should().Be("supersecretverifytoken123");
+    }
+
+    [Fact]
     public void Update_FeishuWithNewSecret_UpdatesIt()
     {
         var added = _store.Add(CreateFeishuConfig(appSecret: "old-secret-key-12345678"));
@@ -186,8 +232,8 @@ public sealed class ChannelConfigStoreTests : IDisposable
         {
             AppId = "cli_test123",
             AppSecret = "brand-new-secret-key1234",
-            EncryptKey = "encrypt-key",
-            VerificationToken = "verify-token",
+            EncryptKey = "encrypt-key-1234",
+            VerificationToken = "verify-token-1234",
             ConnectionMode = "websocket"
         });
 
@@ -238,21 +284,24 @@ public sealed class ChannelConfigStoreTests : IDisposable
     // --- MaskSettingsSecrets ---
 
     [Fact]
-    public void MaskSettingsSecrets_Feishu_MasksAppSecret()
+    public void MaskSettingsSecrets_Feishu_MasksAllSecrets()
     {
         var settingsJson = JsonSerializer.Serialize(new FeishuChannelSettings
         {
             AppId = "cli_test123",
             AppSecret = "supersecretkey12345678",
-            EncryptKey = "encrypt-key"
+            EncryptKey = "encryptkey12345678",
+            VerificationToken = "verifytoken12345678"
         });
 
         var masked = ChannelConfigStore.MaskSettingsSecrets(settingsJson, ChannelType.Feishu);
         var settings = FeishuChannelSettings.TryParse(masked);
 
         settings.Should().NotBeNull();
-        settings!.AppSecret.Should().Be("supe***5678");
-        settings.AppId.Should().Be("cli_test123");
+        settings!.AppId.Should().Be("cli_test123");
+        settings.AppSecret.Should().Be("supe***5678");
+        settings.EncryptKey.Should().Be("encr***5678");
+        settings.VerificationToken.Should().Be("veri***5678");
     }
 
     [Fact]

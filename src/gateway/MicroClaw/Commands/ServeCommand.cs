@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
+using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
@@ -218,6 +219,11 @@ public class ServeCommand : Command
 
 		// Token 用量追踪
 		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();
+
+		// F-D-1: 渠道消息失败重试队列
+		builder.Services.AddSingleton<ChannelRetryQueueService>();
+		builder.Services.AddSingleton<IChannelRetryQueue>(sp => sp.GetRequiredService<ChannelRetryQueueService>());
+		builder.Services.AddHostedService<ChannelRetryJob>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
@@ -226,9 +232,13 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ChannelConfigStore>();
 
 		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
+		builder.Services.AddSingleton<FeishuTokenCache>();
+		builder.Services.AddSingleton<FeishuRateLimiter>();
 		builder.Services.AddSingleton<FeishuMessageProcessor>();
 		builder.Services.AddSingleton<IChannel, FeishuChannel>();
 		builder.Services.AddHostedService<FeishuWebSocketManager>();
+		// F-C-1: 飞书文档读取工具工厂（供 AgentRunner 加载 read_feishu_doc 工具）
+		builder.Services.AddSingleton<FeishuToolsFactory>();
 
 		builder.Services.AddSingleton<IChannel, WeComChannel>();
 		builder.Services.AddSingleton<IChannel, WeChatChannel>();

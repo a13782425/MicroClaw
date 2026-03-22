@@ -83,14 +83,23 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
         FeishuChannelSettings? incoming = DeserializeFeishuSettings(incomingJson);
         if (existing is null || incoming is null) return incomingJson;
 
-        // 如果 AppSecret 是掩码值，保留原始值
-        string appSecret = (string.IsNullOrWhiteSpace(incoming.AppSecret) || incoming.AppSecret == "***")
-            ? existing.AppSecret
-            : incoming.AppSecret;
+        // 如果字段是掩码值，保留原始值
+        string appSecret          = IsMasked(incoming.AppSecret)          ? existing.AppSecret          : incoming.AppSecret;
+        string encryptKey         = IsMasked(incoming.EncryptKey)         ? existing.EncryptKey         : incoming.EncryptKey;
+        string verificationToken  = IsMasked(incoming.VerificationToken)  ? existing.VerificationToken  : incoming.VerificationToken;
 
-        FeishuChannelSettings merged = incoming with { AppSecret = appSecret };
+        FeishuChannelSettings merged = incoming with
+        {
+            AppSecret = appSecret,
+            EncryptKey = encryptKey,
+            VerificationToken = verificationToken
+        };
         return JsonSerializer.Serialize(merged);
     }
+
+    /// <summary>判断字段值是否为掩码占位符（为空或包含 *** 标记）。</summary>
+    private static bool IsMasked(string value) =>
+        string.IsNullOrWhiteSpace(value) || value.Contains("***");
 
     private static FeishuChannelSettings? DeserializeFeishuSettings(string? json) =>
         FeishuChannelSettings.TryParse(json);
@@ -148,7 +157,9 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
 
             FeishuChannelSettings masked = settings with
             {
-                AppSecret = MaskSecret(settings.AppSecret)
+                AppSecret = MaskSecret(settings.AppSecret),
+                EncryptKey = MaskSecret(settings.EncryptKey),
+                VerificationToken = MaskSecret(settings.VerificationToken)
             };
             return JsonSerializer.Serialize(masked);
         }

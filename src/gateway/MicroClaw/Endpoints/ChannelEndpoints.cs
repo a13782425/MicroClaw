@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels.Models;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Gateway.Contracts;
@@ -112,6 +113,32 @@ public static class ChannelEndpoints
 
             ChannelTestResult result = await channel.TestConnectionAsync(config, ct);
             return Results.Ok(result);
+        })
+        .WithTags("Channels");
+
+        endpoints.MapPost("/channels/{id}/publish", async (
+            string id,
+            ChannelPublishRequest req,
+            ChannelConfigStore store,
+            IEnumerable<IChannel> channels,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.TargetId))
+                return ApiErrors.BadRequest("TargetId is required.");
+            if (string.IsNullOrWhiteSpace(req.Content))
+                return ApiErrors.BadRequest("Content is required.");
+
+            ChannelConfig? config = store.GetById(id);
+            if (config is null || !config.IsEnabled)
+                return ApiErrors.NotFound($"Channel '{id}' not found or disabled.");
+
+            IChannel? channel = channels.FirstOrDefault(c => c.Type == config.ChannelType);
+            if (channel is null)
+                return ApiErrors.BadRequest($"未找到类型 '{config.ChannelType}' 的渠道服务实现。");
+
+            ChannelMessage message = new(req.TargetId.Trim(), req.Content, DateTimeOffset.UtcNow);
+            await channel.PublishAsync(message, ct);
+            return Results.Ok();
         })
         .WithTags("Channels");
 
@@ -439,3 +466,5 @@ public sealed record ChannelUpdateRequest(
     string? Settings = null);
 
 public sealed record ChannelDeleteRequest(string Id);
+
+public sealed record ChannelPublishRequest(string TargetId, string Content);

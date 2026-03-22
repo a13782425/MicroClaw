@@ -1,4 +1,5 @@
 ﻿using MicroClaw.Agent.Memory;
+using MicroClaw.Channels.Feishu;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -27,7 +28,8 @@ public sealed class AgentRunner(
     ISubAgentRunner subAgentRunner,
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
-    IAgentStatusNotifier agentStatusNotifier) : IAgentMessageHandler
+    IAgentStatusNotifier agentStatusNotifier,
+    FeishuToolsFactory? feishuToolsFactory = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
 
@@ -95,6 +97,10 @@ public sealed class AgentRunner(
             _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
         }
 
+        // F-C-1: 追加飞书文档工具（全局可用，无需 sessionId，无已启用飞书渠道时自动跳过）
+        if (feishuToolsFactory is not null)
+            allTools.AddRange(feishuToolsFactory.CreateTools());
+
         _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
@@ -157,6 +163,10 @@ public sealed class AgentRunner(
         {
             _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
         }
+
+        // F-C-1: 追加飞书文档工具（全局可用，无需 sessionId，无已启用飞书渠道时自动跳过）
+        if (feishuToolsFactory is not null)
+            allTools.AddRange(feishuToolsFactory.CreateTools());
 
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);

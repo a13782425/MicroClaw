@@ -102,6 +102,80 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("channels", (string)null);
                 });
 
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.ChannelRetryQueueEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ChannelId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("channel_id");
+
+                    b.Property<string>("ChannelType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("channel_type");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_error_message");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("NextRetryAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_retry_at");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("retry_count");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("UserText")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_channel_retry_queue_message_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_channel_retry_queue_status");
+
+                    b.ToTable("channel_retry_queue", (string)null);
+                });
+
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.CronJobEntity", b =>
                 {
                     b.Property<string>("Id")

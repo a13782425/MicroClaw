@@ -59,6 +59,13 @@
               @click="testConnection(c)"
             >测试</el-button>
             <el-divider direction="vertical" />
+            <el-button
+              v-if="c.channelType === 'feishu'"
+              link
+              type="success"
+              @click="openPublishDialog(c)"
+            >发送消息</el-button>
+            <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
             <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
             <el-divider direction="vertical" />
             <el-button link type="danger" :icon="Delete" @click="confirmDelete(c)">删除</el-button>
@@ -82,6 +89,58 @@
         </div>
       </div>
     </div>
+
+    <!-- 发送消息 Dialog -->
+    <el-dialog
+      v-model="publishDialogVisible"
+      title="主动发送消息"
+      width="480px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form
+        ref="publishFormRef"
+        :model="publishForm"
+        :rules="publishRules"
+        label-position="top"
+      >
+        <el-form-item label="目标类型">
+          <el-radio-group v-model="publishForm.targetType" @change="onTargetTypeChange">
+            <el-radio value="user">用户（open_id）</el-radio>
+            <el-radio value="group">群聊（chat_id）</el-radio>
+          </el-radio-group>
+          <div class="form-hint">
+            {{ publishForm.targetType === 'user'
+              ? '填写用户的 open_id，格式以 ou_ 开头' 
+              : '填写群聊的 chat_id，格式以 oc_ 开头' }}
+          </div>
+        </el-form-item>
+
+        <el-form-item
+          :label="publishForm.targetType === 'user' ? 'Open ID' : 'Chat ID'"
+          prop="targetId"
+        >
+          <el-input
+            v-model="publishForm.targetId"
+            :placeholder="publishForm.targetType === 'user' ? 'ou_xxxxxxxxxx' : 'oc_xxxxxxxxxx'"
+          />
+        </el-form-item>
+
+        <el-form-item label="消息内容" prop="content">
+          <el-input
+            v-model="publishForm.content"
+            type="textarea"
+            :rows="5"
+            placeholder="支持纯文本；含 Markdown 代码块、表格、标题时自动转换为飞书卡片格式"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="publishDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="publishSubmitting" @click="submitPublish">发送</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 新增 / 编辑 Dialog -->
     <el-dialog
@@ -167,12 +226,30 @@
             </el-form-item>
 
             <el-form-item v-if="form.feishu.connectionMode === 'webhook'" label="Encrypt Key">
-              <el-input v-model="form.feishu.encryptKey" placeholder="事件订阅的加密密钥（可选）" />
+              <el-input
+                v-model="form.feishu.encryptKey"
+                type="password"
+                show-password
+                :placeholder="isEditing ? '不修改则保留原值，清空后重新输入新密钥' : '事件订阅的加密密钥（可选）'"
+              />
               <div class="form-hint">在飞书开放平台 → 事件订阅 → 加密策略中配置</div>
             </el-form-item>
 
             <el-form-item v-if="form.feishu.connectionMode === 'webhook'" label="Verification Token">
-              <el-input v-model="form.feishu.verificationToken" placeholder="事件订阅的验证 Token（可选）" />
+              <el-input
+                v-model="form.feishu.verificationToken"
+                type="password"
+                show-password
+                :placeholder="isEditing ? '不修改则保留原值，清空后重新输入新 Token' : '事件订阅的验证 Token（可选）'"
+              />
+            </el-form-item>
+
+            <el-form-item label="API Base URL">
+              <el-input
+                v-model="form.feishu.apiBaseUrl"
+                placeholder="https://open.feishu.cn（私有化部署时修改）"
+              />
+              <div class="form-hint">仅私有化部署或使用代理时需要修改，默认使用官方公有云地址</div>
             </el-form-item>
           </div>
         </div>
@@ -199,6 +276,7 @@ import {
   updateChannel,
   deleteChannel,
   testChannel,
+  publishChannelMessage,
   listProviders,
 } from '@/services/gatewayApi'
 import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult } from '@/services/gatewayApi'
@@ -207,6 +285,21 @@ const loading = ref(false)
 const submitting = ref(false)
 const channels = ref<ChannelConfig[]>([])
 const providers = ref<ProviderConfig[]>([])
+
+// ── 发送消息 Dialog ──────────────────────────────────────────────────────────
+const publishDialogVisible = ref(false)
+const publishSubmitting = ref(false)
+const publishingChannelId = ref('')
+const publishFormRef = ref<FormInstance>()
+const publishForm = reactive({
+  targetType: 'user' as 'user' | 'group',
+  targetId: '',
+  content: '',
+})
+const publishRules: FormRules = {
+  targetId: [{ required: true, message: '请输入目标 ID', trigger: 'blur' }],
+  content: [{ required: true, message: '请输入消息内容', trigger: 'blur' }],
+}
 
 type TestState = { loading: boolean } & Partial<ChannelTestResult>
 const testResults = reactive<Record<string, TestState>>({})
@@ -227,6 +320,7 @@ const form = reactive({
     encryptKey: '',
     verificationToken: '',
     connectionMode: 'websocket' as 'websocket' | 'webhook',
+    apiBaseUrl: '',
   },
 })
 
@@ -307,7 +401,7 @@ function resetForm() {
     channelType: 'feishu' as ChannelType,
     providerId: '',
     isEnabled: true,
-    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook' },
+    feishu: { appId: '', appSecret: '', encryptKey: '', verificationToken: '', connectionMode: 'websocket' as 'websocket' | 'webhook', apiBaseUrl: '' },
   })
 }
 
@@ -336,9 +430,10 @@ function openEditDialog(c: ChannelConfig) {
       const parsed = typeof c.settings === 'string' ? JSON.parse(c.settings) : c.settings
       form.feishu.appId = parsed.appId ?? ''
       form.feishu.appSecret = '***' // 编辑时预填掩码值，留原值则保留原有 Secret
-      form.feishu.encryptKey = parsed.encryptKey ?? ''
-      form.feishu.verificationToken = parsed.verificationToken ?? ''
+      form.feishu.encryptKey = parsed.encryptKey ?? ''   // API 返回已掩码值，不改则后端自动保留原值
+      form.feishu.verificationToken = parsed.verificationToken ?? ''  // 同上
       form.feishu.connectionMode = parsed.connectionMode ?? 'websocket'
+      form.feishu.apiBaseUrl = parsed.apiBaseUrl ?? ''
     } catch { /* ignore */ }
   }
 
@@ -350,9 +445,10 @@ function buildSettingsJson(): string {
     return JSON.stringify({
       appId: form.feishu.appId,
       appSecret: form.feishu.appSecret || (isEditing.value ? '***' : ''),
-      encryptKey: form.feishu.encryptKey,
-      verificationToken: form.feishu.verificationToken,
+      encryptKey: form.feishu.encryptKey,       // 如含 *** 后端自动保留原值
+      verificationToken: form.feishu.verificationToken, // 同上
       connectionMode: form.feishu.connectionMode,
+      apiBaseUrl: form.feishu.apiBaseUrl || undefined,
     })
   }
   return '{}'
@@ -428,6 +524,38 @@ async function confirmDelete(c: ChannelConfig) {
     await loadData()
   } catch {
     // 删除失败由全局拦截器展示后端错误信息
+  }
+}
+
+function openPublishDialog(c: ChannelConfig) {
+  publishingChannelId.value = c.id
+  publishForm.targetType = 'user'
+  publishForm.targetId = ''
+  publishForm.content = ''
+  publishDialogVisible.value = true
+}
+
+function onTargetTypeChange() {
+  publishForm.targetId = ''
+}
+
+async function submitPublish() {
+  if (!publishFormRef.value) return
+  const valid = await publishFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  publishSubmitting.value = true
+  try {
+    await publishChannelMessage(publishingChannelId.value, {
+      targetId: publishForm.targetId.trim(),
+      content: publishForm.content,
+    })
+    ElMessage.success('消息已发送')
+    publishDialogVisible.value = false
+  } catch {
+    // 失败由全局拦截器展示后端错误信息
+  } finally {
+    publishSubmitting.value = false
   }
 }
 

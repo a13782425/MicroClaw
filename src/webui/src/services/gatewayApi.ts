@@ -149,6 +149,7 @@ export type FeishuChannelSettings = {
   encryptKey: string
   verificationToken: string
   connectionMode: 'websocket' | 'webhook'
+  apiBaseUrl?: string
 }
 
 export type ChannelConfig = {
@@ -205,6 +206,15 @@ export type ChannelTestResult = {
 export async function testChannel(id: string): Promise<ChannelTestResult> {
   const { data } = await axios.post<ChannelTestResult>(`/api/channels/${id}/test`)
   return data
+}
+
+export type ChannelPublishRequest = {
+  targetId: string
+  content: string
+}
+
+export async function publishChannelMessage(id: string, req: ChannelPublishRequest): Promise<void> {
+  await axios.post(`/api/channels/${id}/publish`, req)
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
