@@ -20,7 +20,7 @@ COPY --from=webui-build /usr/local/bin/node /usr/local/bin/node
 COPY --from=webui-build /usr/local/bin/npm /usr/local/bin/npm
 COPY --from=webui-build /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends bash python3\
+	&& apt-get install -y --no-install-recommends bash python3 \
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY --from=gateway-build /out/gateway/ /app/gateway/
