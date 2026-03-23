@@ -23,8 +23,7 @@ COPY --from=webui-build /src/webui/dist/ /app/webui/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN mkdir -p /app/.microclaw \
 	&& chmod +x /usr/local/bin/entrypoint.sh
-ENV ASPNETCORE_URLS=http://+:8080 \
-	MICROCLAW_CONFIG_FILE=/app/microclaw.json \
+ENV MICROCLAW_HOME=/app/.microclaw \
 	MICROCLAW_WEBUI_PATH=/app/webui
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
