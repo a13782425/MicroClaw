@@ -83,10 +83,11 @@ public sealed class SkillRunner(SkillService skillService, ILogger<SkillRunner> 
     {
         return skillType.ToLowerInvariant() switch
         {
-            "python" => ("python", entryPoint),
-            "nodejs" or "node" => ("node", entryPoint),
-            "shell" or "bash" or "sh" => ("bash", entryPoint),
-            _ => throw new NotSupportedException($"Skill type '{skillType}' is not supported. Supported types: python, nodejs, shell."),
+            "python"                   => ("python",        entryPoint),
+            "nodejs" or "node"         => ("node",          entryPoint),
+            "shell" or "bash" or "sh"  => ("bash",          entryPoint),
+            "csharp" or "cs"           => ("dotnet-script", entryPoint),
+            _ => throw new NotSupportedException($"Skill type '{skillType}' is not supported. Supported types: python, nodejs, shell, csharp."),
         };
     }
 }

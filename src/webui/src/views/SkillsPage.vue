@@ -78,6 +78,14 @@
               <div class="ov-label">创建时间</div>
               <div class="ov-value">{{ formatDate(selectedSkill.createdAtUtc) }}</div>
             </div>
+            <div class="overview-card">
+              <div class="ov-label">模式</div>
+              <div class="ov-value">
+                <el-tag :type="isPlaybookMode ? 'primary' : 'success'" effect="plain">
+                  {{ isPlaybookMode ? 'Playbook' : '脚本' }}
+                </el-tag>
+              </div>
+            </div>
           </div>
           <div class="ov-entry-block">
             <div class="ov-label">入口文件</div>
@@ -86,6 +94,12 @@
           <div v-if="selectedSkill.description" class="ov-desc-block">
             <div class="ov-label">描述</div>
             <pre class="ov-desc">{{ selectedSkill.description }}</pre>
+          </div>
+          <div v-if="declaredTools.length > 0" class="ov-tools-block">
+            <div class="ov-label">声明工具</div>
+            <div class="ov-tools">
+              <el-tag v-for="tool in declaredTools" :key="tool" size="small" class="tool-tag">{{ tool }}</el-tag>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -133,6 +147,7 @@
             <el-option label="Python" value="python" />
             <el-option label="Node.js" value="nodejs" />
             <el-option label="Shell" value="shell" />
+            <el-option label="C#" value="csharp" />
           </el-select>
         </el-form-item>
         <el-form-item label="入口文件" required>
@@ -181,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import {
@@ -206,13 +221,13 @@ async function loadSkills() {
 onMounted(loadSkills)
 
 function skillTypeIcon(type: SkillType): string {
-  const map: Record<SkillType, string> = { python: '🐍', nodejs: '⬡', shell: '⌨' }
+  const map: Record<SkillType, string> = { python: '🐍', nodejs: '⭡', shell: '⌨', csharp: '⚡' }
   return map[type] ?? '📦'
 }
 
-function typeTagType(type: SkillType): 'success' | 'warning' | 'info' {
-  const map: Record<SkillType, 'success' | 'warning' | 'info'> = {
-    python: 'success', nodejs: 'warning', shell: 'info',
+function typeTagType(type: SkillType): 'success' | 'warning' | 'info' | 'primary' {
+  const map: Record<SkillType, 'success' | 'warning' | 'info' | 'primary'> = {
+    python: 'success', nodejs: 'warning', shell: 'info', csharp: 'primary',
   }
   return map[type] ?? 'info'
 }
@@ -228,6 +243,26 @@ function formatSize(bytes: number): string {
 }
 
 // ── 选中 ──────────────────────────────────────────────────────────────────────
+// 概览附加信息
+const isPlaybookMode = computed(() => skillFiles.value.some(f => f.path === 'SKILL.md'))
+const declaredTools = ref<string[]>([])
+
+async function loadOverviewExtras() {
+  if (!selectedSkill.value) return
+  await loadFiles()
+  const hasDeclaredToolsFile = skillFiles.value.some(f => f.path === 'tools.json')
+  if (hasDeclaredToolsFile) {
+    try {
+      const content = await getSkillFileContent(selectedSkill.value.id, 'tools.json')
+      declaredTools.value = JSON.parse(content)
+    } catch {
+      declaredTools.value = []
+    }
+  } else {
+    declaredTools.value = []
+  }
+}
+
 const selectedSkill = ref<SkillConfig | null>(null)
 const activeTab = ref('overview')
 
@@ -236,6 +271,8 @@ function selectSkill(s: SkillConfig) {
     selectedSkill.value = s
     activeTab.value = 'overview'
     skillFiles.value = []
+    declaredTools.value = []
+    loadOverviewExtras()
   }
 }
 
@@ -618,8 +655,20 @@ async function deleteFile(f: SkillFileInfo) {
 }
 
 .ov-entry-block,
-.ov-desc-block {
+.ov-desc-block,
+.ov-tools-block {
   margin-top: 12px;
+}
+
+.ov-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tool-tag {
+  cursor: default;
 }
 
 .ov-entry {

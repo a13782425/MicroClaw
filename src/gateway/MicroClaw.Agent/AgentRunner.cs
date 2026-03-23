@@ -271,7 +271,8 @@ public sealed class AgentRunner(
 
     private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null)
     {
-        string systemPrompt = BuildSystemPrompt(sessionId);
+        string skillContext = skillToolFactory.BuildSkillSystemPromptFragment(agent.BoundSkillIds);
+        string systemPrompt = BuildSystemPrompt(sessionId, skillContext);
         if (!string.IsNullOrEmpty(systemPrompt))
         {
             int promptBytes = System.Text.Encoding.UTF8.GetByteCount(systemPrompt);
@@ -300,16 +301,17 @@ public sealed class AgentRunner(
     /// 构建 System Prompt：Session DNA（SOUL+USER+AGENTS）+ 长期/每日记忆（权重衰减）。
     /// sessionId 为空时返回空字符串（子代理场景，无 Session 上下文）。
     /// </summary>
-    internal string BuildSystemPrompt(string? sessionId)
+    internal string BuildSystemPrompt(string? sessionId, string? skillContext = null)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return string.Empty;
 
         string dnaContext = sessionDnaService.BuildDnaContext(sessionId);
         string memoryContext = memoryService.BuildMemoryContext(sessionId);
 
-        var parts = new List<string>(2);
+        var parts = new List<string>(3);
         if (!string.IsNullOrWhiteSpace(dnaContext)) parts.Add(dnaContext);
         if (!string.IsNullOrWhiteSpace(memoryContext)) parts.Add(memoryContext);
+        if (!string.IsNullOrWhiteSpace(skillContext)) parts.Add(skillContext);
         return string.Join("\n\n", parts);
     }
 

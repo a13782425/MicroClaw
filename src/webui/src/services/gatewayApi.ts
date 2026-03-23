@@ -559,7 +559,7 @@ export async function switchSessionProvider(
 
 // ─── Skills ───────────────────────────────────────────────────────────────────
 
-export type SkillType = 'python' | 'nodejs' | 'shell'
+export type SkillType = 'python' | 'nodejs' | 'shell' | 'csharp'
 
 export type SkillConfig = {
   id: string
@@ -836,5 +836,17 @@ export async function testMcpServer(id: string): Promise<McpTestResult> {
 
 export async function listMcpServerTools(id: string): Promise<McpToolInfo[]> {
   const { data } = await axios.get<McpToolInfo[]>(`/api/mcp-servers/${id}/tools`)
+  return data
+}
+
+// ── 全局工具目录（内置 + MCP）────────────────────────────────────────────────
+
+/** GET /api/tools 返回的分组，比 Agent 级别 ToolGroup 多一个 loadError 字段 */
+export type GlobalToolGroup = ToolGroup & {
+  loadError?: boolean
+}
+
+export async function listAllTools(): Promise<GlobalToolGroup[]> {
+  const { data } = await axios.get<GlobalToolGroup[]>('/api/tools')
   return data
 }

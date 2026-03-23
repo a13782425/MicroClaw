@@ -67,6 +67,27 @@ public sealed class SkillService(string workspaceRoot)
             Directory.Delete(dir, recursive: true);
     }
 
+    /// <summary>读取 SKILL.md 内容；若不存在返回 null。</summary>
+    public string? GetSkillMd(string skillId) => GetFile(skillId, "SKILL.md");
+
+    /// <summary>检查技能是否为 Playbook 模式（有 SKILL.md）。</summary>
+    public bool IsPlaybookMode(string skillId) => GetSkillMd(skillId) is not null;
+
+    /// <summary>读取 tools.json 声明的工具名列表；若不存在或格式错误返回空列表。</summary>
+    public IReadOnlyList<string> GetDeclaredTools(string skillId)
+    {
+        string? json = GetFile(skillId, "tools.json");
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     /// <summary>解析并验证安全路径，阻止路径穿越攻击。若非法则返回 null。</summary>
     private string? ResolveSafePath(string skillId, string fileName)
     {

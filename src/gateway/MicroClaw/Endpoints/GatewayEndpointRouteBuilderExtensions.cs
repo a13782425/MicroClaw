@@ -25,6 +25,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapSkillEndpoints();
 		protectedApi.MapUsageEndpoints();
 		protectedApi.MapMcpEndpoints();
+		protectedApi.MapToolsEndpoints();
 
 		return endpoints;
 	}
