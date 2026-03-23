@@ -15,9 +15,14 @@ RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS all-in-one
 WORKDIR /app
+# 从 webui-build 阶段复制 Node.js（避免重复安装，版本与构建阶段一致）
+COPY --from=webui-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=webui-build /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=webui-build /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends bash \
+	&& apt-get install -y --no-install-recommends bash python3\
 	&& rm -rf /var/lib/apt/lists/*
+
 COPY --from=gateway-build /out/gateway/ /app/gateway/
 COPY --from=webui-build /src/webui/dist/ /app/webui/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
