@@ -12,7 +12,7 @@ using ModelContextProtocol.Client;
 namespace MicroClaw.Agent.Endpoints;
 
 /// <summary>
-/// Agent REST API 端点：Agent CRUD、DNA 基因文件管理、MCP 工具列表、流式对话。
+/// Agent REST API 端点：Agent CRUD、MCP Server 引用管理、工具列表、流式对话。
 /// </summary>
 public static class AgentEndpoints
 {
@@ -44,10 +44,10 @@ public static class AgentEndpoints
             AgentConfig config = new(
                 Id: string.Empty,
                 Name: req.Name.Trim(),
-                SystemPrompt: req.SystemPrompt ?? string.Empty,
+                Description: req.Description ?? string.Empty,
                 IsEnabled: req.IsEnabled,
                 BoundSkillIds: req.BoundSkillIds ?? [],
-                McpServers: req.McpServers ?? [],
+                EnabledMcpServerIds: req.EnabledMcpServerIds ?? [],
                 ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow,
                 ContextWindowMessages: req.ContextWindowMessages);
@@ -76,10 +76,10 @@ public static class AgentEndpoints
             AgentConfig updated = existing with
             {
                 Name = req.Name?.Trim() ?? existing.Name,
-                SystemPrompt = req.SystemPrompt ?? existing.SystemPrompt,
+                Description = req.Description ?? existing.Description,
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
                 BoundSkillIds = req.BoundSkillIds ?? existing.BoundSkillIds,
-                McpServers = req.McpServers ?? existing.McpServers,
+                EnabledMcpServerIds = req.EnabledMcpServerIds ?? existing.EnabledMcpServerIds,
                 ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
             };
 
@@ -113,111 +113,43 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        // ── DNA 基因文件管理 ─────────────────────────────────────────────────
+        // ── 全局 MCP Server 引用管理 ────────────────────────────────────────────────────────────────────────────
 
-        endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, DNAService dna) =>
+        endpoints.MapGet("/agents/{id}/mcp-servers", (string id, AgentStore store) =>
         {
-            if (store.GetById(id) is null)
+            AgentConfig? agent = store.GetById(id);
+            return agent is null
+                ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
+                : Results.Ok(agent.EnabledMcpServerIds);
+        })
+        .WithTags("Agents");
+
+        endpoints.MapPost("/agents/{id}/mcp-servers", (string id, AgentMcpServersRequest req, AgentStore store, McpServerConfigStore mcpStore) =>
+        {
+            AgentConfig? existing = store.GetById(id);
+            if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            return Results.Ok(dna.List(id));
+            IReadOnlyList<string> mcpIds = req.McpServerIds ?? [];
+            List<string> invalidIds = mcpIds.Where(mid => mcpStore.GetById(mid) is null).ToList();
+            if (invalidIds.Count > 0)
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    message = $"MCP Server(s) not found: {string.Join(", ", invalidIds)}",
+                    errorCode = "MCP_SERVER_NOT_FOUND"
+                });
+
+            AgentConfig? result = store.UpdateEnabledMcpServerIds(id, mcpIds);
+            return result is null
+                ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
+                : Results.Ok(new { result.Id });
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/{id}/dna", (string id, GeneFileWriteRequest req, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
+        // ── 工具列表（内置分组 + 全局 MCP 分组，含启用状态）────────────────────
 
-            // 防止路径穿越：sanitize category 和 fileName
-            string safeName = Path.GetFileName(req.FileName);
-            string safeCategory = SanitizeCategory(req.Category);
-
-            GeneFile file = dna.Write(id, safeCategory, safeName, req.Content ?? string.Empty);
-            return Results.Ok(file);
-        })
-        .WithTags("Agents");
-
-        endpoints.MapPost("/agents/{id}/dna/delete", (string id, GeneFileDeleteRequest req, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { message = $"Agent '{id}' not found." });
-
-            string safeName = Path.GetFileName(req.FileName ?? string.Empty);
-            bool deleted = dna.Delete(id, SanitizeCategory(req.Category), safeName);
-            return deleted ? Results.Ok() : Results.NotFound();
-        })
-        .WithTags("Agents");
-
-        // ── DNA 版本快照 ──────────────────────────────────────────────────────
-
-        endpoints.MapGet("/agents/{id}/dna/snapshots", (string id, string fileName, string? category, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(fileName))
-                return Results.BadRequest(new { success = false, message = "fileName query parameter is required.", errorCode = "BAD_REQUEST" });
-
-            string safeName = Path.GetFileName(fileName);
-            string safeCategory = SanitizeCategory(category);
-            IReadOnlyList<GeneFileSnapshot> snapshots = dna.ListSnapshots(id, safeCategory, safeName);
-            return Results.Ok(snapshots);
-        })
-        .WithTags("Agents");
-
-        endpoints.MapPost("/agents/{id}/dna/restore", (string id, GeneFileRestoreRequest req, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
-            if (string.IsNullOrWhiteSpace(req.SnapshotId))
-                return Results.BadRequest(new { success = false, message = "SnapshotId is required.", errorCode = "BAD_REQUEST" });
-
-            string safeName = Path.GetFileName(req.FileName);
-            string safeCategory = SanitizeCategory(req.Category);
-
-            try
-            {
-                GeneFile restored = dna.RestoreSnapshot(id, safeCategory, safeName, req.SnapshotId);
-                return Results.Ok(restored);
-            }
-            catch (FileNotFoundException ex)
-            {
-                return Results.NotFound(new { success = false, message = ex.Message, errorCode = "SNAPSHOT_NOT_FOUND" });
-            }
-        })
-        .WithTags("Agents");
-
-        // ── DNA 导出/导入 Markdown ────────────────────────────────────────
-
-        endpoints.MapGet("/agents/{id}/dna/export", (string id, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
-
-            string markdown = dna.ExportToMarkdown(id);
-            return Results.Text(markdown, "text/plain; charset=utf-8");
-        })
-        .WithTags("Agents");
-
-        endpoints.MapPost("/agents/{id}/dna/import", (string id, DnaMarkdownImportRequest req, AgentStore store, DNAService dna) =>
-        {
-            if (store.GetById(id) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(req.Content))
-                return Results.BadRequest(new { success = false, message = "Content is required.", errorCode = "BAD_REQUEST" });
-
-            IReadOnlyList<DnaImportEntryResult> entries = dna.ImportFromMarkdown(id, req.Content);
-            return Results.Ok(new { imported = entries.Count(r => r.Success), total = entries.Count, entries });
-        })
-        .WithTags("Agents");
-
-        // ── 工具列表（内置分组 + MCP 分组，含启用状态）────────────────────
-
-        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, McpServerConfigStore mcpStore, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
             AgentConfig? agent = store.GetById(id);
             if (agent is null)
@@ -276,17 +208,19 @@ public static class AgentEndpoints
                 }).ToList()
             });
 
-            // ── MCP Server 分组 ──────────────────────────────────────────────
-            foreach (McpServerConfig srv in agent.McpServers)
+            // ── 全局 MCP Server 分组（按 Agent 引用 ID 过滤）──────────────────────────────
+            HashSet<string> enabledIds = agent.EnabledMcpServerIds.ToHashSet();
+            foreach (McpServerConfig srv in mcpStore.All)
             {
+                bool isEnabled = enabledIds.Contains(srv.Id);
                 ToolGroupConfig? srvCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == srv.Name);
-                bool srvEnabled = srvCfg is null || srvCfg.IsEnabled;
+                bool groupEnabled = isEnabled && (srvCfg is null || srvCfg.IsEnabled);
 
-                if (!srvEnabled)
+                if (!groupEnabled)
                 {
                     groups.Add(new
                     {
-                        id = srv.Name,
+                        id = srv.Id,
                         name = srv.Name,
                         type = "mcp",
                         isEnabled = false,
@@ -301,7 +235,7 @@ public static class AgentEndpoints
                 {
                     groups.Add(new
                     {
-                        id = srv.Name,
+                        id = srv.Id,
                         name = srv.Name,
                         type = "mcp",
                         isEnabled = true,
@@ -384,24 +318,14 @@ public static class AgentEndpoints
         await response.Body.FlushAsync(ct);
     }
 
-    private static string SanitizeCategory(string? category)
-    {
-        if (string.IsNullOrWhiteSpace(category)) return string.Empty;
-        // 按分隔符拆分再用 GetFileName 去掉任何路径穿越段
-        return string.Join("/",
-            category.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(Path.GetFileName)
-                    .Where(s => !string.IsNullOrWhiteSpace(s)));
-    }
-
     private static object ToDto(AgentConfig a) => new
     {
         a.Id,
         a.Name,
-        a.SystemPrompt,
+        a.Description,
         a.IsEnabled,
         a.BoundSkillIds,
-        a.McpServers,
+        a.EnabledMcpServerIds,
         a.ToolGroupConfigs,
         a.CreatedAtUtc,
         a.IsDefault,
@@ -413,40 +337,26 @@ public static class AgentEndpoints
 
 public sealed record AgentCreateRequest(
     string Name,
-    string? SystemPrompt,
+    string? Description = null,
     bool IsEnabled = true,
     IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<McpServerConfig>? McpServers = null,
+    IReadOnlyList<string>? EnabledMcpServerIds = null,
     int? ContextWindowMessages = null);
 
 public sealed record AgentUpdateRequest(
     string Id,
     string? Name = null,
-    string? SystemPrompt = null,
+    string? Description = null,
     bool? IsEnabled = null,
     IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<McpServerConfig>? McpServers = null,
+    IReadOnlyList<string>? EnabledMcpServerIds = null,
     int? ContextWindowMessages = null);
+
+public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);
 
 public sealed record AgentBoundSkillsRequest(IReadOnlyList<string>? SkillIds);
 
 public sealed record AgentDeleteRequest(string Id);
-
-public sealed record GeneFileWriteRequest(
-    string FileName,
-    string? Category,
-    string? Content);
-
-public sealed record GeneFileDeleteRequest(
-    string FileName,
-    string? Category);
-
-public sealed record GeneFileRestoreRequest(
-    string FileName,
-    string? Category,
-    string SnapshotId);
-
-public sealed record DnaMarkdownImportRequest(string Content);
 
 public sealed record ToolGroupConfigRequest(
     string GroupId,

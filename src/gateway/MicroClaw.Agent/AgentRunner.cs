@@ -13,12 +13,15 @@ namespace MicroClaw.Agent;
 
 /// <summary>
 /// Agent 执行引擎：实现 ReAct 循环（推理 → 工具调用 → 观察 → 循环）。
-/// 注入 DNA 记忆作为 SystemPrompt 上下文，通过 MCP 协议接入 Python/Node.js 工具。
+/// System Prompt 由 Session DNA（SOUL/USER/AGENTS）+ Session 记忆（长期+每日权重衰减）构成。
+/// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.EnabledMcpServerIds 过滤。
 /// 实现 IAgentMessageHandler，供渠道消息处理器路由调用。
 /// </summary>
 public sealed class AgentRunner(
     AgentStore agentStore,
-    DNAService dnaService,
+    SessionDnaService sessionDnaService,
+    MemoryService memoryService,
+    McpServerConfigStore mcpServerConfigStore,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     ISessionReader sessionReader,
@@ -76,7 +79,7 @@ public sealed class AgentRunner(
         List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
 
         // 按工具配置过滤要连接的 MCP Server
-        IReadOnlyList<McpServerConfig> enabledMcpServers = FilterMcpServers(agent);
+        IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
         var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(enabledMcpServers, loggerFactory, ct);
 
         // 过滤 MCP 工具中被单独禁用的工具
@@ -89,8 +92,8 @@ public sealed class AgentRunner(
             allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
             // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具（含 write_session_dna）
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, dnaService));
+            // 追加子代理工具（含 write_session_dna → 写入当日记忆）
+            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, memoryService));
         }
         else
         {
@@ -143,7 +146,7 @@ public sealed class AgentRunner(
         List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
 
         // 按工具配置过滤要连接的 MCP Server
-        IReadOnlyList<McpServerConfig> enabledMcpServers = FilterMcpServers(agent);
+        IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
         var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(enabledMcpServers, loggerFactory, ct);
 
         // 过滤 MCP 工具中被单独禁用的工具
@@ -156,8 +159,8 @@ public sealed class AgentRunner(
             allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
             // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具（含 write_session_dna）
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, dnaService));
+            // 追加子代理工具（含 write_session_dna → 写入当日记忆）
+            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, memoryService));
         }
         else
         {
@@ -209,11 +212,12 @@ public sealed class AgentRunner(
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
-    /// <summary>返回未被整体禁用的 MCP Server 配置列表。</summary>
-    private static IReadOnlyList<McpServerConfig> FilterMcpServers(AgentConfig agent)
+    /// <summary>返回未被整体禁用的 MCP Server 配置列表（从全局库中按引用 ID 加载）。</summary>
+    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
     {
-        if (agent.ToolGroupConfigs.Count == 0) return agent.McpServers;
-        return agent.McpServers
+        IReadOnlyList<McpServerConfig> servers = mcpServerConfigStore.GetEnabledByIds(agent.EnabledMcpServerIds);
+        if (agent.ToolGroupConfigs.Count == 0) return servers;
+        return servers
             .Where(s =>
             {
                 ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == s.Name);
@@ -247,17 +251,12 @@ public sealed class AgentRunner(
 
     private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null)
     {
-        string dnaContext = dnaService.BuildFullSystemPromptContext(agent.Id, sessionId);
-
-        if (!string.IsNullOrEmpty(dnaContext))
+        string systemPrompt = BuildSystemPrompt(sessionId);
+        if (!string.IsNullOrEmpty(systemPrompt))
         {
-            int dnaBytes = System.Text.Encoding.UTF8.GetByteCount(dnaContext);
-            _logger.LogDebug("DNA 上下文注入：{Bytes} 字节，Agent={AgentId}", dnaBytes, agent.Id);
+            int promptBytes = System.Text.Encoding.UTF8.GetByteCount(systemPrompt);
+            _logger.LogDebug("System Prompt 注入：{Bytes} 字节（DNA+记忆），Session={SessionId}", promptBytes, sessionId);
         }
-
-        string systemPrompt = string.IsNullOrWhiteSpace(dnaContext)
-            ? agent.SystemPrompt
-            : agent.SystemPrompt + "\n\n" + dnaContext;
 
         var messages = new List<ChatMessage>();
         if (!string.IsNullOrWhiteSpace(systemPrompt))
@@ -275,6 +274,23 @@ public sealed class AgentRunner(
         }
 
         return messages;
+    }
+
+    /// <summary>
+    /// 构建 System Prompt：Session DNA（SOUL+USER+AGENTS）+ 长期/每日记忆（权重衰减）。
+    /// sessionId 为空时返回空字符串（子代理场景，无 Session 上下文）。
+    /// </summary>
+    internal string BuildSystemPrompt(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return string.Empty;
+
+        string dnaContext = sessionDnaService.BuildDnaContext(sessionId);
+        string memoryContext = memoryService.BuildMemoryContext(sessionId);
+
+        var parts = new List<string>(2);
+        if (!string.IsNullOrWhiteSpace(dnaContext)) parts.Add(dnaContext);
+        if (!string.IsNullOrWhiteSpace(memoryContext)) parts.Add(memoryContext);
+        return string.Join("\n\n", parts);
     }
 
     private IChatClient BuildClient(ProviderConfig provider, bool withTools)

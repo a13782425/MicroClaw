@@ -13,7 +13,11 @@ public sealed record McpServerConfig(
     IReadOnlyList<string>? Args = null,
     IDictionary<string, string?>? Env = null,
     // SSE transport
-    string? Url = null);
+    string? Url = null,
+    // 全局管理元数据
+    string Id = "",
+    bool IsEnabled = true,
+    DateTimeOffset CreatedAtUtc = default);
 
 public enum McpTransportType
 {

@@ -44,10 +44,10 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         _agentStore.Add(new AgentConfig(
             Id: string.Empty,
             Name: name,
-            SystemPrompt: "You are a helpful assistant.",
+            Description: "You are a helpful assistant.",
             IsEnabled: isEnabled,
             BoundSkillIds: [],
-            McpServers: [],
+            EnabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow));
 

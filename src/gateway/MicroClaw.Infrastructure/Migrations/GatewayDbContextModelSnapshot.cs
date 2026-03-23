@@ -36,6 +36,15 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EnabledMcpServerIdsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("enabled_mcp_server_ids_json");
+
                     b.Property<bool>("IsDefault")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_default");
@@ -44,19 +53,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");
 
-                    b.Property<string>("McpServersJson")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("mcp_servers_json");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
-
-                    b.Property<string>("SystemPrompt")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("system_prompt");
 
                     b.Property<string>("ToolGroupConfigsJson")
                         .HasColumnType("TEXT")
@@ -275,6 +275,53 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("cron_job_run_logs", (string)null);
                 });
 
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.McpServerConfigEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ArgsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("args_json");
+
+                    b.Property<string>("Command")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("command");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("EnvJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("env_json");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("TransportType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("transport_type");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("mcp_server_configs", (string)null);
+                });
+
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.ProviderConfigEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -331,6 +378,51 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("providers", (string)null);
                 });
 
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.RagConfigEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Scope")
+                        .HasDatabaseName("ix_rag_configs_scope");
+
+                    b.ToTable("rag_configs", (string)null);
+                });
+
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.SessionEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -345,6 +437,10 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.Property<string>("ApprovalReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("approval_reason");
+
+                    b.Property<string>("ChannelId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ChannelType")
                         .IsRequired()

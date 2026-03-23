@@ -6,6 +6,7 @@ public sealed record SessionInfo(
     string ProviderId,
     bool IsApproved,
     ChannelType ChannelType,
+    string ChannelId,
     DateTimeOffset CreatedAt,
     string? AgentId = null,
     string? ParentSessionId = null,
@@ -26,17 +27,15 @@ public sealed record MessageAttachment(
 
 public sealed record CreateSessionRequest(
     string Title,
-    string ProviderId);
+    string ProviderId,
+    string? ChannelId = null,
+    string? AgentId = null);
 
 public sealed record DeleteSessionRequest(string Id);
 
 public sealed record ApproveSessionRequest(string Id, string? Reason = null);
 
 public sealed record DisableSessionRequest(string Id, string? Reason = null);
-
-public sealed record BatchApproveSessionRequest(IReadOnlyList<string> Ids, string? Reason = null);
-
-public sealed record BatchDisableSessionRequest(IReadOnlyList<string> Ids, string? Reason = null);
 
 public sealed record ChatRequest(
     string Content,

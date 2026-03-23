@@ -12,6 +12,8 @@ import {
   TrendCharts,
   Setting,
   Collection,
+  Share,
+  DataBoard,
 } from '@element-plus/icons-vue'
 
 export interface MenuItem {
@@ -45,7 +47,9 @@ export const menuGroups: MenuGroup[] = [
     items: [
        { label: 'Agent', icon: Promotion, route: '/agents' },
        { label: '技能', icon: MagicStick, route: '/skills' },
-       { label: 'DNA 管理', icon: Collection, route: '/dna' },
+       { label: 'MCP 管理', icon: Share, route: '/mcp' },
+       { label: 'RAG 知识库', icon: DataBoard, route: '/rag' },
+       { label: '工具', icon: Tools, route: '/tools' },
     ],
   },
   {
@@ -55,7 +59,7 @@ export const menuGroups: MenuGroup[] = [
     items: [
       { label: '模型', icon: Cpu, route: '/models' },
       { label: '渠道', icon: Connection, route: '/channels' },
-      { label: '会话审批', icon: DocumentChecked, route: '/approvals' },
+      { label: '会话管理', icon: DocumentChecked, route: '/session-manage' },
       { label: '系统配置', icon: Setting, route: '/config' },
     ],
   },

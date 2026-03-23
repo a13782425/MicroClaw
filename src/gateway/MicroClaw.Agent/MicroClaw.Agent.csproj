@@ -13,6 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MicroClaw.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />

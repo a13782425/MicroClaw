@@ -41,6 +41,7 @@ public sealed class SessionStoreTests : IDisposable
         session.ProviderId.Should().Be("provider-1");
         session.IsApproved.Should().BeFalse();
         session.ChannelType.Should().Be(ChannelType.Web);
+        session.ChannelId.Should().Be("web");
         session.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
     }
 
@@ -267,5 +268,38 @@ public sealed class SessionStoreTests : IDisposable
         var retrieved = _store.Get(child.Id)!;
         retrieved.AgentId.Should().Be("agent-456");
         retrieved.ParentSessionId.Should().Be(parent.Id);
+    }
+
+    // --- ChannelId 绑定测试 ---
+
+    [Fact]
+    public void Create_DefaultChannelId_IsWeb()
+    {
+        var session = _store.Create("Test", "p1");
+
+        session.ChannelId.Should().Be("web");
+        _store.Get(session.Id)!.ChannelId.Should().Be("web");
+    }
+
+    [Fact]
+    public void Create_WithCustomChannelId_PreservesChannelId()
+    {
+        string channelId = "feishu-channel-abc123";
+        var session = _store.Create("Feishu Session", "p1", channelId: channelId);
+
+        session.ChannelId.Should().Be(channelId);
+        _store.Get(session.Id)!.ChannelId.Should().Be(channelId);
+    }
+
+    [Fact]
+    public void Create_WithAgentId_ChannelIdAndAgentIdBothPersisted()
+    {
+        var session = _store.Create("Bound Session", "p1",
+            channelId: "my-channel-id",
+            agentId: "my-agent-id");
+
+        var retrieved = _store.Get(session.Id)!;
+        retrieved.ChannelId.Should().Be("my-channel-id");
+        retrieved.AgentId.Should().Be("my-agent-id");
     }
 }

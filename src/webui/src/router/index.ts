@@ -6,12 +6,15 @@ const SessionsPage  = () => import('@/views/SessionsPage.vue')
 const CronPage      = () => import('@/views/CronPage.vue')
 const ModelsPage    = () => import('@/views/ModelsPage.vue')
 const ChannelsPage  = () => import('@/views/ChannelsPage.vue')
-const ApprovalsPage = () => import('@/views/ApprovalsPage.vue')
-const AgentsPage    = () => import('@/views/AgentsPage.vue')
+const SessionManagePage = () => import('@/views/SessionManagePage.vue')
+const AgentsPage        = () => import('@/views/AgentsPage.vue')
 const SkillsPage    = () => import('@/views/SkillsPage.vue')
 const UsagePage     = () => import('@/views/UsagePage.vue')
 const ConfigPage    = () => import('@/views/ConfigPage.vue')
 const DnaPage       = () => import('@/views/DnaPage.vue')
+const McpPage       = () => import('@/views/McpPage.vue')
+const RagPage       = () => import('@/views/RagPage.vue')
+const ToolsPage     = () => import('@/views/ToolsPage.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -23,11 +26,14 @@ export const router = createRouter({
     { path: '/usage', name: 'usage', component: UsagePage },
     { path: '/models', name: 'models', component: ModelsPage },
     { path: '/channels', name: 'channels', component: ChannelsPage },
-    { path: '/approvals', name: 'approvals', component: ApprovalsPage },
+    { path: '/session-manage', name: 'session-manage', component: SessionManagePage },
     { path: '/agents', name: 'agents', component: AgentsPage },
     { path: '/skills', name: 'skills', component: SkillsPage },
     { path: '/config', name: 'config', component: ConfigPage },
     { path: '/dna', name: 'dna', component: DnaPage },
+    { path: '/mcp', name: 'mcp', component: McpPage },
+    { path: '/rag', name: 'rag', component: RagPage },
+    { path: '/tools', name: 'tools', component: ToolsPage },
   ]
 })
 

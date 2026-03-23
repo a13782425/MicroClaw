@@ -26,8 +26,8 @@ async function getMocks() {
 }
 
 const fakeSessions: SessionInfo[] = [
-  { id: 's1', title: '测试会话1', providerId: 'p1', isApproved: true, channelType: 'web', createdAt: '2025-01-01T00:00:00Z' },
-  { id: 's2', title: '测试会话2', providerId: 'p1', isApproved: false, channelType: 'feishu', createdAt: '2025-01-02T00:00:00Z' },
+  { id: 's1', title: '测试会话1', providerId: 'p1', channelId: '', isApproved: true, channelType: 'web', createdAt: '2025-01-01T00:00:00Z' },
+  { id: 's2', title: '测试会话2', providerId: 'p1', channelId: '', isApproved: false, channelType: 'feishu', createdAt: '2025-01-02T00:00:00Z' },
 ]
 
 describe('useSessionStore', () => {
@@ -57,7 +57,7 @@ describe('useSessionStore', () => {
 
   it('addSession 创建并 prepend 会话', async () => {
     const mocks = await getMocks()
-    const newSession: SessionInfo = { id: 's3', title: '新会话', providerId: 'p1', isApproved: true, channelType: 'web', createdAt: '2025-01-03T00:00:00Z' }
+    const newSession: SessionInfo = { id: 's3', title: '新会话', providerId: 'p1', channelId: '', isApproved: true, channelType: 'web', createdAt: '2025-01-03T00:00:00Z' }
     mocks.createSession.mockResolvedValueOnce(newSession)
 
     const store = useSessionStore()

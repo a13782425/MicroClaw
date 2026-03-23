@@ -13,6 +13,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
+    public DbSet<McpServerConfigEntity> McpServers => Set<McpServerConfigEntity>();
+    public DbSet<RagConfigEntity> RagConfigs => Set<RagConfigEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,10 +67,10 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.Name).HasColumnName("name");
-            b.Property(e => e.SystemPrompt).HasColumnName("system_prompt");
+            b.Property(e => e.Description).HasColumnName("description");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.BoundSkillIdsJson).HasColumnName("bound_skill_ids_json");
-            b.Property(e => e.McpServersJson).HasColumnName("mcp_servers_json");
+            b.Property(e => e.EnabledMcpServerIdsJson).HasColumnName("enabled_mcp_server_ids_json");
             b.Property(e => e.ToolGroupConfigsJson).HasColumnName("tool_group_configs_json");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             b.Property(e => e.IsDefault).HasColumnName("is_default");
@@ -154,6 +156,35 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.LastErrorMessage).HasColumnName("last_error_message");
             b.HasIndex(e => e.Status).HasDatabaseName("ix_channel_retry_queue_status");
             b.HasIndex(e => e.MessageId).HasDatabaseName("ix_channel_retry_queue_message_id").IsUnique();
+        });
+
+        modelBuilder.Entity<McpServerConfigEntity>(b =>
+        {
+            b.ToTable("mcp_server_configs");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.Name).HasColumnName("name");
+            b.Property(e => e.TransportType).HasColumnName("transport_type").HasMaxLength(16);
+            b.Property(e => e.Command).HasColumnName("command").IsRequired(false);
+            b.Property(e => e.ArgsJson).HasColumnName("args_json").IsRequired(false);
+            b.Property(e => e.EnvJson).HasColumnName("env_json").IsRequired(false);
+            b.Property(e => e.Url).HasColumnName("url").IsRequired(false);
+            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+        });
+
+        modelBuilder.Entity<RagConfigEntity>(b =>
+        {
+            b.ToTable("rag_configs");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.Name).HasColumnName("name");
+            b.Property(e => e.Scope).HasColumnName("scope").HasMaxLength(16);
+            b.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64).IsRequired(false);
+            b.Property(e => e.SourceType).HasColumnName("source_type").HasMaxLength(64);
+            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_configs_scope");
         });
     }
 }

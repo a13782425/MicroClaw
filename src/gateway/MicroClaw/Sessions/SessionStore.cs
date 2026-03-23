@@ -59,7 +59,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return entity is null ? null : ToInfo(entity);
     }
 
-    public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null)
+    public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null, string? channelId = null)
     {
         SessionEntity entity = new()
         {
@@ -68,6 +68,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             ProviderId = providerId,
             IsApproved = false,
             ChannelType = ChannelConfigStore.SerializeChannelType(channelType),
+            ChannelId = channelId ?? ChannelConfigStore.WebChannelId,
             CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             AgentId = agentId,
             ParentSessionId = parentSessionId,
@@ -116,38 +117,6 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         entity.ApprovalReason = reason;
         db.SaveChanges();
         return ToInfo(entity);
-    }
-
-    public IReadOnlyList<SessionInfo> ApproveBatch(IReadOnlyList<string> ids, string? reason = null)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        List<SessionInfo> results = [];
-        foreach (string id in ids)
-        {
-            SessionEntity? entity = db.Sessions.Find(id);
-            if (entity is null) continue;
-            entity.IsApproved = true;
-            entity.ApprovalReason = reason;
-            results.Add(ToInfo(entity));
-        }
-        db.SaveChanges();
-        return results.AsReadOnly();
-    }
-
-    public IReadOnlyList<SessionInfo> DisableBatch(IReadOnlyList<string> ids, string? reason = null)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        List<SessionInfo> results = [];
-        foreach (string id in ids)
-        {
-            SessionEntity? entity = db.Sessions.Find(id);
-            if (entity is null) continue;
-            entity.IsApproved = false;
-            entity.ApprovalReason = reason;
-            results.Add(ToInfo(entity));
-        }
-        db.SaveChanges();
-        return results.AsReadOnly();
     }
 
     /// <summary>更新会话绑定的 Provider（用于中途切换模型）。</summary>
@@ -272,6 +241,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     private static SessionInfo ToInfo(SessionEntity e) =>
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,
             ChannelConfigStore.ParseChannelType(e.ChannelType),
+            string.IsNullOrEmpty(e.ChannelId) ? ChannelConfigStore.WebChannelId : e.ChannelId,
             DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue,
             e.AgentId,
             e.ParentSessionId,

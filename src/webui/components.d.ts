@@ -12,7 +12,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ChatMessage: typeof import('./src/components/ChatMessage.vue')['default']
-    DnaFilePanel: typeof import('./src/components/DnaFilePanel.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElButton: typeof import('element-plus/es')['ElButton']
@@ -24,6 +23,8 @@ declare module 'vue' {
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
     ElContainer: typeof import('element-plus/es')['ElContainer']
     ElDatePicker: typeof import('element-plus/es')['ElDatePicker']
+    ElDescriptions: typeof import('element-plus/es')['ElDescriptions']
+    ElDescriptionsItem: typeof import('element-plus/es')['ElDescriptionsItem']
     ElDialog: typeof import('element-plus/es')['ElDialog']
     ElDivider: typeof import('element-plus/es')['ElDivider']
     ElDrawer: typeof import('element-plus/es')['ElDrawer']
@@ -41,6 +42,7 @@ declare module 'vue' {
     ElPopconfirm: typeof import('element-plus/es')['ElPopconfirm']
     ElRadio: typeof import('element-plus/es')['ElRadio']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
+    ElResult: typeof import('element-plus/es')['ElResult']
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSubMenu: typeof import('element-plus/es')['ElSubMenu']

@@ -4,6 +4,7 @@ using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -28,7 +29,7 @@ public static class SessionEndpoints
             .WithTags("Sessions");
 
         // POST /api/sessions — 创建会话
-        endpoints.MapPost("/sessions", (CreateSessionRequest req, SessionStore store, ProviderConfigStore providerStore) =>
+        endpoints.MapPost("/sessions", (CreateSessionRequest req, SessionStore store, ProviderConfigStore providerStore, AgentStore agentStore, ChannelConfigStore channelStore, SessionDnaService sessionDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Title))
                 return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
@@ -39,13 +40,29 @@ public static class SessionEndpoints
             if (provider is null)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
 
-            SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId, ChannelType.Web);
+            // 解析 ChannelId：默认使用内置 web channel
+            string channelId = string.IsNullOrWhiteSpace(req.ChannelId)
+                ? ChannelConfigStore.WebChannelId
+                : req.ChannelId;
+            ChannelConfig? channel = channelStore.GetById(channelId);
+            if (channel is null)
+                return Results.NotFound(new { success = false, message = $"Channel '{channelId}' not found.", errorCode = "NOT_FOUND" });
+
+            // 解析 AgentId：默认使用 main agent
+            string? agentId = string.IsNullOrWhiteSpace(req.AgentId)
+                ? agentStore.GetDefault()?.Id
+                : req.AgentId;
+            if (!string.IsNullOrWhiteSpace(req.AgentId) && agentStore.GetById(req.AgentId) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
+
+            SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
+            sessionDna.InitializeSession(created.Id);
             return Results.Ok(created);
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, DNAService dna) =>
+        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, SessionDnaService sessionDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -54,8 +71,8 @@ public static class SessionEndpoints
             if (!deleted)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 同步删除会话 DNA 目录
-            dna.DeleteSessionDnaDir(req.Id);
+            // 同步删除会话固定 DNA 文件
+            sessionDna.DeleteSessionDnaFiles(req.Id);
             return Results.Ok();
         })
         .WithTags("Sessions");
@@ -77,21 +94,6 @@ public static class SessionEndpoints
         })
         .WithTags("Sessions");
 
-        // POST /api/sessions/approve-batch — 批量审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve-batch", async (BatchApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
-        {
-            if (!user.IsInRole("admin"))
-                return Results.Forbid();
-            if (req.Ids is null || req.Ids.Count == 0)
-                return Results.BadRequest(new { success = false, message = "Ids is required.", errorCode = "BAD_REQUEST" });
-
-            IReadOnlyList<SessionInfo> updated = store.ApproveBatch(req.Ids, req.Reason);
-            foreach (SessionInfo s in updated)
-                await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = s.Id, title = s.Title });
-            return Results.Ok(new { updated, count = updated.Count });
-        })
-        .WithTags("Sessions");
-
         // POST /api/sessions/disable — 禁用会话（仅 admin）
         endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
         {
@@ -106,21 +108,6 @@ public static class SessionEndpoints
 
             await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
-        })
-        .WithTags("Sessions");
-
-        // POST /api/sessions/disable-batch — 批量禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable-batch", async (BatchDisableSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
-        {
-            if (!user.IsInRole("admin"))
-                return Results.Forbid();
-            if (req.Ids is null || req.Ids.Count == 0)
-                return Results.BadRequest(new { success = false, message = "Ids is required.", errorCode = "BAD_REQUEST" });
-
-            IReadOnlyList<SessionInfo> updated = store.DisableBatch(req.Ids, req.Reason);
-            foreach (SessionInfo s in updated)
-                await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = s.Id, title = s.Title });
-            return Results.Ok(new { updated, count = updated.Count });
         })
         .WithTags("Sessions");
 
@@ -205,12 +192,14 @@ public static class SessionEndpoints
                 // 构建历史消息上下文
                 IReadOnlyList<SessionMessage> history = store.GetMessages(id);
 
-                // 获取默认 Agent（技能、MCP、DNA 等能力均通过 AgentRunner 注入）
-                AgentConfig? defaultAgent = agentStore.GetDefault();
+                // 获取 Session 绑定的 Agent（优先用绑定 AgentId，否则退到默认 Agent）
+                AgentConfig? defaultAgent = string.IsNullOrWhiteSpace(session.AgentId)
+                    ? agentStore.GetDefault()
+                    : agentStore.GetById(session.AgentId) ?? agentStore.GetDefault();
                 if (defaultAgent is null || !defaultAgent.IsEnabled)
                 {
                     ctx.Response.StatusCode = 503;
-                    await ctx.Response.WriteAsJsonAsync(new { message = "No enabled default agent found." }, ct);
+                    await ctx.Response.WriteAsJsonAsync(new { message = "No enabled agent found for this session." }, ct);
                     return;
                 }
 
@@ -276,84 +265,98 @@ public static class SessionEndpoints
             })
         .WithTags("Sessions");
 
-        // ── 会话 DNA 端点（三层架构第三层）────────────────────────────────────────────────
+        // ── 会话 DNA 端点（B-03 固定三文件模式）────────────────────────────────────────────
 
-        // GET /api/sessions/{id}/dna — 列出会话 DNA 文件
-        endpoints.MapGet("/sessions/{id}/dna", (string id, SessionStore store, DNAService dna) =>
+        // GET /api/sessions/{id}/dna — 列出三个固定 DNA 文件（SOUL / USER / AGENTS）
+        endpoints.MapGet("/sessions/{id}/dna", (string id, SessionStore store, SessionDnaService sessionDna) =>
         {
             if (store.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            return Results.Ok(dna.ListSession(id));
+            return Results.Ok(sessionDna.ListFiles(id));
         })
         .WithTags("SessionDNA");
 
-        // POST /api/sessions/{id}/dna — 写入/更新会话 DNA 文件
-        endpoints.MapPost("/sessions/{id}/dna", (string id, GeneFileWriteRequest req, SessionStore store, DNAService dna) =>
-        {
-            if (store.Get(id) is null)
-                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(req.FileName))
-                return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
-
-            string safeName = Path.GetFileName(req.FileName);
-            string safeCategory = SanitizeCategory(req.Category);
-
-            GeneFile file = dna.WriteSession(id, safeCategory, safeName, req.Content ?? string.Empty);
-            return Results.Ok(file);
-        })
-        .WithTags("SessionDNA");
-
-        // POST /api/sessions/{id}/dna/delete — 删除会话 DNA 文件
-        endpoints.MapPost("/sessions/{id}/dna/delete", (string id, GeneFileDeleteRequest req, SessionStore store, DNAService dna) =>
+        // GET /api/sessions/{id}/dna/{fileName} — 读取指定固定 DNA 文件
+        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, SessionStore store, SessionDnaService sessionDna) =>
         {
             if (store.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            string safeName = Path.GetFileName(req.FileName ?? string.Empty);
-            bool deleted = dna.DeleteSession(id, SanitizeCategory(req.Category), safeName);
-            return deleted ? Results.Ok() : Results.NotFound();
+            SessionDnaFileInfo? file = sessionDna.Read(id, fileName);
+            return file is null
+                ? Results.NotFound(new { success = false, message = $"File '{fileName}' is not a valid Session DNA file. Allowed: SOUL.md, USER.md, AGENTS.md", errorCode = "NOT_FOUND" })
+                : Results.Ok(file);
         })
         .WithTags("SessionDNA");
 
-        // GET /api/sessions/{id}/dna/snapshots — 快照列表
-        endpoints.MapGet("/sessions/{id}/dna/snapshots", (string id, string fileName, string? category, SessionStore store, DNAService dna) =>
-        {
-            if (store.Get(id) is null)
-                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
-            if (string.IsNullOrWhiteSpace(fileName))
-                return Results.BadRequest(new { success = false, message = "fileName query parameter is required.", errorCode = "BAD_REQUEST" });
-
-            string safeName = Path.GetFileName(fileName);
-            string safeCategory = SanitizeCategory(category);
-            return Results.Ok(dna.ListSessionSnapshots(id, safeCategory, safeName));
-        })
-        .WithTags("SessionDNA");
-
-        // POST /api/sessions/{id}/dna/restore — 还原快照
-        endpoints.MapPost("/sessions/{id}/dna/restore", (string id, GeneFileRestoreRequest req, SessionStore store, DNAService dna) =>
+        // POST /api/sessions/{id}/dna — 更新固定 DNA 文件内容（body: fileName + content）
+        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, SessionStore store, SessionDnaService sessionDna) =>
         {
             if (store.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
                 return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
-            if (string.IsNullOrWhiteSpace(req.SnapshotId))
-                return Results.BadRequest(new { success = false, message = "SnapshotId is required.", errorCode = "BAD_REQUEST" });
+            if (!SessionDnaService.IsAllowedFileName(req.FileName))
+                return Results.BadRequest(new { success = false, message = $"'{req.FileName}' is not a valid Session DNA file. Allowed: SOUL.md, USER.md, AGENTS.md", errorCode = "INVALID_FILE_NAME" });
 
-            string safeName = Path.GetFileName(req.FileName);
-            string safeCategory = SanitizeCategory(req.Category);
-
-            try
-            {
-                GeneFile restored = dna.RestoreSessionSnapshot(id, safeCategory, safeName, req.SnapshotId);
-                return Results.Ok(restored);
-            }
-            catch (FileNotFoundException ex)
-            {
-                return Results.NotFound(new { success = false, message = ex.Message, errorCode = "SNAPSHOT_NOT_FOUND" });
-            }
+            SessionDnaFileInfo? updated = sessionDna.Update(id, req.FileName, req.Content ?? string.Empty);
+            return updated is null
+                ? Results.BadRequest(new { success = false, message = "Update failed.", errorCode = "BAD_REQUEST" })
+                : Results.Ok(updated);
         })
         .WithTags("SessionDNA");
+
+        // ── 会话记忆端点（B-02）────────────────────────────────────────────────────
+
+        // GET /api/sessions/{id}/memory — 获取长期记忆（MEMORY.md）
+        endpoints.MapGet("/sessions/{id}/memory", (string id, SessionStore store, MemoryService memory) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            string content = memory.GetLongTermMemory(id);
+            return Results.Ok(new { content });
+        })
+        .WithTags("SessionMemory");
+
+        // POST /api/sessions/{id}/memory — 更新长期记忆
+        endpoints.MapPost("/sessions/{id}/memory", (string id, UpdateMemoryRequest req, SessionStore store, MemoryService memory) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            memory.UpdateLongTermMemory(id, req.Content ?? string.Empty);
+            string content = memory.GetLongTermMemory(id);
+            return Results.Ok(new { content });
+        })
+        .WithTags("SessionMemory");
+
+        // GET /api/sessions/{id}/memory/daily — 列出所有每日记忆（日期列表，降序）
+        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, SessionStore store, MemoryService memory) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            IReadOnlyList<string> dates = memory.ListDailyMemories(id);
+            return Results.Ok(new { dates });
+        })
+        .WithTags("SessionMemory");
+
+        // GET /api/sessions/{id}/memory/daily/{date} — 获取指定日期记忆（YYYY-MM-DD）
+        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, SessionStore store, MemoryService memory) =>
+        {
+            if (store.Get(id) is null)
+                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
+            if (!MemoryService.IsValidDateFormat(date))
+                return Results.BadRequest(new { success = false, message = $"Invalid date format: '{date}'. Expected YYYY-MM-DD.", errorCode = "BAD_REQUEST" });
+
+            DailyMemoryInfo? info = memory.GetDailyMemory(id, date);
+            return info is null
+                ? Results.NotFound(new { success = false, message = $"No memory found for date '{date}'.", errorCode = "NOT_FOUND" })
+                : Results.Ok(info);
+        })
+        .WithTags("SessionMemory");
 
         return endpoints;
     }
@@ -390,3 +393,16 @@ public static class SessionEndpoints
         await response.Body.FlushAsync(ct);
     }
 }
+
+// ── Session DNA Request records ────────────────────────────────────────────────────────
+
+/// <summary>更新 Session 固定 DNA 文件的请求体。</summary>
+public sealed record SessionDnaUpdateRequest(string FileName, string? Content);
+
+/// <summary>更新 Session 长期记忆的请求体。</summary>
+public sealed record UpdateMemoryRequest(string? Content);
+
+// 以下 records 供旧 Agent DNA 端点等继续使用，待 M-05 清理时移除
+public sealed record GeneFileWriteRequest(string FileName, string? Category, string? Content);
+public sealed record GeneFileDeleteRequest(string FileName, string? Category);
+public sealed record GeneFileRestoreRequest(string FileName, string? Category, string SnapshotId);

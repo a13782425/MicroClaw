@@ -75,6 +75,30 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
         return true;
     }
 
+    /// <summary>
+    /// 幂等创建内置 Web Channel。系统启动时调用，若已存在则跳过。
+    /// </summary>
+    public void EnsureWebChannel()
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        if (db.Channels.Any(e => e.Id == WebChannelId))
+            return;
+
+        db.Channels.Add(new ChannelConfigEntity
+        {
+            Id          = WebChannelId,
+            DisplayName = "Web Console",
+            ChannelType = "web",
+            ProviderId  = string.Empty,
+            IsEnabled   = true,
+            SettingsJson = "{}"
+        });
+        db.SaveChanges();
+    }
+
+    /// <summary>内置 Web Channel 的固定 ID。</summary>
+    public const string WebChannelId = "web";
+
     private static string MergeSettings(string? existingJson, string incomingJson, ChannelType type)
     {
         if (type != ChannelType.Feishu) return incomingJson;

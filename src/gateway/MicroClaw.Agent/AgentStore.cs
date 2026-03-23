@@ -51,15 +51,29 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         AgentConfig main = new(
             Id: string.Empty,
             Name: "main",
-            SystemPrompt: string.Empty,
+            Description: string.Empty,
             IsEnabled: true,
             BoundSkillIds: [],
-            McpServers: [],
+            EnabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             IsDefault: true);
 
         return Add(main);
+    }
+
+    /// <summary>更新 Agent 启用的全局 MCP Server ID 列表。</summary>
+    public AgentConfig? UpdateEnabledMcpServerIds(string id, IReadOnlyList<string> mcpServerIds)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        AgentConfigEntity? entity = db.Agents.Find(id);
+        if (entity is null) return null;
+
+        entity.EnabledMcpServerIdsJson = mcpServerIds.Count > 0
+            ? JsonSerializer.Serialize(mcpServerIds, JsonOpts)
+            : null;
+        db.SaveChanges();
+        return ToConfig(entity);
     }
 
     /// <summary>更新 Agent 的工具分组启用配置。</summary>
@@ -105,13 +119,13 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
             entity.Name = incoming.Name;
         }
 
-        entity.SystemPrompt = incoming.SystemPrompt;
+        entity.Description = incoming.Description;
         entity.IsEnabled = incoming.IsEnabled;
         entity.BoundSkillIdsJson = incoming.BoundSkillIds.Count > 0
             ? JsonSerializer.Serialize(incoming.BoundSkillIds, JsonOpts)
             : null;
-        entity.McpServersJson = incoming.McpServers.Count > 0
-            ? JsonSerializer.Serialize(incoming.McpServers, JsonOpts)
+        entity.EnabledMcpServerIdsJson = incoming.EnabledMcpServerIds.Count > 0
+            ? JsonSerializer.Serialize(incoming.EnabledMcpServerIds, JsonOpts)
             : null;
         entity.ToolGroupConfigsJson = incoming.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(incoming.ToolGroupConfigs, JsonOpts)
@@ -138,10 +152,10 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
     private static AgentConfig ToConfig(AgentConfigEntity e) => new(
         e.Id,
         e.Name,
-        e.SystemPrompt,
+        e.Description,
         e.IsEnabled,
         DeserializeList<string>(e.BoundSkillIdsJson),
-        DeserializeList<McpServerConfig>(e.McpServersJson),
+        DeserializeList<string>(e.EnabledMcpServerIdsJson),
         DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
         e.CreatedAtUtc,
         e.IsDefault,
@@ -151,13 +165,13 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
     {
         Id = c.Id,
         Name = c.Name,
-        SystemPrompt = c.SystemPrompt,
+        Description = c.Description,
         IsEnabled = c.IsEnabled,
         BoundSkillIdsJson = c.BoundSkillIds.Count > 0
             ? JsonSerializer.Serialize(c.BoundSkillIds, JsonOpts)
             : null,
-        McpServersJson = c.McpServers.Count > 0
-            ? JsonSerializer.Serialize(c.McpServers, JsonOpts)
+        EnabledMcpServerIdsJson = c.EnabledMcpServerIds.Count > 0
+            ? JsonSerializer.Serialize(c.EnabledMcpServerIds, JsonOpts)
             : null,
         ToolGroupConfigsJson = c.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(c.ToolGroupConfigs, JsonOpts)

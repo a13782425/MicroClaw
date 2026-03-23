@@ -72,7 +72,7 @@
           <div class="overview-grid">
             <div class="overview-card">
               <div class="ov-label">MCP Server</div>
-              <div class="ov-value">{{ selectedAgent.mcpServers.length }} 个</div>
+              <div class="ov-value">{{ selectedAgent.enabledMcpServerIds.length }} 个</div>
             </div>
             <div class="overview-card">
               <div class="ov-label">绑定技能</div>
@@ -88,69 +88,16 @@
             </div>
           </div>
           <div class="ov-prompt-block">
-            <div class="ov-label">系统提示词</div>
-            <pre v-if="selectedAgent.systemPrompt" class="ov-prompt">{{ selectedAgent.systemPrompt }}</pre>
+            <div class="ov-label">描述</div>
+            <pre v-if="selectedAgent.description" class="ov-prompt">{{ selectedAgent.description }}</pre>
             <span v-else class="ov-empty-text">（未设置）</span>
           </div>
         </el-tab-pane>
 
-        <!-- 文件 (DNA) -->
-        <el-tab-pane label="文件" name="files">
-          <div class="tab-toolbar">
-            <el-button type="primary" :icon="Plus" size="small" @click="openNewGeneDialog">新建文件</el-button>
-            <el-button
-              link
-              size="small"
-              type="primary"
-              @click="$router.push({ path: '/dna', query: { tab: 'agent', id: selectedAgent!.id } })"
-            >在 DNA 管理页中查看 →</el-button>
-          </div>
-          <div v-if="dnaLoading" class="tab-loading"><el-skeleton :rows="3" animated /></div>
-          <el-empty v-else-if="geneFiles.length === 0" description="暂无 DNA 文件" :image-size="80" />
-          <el-table v-else :data="geneFiles" style="width:100%" size="small">
-            <el-table-column prop="category" label="分类" width="120" />
-            <el-table-column prop="fileName" label="文件名" width="180" />
-            <el-table-column label="内容预览">
-              <template #default="{ row }">
-                <span class="file-preview">{{ truncate(row.content, 60) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="更新时间" width="140">
-              <template #default="{ row }">{{ formatDate(row.updatedAt) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="160">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openEditGeneDialog(row)">编辑</el-button>
-                <el-button link size="small" @click="openSnapshotDrawer(row)">历史</el-button>
-                <el-button link type="danger" size="small" @click="deleteGene(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
+
 
         <!-- 工具 -->
         <el-tab-pane label="工具" name="tools">
-          <div class="tools-section">
-            <div class="tools-section-header">
-              <span>MCP Server 配置</span>
-              <el-tag type="info" size="small">{{ selectedAgent.mcpServers.length }} 个</el-tag>
-            </div>
-            <el-empty v-if="selectedAgent.mcpServers.length === 0" description="未配置 MCP Server" :image-size="60" />
-            <div v-else class="mcp-server-list">
-              <el-card v-for="srv in selectedAgent.mcpServers" :key="srv.name" shadow="never" class="mcp-server-card">
-                <div class="mcp-srv-row">
-                  <el-tag size="small" type="info">{{ srv.transportType }}</el-tag>
-                  <span class="mcp-srv-name">{{ srv.name }}</span>
-                  <span class="mcp-srv-detail">
-                    {{ srv.transportType === 'stdio' ? [srv.command, ...(srv.args ?? [])].join(' ') : srv.url }}
-                  </span>
-                </div>
-              </el-card>
-            </div>
-          </div>
-
-          <el-divider />
-
           <div class="tools-section">
             <div class="tools-section-header">
               <span>工具分组</span>
@@ -205,6 +152,36 @@
                 </div>
               </el-collapse-item>
             </el-collapse>
+          </div>
+        </el-tab-pane>
+
+        <!-- MCP -->
+        <el-tab-pane label="MCP" name="mcp">
+          <div class="tools-section">
+            <div class="tools-section-header">
+              <span>MCP Server（全局引用）</span>
+              <el-tag type="info" size="small">{{ selectedAgent.enabledMcpServerIds.length }} 个已启用</el-tag>
+            </div>
+            <div v-if="mcpServersLoading" class="tab-loading"><el-skeleton :rows="2" animated /></div>
+            <el-empty v-else-if="allMcpServers.length === 0" description="暂无全局 MCP Server，请先在 MCP 管理页创建" :image-size="60" />
+            <div v-else class="mcp-server-list">
+              <div v-for="srv in allMcpServers" :key="srv.id" class="mcp-srv-row">
+                <el-switch
+                  :model-value="mcpEnabledIds.includes(srv.id)"
+                  size="small"
+                  @change="(v: boolean) => toggleMcpServer(srv.id, v)"
+                />
+                <el-tag size="small" type="info">{{ srv.transportType }}</el-tag>
+                <span class="mcp-srv-name">{{ srv.name }}</span>
+                <span class="mcp-srv-detail">
+                  {{ srv.transportType === 'stdio' ? [srv.command, ...(srv.args ?? [])].join(' ') : srv.url }}
+                </span>
+                <el-tag v-if="!srv.isEnabled" type="warning" size="small">全局已禁用</el-tag>
+              </div>
+            </div>
+            <div v-if="mcpSelectionDirty" style="margin-top:12px">
+              <el-button type="primary" size="small" :loading="savingMcpSelection" @click="saveMcpSelection">保存 MCP 引用</el-button>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -263,51 +240,17 @@
           />
           <div v-if="editingAgent?.isDefault" class="form-tip">默认代理名称不可修改</div>
         </el-form-item>
-        <el-form-item label="系统提示词">
+        <el-form-item label="描述">
           <el-input
-            v-model="form.systemPrompt"
+            v-model="form.description"
             type="textarea"
-            :rows="4"
-            placeholder="系统级提示词，定义代理角色与行为"
+            :rows="3"
+            placeholder="代理功能描述（可选）"
           />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="form.isEnabled" />
         </el-form-item>
-
-        <el-divider>MCP Server（工具来源）</el-divider>
-        <div v-for="(srv, idx) in form.mcpServers" :key="idx" class="mcp-server-row">
-          <el-card shadow="never" class="mcp-card">
-            <div class="mcp-header">
-              <span class="mcp-title">Server {{ idx + 1 }}</span>
-              <el-button link type="danger" :icon="Delete" @click="removeMcpServer(idx)" />
-            </div>
-            <el-form-item label="名称">
-              <el-input v-model="srv.name" placeholder="如 filesystem" />
-            </el-form-item>
-            <el-form-item label="传输方式">
-              <el-radio-group v-model="srv.transportType">
-                <el-radio value="stdio">Stdio（本地进程）</el-radio>
-                <el-radio value="sse">SSE（远程 HTTP）</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <template v-if="srv.transportType === 'stdio'">
-              <el-form-item label="命令">
-                <el-input v-model="srv.command" placeholder="如 npx 或 uvx" />
-              </el-form-item>
-              <el-form-item label="参数">
-                <el-input v-model="srv.argsText" placeholder="如 -y @modelcontextprotocol/server-filesystem /tmp" />
-                <div class="form-tip">空格分隔，每个参数独立一项</div>
-              </el-form-item>
-            </template>
-            <template v-else>
-              <el-form-item label="URL">
-                <el-input v-model="srv.url" placeholder="如 http://localhost:3000/sse" />
-              </el-form-item>
-            </template>
-          </el-card>
-        </div>
-        <el-button link type="primary" :icon="Plus" @click="addMcpServer">添加 MCP Server</el-button>
       </el-form>
 
       <template #footer>
@@ -316,69 +259,6 @@
       </template>
     </el-dialog>
 
-    <!-- ── DNA 版本快照 Drawer ───────────────────────────── -->
-    <el-drawer
-      v-model="snapshotDrawerVisible"
-      :title="`历史版本 — ${snapshotTarget?.fileName ?? ''}`"
-      size="600px"
-      direction="rtl"
-    >
-      <div v-if="snapshotLoading" class="tab-loading"><el-skeleton :rows="4" animated /></div>
-      <el-empty v-else-if="snapshots.length === 0" description="暂无历史版本" :image-size="80" />
-      <div v-else class="snapshot-list">
-        <el-card
-          v-for="snap in snapshots"
-          :key="snap.snapshotId"
-          shadow="never"
-          class="snapshot-card"
-          :class="{ 'snapshot-selected': previewingSnapshot?.snapshotId === snap.snapshotId }"
-          @click="previewingSnapshot = snap"
-        >
-          <div class="snapshot-card-header">
-            <span class="snapshot-time">{{ formatDate(snap.savedAt) }}</span>
-            <el-button
-              type="primary"
-              size="small"
-              :loading="restoringSnapshotId === snap.snapshotId"
-              @click.stop="restoreSnapshot(snap)"
-            >回滚至此版本</el-button>
-          </div>
-          <pre v-if="previewingSnapshot?.snapshotId === snap.snapshotId" class="snapshot-preview">{{ snap.content }}</pre>
-        </el-card>
-      </div>
-    </el-drawer>
-
-    <!-- ── 基因文件编辑 Dialog ──────────────────────────── -->
-    <el-dialog
-      v-model="geneEditDialogVisible"
-      :title="editingGene ? '编辑基因文件' : '新建基因文件'"
-      width="640px"
-    >
-      <el-form label-width="80px">
-        <el-form-item label="文件名" required>
-          <el-input
-            v-model="geneForm.fileName"
-            placeholder="如 personality.md"
-            :disabled="!!editingGene"
-          />
-        </el-form-item>
-        <el-form-item label="分类">
-          <el-input v-model="geneForm.category" placeholder="如 persona（可选）" />
-        </el-form-item>
-        <el-form-item label="内容">
-          <el-input
-            v-model="geneForm.content"
-            type="textarea"
-            :rows="10"
-            placeholder="Markdown 格式，将注入 Agent SystemPrompt 上下文"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="geneEditDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="geneSaving" @click="saveGene">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -391,13 +271,13 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, MagicStick } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import {
   listAgents, createAgent, updateAgent, deleteAgent,
-  listAgentDna, writeAgentDna, deleteAgentDna, listAgentTools, updateAgentToolSettings,
+  listAgentTools, updateAgentToolSettings,
   listSkills, updateAgentSkills,
-  listDnaSnapshots, restoreDnaSnapshot,
-  type AgentConfig, type GeneFile, type GeneFileSnapshot, type ToolGroup, type ToolGroupConfig, type McpServerConfig, type SkillConfig,
+  listMcpServers,
+  type AgentConfig, type ToolGroup, type ToolGroupConfig, type McpServerConfig, type SkillConfig,
 } from '@/services/gatewayApi'
 
 // ── 列表状态 ──────────────────────────────────────────────────────────────────
@@ -419,10 +299,6 @@ function truncate(str: string, len: number) {
   return str.length > len ? str.slice(0, len) + '…' : str
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false }).slice(0, 16)
-}
-
 // ── 选中代理 ──────────────────────────────────────────────────────────────────
 const selectedAgent = ref<AgentConfig | null>(null)
 const activeTab = ref('overview')
@@ -434,18 +310,23 @@ function selectAgent(a: AgentConfig) {
     // 重置工具和文件列表
     toolGroups.value = []
     toolSettingsDirty.value = false
-    geneFiles.value = []
     allSkills.value = []
     boundSkillIds.value = []
     skillsDirty.value = false
+    mcpEnabledIds.value = [...a.enabledMcpServerIds]
+    mcpSelectionDirty.value = false
   }
 }
 
 // 切换 Tab 时懒加载数据
 watch(activeTab, async (tab) => {
   if (!selectedAgent.value) return
-  if (tab === 'files') await loadGeneFiles()
-  if (tab === 'tools') await loadTools(selectedAgent.value)
+  if (tab === 'tools') {
+    await loadTools(selectedAgent.value)
+  }
+  if (tab === 'mcp') {
+    await loadMcpServers()
+  }
   if (tab === 'skills') await loadAgentSkills(selectedAgent.value)
 })
 
@@ -464,15 +345,10 @@ async function onToggleEnabled(a: AgentConfig, val: boolean) {
 }
 
 // ── 创建/编辑 Dialog ──────────────────────────────────────────────────────────
-interface McpServerFormItem extends McpServerConfig {
-  argsText: string
-}
-
 interface AgentForm {
   name: string
-  systemPrompt: string
+  description: string
   isEnabled: boolean
-  mcpServers: McpServerFormItem[]
 }
 
 const dialogVisible = ref(false)
@@ -481,14 +357,13 @@ const editingAgent = ref<AgentConfig | null>(null)
 
 const form = ref<AgentForm>({
   name: '',
-  systemPrompt: '',
+  description: '',
   isEnabled: true,
-  mcpServers: [],
 })
 
 function openCreateDialog() {
   editingAgent.value = null
-  form.value = { name: '', systemPrompt: '', isEnabled: true, mcpServers: [] }
+  form.value = { name: '', description: '', isEnabled: true }
   dialogVisible.value = true
 }
 
@@ -496,30 +371,10 @@ function openEditDialog(a: AgentConfig) {
   editingAgent.value = a
   form.value = {
     name: a.name,
-    systemPrompt: a.systemPrompt,
+    description: a.description,
     isEnabled: a.isEnabled,
-    mcpServers: a.mcpServers.map(s => ({
-      ...s,
-      argsText: s.args?.join(' ') ?? '',
-    })),
   }
   dialogVisible.value = true
-}
-
-function addMcpServer() {
-  form.value.mcpServers.push({
-    name: '',
-    transportType: 'stdio',
-    command: '',
-    args: null,
-    env: null,
-    url: null,
-    argsText: '',
-  })
-}
-
-function removeMcpServer(idx: number) {
-  form.value.mcpServers.splice(idx, 1)
 }
 
 async function saveAgent() {
@@ -527,30 +382,19 @@ async function saveAgent() {
 
   saving.value = true
   try {
-    const mcpServers: McpServerConfig[] = form.value.mcpServers.map(s => ({
-      name: s.name,
-      transportType: s.transportType,
-      command: s.command || null,
-      args: s.argsText ? s.argsText.trim().split(/\s+/) : null,
-      env: s.env || null,
-      url: s.url || null,
-    }))
-
     if (editingAgent.value) {
       await updateAgent({
         id: editingAgent.value.id,
         name: form.value.name,
-        systemPrompt: form.value.systemPrompt,
+        description: form.value.description,
         isEnabled: form.value.isEnabled,
-        mcpServers,
       })
       ElMessage.success('已保存')
     } else {
       await createAgent({
         name: form.value.name,
-        systemPrompt: form.value.systemPrompt,
+        description: form.value.description,
         isEnabled: form.value.isEnabled,
-        mcpServers,
       })
       ElMessage.success('创建成功')
     }
@@ -584,106 +428,46 @@ async function confirmDelete(a: AgentConfig) {
   }
 }
 
-// ── DNA 基因文件 ───────────────────────────────────────────────────────────────
-const dnaLoading = ref(false)
-const geneFiles = ref<GeneFile[]>([])
+// ── 全局 MCP Server 引用管理 ──────────────────────────────────────────────────
+const mcpServersLoading = ref(false)
+const allMcpServers = ref<McpServerConfig[]>([])
+const mcpEnabledIds = ref<string[]>([])
+const mcpSelectionDirty = ref(false)
+const savingMcpSelection = ref(false)
 
-async function loadGeneFiles() {
-  if (!selectedAgent.value) return
-  dnaLoading.value = true
+async function loadMcpServers() {
+  mcpServersLoading.value = true
   try {
-    geneFiles.value = await listAgentDna(selectedAgent.value.id)
+    allMcpServers.value = await listMcpServers()
+  } catch {
+    // 加载失败由全局拦截器展示后端错误信息
   } finally {
-    dnaLoading.value = false
+    mcpServersLoading.value = false
   }
 }
 
-// ── 基因文件编辑 ──────────────────────────────────────────────────────────────
-const geneEditDialogVisible = ref(false)
-const geneSaving = ref(false)
-const editingGene = ref<GeneFile | null>(null)
-const geneForm = ref({ fileName: '', category: '', content: '' })
-
-function openNewGeneDialog() {
-  editingGene.value = null
-  geneForm.value = { fileName: '', category: '', content: '' }
-  geneEditDialogVisible.value = true
+function toggleMcpServer(id: string, enabled: boolean) {
+  if (enabled) {
+    if (!mcpEnabledIds.value.includes(id)) mcpEnabledIds.value = [...mcpEnabledIds.value, id]
+  } else {
+    mcpEnabledIds.value = mcpEnabledIds.value.filter(x => x !== id)
+  }
+  mcpSelectionDirty.value = true
 }
 
-function openEditGeneDialog(g: GeneFile) {
-  editingGene.value = g
-  geneForm.value = { fileName: g.fileName, category: g.category, content: g.content }
-  geneEditDialogVisible.value = true
-}
-
-async function saveGene() {
-  if (!geneForm.value.fileName.trim()) { ElMessage.warning('请填写文件名'); return }
+async function saveMcpSelection() {
   if (!selectedAgent.value) return
-  geneSaving.value = true
+  savingMcpSelection.value = true
   try {
-    await writeAgentDna(selectedAgent.value.id, geneForm.value.fileName, geneForm.value.content, geneForm.value.category)
-    ElMessage.success('已保存')
-    geneEditDialogVisible.value = false
-    await loadGeneFiles()
+    await updateAgent({ id: selectedAgent.value.id, enabledMcpServerIds: mcpEnabledIds.value })
+    selectedAgent.value = { ...selectedAgent.value, enabledMcpServerIds: [...mcpEnabledIds.value] }
+    mcpSelectionDirty.value = false
+    ElMessage.success('MCP 引用已保存')
+    await loadData()
   } catch {
     // 保存失败由全局拦截器展示后端错误信息
   } finally {
-    geneSaving.value = false
-  }
-}
-
-async function deleteGene(g: GeneFile) {
-  if (!selectedAgent.value) return
-  await ElMessageBox.confirm(`确定删除「${g.fileName}」？`, '删除确认', {
-    confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
-  })
-  try {
-    await deleteAgentDna(selectedAgent.value.id, g.fileName, g.category)
-    ElMessage.success('已删除')
-    await loadGeneFiles()
-  } catch {
-    // 删除失败由全局拦截器展示后端错误信息
-  }
-}
-
-// ── DNA 版本快照 ──────────────────────────────────────────────────────────────
-const snapshotDrawerVisible = ref(false)
-const snapshotLoading = ref(false)
-const snapshotTarget = ref<GeneFile | null>(null)
-const snapshots = ref<GeneFileSnapshot[]>([])
-const previewingSnapshot = ref<GeneFileSnapshot | null>(null)
-const restoringSnapshotId = ref<string | null>(null)
-
-async function openSnapshotDrawer(g: GeneFile) {
-  snapshotTarget.value = g
-  previewingSnapshot.value = null
-  snapshotDrawerVisible.value = true
-  snapshotLoading.value = true
-  try {
-    if (!selectedAgent.value) return
-    snapshots.value = await listDnaSnapshots(selectedAgent.value.id, g.fileName, g.category)
-  } finally {
-    snapshotLoading.value = false
-  }
-}
-
-async function restoreSnapshot(snap: GeneFileSnapshot) {
-  if (!selectedAgent.value || !snapshotTarget.value) return
-  await ElMessageBox.confirm(
-    `确定将「${snapshotTarget.value.fileName}」回滚至 ${formatDate(snap.savedAt)} 的版本？当前内容将被保存为新快照。`,
-    '回滚确认',
-    { confirmButtonText: '确认回滚', cancelButtonText: '取消', type: 'warning' }
-  )
-  restoringSnapshotId.value = snap.snapshotId
-  try {
-    await restoreDnaSnapshot(selectedAgent.value.id, snapshotTarget.value.fileName, snap.snapshotId, snapshotTarget.value.category)
-    ElMessage.success('已回滚至历史版本')
-    snapshotDrawerVisible.value = false
-    await loadGeneFiles()
-  } catch {
-    // 回滚失败由全局拦截器展示后端错误信息
-  } finally {
-    restoringSnapshotId.value = null
+    savingMcpSelection.value = false
   }
 }
 

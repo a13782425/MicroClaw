@@ -104,7 +104,14 @@
             <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
             <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
             <el-divider direction="vertical" />
-            <el-button link type="danger" :icon="Delete" @click="confirmDelete(c)">删除</el-button>
+            <el-button
+              v-if="c.id !== 'web'"
+              link
+              type="danger"
+              :icon="Delete"
+              @click="confirmDelete(c)"
+            >删除</el-button>
+            <el-tag v-else type="info" size="small">内置</el-tag>
           </div>
         </div>
         <div

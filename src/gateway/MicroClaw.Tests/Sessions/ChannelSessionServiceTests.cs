@@ -77,6 +77,7 @@ public sealed class ChannelSessionServiceTests : IDisposable
 
         session.Should().NotBeNull();
         session.ChannelType.Should().Be(ChannelType.Feishu);
+        session.ChannelId.Should().Be("channel-1");
         session.ProviderId.Should().Be("provider-1");
         session.Title.Should().Contain("My Feishu Bot");
         session.Title.Should().Contain("sender-a");

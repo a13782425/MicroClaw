@@ -281,13 +281,17 @@ export type SessionInfo = {
   providerId: string
   isApproved: boolean
   channelType: ChannelType
+  channelId: string
   createdAt: string
+  agentId?: string | null
   approvalReason?: string | null
 }
 
 export type CreateSessionRequest = {
   title: string
   providerId: string
+  channelId?: string
+  agentId?: string
 }
 
 export type ChatRequest = {
@@ -321,16 +325,6 @@ export async function approveSession(id: string, reason?: string): Promise<Sessi
 
 export async function disableSession(id: string, reason?: string): Promise<SessionInfo> {
   const { data } = await axios.post<SessionInfo>('/api/sessions/disable', { id, reason })
-  return data
-}
-
-export async function batchApproveSession(ids: string[], reason?: string): Promise<{ updated: SessionInfo[]; count: number }> {
-  const { data } = await axios.post('/api/sessions/approve-batch', { ids, reason })
-  return data
-}
-
-export async function batchDisableSession(ids: string[], reason?: string): Promise<{ updated: SessionInfo[]; count: number }> {
-  const { data } = await axios.post('/api/sessions/disable-batch', { ids, reason })
   return data
 }
 
@@ -433,43 +427,32 @@ export function streamChat(
 
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
-export type McpTransportType = 'stdio' | 'sse'
-
-export type McpServerConfig = {
-  name: string
-  transportType: McpTransportType
-  command?: string | null
-  args?: string[] | null
-  env?: Record<string, string | null> | null
-  url?: string | null
-}
-
 export type AgentConfig = {
   id: string
   name: string
-  systemPrompt: string
+  description: string
   isEnabled: boolean
   isDefault: boolean
   boundSkillIds: string[]
-  mcpServers: McpServerConfig[]
+  enabledMcpServerIds: string[]
   createdAtUtc: string
 }
 
 export type AgentCreateRequest = {
   name: string
-  systemPrompt?: string
+  description?: string
   isEnabled?: boolean
   boundSkillIds?: string[]
-  mcpServers?: McpServerConfig[]
+  enabledMcpServerIds?: string[]
 }
 
 export type AgentUpdateRequest = {
   id: string
   name?: string
-  systemPrompt?: string
+  description?: string
   isEnabled?: boolean
   boundSkillIds?: string[]
-  mcpServers?: McpServerConfig[]
+  enabledMcpServerIds?: string[]
 }
 
 export type ToolItem = {
@@ -496,19 +479,12 @@ export type ToolGroupConfig = {
   disabledToolNames?: string[]
 }
 
-export type GeneFile = {
+// B-03：Session DNA 固定文件（SOUL / USER / AGENTS）
+export type SessionDnaFileInfo = {
   fileName: string
-  category: string
+  description: string
   content: string
   updatedAt: string
-}
-
-export type GeneFileSnapshot = {
-  snapshotId: string
-  fileName: string
-  category: string
-  savedAt: string
-  content: string
 }
 
 export type McpTool = {
@@ -539,58 +515,6 @@ export async function updateAgent(req: AgentUpdateRequest): Promise<{ id: string
 
 export async function deleteAgent(id: string): Promise<void> {
   await axios.post('/api/agents/delete', { id })
-}
-
-export async function listAgentDna(agentId: string): Promise<GeneFile[]> {
-  const { data } = await axios.get<GeneFile[]>(`/api/agents/${agentId}/dna`)
-  return data
-}
-
-export async function writeAgentDna(
-  agentId: string,
-  fileName: string,
-  content: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>(`/api/agents/${agentId}/dna`, {
-    fileName,
-    content,
-    category,
-  })
-  return data
-}
-
-export async function deleteAgentDna(
-  agentId: string,
-  fileName: string,
-  category = ''
-): Promise<void> {
-  await axios.post(`/api/agents/${agentId}/dna/delete`, { fileName, category })
-}
-
-export async function listDnaSnapshots(
-  agentId: string,
-  fileName: string,
-  category = ''
-): Promise<GeneFileSnapshot[]> {
-  const { data } = await axios.get<GeneFileSnapshot[]>(`/api/agents/${agentId}/dna/snapshots`, {
-    params: { fileName, category },
-  })
-  return data
-}
-
-export async function restoreDnaSnapshot(
-  agentId: string,
-  fileName: string,
-  snapshotId: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>(`/api/agents/${agentId}/dna/restore`, {
-    fileName,
-    snapshotId,
-    category,
-  })
-  return data
 }
 
 export async function listAgentTools(agentId: string): Promise<AgentToolsResponse> {
@@ -744,185 +668,152 @@ export async function fetchUsageStats(startDate: string, endDate: string): Promi
   return data
 }
 
-// ─── 全局 DNA（三层架构第一层）──────────────────────────────────────────────────
-
-export async function listGlobalDna(): Promise<GeneFile[]> {
-  const { data } = await axios.get<GeneFile[]>('/api/dna')
-  return data
-}
-
-export async function writeGlobalDna(
-  fileName: string,
-  content: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>('/api/dna', { fileName, content, category })
-  return data
-}
-
-export async function deleteGlobalDna(fileName: string, category = ''): Promise<void> {
-  await axios.post('/api/dna/delete', { fileName, category })
-}
-
-export async function listGlobalDnaSnapshots(
-  fileName: string,
-  category = ''
-): Promise<GeneFileSnapshot[]> {
-  const { data } = await axios.get<GeneFileSnapshot[]>('/api/dna/snapshots', {
-    params: { fileName, category },
-  })
-  return data
-}
-
-export async function restoreGlobalDnaSnapshot(
-  fileName: string,
-  snapshotId: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>('/api/dna/restore', {
-    fileName,
-    snapshotId,
-    category,
-  })
-  return data
-}
-
-// ─── DNA 导出/导入 Markdown ───────────────────────────────────────────────────
-
-export type DnaImportEntryResult = {
-  fileName: string
-  category: string
-  success: boolean
-  error?: string | null
-}
-
-export type DnaImportResponse = {
-  imported: number
-  total: number
-  entries: DnaImportEntryResult[]
-}
-
-export async function exportAgentDna(agentId: string): Promise<string> {
-  const { data } = await axios.get<string>(`/api/agents/${agentId}/dna/export`, {
-    responseType: 'text',
-  })
-  return data
-}
-
-export async function importAgentDna(agentId: string, content: string): Promise<DnaImportResponse> {
-  const { data } = await axios.post<DnaImportResponse>(`/api/agents/${agentId}/dna/import`, {
-    content,
-  })
-  return data
-}
-
-export async function exportGlobalDna(): Promise<string> {
-  const { data } = await axios.get<string>('/api/dna/export', { responseType: 'text' })
-  return data
-}
-
-export async function importGlobalDna(content: string): Promise<DnaImportResponse> {
-  const { data } = await axios.post<DnaImportResponse>('/api/dna/import', { content })
-  return data
-}
-
-// ─── DNA 从飞书文档导入（F-C-6）──────────────────────────────────────────────
+// ─── Session DNA 飞书文档导入（F-C-6）──────────────────────────────────────────
 
 export type FeishuDocImportResult = {
   success: boolean
-  file: GeneFile
+  file: SessionDnaFileInfo
   charCount: number
-}
-
-export async function importGlobalDnaFromFeishu(
-  docUrlOrToken: string,
-  fileName: string,
-  category = ''
-): Promise<FeishuDocImportResult> {
-  const { data } = await axios.post<FeishuDocImportResult>('/api/dna/import-from-feishu', {
-    docUrlOrToken,
-    fileName,
-    category,
-  })
-  return data
-}
-
-export async function importAgentDnaFromFeishu(
-  agentId: string,
-  docUrlOrToken: string,
-  fileName: string,
-  category = ''
-): Promise<FeishuDocImportResult> {
-  const { data } = await axios.post<FeishuDocImportResult>(
-    `/api/agents/${agentId}/dna/import-from-feishu`,
-    { docUrlOrToken, fileName, category }
-  )
-  return data
 }
 
 export async function importSessionDnaFromFeishu(
   sessionId: string,
   docUrlOrToken: string,
-  fileName: string,
-  category = ''
+  fileName: string
 ): Promise<FeishuDocImportResult> {
   const { data } = await axios.post<FeishuDocImportResult>(
     `/api/sessions/${sessionId}/dna/import-from-feishu`,
-    { docUrlOrToken, fileName, category }
+    { docUrlOrToken, fileName }
   )
   return data
 }
 
 
 
-export async function listSessionDna(sessionId: string): Promise<GeneFile[]> {
-  const { data } = await axios.get<GeneFile[]>(`/api/sessions/${sessionId}/dna`)
+export async function listSessionDna(sessionId: string): Promise<SessionDnaFileInfo[]> {
+  const { data } = await axios.get<SessionDnaFileInfo[]>(`/api/sessions/${sessionId}/dna`)
   return data
 }
 
-export async function writeSessionDna(
+export async function getSessionDnaFile(sessionId: string, fileName: string): Promise<SessionDnaFileInfo> {
+  const { data } = await axios.get<SessionDnaFileInfo>(`/api/sessions/${sessionId}/dna/${fileName}`)
+  return data
+}
+
+export async function updateSessionDna(
   sessionId: string,
   fileName: string,
-  content: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>(`/api/sessions/${sessionId}/dna`, {
+  content: string
+): Promise<SessionDnaFileInfo> {
+  const { data } = await axios.post<SessionDnaFileInfo>(`/api/sessions/${sessionId}/dna`, {
     fileName,
     content,
-    category,
   })
   return data
 }
 
-export async function deleteSessionDna(
-  sessionId: string,
-  fileName: string,
-  category = ''
-): Promise<void> {
-  await axios.post(`/api/sessions/${sessionId}/dna/delete`, { fileName, category })
+// ─── Session Memory ───────────────────────────────────────────────────────────
+
+export type DailyMemoryInfo = {
+  date: string
+  content: string
+  updatedAt: string
 }
 
-export async function listSessionDnaSnapshots(
-  sessionId: string,
-  fileName: string,
-  category = ''
-): Promise<GeneFileSnapshot[]> {
-  const { data } = await axios.get<GeneFileSnapshot[]>(`/api/sessions/${sessionId}/dna/snapshots`, {
-    params: { fileName, category },
-  })
+export async function getSessionMemory(sessionId: string): Promise<string> {
+  const { data } = await axios.get<{ content: string }>(`/api/sessions/${sessionId}/memory`)
+  return data.content
+}
+
+export async function updateSessionMemory(sessionId: string, content: string): Promise<string> {
+  const { data } = await axios.post<{ content: string }>(`/api/sessions/${sessionId}/memory`, { content })
+  return data.content
+}
+
+export async function listSessionDailyMemories(sessionId: string): Promise<string[]> {
+  const { data } = await axios.get<{ dates: string[] }>(`/api/sessions/${sessionId}/memory/daily`)
+  return data.dates
+}
+
+export async function getSessionDailyMemory(sessionId: string, date: string): Promise<DailyMemoryInfo> {
+  const { data } = await axios.get<DailyMemoryInfo>(`/api/sessions/${sessionId}/memory/daily/${date}`)
   return data
 }
 
-export async function restoreSessionDnaSnapshot(
-  sessionId: string,
-  fileName: string,
-  snapshotId: string,
-  category = ''
-): Promise<GeneFile> {
-  const { data } = await axios.post<GeneFile>(`/api/sessions/${sessionId}/dna/restore`, {
-    fileName,
-    snapshotId,
-    category,
-  })
+// ─── MCP Servers ─────────────────────────────────────────────────────────────
+
+export type McpTransportType = 'stdio' | 'sse'
+
+export type McpServerConfig = {
+  id: string
+  name: string
+  transportType: McpTransportType
+  command?: string | null
+  args?: string[] | null
+  env?: Record<string, string | null> | null
+  url?: string | null
+  isEnabled: boolean
+  createdAtUtc: string
+}
+
+export type McpServerCreateRequest = {
+  name: string
+  transportType?: McpTransportType
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  isEnabled?: boolean
+}
+
+export type McpServerUpdateRequest = {
+  id: string
+  name?: string
+  transportType?: McpTransportType
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  isEnabled?: boolean
+}
+
+export type McpToolInfo = {
+  name: string
+  description?: string
+}
+
+export type McpTestResult = {
+  success: boolean
+  toolCount?: number
+  toolNames?: string[]
+  error?: string
+}
+
+export async function listMcpServers(): Promise<McpServerConfig[]> {
+  const { data } = await axios.get<McpServerConfig[]>('/api/mcp-servers')
+  return data
+}
+
+export async function createMcpServer(req: McpServerCreateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/mcp-servers', req)
+  return data
+}
+
+export async function updateMcpServer(req: McpServerUpdateRequest): Promise<{ id: string }> {
+  const { data } = await axios.post<{ id: string }>('/api/mcp-servers/update', req)
+  return data
+}
+
+export async function deleteMcpServer(id: string): Promise<void> {
+  await axios.post('/api/mcp-servers/delete', { id })
+}
+
+export async function testMcpServer(id: string): Promise<McpTestResult> {
+  const { data } = await axios.post<McpTestResult>(`/api/mcp-servers/${id}/test`)
+  return data
+}
+
+export async function listMcpServerTools(id: string): Promise<McpToolInfo[]> {
+  const { data } = await axios.get<McpToolInfo[]>(`/api/mcp-servers/${id}/tools`)
   return data
 }

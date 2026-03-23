@@ -6,6 +6,7 @@ using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Channels.WeCom;
+using MicroClaw.Tools;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
 using MicroClaw.Skills;
@@ -68,6 +69,7 @@ public class ServeCommand : Command
 		ValidateStartupConfiguration(app);
 		MigrateDatabase(app);
 		SeedDefaultAgent(app);
+		EnsureWebChannel(app);
 		ConfigureMiddleware(app);
 		MapEndpoints(app);
 
@@ -180,11 +182,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderClientFactory>();
 
 		// Agent 服务
-		string agentsDataDir = ResolveAgentsDataDir(home, configFile);
 		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
-		string globalDnaDir = Path.Combine(workspaceRoot, "dna");
 		builder.Services.AddSingleton<AgentStore>();
-		builder.Services.AddSingleton<DNAService>(_ => new DNAService(agentsDataDir, globalDnaDir, sessionsDir));
+		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
+		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
 			sp.GetRequiredService<SessionStore>(),
@@ -198,6 +199,9 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ => new SkillService(workspaceRoot));
 		builder.Services.AddSingleton<SkillRunner>();
+
+		// MCP Server 全局管理
+		builder.Services.AddSingleton<McpServerConfigStore>();
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),
 			sp.GetRequiredService<SkillService>(),
@@ -245,6 +249,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<FeishuToolsFactory>();
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
 		builder.Services.AddHostedService<FeishuDocSyncJob>();
+		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
+		builder.Services.AddHostedService<MemorySummarizationJob>();
 
 		builder.Services.AddSingleton<IChannel, WeComChannel>();
 		builder.Services.AddSingleton<IChannel, WeChatChannel>();
@@ -281,6 +287,14 @@ public class ServeCommand : Command
 		using var scope = app.Services.CreateScope();
 		var agentStore = scope.ServiceProvider.GetRequiredService<AgentStore>();
 		agentStore.EnsureMainAgent();
+	}
+
+	/// <summary>确保内置 Web Channel 存在（幂等）。</summary>
+	private static void EnsureWebChannel(WebApplication app)
+	{
+		using var scope = app.Services.CreateScope();
+		var channelStore = scope.ServiceProvider.GetRequiredService<ChannelConfigStore>();
+		channelStore.EnsureWebChannel();
 	}
 
 	/// <summary>配置中间件管道：请求日志、认证授权、Swagger UI、默认文件、Brotli 预压缩及静态文件服务。</summary>
@@ -417,16 +431,6 @@ public class ServeCommand : Command
 		if (!string.IsNullOrWhiteSpace(configFile))
 			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "sessions");
 		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "sessions");
-	}
-
-	/// <summary>返回 Agent DNA 基因文件的存储根目录路径（workspace/agents/）。</summary>
-	private static string ResolveAgentsDataDir(string? home, string? configFile)
-	{
-		if (!string.IsNullOrWhiteSpace(home))
-			return Path.Combine(home, "workspace", "agents");
-		if (!string.IsNullOrWhiteSpace(configFile))
-			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "agents");
-		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "agents");
 	}
 
 	/// <summary>返回 workspace 根目录路径，供 Skills 等子目录使用。</summary>

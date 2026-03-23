@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Gateway.Contracts.Sessions;
 using Microsoft.Extensions.AI;
@@ -15,7 +14,7 @@ public static class SubAgentTools
     private static readonly IReadOnlyList<(string Name, string Description)> BuiltinToolDescriptions =
     [
         ("spawn_subagent", "启动子代理会话执行专项任务，并等待结果。当主任务需要将部分工作委派给具有特定专长的子代理时使用。子代理会话会被持久化，可在会话列表中查看执行历史。"),
-        ("write_session_dna", "将重要信息持久化写入当前会话的 DNA 记忆（会话级私有上下文）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
+        ("write_session_dna", "将重要信息追加写入当前会话的长期记忆（MEMORY.md）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
     ];
 
     /// <summary>返回内置工具元数据（供工具列表 API 使用，不需要 sessionId）。</summary>
@@ -23,13 +22,13 @@ public static class SubAgentTools
         BuiltinToolDescriptions;
 
     /// <summary>
-    /// 为指定 Session 创建内置工具列表（子代理 + 会话 DNA 写入）。
+    /// 为指定 Session 创建内置工具列表（子代理 + 会话记忆写入）。
     /// </summary>
     public static IReadOnlyList<AIFunction> CreateForSession(
         string sessionId,
         AgentStore agentStore,
         ISubAgentRunner subAgentRunner,
-        DNAService dnaService)
+        MemoryService memoryService)
     {
         return
         [
@@ -62,26 +61,22 @@ public static class SubAgentTools
 
             AIFunctionFactory.Create(
                 (
-                    [Description("记忆文件名，建议使用英文短名（如 user-prefs.md）。若不含 .md 后缀会自动补全。")] string fileName,
-                    [Description("要写入的 Markdown 格式内容，完整覆盖写入（非追加）。")] string content,
-                    [Description("可选子目录分类标签（如 preferences、decisions），用于归类管理。留空则写到根目录。")] string? category) =>
+                    [Description("要追加写入长期记忆的 Markdown 格式内容（如用户偏好、关键约定、阶段性结论）。")] string content) =>
                 {
-                    // 路径净化：防止路径穿越
-                    string safeName = Path.GetFileName(fileName.Trim());
-                    if (string.IsNullOrWhiteSpace(safeName))
-                        return (object)new { success = false, error = "fileName 不能为空。" };
-
-                    // 自动补全 .md 后缀
-                    if (!safeName.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
-                        safeName += ".md";
-
-                    string safeCategory = SanitizeCategory(category);
+                    if (string.IsNullOrWhiteSpace(content))
+                        return (object)new { success = false, error = "content 不能为空。" };
 
                     try
                     {
-                        GeneFile written = dnaService.WriteSession(sessionId, safeCategory, safeName, content ?? string.Empty);
-                        int sizeBytes = Encoding.UTF8.GetByteCount(written.Content);
-                        return (object)new { success = true, fileName = written.FileName, category = written.Category, sizeBytes };
+                        // 追加到当日记忆
+                        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                        DailyMemoryInfo? existing = memoryService.GetDailyMemory(sessionId, today);
+                        string current = existing?.Content ?? string.Empty;
+                        string newContent = string.IsNullOrWhiteSpace(current)
+                            ? content.Trim()
+                            : current.TrimEnd() + "\n\n" + content.Trim();
+                        memoryService.WriteDailyMemory(sessionId, today, newContent);
+                        return (object)new { success = true, date = today, charCount = newContent.Length };
                     }
                     catch (Exception ex)
                     {
@@ -89,17 +84,7 @@ public static class SubAgentTools
                     }
                 },
                 name: "write_session_dna",
-                description: "将重要信息持久化写入当前会话的 DNA 记忆（会话级私有上下文）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
+                description: "将重要信息追加写入当前会话的长期记忆（MEMORY.md）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
         ];
-    }
-
-    /// <summary>净化 category 路径段，防止路径穿越攻击。</summary>
-    private static string SanitizeCategory(string? category)
-    {
-        if (string.IsNullOrWhiteSpace(category)) return string.Empty;
-        return string.Join("/",
-            category.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(Path.GetFileName)
-                    .Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 }

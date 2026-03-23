@@ -1,6 +1,5 @@
 using FluentAssertions;
 using MicroClaw.Agent;
-using MicroClaw.Tools;
 using MicroClaw.Tests.Fixtures;
 
 namespace MicroClaw.Tests.Agents;
@@ -24,10 +23,10 @@ public sealed class AgentStoreTests : IDisposable
         new(
             Id: string.Empty,
             Name: name,
-            SystemPrompt: "You are a helpful assistant.",
+            Description: "A test agent.",
             IsEnabled: isEnabled,
             BoundSkillIds: [],
-            McpServers: [],
+            EnabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             IsDefault: isDefault);
@@ -82,13 +81,13 @@ public sealed class AgentStoreTests : IDisposable
     public void Update_ExistingAgent_ReturnsUpdated()
     {
         var added = _store.Add(CreateSampleConfig(name: "Original"));
-        var updated = added with { Name = "Updated", SystemPrompt = "New prompt" };
+        var updated = added with { Name = "Updated", Description = "New description" };
 
         var result = _store.Update(added.Id, updated);
 
         result.Should().NotBeNull();
         result!.Name.Should().Be("Updated");
-        result.SystemPrompt.Should().Be("New prompt");
+        result.Description.Should().Be("New description");
     }
 
     [Fact]
@@ -176,11 +175,11 @@ public sealed class AgentStoreTests : IDisposable
         _store.EnsureMainAgent();
         var main = _store.GetDefault()!;
 
-        _store.Update(main.Id, main with { Name = "hacked-name", SystemPrompt = "new prompt" });
+        _store.Update(main.Id, main with { Name = "hacked-name", Description = "new description" });
 
         var after = _store.GetById(main.Id)!;
         after.Name.Should().Be("main");
-        after.SystemPrompt.Should().Be("new prompt"); // 非名称字段可修改
+        after.Description.Should().Be("new description"); // 非名称字段可修改
     }
 
     // --- JSON 序列化往返测试 ---
@@ -198,20 +197,14 @@ public sealed class AgentStoreTests : IDisposable
     }
 
     [Fact]
-    public void McpServers_RoundTrip_Preserved()
+    public void EnabledMcpServerIds_RoundTrip_Preserved()
     {
-        var servers = new[]
-        {
-            new McpServerConfig("filesystem", McpTransportType.Stdio, "/usr/bin/npx", ["-y", "@modelcontextprotocol/server-filesystem"])
-        };
-        var config = CreateSampleConfig() with { McpServers = servers };
+        var mcpIds = new[] { "mcp-id-1", "mcp-id-2" };
+        var config = CreateSampleConfig() with { EnabledMcpServerIds = mcpIds };
 
         var added = _store.Add(config);
         var retrieved = _store.GetById(added.Id)!;
 
-        retrieved.McpServers.Should().ContainSingle()
-            .Which.Name.Should().Be("filesystem");
-        retrieved.McpServers[0].TransportType.Should().Be(McpTransportType.Stdio);
-        retrieved.McpServers[0].Args.Should().BeEquivalentTo(new[] { "-y", "@modelcontextprotocol/server-filesystem" });
+        retrieved.EnabledMcpServerIds.Should().BeEquivalentTo(mcpIds);
     }
 }

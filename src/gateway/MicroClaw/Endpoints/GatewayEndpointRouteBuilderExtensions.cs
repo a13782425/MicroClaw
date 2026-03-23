@@ -1,5 +1,6 @@
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Skills.Endpoints;
+using MicroClaw.Tools.Endpoints;
 
 namespace MicroClaw.Endpoints;
 
@@ -19,11 +20,11 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapAdminEndpoints();
 		protectedApi.MapSessionEndpoints();
 		protectedApi.MapAgentEndpoints();
-		protectedApi.MapGlobalDnaEndpoints();
 		protectedApi.MapFeishuDocImportEndpoints();
 		protectedApi.MapCronEndpoints();
 		protectedApi.MapSkillEndpoints();
 		protectedApi.MapUsageEndpoints();
+		protectedApi.MapMcpEndpoints();
 
 		return endpoints;
 	}

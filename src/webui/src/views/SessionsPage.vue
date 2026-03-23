@@ -35,6 +35,13 @@
               effect="plain"
               class="channel-tag"
             >{{ channelLabel(session.channelType) }}</el-tag>
+            <el-tag
+              v-if="session.agentId && !isDefaultAgent(session.agentId)"
+              size="small"
+              type="warning"
+              effect="plain"
+              class="channel-tag"
+            >{{ agentName(session.agentId) }}</el-tag>
           </div>
           <div class="session-actions">
             <el-button
@@ -89,7 +96,6 @@
           </div>
         </div>
 
-        <!-- 消息列表 -->
         <div class="chat-messages" ref="messagesEl" @scroll="handleMessagesScroll">
           <div v-if="store.loading" class="loading-wrap">
             <el-skeleton :rows="4" animated />
@@ -185,7 +191,7 @@
     </div>
 
     <!-- 新建会话对话框 -->
-    <el-dialog v-model="showCreate" title="新建会话" width="420px" :close-on-click-modal="false">
+    <el-dialog v-model="showCreate" title="新建会话" width="440px" :close-on-click-modal="false">
       <el-form :model="createForm" label-width="80px">
         <el-form-item label="会话名称" required>
           <el-input v-model="createForm.title" placeholder="为此会话取个名字" maxlength="50" show-word-limit />
@@ -197,6 +203,26 @@
               :key="p.id"
               :label="p.displayName + ' (' + p.modelName + ')'"
               :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="渠道">
+          <el-select v-model="createForm.channelId" placeholder="默认 Web" style="width: 100%">
+            <el-option
+              v-for="c in enabledChannels"
+              :key="c.id"
+              :label="c.displayName"
+              :value="c.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Agent">
+          <el-select v-model="createForm.agentId" placeholder="默认 main" style="width: 100%">
+            <el-option
+              v-for="a in enabledAgents"
+              :key="a.id"
+              :label="a.name"
+              :value="a.id"
             />
           </el-select>
         </el-form-item>
@@ -217,7 +243,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useSessionStore } from '@/stores/sessionStore'
-import { listProviders, switchSessionProvider, type ProviderConfig, type MessageAttachment } from '@/services/gatewayApi'
+import {
+  listProviders, switchSessionProvider,
+  listChannels, listAgents,
+  type ProviderConfig, type MessageAttachment, type ChannelConfig, type AgentConfig
+} from '@/services/gatewayApi'
 import ChatMessage from '@/components/ChatMessage.vue'
 import { SYSTEM_SOURCES } from '@/services/gatewayApi'
 import {
@@ -236,11 +266,15 @@ const pendingAttachments = ref<MessageAttachment[]>([])
 const messagesEl = ref<HTMLElement | null>(null)
 const providers = ref<ProviderConfig[]>([])
 const enabledProviders = ref<ProviderConfig[]>([])
+const channels = ref<ChannelConfig[]>([])
+const enabledChannels = ref<ChannelConfig[]>([])
+const agents = ref<AgentConfig[]>([])
+const enabledAgents = ref<AgentConfig[]>([])
 
 // sessionId → 当前是否有 Agent 在后台运行（非流式，如渠道消息触发的对话）
 const runningSessionIds = ref<Set<string>>(new Set())
 
-const createForm = ref({ title: '', providerId: '' })
+const createForm = ref({ title: '', providerId: '', channelId: '', agentId: '' })
 
 // 过滤掉所有系统自动触发的用户消息（cron/skill/tool 等），不在 Web 界面显示
 const displayMessages = computed(() =>
@@ -254,6 +288,14 @@ onMounted(async () => {
   const defaultProvider = enabledProviders.value.find((p) => p.isDefault)
   if (defaultProvider) {
     createForm.value.providerId = defaultProvider.id
+  }
+  channels.value = await listChannels()
+  enabledChannels.value = channels.value.filter((c) => c.isEnabled)
+  agents.value = await listAgents()
+  enabledAgents.value = agents.value.filter((a) => a.isEnabled)
+  const defaultAgent = enabledAgents.value.find((a) => a.isDefault)
+  if (defaultAgent) {
+    createForm.value.agentId = defaultAgent.id
   }
   eventBus.on('session:created', onSessionEvent)
   eventBus.on('session:approved', onSessionEvent)
@@ -339,17 +381,26 @@ async function handleSelect(id: string) {
   scrollToBottom()
 }
 
+// ── DNA 相关 ─────────────────────────────────────────────────────────────────
+
+
+
+// ── Memory 相关 ──────────────────────────────────────────────────────────────
+
 async function handleCreate() {
   if (!createForm.value.title.trim() || !createForm.value.providerId) return
   creating.value = true
   try {
     const session = await store.addSession({
       title: createForm.value.title.trim(),
-      providerId: createForm.value.providerId
+      providerId: createForm.value.providerId,
+      channelId: createForm.value.channelId || undefined,
+      agentId: createForm.value.agentId || undefined,
     })
     showCreate.value = false
     const defaultProvider = enabledProviders.value.find((p) => p.isDefault)
-    createForm.value = { title: '', providerId: defaultProvider?.id ?? '' }
+    const defaultAgent = enabledAgents.value.find((a) => a.isDefault)
+    createForm.value = { title: '', providerId: defaultProvider?.id ?? '', channelId: '', agentId: defaultAgent?.id ?? '' }
     await store.selectSession(session.id)
     ElMessage.success('会话已创建，请等待管理员批准后方可对话')
   } catch {
@@ -395,6 +446,14 @@ function channelLabel(type: string): string {
 
 function isWebChannel(type: string): boolean {
   return !type || type === 'web'
+}
+
+function agentName(agentId: string): string {
+  return agents.value.find((a) => a.id === agentId)?.name ?? agentId
+}
+
+function isDefaultAgent(agentId: string): boolean {
+  return agents.value.find((a) => a.id === agentId)?.isDefault ?? false
 }
 
 async function handleSend() {

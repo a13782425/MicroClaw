@@ -3,15 +3,15 @@ using MicroClaw.Tools;
 namespace MicroClaw.Agent;
 
 /// <summary>
-/// Agent 配置数据模型。MCP Server 列表均序列化为 JSON 存入数据库。
+/// Agent 配置数据模型。Agent 作为能力组合器，通过引用全局 MCP Server ID 列表来指定工具。
 /// </summary>
 public sealed record AgentConfig(
     string Id,
     string Name,
-    string SystemPrompt,
+    string Description,
     bool IsEnabled,
     IReadOnlyList<string> BoundSkillIds,
-    IReadOnlyList<McpServerConfig> McpServers,
+    IReadOnlyList<string> EnabledMcpServerIds,
     IReadOnlyList<ToolGroupConfig> ToolGroupConfigs,
     DateTimeOffset CreatedAtUtc,
     bool IsDefault = false,
