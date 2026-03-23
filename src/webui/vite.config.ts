@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import Components from "unplugin-vue-components/vite";
 import AutoImport from "unplugin-auto-import/vite";
 import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
-import { compression } from "vite-plugin-compression2";
+// import { compression } from "vite-plugin-compression2";
 
 export default defineConfig(({ mode }) => {
   const microclawEnv = loadEnv(mode, resolve(__dirname, "../../.microclaw"), "");
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       vue(),
       AutoImport({ resolvers: [ElementPlusResolver()] }),
       Components({ resolvers: [ElementPlusResolver()] }),
-      compression({ algorithms: ['brotliCompress'], include: /\.(js|css)$/ }),
+      // compression({ algorithms: ['brotliCompress'], include: /\.(js|css)$/ }),
     ],
     resolve: {
       alias: {
