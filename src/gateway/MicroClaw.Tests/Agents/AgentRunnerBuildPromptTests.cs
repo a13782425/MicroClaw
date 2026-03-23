@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -61,7 +62,9 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             subAgentRunner:        Substitute.For<ISubAgentRunner>(),
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
-            agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>());
+            agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
+            channelConfigStore:    new ChannelConfigStore(dbFactory),
+            toolProviders:         []);
     }
 
     public void Dispose()

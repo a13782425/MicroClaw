@@ -1,5 +1,6 @@
 ﻿using MicroClaw.Agent.Memory;
-using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels;
+using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -32,7 +33,8 @@ public sealed class AgentRunner(
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
     IAgentStatusNotifier agentStatusNotifier,
-    FeishuToolsFactory? feishuToolsFactory = null) : IAgentMessageHandler
+    ChannelConfigStore channelConfigStore,
+    IEnumerable<IChannelToolProvider> toolProviders) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
 
@@ -100,9 +102,18 @@ public sealed class AgentRunner(
             _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
         }
 
-        // F-C-1: 追加飞书文档工具（全局可用，无需 sessionId，无已启用飞书渠道时自动跳过）
-        if (feishuToolsFactory is not null)
-            allTools.AddRange(feishuToolsFactory.CreateTools());
+        // 按会话所在渠道类型注入对应的渠道专属工具
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            SessionInfo? sessionForTools = sessionReader.Get(sessionId);
+            if (sessionForTools is not null)
+            {
+                ChannelConfig? channelCfg = channelConfigStore.GetById(sessionForTools.ChannelId);
+                IChannelToolProvider? toolProvider = toolProviders.FirstOrDefault(p => p.ChannelType == sessionForTools.ChannelType);
+                if (toolProvider is not null && channelCfg is not null)
+                    allTools.AddRange(toolProvider.CreateToolsForChannel(channelCfg));
+            }
+        }
 
         _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
@@ -167,9 +178,18 @@ public sealed class AgentRunner(
             _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
         }
 
-        // F-C-1: 追加飞书文档工具（全局可用，无需 sessionId，无已启用飞书渠道时自动跳过）
-        if (feishuToolsFactory is not null)
-            allTools.AddRange(feishuToolsFactory.CreateTools());
+        // 按会话所在渠道类型注入对应的渠道专属工具
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            SessionInfo? sessionForTools = sessionReader.Get(sessionId);
+            if (sessionForTools is not null)
+            {
+                ChannelConfig? channelCfg = channelConfigStore.GetById(sessionForTools.ChannelId);
+                IChannelToolProvider? toolProvider = toolProviders.FirstOrDefault(p => p.ChannelType == sessionForTools.ChannelType);
+                if (toolProvider is not null && channelCfg is not null)
+                    allTools.AddRange(toolProvider.CreateToolsForChannel(channelCfg));
+            }
+        }
 
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);

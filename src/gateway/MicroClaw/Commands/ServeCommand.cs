@@ -245,8 +245,9 @@ public class ServeCommand : Command
 		// F-F-2: 同时注册为单例（健康检查端点需直接注入）和 IHostedService
 		builder.Services.AddSingleton<FeishuWebSocketManager>();
 		builder.Services.AddHostedService(sp => sp.GetRequiredService<FeishuWebSocketManager>());
-		// F-C-1: 飞书文档读取工具工厂（供 AgentRunner 加载 read_feishu_doc 工具）
+		// F-C-1: 飞书文档读取工具工厂（供 AgentRunner 加载工具，并展示到渠道工具面板）
 		builder.Services.AddSingleton<FeishuToolsFactory>();
+		builder.Services.AddSingleton<IChannelToolProvider>(sp => sp.GetRequiredService<FeishuToolsFactory>());
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
 		builder.Services.AddHostedService<FeishuDocSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）

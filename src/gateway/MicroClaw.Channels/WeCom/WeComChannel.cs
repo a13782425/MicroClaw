@@ -11,6 +11,8 @@ public sealed class WeComChannel : IChannel
 
     public ChannelType Type => ChannelType.WeCom;
 
+    public string DisplayName => "企业微信";
+
     public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;

@@ -1,144 +1,225 @@
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">渠道</h2>
-        <p class="page-desc">管理消息接入渠道，支持飞书、企业微信、微信等多渠道接入</p>
+  <div class="channels-layout">
+    <!-- ── 左侧渠道类型列表 ────────────────────────────────────────────────── -->
+    <div class="channels-sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">渠道</span>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreateDialog">添加渠道</el-button>
-    </div>
 
-    <div v-if="loading" class="loading-wrap">
-      <el-skeleton :rows="3" animated />
-    </div>
+      <div v-if="typeLoading" class="sidebar-loading">
+        <el-skeleton :rows="3" animated />
+      </div>
 
-    <el-empty v-else-if="channels.length === 0" description="暂无渠道，点击右上角添加" :image-size="100">
-      <template #image>
-        <el-icon class="placeholder-icon"><Connection /></el-icon>
-      </template>
-    </el-empty>
+      <div v-else-if="channelTypes.length === 0" class="sidebar-empty">
+        <el-empty description="无可用渠道" :image-size="40" />
+      </div>
 
-    <div v-else class="channel-grid">
-      <div v-for="c in channels" :key="c.id" class="channel-card" :class="{ disabled: !c.isEnabled }">
-        <div class="card-top">
-          <div class="card-title-row">
-            <span class="card-name">{{ c.displayName }}</span>
-            <span v-if="c.channelType === 'feishu'" :class="healthDotClass(c.id)" :title="healthLevel(c.id) === 'ok' ? '运行正常' : healthLevel(c.id) === 'warn' ? '最近消息处理失败' : healthLevel(c.id) === 'error' ? '连接已断开' : '状态未知'"></span>
-            <el-tag :type="channelTagType(c.channelType)" size="small" class="channel-tag">
-              {{ channelLabel(c.channelType) }}
-            </el-tag>
-          </div>
-          <div class="card-provider">
-            <el-icon><Cpu /></el-icon>
-            {{ providerName(c.providerId) || c.providerId }}
-          </div>
-          <div class="card-mode">
-            <el-tag v-if="parseConnectionMode(c) === 'websocket'" type="success" size="small">WebSocket 长连接</el-tag>
-            <el-tag v-else type="info" size="small">Webhook 回调</el-tag>
-          </div>
-          <div v-if="parseConnectionMode(c) === 'webhook'" class="card-webhook">
-            <el-icon><Link /></el-icon>
-            <span class="webhook-url">{{ webhookUrl(c) }}</span>
-            <el-button link size="small" @click="copyWebhook(c)">
-              <el-icon><CopyDocument /></el-icon>
-            </el-button>
-          </div>
-
-          <!-- F-F-3: 错误事件统计数字卡 -->
-          <div v-if="c.channelType === 'feishu' && channelStats[c.id]" class="card-stats">
-            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].signatureFailures > 0 }">
-              <span class="stat-label">签名失败</span>
-              <span class="stat-value">{{ channelStats[c.id].signatureFailures }}</span>
-            </div>
-            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].aiCallFailures > 0 }">
-              <span class="stat-label">AI 失败</span>
-              <span class="stat-value">{{ channelStats[c.id].aiCallFailures }}</span>
-            </div>
-            <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].replyFailures > 0 }">
-              <span class="stat-label">回复失败</span>
-              <span class="stat-value">{{ channelStats[c.id].replyFailures }}</span>
-            </div>
-          </div>
-
-          <!-- F-G-4: 最近处理时间 -->
-          <div v-if="c.channelType === 'feishu' && channelHealth[c.id]?.lastMessageAt" class="card-last-message">
-            <el-icon><Clock /></el-icon>
-            <span>最近处理：{{ formatRelativeTime(channelHealth[c.id].lastMessageAt) }}</span>
-            <el-tag
-              v-if="channelHealth[c.id].lastMessageSuccess !== null"
-              :type="channelHealth[c.id].lastMessageSuccess ? 'success' : 'danger'"
-              size="small"
-              effect="plain"
-            >{{ channelHealth[c.id].lastMessageSuccess ? '成功' : '失败' }}</el-tag>
-          </div>
-        </div>
-
-        <div class="card-bottom">
-          <el-switch
-            v-model="c.isEnabled"
-            size="small"
-            active-text="启用"
-            inactive-text="停用"
-            @change="(val: boolean) => toggleEnabled(c, val)"
-          />
-          <div class="card-actions">
-            <el-button
-              link
-              :loading="testResults[c.id]?.loading"
-              @click="testConnection(c)"
-            >测试</el-button>
-            <el-divider direction="vertical" />
-            <el-button
-              v-if="c.channelType === 'feishu'"
-              link
-              type="success"
-              @click="openPublishDialog(c)"
-            >发送消息</el-button>
-            <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
-            <el-button
-              v-if="c.channelType === 'feishu'"
-              link
-              type="info"
-              @click="openHealthDrawer(c)"
-            >健康详情</el-button>
-            <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
-            <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
-            <el-divider direction="vertical" />
-            <el-button
-              v-if="c.id !== 'web'"
-              link
-              type="danger"
-              :icon="Delete"
-              @click="confirmDelete(c)"
-            >删除</el-button>
-            <el-tag v-else type="info" size="small">内置</el-tag>
-          </div>
-        </div>
+      <div v-else class="type-list">
         <div
-          v-if="testResults[c.id] && !testResults[c.id].loading"
-          class="card-test-result"
+          v-for="t in channelTypes"
+          :key="t.type"
+          class="type-item"
+          :class="{ active: selectedType === t.type }"
+          @click="selectType(t)"
         >
-          <el-tag
-            :type="testResults[c.id]?.success ? 'success' : 'danger'"
-            size="small"
-            effect="plain"
-          >
-            {{
-              testResults[c.id]?.success
-                ? `✓ 连通 ${testResults[c.id]?.latencyMs}ms`
-                : `✗ ${testResults[c.id]?.message}`
-            }}
-          </el-tag>
-          <!-- F-E-3: Webhook 内网探测提示 -->
-          <el-alert
-            v-if="testResults[c.id]?.connectivityHint"
-            :title="testResults[c.id]?.connectivityHint"
-            type="warning"
-            show-icon
-            :closable="false"
-            class="card-connectivity-hint"
+          <el-icon class="type-icon"><component :is="typeIcon(t.type)" /></el-icon>
+          <span class="type-name">{{ t.displayName }}</span>
+          <el-badge
+            v-if="channelCountByType(t.type) > 0"
+            :value="channelCountByType(t.type)"
+            type="primary"
+            class="type-badge"
           />
         </div>
+      </div>
+    </div>
+
+    <!-- ── 右侧详情面板 ──────────────────────────────────────────────────── -->
+    <div class="channels-detail">
+      <template v-if="selectedType">
+        <!-- 渠道配置列表 -->
+        <div class="detail-section">
+          <div class="detail-section-header">
+            <div>
+              <h3 class="detail-section-title">渠道配置</h3>
+              <p class="detail-section-desc">{{ selectedTypeInfo?.displayName }} 渠道的已配置实例</p>
+            </div>
+            <el-button
+              v-if="selectedTypeInfo?.canCreate"
+              type="primary"
+              :icon="Plus"
+              @click="openCreateDialog"
+            >添加渠道</el-button>
+          </div>
+
+          <div v-if="loading" class="loading-wrap">
+            <el-skeleton :rows="3" animated />
+          </div>
+
+          <el-empty
+            v-else-if="filteredChannels.length === 0"
+            description="此类型暂无渠道配置"
+            :image-size="80"
+          >
+            <template v-if="selectedTypeInfo?.canCreate" #default>
+              <el-button type="primary" :icon="Plus" @click="openCreateDialog">添加渠道</el-button>
+            </template>
+          </el-empty>
+
+          <div v-else class="channel-list">
+            <div v-for="c in filteredChannels" :key="c.id" class="channel-card" :class="{ disabled: !c.isEnabled }">
+              <div class="card-top">
+                <div class="card-title-row">
+                  <span class="card-name">{{ c.displayName }}</span>
+                  <span v-if="c.channelType === 'feishu'" :class="healthDotClass(c.id)" :title="healthLevel(c.id) === 'ok' ? '运行正常' : healthLevel(c.id) === 'warn' ? '最近消息处理失败' : healthLevel(c.id) === 'error' ? '连接已断开' : '状态未知'"></span>
+                  <el-tag :type="channelTagType(c.channelType)" size="small" class="channel-tag">
+                    {{ channelLabel(c.channelType) }}
+                  </el-tag>
+                </div>
+                <div class="card-provider">
+                  <el-icon><Cpu /></el-icon>
+                  {{ providerName(c.providerId) || c.providerId }}
+                </div>
+                <div class="card-mode">
+                  <el-tag v-if="parseConnectionMode(c) === 'websocket'" type="success" size="small">WebSocket 长连接</el-tag>
+                  <el-tag v-else type="info" size="small">Webhook 回调</el-tag>
+                </div>
+                <div v-if="parseConnectionMode(c) === 'webhook'" class="card-webhook">
+                  <el-icon><Link /></el-icon>
+                  <span class="webhook-url">{{ webhookUrl(c) }}</span>
+                  <el-button link size="small" @click="copyWebhook(c)">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                </div>
+
+                <div v-if="c.channelType === 'feishu' && channelStats[c.id]" class="card-stats">
+                  <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].signatureFailures > 0 }">
+                    <span class="stat-label">签名失败</span>
+                    <span class="stat-value">{{ channelStats[c.id].signatureFailures }}</span>
+                  </div>
+                  <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].aiCallFailures > 0 }">
+                    <span class="stat-label">AI 失败</span>
+                    <span class="stat-value">{{ channelStats[c.id].aiCallFailures }}</span>
+                  </div>
+                  <div class="stat-item" :class="{ 'stat-error': channelStats[c.id].replyFailures > 0 }">
+                    <span class="stat-label">回复失败</span>
+                    <span class="stat-value">{{ channelStats[c.id].replyFailures }}</span>
+                  </div>
+                </div>
+
+                <div v-if="c.channelType === 'feishu' && channelHealth[c.id]?.lastMessageAt" class="card-last-message">
+                  <el-icon><Clock /></el-icon>
+                  <span>最近处理：{{ formatRelativeTime(channelHealth[c.id].lastMessageAt) }}</span>
+                  <el-tag
+                    v-if="channelHealth[c.id].lastMessageSuccess !== null"
+                    :type="channelHealth[c.id].lastMessageSuccess ? 'success' : 'danger'"
+                    size="small"
+                    effect="plain"
+                  >{{ channelHealth[c.id].lastMessageSuccess ? '成功' : '失败' }}</el-tag>
+                </div>
+              </div>
+
+              <div class="card-bottom">
+                <el-switch
+                  v-model="c.isEnabled"
+                  size="small"
+                  active-text="启用"
+                  inactive-text="停用"
+                  @change="(val: boolean) => toggleEnabled(c, val)"
+                />
+                <div class="card-actions">
+                  <el-button
+                    link
+                    :loading="testResults[c.id]?.loading"
+                    @click="testConnection(c)"
+                  >测试</el-button>
+                  <el-divider direction="vertical" />
+                  <el-button
+                    v-if="c.channelType === 'feishu'"
+                    link
+                    type="success"
+                    @click="openPublishDialog(c)"
+                  >发送消息</el-button>
+                  <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
+                  <el-button
+                    v-if="c.channelType === 'feishu'"
+                    link
+                    type="info"
+                    @click="openHealthDrawer(c)"
+                  >健康详情</el-button>
+                  <el-divider v-if="c.channelType === 'feishu'" direction="vertical" />
+                  <el-button link type="primary" :icon="Edit" @click="openEditDialog(c)">编辑</el-button>
+                  <el-divider direction="vertical" />
+                  <el-button
+                    v-if="c.id !== 'web'"
+                    link
+                    type="danger"
+                    :icon="Delete"
+                    @click="confirmDelete(c)"
+                  >删除</el-button>
+                  <el-tag v-else type="info" size="small">内置</el-tag>
+                </div>
+              </div>
+              <div
+                v-if="testResults[c.id] && !testResults[c.id].loading"
+                class="card-test-result"
+              >
+                <el-tag
+                  :type="testResults[c.id]?.success ? 'success' : 'danger'"
+                  size="small"
+                  effect="plain"
+                >
+                  {{
+                    testResults[c.id]?.success
+                      ? `✓ 连通 ${testResults[c.id]?.latencyMs}ms`
+                      : `✗ ${testResults[c.id]?.message}`
+                  }}
+                </el-tag>
+                <el-alert
+                  v-if="testResults[c.id]?.connectivityHint"
+                  :title="testResults[c.id]?.connectivityHint"
+                  type="warning"
+                  show-icon
+                  :closable="false"
+                  class="card-connectivity-hint"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 渠道专属工具 -->
+        <div class="detail-section">
+          <div class="detail-section-header">
+            <div>
+              <h3 class="detail-section-title">渠道专属工具</h3>
+              <p class="detail-section-desc">此渠道为 Agent 提供的专属工具能力</p>
+            </div>
+          </div>
+
+          <div v-if="toolsLoading" class="loading-wrap">
+            <el-skeleton :rows="2" animated />
+          </div>
+          <el-empty
+            v-else-if="channelTools.length === 0"
+            description="此渠道暂无专属工具"
+            :image-size="60"
+          />
+          <div v-else class="tools-list">
+            <div v-for="tool in channelTools" :key="tool.name" class="tool-item">
+              <div class="tool-item-name">{{ tool.name }}</div>
+              <div class="tool-item-desc">{{ tool.description }}</div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="detail-placeholder">
+        <el-empty description="请从左侧选择渠道类型" :image-size="80">
+          <template #image>
+            <el-icon class="placeholder-icon"><Connection /></el-icon>
+          </template>
+        </el-empty>
       </div>
     </div>
 
@@ -471,10 +552,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Edit, Delete, Cpu, Link, Connection, CopyDocument, Clock } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Cpu, Link, Connection, CopyDocument, Clock, Monitor, OfficeBuilding, Iphone, ChatLineRound } from '@element-plus/icons-vue'
 import {
   listChannels,
   createChannel,
@@ -485,8 +566,10 @@ import {
   getChannelStats,
   getChannelHealth,
   listProviders,
+  getChannelTypes,
+  getChannelTools,
 } from '@/services/gatewayApi'
-import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult, ChannelStats, ChannelHealth } from '@/services/gatewayApi'
+import type { ChannelConfig, ChannelType, ProviderConfig, ChannelTestResult, ChannelStats, ChannelHealth, ChannelTypeInfo, ChannelToolInfo } from '@/services/gatewayApi'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -494,6 +577,55 @@ const channels = ref<ChannelConfig[]>([])
 const providers = ref<ProviderConfig[]>([])
 const channelStats = reactive<Record<string, ChannelStats>>({})
 const channelHealth = reactive<Record<string, ChannelHealth>>({})
+
+// ── 渠道类型列表（动态，支持插件扩展）────────────────────────────────────────
+const typeLoading = ref(false)
+const channelTypes = ref<ChannelTypeInfo[]>([])
+const selectedType = ref<string>('')
+
+const selectedTypeInfo = computed(() =>
+  channelTypes.value.find(t => t.type === selectedType.value)
+)
+
+const filteredChannels = computed(() =>
+  channels.value.filter(c => c.channelType === selectedType.value)
+)
+
+function channelCountByType(type: string): number {
+  return channels.value.filter(c => c.channelType === type).length
+}
+
+function selectType(t: ChannelTypeInfo) {
+  selectedType.value = t.type
+}
+
+function typeIcon(type: string) {
+  const map: Record<string, unknown> = {
+    web: Monitor,
+    feishu: ChatLineRound,
+    wecom: OfficeBuilding,
+    wechat: Iphone,
+  }
+  return map[type] ?? Connection
+}
+
+// ── 渠道专属工具────────────────────────────────────────────────────────────
+const toolsLoading = ref(false)
+const channelTools = ref<ChannelToolInfo[]>([])
+
+async function loadTools(type: string) {
+  if (!type) return
+  toolsLoading.value = true
+  try {
+    channelTools.value = await getChannelTools(type)
+  } catch {
+    channelTools.value = []
+  } finally {
+    toolsLoading.value = false
+  }
+}
+
+watch(selectedType, loadTools)
 
 // ── 健康仪表盘 Drawer ────────────────────────────────────────────────────────
 const healthDrawerVisible = ref(false)
@@ -650,12 +782,21 @@ async function copyWebhook(c: ChannelConfig) {
 
 async function loadData() {
   loading.value = true
+  typeLoading.value = true
   try {
-    const [channelList, providerList] = await Promise.all([listChannels(), listProviders()])
+    const [channelList, providerList, typeList] = await Promise.all([
+      listChannels(),
+      listProviders(),
+      getChannelTypes(),
+    ])
     channels.value = channelList
     providers.value = providerList
-    // F-F-3: 加载飞书渠道的错误事件统计数据
-    // F-G-4: 同时加载健康数据
+    channelTypes.value = typeList
+    // 默认选中第一个类型
+    if (!selectedType.value && typeList.length > 0)
+      selectedType.value = typeList[0].type
+
+    // 加载飞书渠道的健康数据和统计数据
     const feishuChannels = channelList.filter(c => c.channelType === 'feishu')
     await Promise.allSettled([
       ...feishuChannels.map(c =>
@@ -669,6 +810,7 @@ async function loadData() {
     // 失败由全局拦截器展示后端错误信息
   } finally {
     loading.value = false
+    typeLoading.value = false
   }
 }
 
@@ -686,6 +828,9 @@ function openCreateDialog() {
   isEditing.value = false
   editingId.value = ''
   resetForm()
+  // 预填当前选中的渠道类型
+  if (selectedType.value && selectedType.value !== 'web')
+    form.channelType = selectedType.value as ChannelType
   dialogVisible.value = true
 }
 
@@ -874,36 +1019,119 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.page-container {
-  max-width: 1200px;
-  height: 100%;
-  padding: 24px;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-.page-header {
+/* ── 整体布局 ─────────────────────────────────────────────────────────────── */
+.channels-layout {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 28px;
+  height: 100%;
+  overflow: hidden;
 }
 
-.page-title {
-  margin: 0 0 4px;
-  font-size: 22px;
-  font-weight: 700;
-  color: #1f2937;
+/* ── 左侧类型列表 ─────────────────────────────────────────────────────────── */
+.channels-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  background: #fafafa;
 }
 
-.page-desc {
-  margin: 0;
+.sidebar-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.sidebar-title {
   font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.sidebar-loading,
+.sidebar-empty {
+  padding: 16px;
+  flex: 1;
+}
+
+.type-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.type-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.type-item:hover {
+  background: #f3f4f6;
+}
+
+.type-item.active {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.type-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #2563eb;
+  border-radius: 0 2px 2px 0;
+}
+
+.type-icon {
+  font-size: 16px;
+  flex-shrink: 0;
   color: #6b7280;
 }
 
-.loading-wrap {
-  padding: 24px 0;
+.type-item.active .type-icon {
+  color: #2563eb;
+}
+
+.type-name {
+  flex: 1;
+  font-size: 14px;
+  color: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-badge {
+  flex-shrink: 0;
+}
+
+/* ── 右侧详情面板 ─────────────────────────────────────────────────────────── */
+.channels-detail {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.detail-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .placeholder-icon {
@@ -911,10 +1139,44 @@ onMounted(loadData)
   color: #d1d5db;
 }
 
-.channel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 16px;
+.detail-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+}
+
+.detail-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.detail-section-title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.detail-section-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* ── 渠道卡片列表（代替旧的 channel-grid）──────────────────────────────────── */
+.channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loading-wrap {
+  padding: 12px 0;
 }
 
 .channel-card {
@@ -1299,8 +1561,32 @@ onMounted(loadData)
   padding-bottom: 4px;
 }
 
-.form-item-inline :deep(.el-form-item__label) {
-  padding-bottom: 0;
+/* ── 渠道专属工具列表 ──────────────────────────────────────────────────────── */
+.tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-item {
+  padding: 10px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.tool-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  margin-bottom: 4px;
+}
+
+.tool-item-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
 }
 
 .section-title {

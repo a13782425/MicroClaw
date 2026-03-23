@@ -17,6 +17,8 @@ public sealed class FeishuChannel(
 
     public ChannelType Type => ChannelType.Feishu;
 
+    public string DisplayName => "飞书";
+
     /// <summary>
     /// F-A-1: 主动发送消息到飞书用户或群聊。
     /// <para><see cref="ChannelMessage.UserId"/> 填写目标的 open_id（ou_ 前缀）或 chat_id（oc_ 前缀）。</para>

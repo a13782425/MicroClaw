@@ -29,6 +29,40 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
+        // 渠道类型列表（动态注入 IEnumerable<IChannel>，支持插件扩展）
+        endpoints.MapGet("/channels/types", (IEnumerable<IChannel> registeredChannels) =>
+        {
+            // Web 是内置渠道，没有对应的 IChannel 实现，始终首位展示
+            var types = new List<object>
+            {
+                new { type = "web", displayName = "Web（内置）", canCreate = false }
+            };
+            types.AddRange(registeredChannels.Select(c => (object)new
+            {
+                type = c.Type.ToString().ToLowerInvariant(),
+                displayName = c.DisplayName,
+                canCreate = c.CanCreate
+            }));
+            return Results.Ok(types);
+        })
+        .WithTags("Channels");
+
+        // 渠道专属工具列表（支持插件注入的自定义渠道工具）
+        endpoints.MapGet("/channels/{channelType}/tools", (
+            string channelType,
+            IEnumerable<IChannelToolProvider> toolProviders) =>
+        {
+            IChannelToolProvider? provider = toolProviders.FirstOrDefault(
+                p => string.Equals(p.ChannelType.ToString(), channelType, StringComparison.OrdinalIgnoreCase));
+            var tools = (provider?.GetToolDescriptions() ?? []).Select(t => new
+            {
+                name = t.Name,
+                description = t.Description
+            });
+            return Results.Ok(tools);
+        })
+        .WithTags("Channels");
+
         endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelConfigStore store, ProviderConfigStore providerStore) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))

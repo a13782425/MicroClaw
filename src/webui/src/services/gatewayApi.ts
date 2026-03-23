@@ -252,6 +252,27 @@ export async function getChannelHealth(id: string): Promise<ChannelHealth> {
   return data
 }
 
+export type ChannelTypeInfo = {
+  type: string
+  displayName: string
+  canCreate: boolean
+}
+
+export async function getChannelTypes(): Promise<ChannelTypeInfo[]> {
+  const { data } = await axios.get<ChannelTypeInfo[]>('/api/channels/types')
+  return data
+}
+
+export type ChannelToolInfo = {
+  name: string
+  description: string
+}
+
+export async function getChannelTools(channelType: string): Promise<ChannelToolInfo[]> {
+  const { data } = await axios.get<ChannelToolInfo[]>(`/api/channels/${channelType}/tools`)
+  return data
+}
+
 // ─── Sessions ────────────────────────────────────────────────────────────────
 
 export type MessageAttachment = {

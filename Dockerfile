@@ -27,7 +27,8 @@ COPY --from=gateway-build /out/gateway/ /app/gateway/
 COPY --from=webui-build /src/webui/dist/ /app/webui/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN mkdir -p /app/.microclaw \
-	&& chmod +x /usr/local/bin/entrypoint.sh
+    && sed -i 's/\r//' /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 ENV MICROCLAW_HOME=/app/.microclaw \
 	MICROCLAW_WEBUI_PATH=/app/webui
 EXPOSE 8080
