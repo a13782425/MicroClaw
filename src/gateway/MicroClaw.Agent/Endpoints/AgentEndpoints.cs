@@ -208,11 +208,14 @@ public static class AgentEndpoints
                 }).ToList()
             });
 
-            // ── 全局 MCP Server 分组（按 Agent 引用 ID 过滤）──────────────────────────────
+            // ── 全局 MCP Server 分组（EnabledMcpServerIds 为空时默认全部启用）──────────────────────────────
             HashSet<string> enabledIds = agent.EnabledMcpServerIds.ToHashSet();
+            bool defaultAllEnabled = enabledIds.Count == 0;
             foreach (McpServerConfig srv in mcpStore.All)
             {
-                bool isEnabled = enabledIds.Contains(srv.Id);
+                bool isEnabled = defaultAllEnabled || enabledIds.Contains(srv.Id);
+                // 若 MCP Server 本身被全局禁用，则不启用
+                if (!srv.IsEnabled) isEnabled = false;
                 ToolGroupConfig? srvCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == srv.Name);
                 bool groupEnabled = isEnabled && (srvCfg is null || srvCfg.IsEnabled);
 

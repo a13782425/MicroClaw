@@ -26,17 +26,16 @@ public sealed class AgentRunner(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     ISessionReader sessionReader,
-    CronJobStore cronJobStore,
-    ICronJobScheduler cronScheduler,
     SkillToolFactory skillToolFactory,
-    ISubAgentRunner subAgentRunner,
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
     IAgentStatusNotifier agentStatusNotifier,
     ChannelConfigStore channelConfigStore,
-    IEnumerable<IChannelToolProvider> toolProviders) : IAgentMessageHandler
+    IEnumerable<IChannelToolProvider> toolProviders,
+    IEnumerable<IBuiltinToolProvider> builtinToolProviders) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
+    private readonly IReadOnlyList<IBuiltinToolProvider> _builtinToolProviders = builtinToolProviders.ToList().AsReadOnly();
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -57,9 +56,11 @@ public sealed class AgentRunner(
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled default agent found.");
 
-        // 从 session 获取 providerId
+        // 从 session 获取 providerId；若 session 未绑定模型，回退到默认 Provider
         SessionInfo? session = sessionReader.Get(sessionId);
-        string providerId = session?.ProviderId ?? string.Empty;
+        string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
+            ? session.ProviderId
+            : providerStore.GetDefault()?.Id ?? string.Empty;
 
         return await RunReActAsync(agent, providerId, history, sessionId, ct, source: "channel");
     }
@@ -87,20 +88,13 @@ public sealed class AgentRunner(
         // 过滤 MCP 工具中被单独禁用的工具
         IEnumerable<McpClientTool> filteredMcpTools = FilterMcpTools(agent, mcpTools);
 
-        // 追加内置工具（当有 sessionId，且对应分组未禁用时）
+        // 追加内置工具（通过 IBuiltinToolProvider 自动注册，按 ToolGroupConfig 过滤）
         List<AITool> allTools = [.. filteredMcpTools];
+        allTools.AddRange(CollectBuiltinTools(agent, sessionId));
+
+        // 追加技能工具（需要 sessionId，与 Agent.BoundSkillIds 绑定）
         if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
-            // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具（含 write_session_dna → 写入当日记忆）
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, memoryService));
-        }
-        else
-        {
-            _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
-        }
 
         // 按会话所在渠道类型注入对应的渠道专属工具
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -115,7 +109,7 @@ public sealed class AgentRunner(
             }
         }
 
-        _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
+        _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {BuiltinCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -163,20 +157,13 @@ public sealed class AgentRunner(
         // 过滤 MCP 工具中被单独禁用的工具
         IEnumerable<McpClientTool> filteredMcpTools = FilterMcpTools(agent, mcpTools);
 
-        // 追加内置工具（当有 sessionId，且对应分组未禁用时）
+        // 追加内置工具（通过 IBuiltinToolProvider 自动注册，按 ToolGroupConfig 过滤）
         List<AITool> allTools = [.. filteredMcpTools];
+        allTools.AddRange(CollectBuiltinTools(agent, sessionId));
+
+        // 追加技能工具（需要 sessionId，与 Agent.BoundSkillIds 绑定）
         if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            allTools.AddRange(FilterCronTools(agent, CronTools.CreateForSession(sessionId, cronJobStore, cronScheduler)));
-            // 追加技能工具
             allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
-            // 追加子代理工具（含 write_session_dna → 写入当日记忆）
-            allTools.AddRange(SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, memoryService));
-        }
-        else
-        {
-            _logger.LogDebug("sessionId 为空，跳过 CronJob/Skill/SubAgent 工具加载，Agent={AgentId}", agent.Id);
-        }
 
         // 按会话所在渠道类型注入对应的渠道专属工具
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -191,7 +178,7 @@ public sealed class AgentRunner(
             }
         }
 
-        _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {CronCount} built-in)",
+        _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {BuiltinCount} built-in)",
             agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
 
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -232,10 +219,14 @@ public sealed class AgentRunner(
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
-    /// <summary>返回未被整体禁用的 MCP Server 配置列表（从全局库中按引用 ID 加载）。</summary>
+    /// <summary>返回未被整体禁用的 MCP Server 配置列表（从全局库中按引用 ID 加载）。
+    /// EnabledMcpServerIds 为空时，默认使用全局所有已启用的 MCP Server。</summary>
     private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
     {
-        IReadOnlyList<McpServerConfig> servers = mcpServerConfigStore.GetEnabledByIds(agent.EnabledMcpServerIds);
+        // 空列表 = 默认启用全部已启用的 MCP Server（opt-out 模型）
+        IReadOnlyList<McpServerConfig> servers = agent.EnabledMcpServerIds.Count == 0
+            ? mcpServerConfigStore.AllEnabled
+            : mcpServerConfigStore.GetEnabledByIds(agent.EnabledMcpServerIds);
         if (agent.ToolGroupConfigs.Count == 0) return servers;
         return servers
             .Where(s =>
@@ -260,13 +251,27 @@ public sealed class AgentRunner(
         });
     }
 
-    /// <summary>根据 cron 分组配置过滤内置定时工具。</summary>
-    private static IEnumerable<AIFunction> FilterCronTools(AgentConfig agent, IReadOnlyList<AIFunction> cronTools)
+    /// <summary>
+    /// 遍历所有 IBuiltinToolProvider，按 Agent 的 ToolGroupConfig 过滤后返回工具列表。
+    /// 不依赖 sessionId 的 Provider 忽略该参数；需要 sessionId 的 Provider 在其为空时自行返回空列表。
+    /// </summary>
+    private IEnumerable<AIFunction> CollectBuiltinTools(AgentConfig agent, string? sessionId)
     {
-        ToolGroupConfig? cronCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "cron");
-        if (cronCfg is not null && !cronCfg.IsEnabled) return [];
-        if (cronCfg is null) return cronTools;
-        return cronTools.Where(t => !cronCfg.DisabledToolNames.Contains(t.Name));
+        foreach (IBuiltinToolProvider provider in _builtinToolProviders)
+        {
+            IReadOnlyList<AIFunction> tools = provider.CreateTools(sessionId);
+            if (tools.Count == 0) continue;
+
+            ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == provider.GroupId);
+            if (cfg is not null && !cfg.IsEnabled) continue;
+
+            IEnumerable<AIFunction> filtered = cfg is null
+                ? tools
+                : tools.Where(t => !cfg.DisabledToolNames.Contains(t.Name));
+
+            foreach (AIFunction tool in filtered)
+                yield return tool;
+        }
     }
 
     private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null)

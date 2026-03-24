@@ -56,15 +56,13 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             providerStore:         new ProviderConfigStore(dbFactory),
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
-            cronJobStore:          new CronJobStore(dbFactory),
-            cronScheduler:         Substitute.For<ICronJobScheduler>(),
             skillToolFactory:      skillToolFactory,
-            subAgentRunner:        Substitute.For<ISubAgentRunner>(),
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
             agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
             channelConfigStore:    new ChannelConfigStore(dbFactory),
-            toolProviders:         []);
+            toolProviders:         [],
+            builtinToolProviders:  []);
     }
 
     public void Dispose()

@@ -33,8 +33,8 @@ public static class McpEndpoints
             McpTransportType transport = ParseTransport(req.TransportType);
             if (transport == McpTransportType.Stdio && string.IsNullOrWhiteSpace(req.Command))
                 return Results.BadRequest(new { success = false, message = "Command is required for stdio transport.", errorCode = "BAD_REQUEST" });
-            if (transport == McpTransportType.Sse && string.IsNullOrWhiteSpace(req.Url))
-                return Results.BadRequest(new { success = false, message = "Url is required for sse transport.", errorCode = "BAD_REQUEST" });
+            if (transport is McpTransportType.Sse or McpTransportType.Http && string.IsNullOrWhiteSpace(req.Url))
+                return Results.BadRequest(new { success = false, message = "Url is required for sse/http transport.", errorCode = "BAD_REQUEST" });
 
             McpServerConfig config = new(
                 Name: req.Name.Trim(),
@@ -43,6 +43,7 @@ public static class McpEndpoints
                 Args: req.Args,
                 Env: req.Env,
                 Url: req.Url?.Trim(),
+                Headers: req.Headers,
                 IsEnabled: req.IsEnabled,
                 CreatedAtUtc: DateTimeOffset.UtcNow);
 
@@ -72,6 +73,7 @@ public static class McpEndpoints
                 Args          = req.Args                     ?? existing.Args,
                 Env           = req.Env                      ?? existing.Env,
                 Url           = req.Url?.Trim()              ?? existing.Url,
+                Headers       = req.Headers                  ?? existing.Headers,
                 IsEnabled     = req.IsEnabled                ?? existing.IsEnabled,
             };
 
@@ -181,12 +183,18 @@ public static class McpEndpoints
         args          = c.Args,
         env           = c.Env,
         url           = c.Url,
+        headers       = c.Headers,
         isEnabled     = c.IsEnabled,
         createdAtUtc  = c.CreatedAtUtc,
     };
 
     private static McpTransportType ParseTransport(string? value) =>
-        value?.ToLowerInvariant() == "sse" ? McpTransportType.Sse : McpTransportType.Stdio;
+        value?.ToLowerInvariant() switch
+        {
+            "sse"  => McpTransportType.Sse,
+            "http" => McpTransportType.Http,
+            _      => McpTransportType.Stdio,
+        };
 }
 
 // ── Request 模型 ─────────────────────────────────────────────────────────────
@@ -198,6 +206,7 @@ public sealed record McpServerCreateRequest(
     IReadOnlyList<string>? Args = null,
     IDictionary<string, string?>? Env = null,
     string? Url = null,
+    IDictionary<string, string>? Headers = null,
     bool IsEnabled = true);
 
 public sealed record McpServerUpdateRequest(
@@ -208,6 +217,7 @@ public sealed record McpServerUpdateRequest(
     IReadOnlyList<string>? Args = null,
     IDictionary<string, string?>? Env = null,
     string? Url = null,
+    IDictionary<string, string>? Headers = null,
     bool? IsEnabled = null);
 
 public sealed record McpServerDeleteRequest(string Id);

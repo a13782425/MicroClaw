@@ -21,6 +21,17 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
         }
     }
 
+    /// <summary>返回所有 IsEnabled=true 的 MCP Server，用于空 EnabledMcpServerIds 时的默认全量加载。</summary>
+    public IReadOnlyList<McpServerConfig> AllEnabled
+    {
+        get
+        {
+            using GatewayDbContext db = factory.CreateDbContext();
+            return db.McpServers.Where(e => e.IsEnabled).Select(ToConfig).ToList()
+                .OrderBy(s => s.CreatedAtUtc).ToList().AsReadOnly();
+        }
+    }
+
     public McpServerConfig? GetById(string id)
     {
         using GatewayDbContext db = factory.CreateDbContext();
@@ -55,6 +66,8 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
         entity.EnvJson       = incoming.Env is not null
             ? JsonSerializer.Serialize(incoming.Env, JsonOpts) : null;
         entity.Url           = incoming.Url;
+        entity.HeadersJson   = incoming.Headers is not null
+            ? JsonSerializer.Serialize(incoming.Headers, JsonOpts) : null;
         entity.IsEnabled     = incoming.IsEnabled;
 
         db.SaveChanges();
@@ -95,6 +108,9 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
             ? JsonSerializer.Deserialize<Dictionary<string, string?>>(e.EnvJson)
             : null,
         Url: e.Url,
+        Headers: e.HeadersJson is not null
+            ? JsonSerializer.Deserialize<Dictionary<string, string>>(e.HeadersJson)
+            : null,
         IsEnabled: e.IsEnabled,
         CreatedAtUtc: e.CreatedAtUtc);
 
@@ -107,13 +123,24 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
         ArgsJson     = c.Args is not null ? JsonSerializer.Serialize(c.Args, JsonOpts) : null,
         EnvJson      = c.Env is not null  ? JsonSerializer.Serialize(c.Env, JsonOpts)  : null,
         Url          = c.Url,
+        HeadersJson  = c.Headers is not null ? JsonSerializer.Serialize(c.Headers, JsonOpts) : null,
         IsEnabled    = c.IsEnabled,
         CreatedAtUtc = c.CreatedAtUtc,
     };
 
     private static McpTransportType ParseTransport(string? value) =>
-        value?.ToLowerInvariant() == "sse" ? McpTransportType.Sse : McpTransportType.Stdio;
+        value?.ToLowerInvariant() switch
+        {
+            "sse"  => McpTransportType.Sse,
+            "http" => McpTransportType.Http,
+            _      => McpTransportType.Stdio,
+        };
 
     private static string SerializeTransport(McpTransportType t) =>
-        t == McpTransportType.Sse ? "sse" : "stdio";
+        t switch
+        {
+            McpTransportType.Sse  => "sse",
+            McpTransportType.Http => "http",
+            _                     => "stdio",
+        };
 }

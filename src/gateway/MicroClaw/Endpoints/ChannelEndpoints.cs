@@ -67,18 +67,16 @@ public static class ChannelEndpoints
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
                 return ApiErrors.BadRequest("DisplayName is required.");
-            if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return ApiErrors.BadRequest("ProviderId is required.");
 
-            // 验证 Provider 存在
-            if (providerStore.All.All(p => p.Id != req.ProviderId))
+            // 验证 Provider（如果指定了 ProviderId）
+            if (!string.IsNullOrWhiteSpace(req.ProviderId) && providerStore.All.All(p => p.Id != req.ProviderId))
                 return ApiErrors.BadRequest($"Provider '{req.ProviderId}' not found.");
 
             ChannelConfig config = new()
             {
                 DisplayName = req.DisplayName.Trim(),
                 ChannelType = ChannelConfigStore.ParseChannelType(req.ChannelType),
-                ProviderId = req.ProviderId.Trim(),
+                ProviderId = req.ProviderId?.Trim() ?? string.Empty,
                 IsEnabled = req.IsEnabled,
                 SettingsJson = req.Settings ?? "{}"
             };

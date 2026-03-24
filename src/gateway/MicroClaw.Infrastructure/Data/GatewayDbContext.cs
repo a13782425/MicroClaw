@@ -169,6 +169,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ArgsJson).HasColumnName("args_json").IsRequired(false);
             b.Property(e => e.EnvJson).HasColumnName("env_json").IsRequired(false);
             b.Property(e => e.Url).HasColumnName("url").IsRequired(false);
+            b.Property(e => e.HeadersJson).HasColumnName("headers_json").IsRequired(false);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
         });

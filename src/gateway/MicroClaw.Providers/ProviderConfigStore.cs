@@ -19,10 +19,27 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
         }
     }
 
+    /// <summary>
+    /// 返回当前设置为默认且已启用的 Provider；若无默认则返回第一个已启用的 Provider。
+    /// </summary>
+    public ProviderConfig? GetDefault()
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        return db.Providers
+            .Where(p => p.IsEnabled)
+            .OrderByDescending(p => p.IsDefault)
+            .Select(e => ToConfig(e))
+            .FirstOrDefault();
+    }
+
     public ProviderConfig Add(ProviderConfig config)
     {
-        ProviderConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
         using GatewayDbContext db = factory.CreateDbContext();
+        bool hasAny = db.Providers.Any();
+        ProviderConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
+        // 第一个添加的模型自动设为默认
+        if (!hasAny)
+            entity.IsDefault = true;
         db.Providers.Add(entity);
         db.SaveChanges();
         return ToConfig(entity);

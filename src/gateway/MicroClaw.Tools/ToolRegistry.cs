@@ -62,11 +62,15 @@ public static class ToolRegistry
                 EnvironmentVariables = cfg.Env?.ToDictionary(kv => kv.Key, kv => kv.Value),
                 Name = cfg.Name,
             }, loggerFactory!),
-            McpTransportType.Sse => new HttpClientTransport(new HttpClientTransportOptions
+            McpTransportType.Sse or McpTransportType.Http => new HttpClientTransport(new HttpClientTransportOptions
             {
                 Endpoint = new Uri(cfg.Url
-                    ?? throw new InvalidOperationException($"MCP server '{cfg.Name}' requires Url for SSE transport.")),
+                    ?? throw new InvalidOperationException($"MCP server '{cfg.Name}' requires Url for {cfg.TransportType} transport.")),
                 Name = cfg.Name,
+                TransportMode = cfg.TransportType == McpTransportType.Http
+                    ? HttpTransportMode.StreamableHttp
+                    : HttpTransportMode.Sse,
+                AdditionalHeaders = cfg.Headers,
             }, loggerFactory!),
             _ => throw new NotSupportedException($"Transport type '{cfg.TransportType}' is not supported."),
         };

@@ -82,14 +82,6 @@ public sealed class FeishuMessageProcessor(
         logger.LogInformation("[{TraceId}] 飞书消息接收 from={SenderId} chat={ChatId}: {Text}",
             traceId, senderId, chatId, userText);
 
-        ProviderConfig? providerConfig = providerStore.All.FirstOrDefault(p => p.Id == channel.ProviderId);
-        if (providerConfig is null || !providerConfig.IsEnabled)
-        {
-            logger.LogWarning("[{TraceId}] 渠道 {ChannelId} 关联的 Provider {ProviderId} 未找到或已禁用",
-                traceId, channel.Id, channel.ProviderId);
-            return;
-        }
-
         // F-B-2: 群聊会话隔离策略 — 群聊 shared 模式用 chatId 作为会话键（群内共享上下文）；其余用 senderId
         string sessionKey;
         if (chatType == "group"
@@ -103,9 +95,24 @@ public sealed class FeishuMessageProcessor(
             sessionKey = senderId ?? chatId;  // isolated 或单聊：每人独立上下文
         }
 
-        // 查找或创建对应会话
+        // 查找或创建对应会话（模型与会话绑定）
         SessionInfo session = sessionService.FindOrCreateSession(
             ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, channel.ProviderId);
+
+        // 解析 Provider：优先使用会话绑定的模型，回退到渠道配置的模型，最后回退到默认 Provider
+        string resolvedProviderId = !string.IsNullOrWhiteSpace(session.ProviderId) ? session.ProviderId
+            : !string.IsNullOrWhiteSpace(channel.ProviderId) ? channel.ProviderId
+            : string.Empty;
+        ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
+            ? providerStore.GetDefault()
+            : providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
+
+        if (providerConfig is null)
+        {
+            logger.LogWarning("[{TraceId}] 渠道 {ChannelId} 找不到可用的 Provider（session={ProviderId}，channel={ChannelProviderId}）",
+                traceId, channel.Id, session.ProviderId, channel.ProviderId);
+            return;
+        }
 
         // F-B-3: 话题支持 — root_id 非空表示该消息属于某个话题（Thread），回复时需带 reply_in_thread
         bool replyInThread = !string.IsNullOrEmpty(rootId);

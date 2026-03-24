@@ -763,7 +763,7 @@ export async function getSessionDailyMemory(sessionId: string, date: string): Pr
 
 // ─── MCP Servers ─────────────────────────────────────────────────────────────
 
-export type McpTransportType = 'stdio' | 'sse'
+export type McpTransportType = 'stdio' | 'sse' | 'http'
 
 export type McpServerConfig = {
   id: string
@@ -773,6 +773,7 @@ export type McpServerConfig = {
   args?: string[] | null
   env?: Record<string, string | null> | null
   url?: string | null
+  headers?: Record<string, string> | null
   isEnabled: boolean
   createdAtUtc: string
 }
@@ -784,6 +785,7 @@ export type McpServerCreateRequest = {
   args?: string[]
   env?: Record<string, string>
   url?: string
+  headers?: Record<string, string>
   isEnabled?: boolean
 }
 
@@ -795,6 +797,7 @@ export type McpServerUpdateRequest = {
   args?: string[]
   env?: Record<string, string>
   url?: string
+  headers?: Record<string, string>
   isEnabled?: boolean
 }
 

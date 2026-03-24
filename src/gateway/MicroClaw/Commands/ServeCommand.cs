@@ -126,6 +126,8 @@ public class ServeCommand : Command
 				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.aspnetcore"], LogEventLevel.Warning))
 			  .MinimumLevel.Override("Microsoft.Extensions.AI",
 				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.extensions.ai"], LogEventLevel.Debug))
+			  .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command",
+				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.entityframeworkcore.database.command"], LogEventLevel.Warning))
 			  .Enrich.FromLogContext()
 			  .Enrich.WithMachineName()
 			  .Enrich.WithThreadId()
@@ -164,12 +166,22 @@ public class ServeCommand : Command
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
 		builder.Services.AddSignalR();
+		builder.Services.AddHttpClient("fetch", client =>
+		{
+			client.Timeout = TimeSpan.FromSeconds(30);
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("MicroClaw/1.0");
+		});
 
 		// SQLite 数据库路径（会话元数据 + Provider 配置）
 		string dbPath = ResolveDatabasePath(home, configFile);
 		string sessionsDir = ResolveSessionsDir(home, configFile);
 		builder.Services.AddDbContextFactory<GatewayDbContext>(opts =>
-			opts.UseSqlite($"Data Source={dbPath}"));
+		{
+			opts.UseSqlite($"Data Source={dbPath}");
+			opts.LogTo(_ => {}, LogLevel.None);  // 禁用所有 EF 日志
+			// 或只禁用 SQL 日志:
+			// opts.ConfigureWarnings(w => w.Ignore(CoreEventId.SensitiveDataLoggingEnabledWarning));
+		});
 
 		builder.Services.AddSingleton<ProviderConfigStore>();
 		builder.Services.AddSingleton<SessionStore>(sp =>
@@ -202,6 +214,13 @@ public class ServeCommand : Command
 
 		// MCP Server 全局管理
 		builder.Services.AddSingleton<McpServerConfigStore>();
+
+		// 内置工具提供者（实现 IBuiltinToolProvider，AgentRunner 自动加载，无需手动硬编码）
+		builder.Services.AddSingleton<IBuiltinToolProvider, FetchToolProvider>();
+		builder.Services.AddSingleton<IBuiltinToolProvider, ShellToolProvider>();
+		builder.Services.AddSingleton<IBuiltinToolProvider, CronToolProvider>();
+		builder.Services.AddSingleton<IBuiltinToolProvider, SubAgentToolProvider>();
+
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),
 			sp.GetRequiredService<SkillService>(),

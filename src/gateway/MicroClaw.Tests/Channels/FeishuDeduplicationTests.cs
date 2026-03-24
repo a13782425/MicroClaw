@@ -29,11 +29,18 @@ public sealed class FeishuDeduplicationTests : IDisposable
 
     public FeishuDeduplicationTests()
     {
-        // ProviderConfigStore 使用空内存 DB → ProviderId 查找时返回空 → 第一次调用在 provider 检查处提前返回
+        // ProviderConfigStore 使用空内存 DB → providerConfig 查找失败 → provider 检查处提前返回
         ProviderConfigStore providerStore = new(_db.CreateFactory());
         ProviderClientFactory clientFactory = new([]);
         IChannelSessionService sessionService = Substitute.For<IChannelSessionService>();
         ILogger<FeishuMessageProcessor> logger = Substitute.For<ILogger<FeishuMessageProcessor>>();
+
+        // FindOrCreateSession 返回一个无绑定模型的会话，使 provider 回退逻辑最终找不到已启用 Provider 而提前返回
+        sessionService.FindOrCreateSession(
+            Arg.Any<ChannelType>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string>(), Arg.Any<string>())
+            .Returns(new SessionInfo("sess-dedup", "Test", "", false,
+                ChannelType.Feishu, "ch-dedup-test", DateTimeOffset.UtcNow));
 
         _processor = new FeishuMessageProcessor(providerStore, clientFactory, sessionService, logger);
 

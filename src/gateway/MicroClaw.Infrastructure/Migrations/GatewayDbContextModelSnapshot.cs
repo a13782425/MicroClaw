@@ -298,6 +298,10 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("env_json");
 
+                    b.Property<string>("HeadersJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("headers_json");
+
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");

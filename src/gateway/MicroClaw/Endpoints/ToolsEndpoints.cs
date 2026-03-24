@@ -1,5 +1,3 @@
-using MicroClaw.Agent;
-using MicroClaw.Channels.Feishu;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,47 +15,35 @@ public static class ToolsEndpoints
     public static IEndpointRouteBuilder MapToolsEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/tools", async (
+            IEnumerable<IBuiltinToolProvider> builtinProviders,
             McpServerConfigStore mcpStore,
             ILoggerFactory loggerFactory,
             CancellationToken ct) =>
         {
             var groups = new List<object>();
 
-            // ── 内置分组：cron ──────────────────────────────────────────────
-            groups.Add(new
+            // ── 内置分组：遍历所有 IBuiltinToolProvider，自动展示，无需手动维护列表 ──
+            var groupNames = new Dictionary<string, string>
             {
-                id        = "cron",
-                name      = "定时任务",
-                type      = "builtin",
-                isEnabled = true,
-                tools     = CronTools.GetToolDescriptions()
-                              .Select(t => new { name = t.Name, description = t.Description, isEnabled = true })
-                              .ToList()
-            });
-
-            // ── 内置分组：subagent ──────────────────────────────────────────
-            groups.Add(new
+                ["fetch"]    = "HTTP 抓取",
+                ["shell"]    = "Shell 命令",
+                ["cron"]     = "定时任务",
+                ["subagent"] = "子代理 & DNA",
+            };
+            foreach (IBuiltinToolProvider provider in builtinProviders)
             {
-                id        = "subagent",
-                name      = "子代理 & DNA",
-                type      = "builtin",
-                isEnabled = true,
-                tools     = SubAgentTools.GetToolDescriptions()
-                              .Select(t => new { name = t.Name, description = t.Description, isEnabled = true })
-                              .ToList()
-            });
-
-            // ── 内置分组：feishu ────────────────────────────────────────────
-            groups.Add(new
-            {
-                id        = "feishu",
-                name      = "飞书",
-                type      = "builtin",
-                isEnabled = true,
-                tools     = FeishuToolsFactory.GetToolDescriptions()
-                              .Select(t => new { name = t.Name, description = t.Description, isEnabled = true })
-                              .ToList()
-            });
+                string displayName = groupNames.TryGetValue(provider.GroupId, out string? n) ? n : provider.GroupId;
+                groups.Add(new
+                {
+                    id        = provider.GroupId,
+                    name      = displayName,
+                    type      = "builtin",
+                    isEnabled = true,
+                    tools     = provider.GetToolDescriptions()
+                                  .Select(t => new { name = t.Name, description = t.Description, isEnabled = true })
+                                  .ToList()
+                });
+            }
 
             // ── MCP Server 分组（并行连接，超时 10s，失败不中断整体）──────────
             if (mcpStore.All.Count > 0)

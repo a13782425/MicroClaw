@@ -76,7 +76,7 @@
                     {{ channelLabel(c.channelType) }}
                   </el-tag>
                 </div>
-                <div class="card-provider">
+                <div v-if="c.providerId" class="card-provider">
                   <el-icon><Cpu /></el-icon>
                   {{ providerName(c.providerId) || c.providerId }}
                 </div>
@@ -401,31 +401,11 @@
         <div class="section-static">
           <div class="section-static-header">
             <span class="section-title">基础配置</span>
-            <span class="section-subtitle">名称、渠道类型、关联模型</span>
+            <span class="section-subtitle">渠道名称与状态</span>
           </div>
           <div class="section-body">
             <el-form-item label="显示名称" prop="displayName">
               <el-input v-model="form.displayName" placeholder="例如：飞书客服机器人" />
-            </el-form-item>
-
-            <el-form-item label="渠道类型" prop="channelType">
-              <el-select v-model="form.channelType" style="width: 100%" :disabled="isEditing">
-                <el-option label="飞书" value="feishu" />
-                <el-option label="企业微信" value="wecom" disabled />
-                <el-option label="微信" value="wechat" disabled />
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="关联模型" prop="providerId">
-              <el-select v-model="form.providerId" style="width: 100%" placeholder="选择一个 AI 模型提供方">
-                <el-option
-                  v-for="p in providers"
-                  :key="p.id"
-                  :label="`${p.displayName} (${p.modelName})`"
-                  :value="p.id"
-                  :disabled="!p.isEnabled"
-                />
-              </el-select>
             </el-form-item>
 
             <el-form-item label="启用" class="form-item-inline">
@@ -724,8 +704,6 @@ const form = reactive({
 
 const rules: FormRules = {
   displayName: [{ required: true, message: '请输入显示名称', trigger: 'blur' }],
-  channelType: [{ required: true, message: '请选择渠道类型', trigger: 'change' }],
-  providerId: [{ required: true, message: '请选择关联模型', trigger: 'change' }],
   'feishu.appId': [{ required: true, message: '请输入 App ID', trigger: 'blur' }],
   'feishu.appSecret': [
     { required: true, message: '请输入 App Secret', trigger: 'blur' },
