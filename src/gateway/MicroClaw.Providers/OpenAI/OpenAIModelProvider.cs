@@ -4,13 +4,17 @@ using OpenAI;
 using OpenAI.Chat;
 using System.ClientModel;
 
+#pragma warning disable OPENAI001 // ResponsesClient is marked experimental
+
 namespace MicroClaw.Providers.OpenAI;
 
 /// <summary>
-/// IModelProvider implementation for the OpenAI Chat Completions API.
-/// Supports official OpenAI and any OpenAI-compatible endpoint (DeepSeek, Qwen, LiteLLM, etc.).
-/// Set config.Capabilities.SupportsResponsesApi = true to signal Responses API support
-/// (actual OpenAI Responses API routing is planned for a future iteration; currently always uses ChatClient).
+/// IModelProvider implementation for OpenAI models.
+/// Supports both Chat Completions API (default) and Responses API paths.
+/// When <see cref="ProviderCapabilities.SupportsResponsesApi"/> is true,
+/// uses <c>ResponsesClient.AsIChatClient()</c> which enables built-in tools,
+/// conversation state management, and other Responses API features.
+/// Both paths produce an <see cref="IChatClient"/>, so downstream consumers are unaffected.
 /// </summary>
 public sealed class OpenAIModelProvider : IModelProvider
 {
@@ -29,8 +33,20 @@ public sealed class OpenAIModelProvider : IModelProvider
         if (!string.IsNullOrWhiteSpace(config.BaseUrl))
             options.Endpoint = new Uri(config.BaseUrl);
 
-        ChatClient client = new(config.ModelName, new ApiKeyCredential(config.ApiKey), options);
-        return new ChatClientBuilder(client.AsIChatClient())
+        var credential = new ApiKeyCredential(config.ApiKey);
+
+        IChatClient inner;
+        if (config.Capabilities.SupportsResponsesApi)
+        {
+            var openAiClient = new OpenAIClient(credential, options);
+            inner = openAiClient.GetResponsesClient().AsIChatClient(config.ModelName);
+        }
+        else
+        {
+            inner = new ChatClient(config.ModelName, credential, options).AsIChatClient();
+        }
+
+        return new ChatClientBuilder(inner)
             .UseLogging(_loggerFactory)
             .Build();
     }
