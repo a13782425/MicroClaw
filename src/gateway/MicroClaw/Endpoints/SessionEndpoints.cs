@@ -4,6 +4,7 @@ using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Agent.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -213,32 +214,141 @@ public static class SessionEndpoints
 
                 try
                 {
-                    await foreach (string token in
+                    await foreach (StreamItem item in
                         agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
                     {
-                        fullContent.Append(token);
+                        switch (item)
+                        {
+                            case TokenItem token:
+                                fullContent.Append(token.Content);
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new { type = "token", content = token.Content }, JsonOpts), ct);
+                                break;
 
-                        string sseData = JsonSerializer.Serialize(new { type = "token", content = token }, JsonOpts);
-                        await WriteSseAsync(ctx.Response, sseData, ct);
+                            case ToolCallItem toolCall:
+                                store.AddMessage(id, new SessionMessage(
+                                    Role: "assistant",
+                                    Content: $"调用工具: {toolCall.ToolName}",
+                                    ThinkContent: null,
+                                    Timestamp: DateTimeOffset.UtcNow,
+                                    Attachments: null,
+                                    MessageType: "tool_call",
+                                    Metadata: ToJsonElements(new Dictionary<string, object?>
+                                    {
+                                        ["callId"] = toolCall.CallId,
+                                        ["toolName"] = toolCall.ToolName,
+                                        ["arguments"] = toolCall.Arguments
+                                    })));
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new
+                                    {
+                                        type = "tool_call",
+                                        callId = toolCall.CallId,
+                                        toolName = toolCall.ToolName,
+                                        arguments = toolCall.Arguments
+                                    }, JsonOpts), ct);
+                                break;
+
+                            case ToolResultItem toolResult:
+                                store.AddMessage(id, new SessionMessage(
+                                    Role: "tool",
+                                    Content: toolResult.Result,
+                                    ThinkContent: null,
+                                    Timestamp: DateTimeOffset.UtcNow,
+                                    Attachments: null,
+                                    MessageType: "tool_result",
+                                    Metadata: ToJsonElements(new Dictionary<string, object?>
+                                    {
+                                        ["callId"] = toolResult.CallId,
+                                        ["toolName"] = toolResult.ToolName,
+                                        ["success"] = toolResult.Success,
+                                        ["durationMs"] = toolResult.DurationMs
+                                    })));
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new
+                                    {
+                                        type = "tool_result",
+                                        callId = toolResult.CallId,
+                                        toolName = toolResult.ToolName,
+                                        result = toolResult.Result,
+                                        success = toolResult.Success,
+                                        durationMs = toolResult.DurationMs
+                                    }, JsonOpts), ct);
+                                break;
+
+                            case SubAgentStartItem subStart:
+                                store.AddMessage(id, new SessionMessage(
+                                    Role: "system",
+                                    Content: $"子代理 {subStart.AgentName} 开始执行",
+                                    ThinkContent: null,
+                                    Timestamp: DateTimeOffset.UtcNow,
+                                    Attachments: null,
+                                    MessageType: "sub_agent_start",
+                                    Metadata: ToJsonElements(new Dictionary<string, object?>
+                                    {
+                                        ["agentId"] = subStart.AgentId,
+                                        ["agentName"] = subStart.AgentName,
+                                        ["task"] = subStart.Task,
+                                        ["childSessionId"] = subStart.ChildSessionId
+                                    })));
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new
+                                    {
+                                        type = "sub_agent_start",
+                                        agentId = subStart.AgentId,
+                                        agentName = subStart.AgentName,
+                                        task = subStart.Task,
+                                        childSessionId = subStart.ChildSessionId
+                                    }, JsonOpts), ct);
+                                break;
+
+                            case SubAgentResultItem subResult:
+                                store.AddMessage(id, new SessionMessage(
+                                    Role: "system",
+                                    Content: subResult.Result,
+                                    ThinkContent: null,
+                                    Timestamp: DateTimeOffset.UtcNow,
+                                    Attachments: null,
+                                    MessageType: "sub_agent_result",
+                                    Metadata: ToJsonElements(new Dictionary<string, object?>
+                                    {
+                                        ["agentId"] = subResult.AgentId,
+                                        ["agentName"] = subResult.AgentName,
+                                        ["durationMs"] = subResult.DurationMs
+                                    })));
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new
+                                    {
+                                        type = "sub_agent_done",
+                                        agentId = subResult.AgentId,
+                                        agentName = subResult.AgentName,
+                                        result = subResult.Result,
+                                        durationMs = subResult.DurationMs
+                                    }, JsonOpts), ct);
+                                break;
+                        }
                     }
 
                     // 解析 think 块
                     (string Think, string Main) parsed = ExtractThinkContent(fullContent.ToString());
 
-                    // 保存助手消息（带 think 内容）
-                    SessionMessage assistantMessage = new(
-                        Role: "assistant",
-                        Content: parsed.Main,
-                        ThinkContent: string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think,
-                        Timestamp: DateTimeOffset.UtcNow,
-                        Attachments: null);
-                    store.AddMessage(id, assistantMessage);
+                    // 保存助手文本消息（带 think 内容）
+                    if (!string.IsNullOrWhiteSpace(parsed.Main))
+                    {
+                        SessionMessage assistantMessage = new(
+                            Role: "assistant",
+                            Content: parsed.Main,
+                            ThinkContent: string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think,
+                            Timestamp: DateTimeOffset.UtcNow,
+                            Attachments: null);
+                        store.AddMessage(id, assistantMessage);
+                    }
 
                     // 发送完成信号
                     string doneData = JsonSerializer.Serialize(new
                     {
                         type = "done",
-                        thinkContent = assistantMessage.ThinkContent
+                        thinkContent = string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think
                     }, JsonOpts);
                     await WriteSseAsync(ctx.Response, doneData, ct);
                     await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
@@ -392,6 +502,14 @@ public static class SessionEndpoints
     {
         await response.WriteAsync($"data: {data}\n\n", ct);
         await response.Body.FlushAsync(ct);
+    }
+
+    /// <summary>将 Dictionary&lt;string, object?&gt; 转为 Dictionary&lt;string, JsonElement&gt; 以符合 SessionMessage.Metadata 类型。</summary>
+    private static IReadOnlyDictionary<string, JsonElement> ToJsonElements(Dictionary<string, object?> dict)
+    {
+        string json = JsonSerializer.Serialize(dict, JsonOpts);
+        Dictionary<string, JsonElement> result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOpts) ?? [];
+        return result;
     }
 }
 

@@ -1,4 +1,7 @@
-﻿using MicroClaw.Agent.Memory;
+﻿using System.Diagnostics;
+using System.Text.Json;
+using MicroClaw.Agent.Memory;
+using MicroClaw.Agent.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -139,9 +142,9 @@ public sealed class AgentRunner(
         }
     }
 
-    // ── 流式 ReAct 循环（供 SSE API 使用）──────────────────────────────────
+    // ── 流式 ReAct 循环（供 SSE API 使用，手动工具调用循环使过程可观测）──────
 
-    public async IAsyncEnumerable<string> StreamReActAsync(
+    public async IAsyncEnumerable<StreamItem> StreamReActAsync(
         AgentConfig agent,
         string providerId,
         IReadOnlyList<SessionMessage> history,
@@ -191,28 +194,97 @@ public sealed class AgentRunner(
         if (!string.IsNullOrWhiteSpace(sessionId))
             await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
 
+        // 构建不含 UseFunctionInvocation 的 raw 客户端，手动处理工具调用
+        IChatClient client = BuildRawClient(provider);
+        ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
+
+        // 将工具列表索引化供手动调用
+        Dictionary<string, AITool> toolLookup = allTools.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+
+        const int maxIterations = 10;
         bool succeeded = false;
         UsageDetails? lastUsage = null;
-        ChatResponseUpdate? lastUpdate = null;
         try
         {
-            IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
-
-            await foreach (ChatResponseUpdate update in
-                client.GetStreamingResponseAsync(messages, chatOptions, ct))
+            for (int iteration = 0; iteration < maxIterations; iteration++)
             {
-                // 0-B-4: 仅记录最后一个 update，不积累全量内容（usage 由提供商在末尾报告）
-                lastUpdate = update;
+                // ── 流式调用 LLM ──
+                var allUpdates = new List<ChatResponseUpdate>();
+                await foreach (ChatResponseUpdate update in
+                    client.GetStreamingResponseAsync(messages, chatOptions, ct))
+                {
+                    allUpdates.Add(update);
 
-                string token = update.Text ?? string.Empty;
-                if (!string.IsNullOrEmpty(token))
-                    yield return token;
+                    string token = update.Text ?? string.Empty;
+                    if (!string.IsNullOrEmpty(token))
+                        yield return new TokenItem(token);
+                }
+
+                // 聚合为完整 response
+                ChatResponse response = allUpdates.ToChatResponse();
+                lastUsage = response.Usage;
+
+                // 将 assistant response 追加到消息队列
+                ChatMessage lastMsg = response.Messages[response.Messages.Count - 1];
+                messages.Add(lastMsg);
+
+                // ── 检查是否有函数调用请求 ──
+                List<FunctionCallContent> functionCalls = lastMsg.Contents
+                    .OfType<FunctionCallContent>()
+                    .ToList();
+
+                if (functionCalls.Count == 0)
+                    break; // 无工具调用，循环结束
+
+                // ── 逐个执行函数调用 ──
+                var resultContents = new List<AIContent>();
+                foreach (FunctionCallContent call in functionCalls)
+                {
+                    // 提取参数用于事件
+                    IDictionary<string, object?>? args = call.Arguments;
+
+                    yield return new ToolCallItem(call.CallId ?? call.Name, call.Name, args);
+
+                    Stopwatch sw = Stopwatch.StartNew();
+                    bool callSuccess = true;
+                    string resultText;
+
+                    try
+                    {
+                        if (!toolLookup.TryGetValue(call.Name, out AITool? tool))
+                        {
+                            resultText = $"Error: Tool '{call.Name}' not found.";
+                            callSuccess = false;
+                        }
+                        else
+                        {
+                            AIFunction fn = (AIFunction)tool;
+                            object? result = await fn.InvokeAsync(call.Arguments is not null ? new AIFunctionArguments(call.Arguments) : null, ct);
+                            resultText = result switch
+                            {
+                                string s => s,
+                                null => string.Empty,
+                                _ => JsonSerializer.Serialize(result)
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Tool '{ToolName}' invocation failed", call.Name);
+                        resultText = $"Error: {ex.Message}";
+                        callSuccess = false;
+                    }
+
+                    sw.Stop();
+                    yield return new ToolResultItem(call.CallId ?? call.Name, call.Name, resultText, callSuccess, sw.ElapsedMilliseconds);
+
+                    resultContents.Add(new FunctionResultContent(call.CallId ?? call.Name, resultText));
+                }
+
+                // 将所有工具结果作为一条 Tool role 消息追加
+                messages.Add(new ChatMessage(ChatRole.Tool, [.. resultContents]));
             }
 
-            // 从最后一个 update 获取 Usage
-            if (lastUpdate is not null)
-                lastUsage = new List<ChatResponseUpdate> { lastUpdate }.ToChatResponse().Usage;
             succeeded = true;
         }
         finally
@@ -347,6 +419,9 @@ public sealed class AgentRunner(
             .UseFunctionInvocation(loggerFactory, configure: c => c.MaximumIterationsPerRequest = 10)
             .Build();
     }
+
+    /// <summary>构建不带 UseFunctionInvocation 的客户端，供流式手动工具调用循环使用。</summary>
+    private IChatClient BuildRawClient(ProviderConfig provider) => clientFactory.Create(provider);
 
     /// <summary>校验消息历史中的附件是否被 Provider 模态能力支持。不支持的附件记录警告日志并从历史中移除。</summary>
     private IReadOnlyList<SessionMessage> ValidateModalities(

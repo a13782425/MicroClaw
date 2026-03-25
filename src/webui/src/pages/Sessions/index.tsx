@@ -534,13 +534,29 @@ export default function SessionsPage() {
                   )}
 
                   {/* 历史消息 */}
-                  {displayMessages.map((msg, idx) => (
-                    <ChatMessage
-                      key={idx}
-                      message={msg}
-                      isStreaming={chatting && idx === displayMessages.length - 1}
-                    />
-                  ))}
+                  {displayMessages.map((msg, idx) => {
+                    // 查找配对的结果消息
+                    let resultMessage: typeof msg | undefined
+                    if (msg.messageType === 'tool_call') {
+                      const callId = msg.metadata?.callId
+                      resultMessage = callId
+                        ? displayMessages.find(m => m.messageType === 'tool_result' && m.metadata?.callId === callId)
+                        : undefined
+                    } else if (msg.messageType === 'sub_agent_start') {
+                      const agentId = msg.metadata?.agentId
+                      resultMessage = agentId
+                        ? displayMessages.find(m => m.messageType === 'sub_agent_result' && m.metadata?.agentId === agentId)
+                        : undefined
+                    }
+                    return (
+                      <ChatMessage
+                        key={idx}
+                        message={msg}
+                        resultMessage={resultMessage}
+                        isStreaming={chatting && idx === displayMessages.length - 1}
+                      />
+                    )
+                  })}
 
                   {/* 流式输出中的消息 */}
                   {chatting && streamingContent && (

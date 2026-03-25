@@ -250,13 +250,26 @@ export type MessageAttachment = {
 export type MessageSource = 'cron' | 'skill' | 'tool'
 export const SYSTEM_SOURCES = new Set<MessageSource>(['cron', 'skill', 'tool'])
 
+export type MessageType =
+  | 'text'
+  | 'tool_call'
+  | 'tool_result'
+  | 'sub_agent_start'
+  | 'sub_agent_result'
+  | 'skill'
+  | 'memory_read'
+  | 'memory_write'
+  | 'status'
+
 export type SessionMessage = {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
   thinkContent?: string | null
   timestamp: string
   attachments?: MessageAttachment[] | null
   source?: MessageSource | null
+  messageType?: MessageType | null
+  metadata?: Record<string, unknown> | null
 }
 
 export type SessionInfo = {
@@ -287,6 +300,10 @@ export type SseChunk =
   | { type: 'token'; content: string }
   | { type: 'done'; thinkContent?: string | null }
   | { type: 'error'; message: string }
+  | { type: 'tool_call'; callId: string; toolName: string; arguments: Record<string, unknown> }
+  | { type: 'tool_result'; callId: string; toolName: string; result: string; success: boolean; durationMs: number }
+  | { type: 'sub_agent_start'; agentId: string; agentName: string; task: string; childSessionId: string }
+  | { type: 'sub_agent_done'; agentId: string; agentName: string; result: string; durationMs: number }
 
 export interface PagedMessagesResponse {
   messages: SessionMessage[]

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace MicroClaw.Gateway.Contracts.Sessions;
 
 public sealed record SessionInfo(
@@ -18,7 +20,9 @@ public sealed record SessionMessage(
     string? ThinkContent,
     DateTimeOffset Timestamp,
     IReadOnlyList<MessageAttachment>? Attachments,
-    string? Source = null);
+    string? Source = null,
+    string? MessageType = null,
+    IReadOnlyDictionary<string, JsonElement>? Metadata = null);
 
 public sealed record MessageAttachment(
     string FileName,

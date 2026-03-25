@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Box, Text, Flex } from '@chakra-ui/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { SessionMessage } from '@/api/gateway'
+import ToolCallBlock from './ToolCallBlock'
+import SubAgentBlock from './SubAgentBlock'
 
 let mermaidCounter = 0
 
@@ -110,6 +112,8 @@ function getMermaidRuntime(): Promise<(container: HTMLElement) => Promise<void>>
 interface ChatMessageProps {
   message: SessionMessage
   isStreaming?: boolean
+  /** 配对的结果消息（tool_result / sub_agent_result） */
+  resultMessage?: SessionMessage | null
 }
 
 function ThinkBlock({ content }: { content: string }) {
@@ -245,9 +249,32 @@ function MarkdownContent({ content }: { content: string }) {
   )
 }
 
-export default function ChatMessage({ message, isStreaming }: ChatMessageProps) {
+export default function ChatMessage({ message, isStreaming, resultMessage }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const contentRef = useRef<HTMLDivElement>(null)
+
+  // tool_result / sub_agent_result 由配对的 start 消息渲染，不单独显示
+  if (message.messageType === 'tool_result' || message.messageType === 'sub_agent_result') {
+    return null
+  }
+
+  // 工具调用
+  if (message.messageType === 'tool_call') {
+    return (
+      <Flex justify="flex-start" mb="3" px="2">
+        <ToolCallBlock message={message} resultMessage={resultMessage} />
+      </Flex>
+    )
+  }
+
+  // 子代理
+  if (message.messageType === 'sub_agent_start') {
+    return (
+      <Flex justify="flex-start" mb="3" px="2">
+        <SubAgentBlock message={message} resultMessage={resultMessage} />
+      </Flex>
+    )
+  }
 
   return (
     <Flex

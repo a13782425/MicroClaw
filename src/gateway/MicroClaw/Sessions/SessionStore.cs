@@ -16,8 +16,6 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader
 {
-    // 旧格式（JSON 数组，全量读写）
-    private const string LegacyFileName = "messages.json";
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
 
@@ -136,17 +134,12 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         string dir = GetSessionDir(sessionId);
         Directory.CreateDirectory(dir);
 
-        string legacyPath = Path.Combine(dir, LegacyFileName);
         string jsonlPath = Path.Combine(dir, JsonlFileName);
 
         SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
         sem.Wait();
         try
         {
-            // 若存在旧版 JSON 数组文件，先迁移再追加
-            if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
-                MigrateToJsonLines(legacyPath, jsonlPath);
-
             string line = JsonSerializer.Serialize(MessageJson.From(message), JsonLinesOptions);
             File.AppendAllText(jsonlPath, line + "\n");
         }
@@ -180,25 +173,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     private List<SessionMessage> ReadAllMessages(string sessionId)
     {
         string dir = GetSessionDir(sessionId);
-        string legacyPath = Path.Combine(dir, LegacyFileName);
         string jsonlPath = Path.Combine(dir, JsonlFileName);
-
-        // 若存在旧版文件但无新版文件，自动迁移
-        if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
-        {
-            SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
-            sem.Wait();
-            try
-            {
-                // 二次判断（DCL），防止并发情况下重复迁移
-                if (File.Exists(legacyPath) && !File.Exists(jsonlPath))
-                    MigrateToJsonLines(legacyPath, jsonlPath);
-            }
-            finally
-            {
-                sem.Release();
-            }
-        }
 
         if (!File.Exists(jsonlPath)) return [];
 
@@ -211,26 +186,6 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     }
 
     private string GetSessionDir(string id) => Path.Combine(sessionsDir, id);
-
-    /// <summary>
-    /// 将旧版 JSON 数组文件迁移为 JSONL 格式。
-    /// 迁移完成后将旧文件重命名为 .bak（不删除，保留运维底稿）。
-    /// 调用方须在写锁内调用此方法。
-    /// </summary>
-    private static void MigrateToJsonLines(string legacyPath, string jsonlPath)
-    {
-        string json = File.ReadAllText(legacyPath);
-        List<MessageJson> messages = JsonSerializer.Deserialize<List<MessageJson>>(json, JsonOptions) ?? [];
-
-        using (StreamWriter writer = new(jsonlPath, append: false))
-        {
-            foreach (MessageJson msg in messages)
-                writer.WriteLine(JsonSerializer.Serialize(msg, JsonLinesOptions));
-        }
-
-        // 重命名为 .bak 保留备份，不直接删除
-        File.Move(legacyPath, legacyPath + ".bak", overwrite: true);
-    }
 
     private static List<MessageJson> LoadMessages(string filePath)
     {
@@ -257,6 +212,8 @@ internal sealed class MessageJson
     public DateTimeOffset Timestamp { get; set; }
     public List<AttachmentJson>? Attachments { get; set; }
     public string? Source { get; set; }
+    public string? MessageType { get; set; }
+    public Dictionary<string, JsonElement>? Metadata { get; set; }
 
     public static MessageJson From(SessionMessage m) => new()
     {
@@ -265,6 +222,8 @@ internal sealed class MessageJson
         ThinkContent = m.ThinkContent,
         Timestamp = m.Timestamp,
         Source = m.Source,
+        MessageType = m.MessageType,
+        Metadata = m.Metadata is not null ? new Dictionary<string, JsonElement>(m.Metadata) : null,
         Attachments = m.Attachments?.Select(a => new AttachmentJson
         {
             FileName = a.FileName,
@@ -277,7 +236,9 @@ internal sealed class MessageJson
         Role, Content, ThinkContent, Timestamp,
         Attachments?.Select(a => new MessageAttachment(a.FileName, a.MimeType, a.Base64Data))
                    .ToList().AsReadOnly(),
-        Source);
+        Source,
+        MessageType,
+        Metadata);
 }
 
 internal sealed class AttachmentJson

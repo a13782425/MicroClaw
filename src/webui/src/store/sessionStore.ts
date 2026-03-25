@@ -12,6 +12,7 @@ import {
   type CreateSessionRequest,
   type ChatRequest,
   type SseChunk,
+  type MessageType,
   SYSTEM_SOURCES,
 } from '@/api/gateway'
 
@@ -143,6 +144,42 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const onChunk = (chunk: SseChunk) => {
       if (chunk.type === 'token') {
         set((s) => ({ streamingContent: s.streamingContent + chunk.content }))
+      } else if (chunk.type === 'tool_call') {
+        const msg: SessionMessage = {
+          role: 'assistant',
+          content: `调用工具: ${chunk.toolName}`,
+          timestamp: new Date().toISOString(),
+          messageType: 'tool_call',
+          metadata: { callId: chunk.callId, toolName: chunk.toolName, arguments: chunk.arguments },
+        }
+        set((s) => ({ messages: [...s.messages, msg] }))
+      } else if (chunk.type === 'tool_result') {
+        const msg: SessionMessage = {
+          role: 'tool',
+          content: chunk.result,
+          timestamp: new Date().toISOString(),
+          messageType: 'tool_result',
+          metadata: { callId: chunk.callId, toolName: chunk.toolName, success: chunk.success, durationMs: chunk.durationMs },
+        }
+        set((s) => ({ messages: [...s.messages, msg] }))
+      } else if (chunk.type === 'sub_agent_start') {
+        const msg: SessionMessage = {
+          role: 'system',
+          content: `子代理 ${chunk.agentName} 开始执行`,
+          timestamp: new Date().toISOString(),
+          messageType: 'sub_agent_start',
+          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, task: chunk.task, childSessionId: chunk.childSessionId },
+        }
+        set((s) => ({ messages: [...s.messages, msg] }))
+      } else if (chunk.type === 'sub_agent_done') {
+        const msg: SessionMessage = {
+          role: 'system',
+          content: chunk.result,
+          timestamp: new Date().toISOString(),
+          messageType: 'sub_agent_result',
+          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, durationMs: chunk.durationMs },
+        }
+        set((s) => ({ messages: [...s.messages, msg] }))
       }
     }
 
@@ -182,7 +219,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 }))
 
-// Filters out system-triggered messages for display
+// Filters out system-triggered user messages for display.
+// All tool/sub-agent/system messages are always shown.
 export function isDisplayMessage(msg: SessionMessage): boolean {
   return !(msg.role === 'user' && msg.source && SYSTEM_SOURCES.has(msg.source))
+}
+
+// Message type categories for filtering
+const TOOL_TYPES: ReadonlySet<MessageType> = new Set<MessageType>(['tool_call', 'tool_result'])
+const AGENT_TYPES: ReadonlySet<MessageType> = new Set<MessageType>(['sub_agent_start', 'sub_agent_result'])
+
+export function isToolMessage(msg: SessionMessage): boolean {
+  return !!msg.messageType && TOOL_TYPES.has(msg.messageType)
+}
+
+export function isSubAgentMessage(msg: SessionMessage): boolean {
+  return !!msg.messageType && AGENT_TYPES.has(msg.messageType)
 }
