@@ -4,8 +4,8 @@ public sealed class CronJobRunLogEntity
 {
     public string Id { get; set; } = string.Empty;
     public string CronJobId { get; set; } = string.Empty;
-    /// <summary>触发时间（UTC），格式：ISO 8601 (DateTimeOffset.ToString("O"))</summary>
-    public string TriggeredAtUtc { get; set; } = string.Empty;
+    /// <summary>触发时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long TriggeredAtMs { get; set; }
     /// <summary>执行结果：success / failed / cancelled</summary>
     public string Status { get; set; } = string.Empty;
     /// <summary>执行耗时（毫秒）</summary>

@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,7 +46,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         {
             using GatewayDbContext db = factory.CreateDbContext();
             return db.Sessions
-                .OrderByDescending(e => e.CreatedAtUtc)
+                .OrderByDescending(e => e.CreatedAtMs)
                 .Select(e => ToInfo(e))
                 .ToList()
                 .AsReadOnly();
@@ -69,7 +70,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             IsApproved = false,
             ChannelType = ChannelConfigStore.SerializeChannelType(channelType),
             ChannelId = channelId ?? ChannelConfigStore.WebChannelId,
-            CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            CreatedAtMs = TimeBase.NowMs(),
             AgentId = agentId,
             ParentSessionId = parentSessionId,
         };
@@ -242,7 +243,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,
             ChannelConfigStore.ParseChannelType(e.ChannelType),
             string.IsNullOrEmpty(e.ChannelId) ? ChannelConfigStore.WebChannelId : e.ChannelId,
-            DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset dt) ? dt : DateTimeOffset.MinValue,
+            TimeBase.FromMs(e.CreatedAtMs),
             e.AgentId,
             e.ParentSessionId,
             e.ApprovalReason);

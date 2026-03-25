@@ -9,7 +9,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
     {
         using GatewayDbContext db = factory.CreateDbContext();
         return db.CronJobs
-            .OrderByDescending(e => e.CreatedAtUtc)
+            .OrderByDescending(e => e.CreatedAtMs)
             .Select(ToRecord)
             .ToList()
             .AsReadOnly();
@@ -31,11 +31,11 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
             Name = name,
             Description = description,
             CronExpression = cronExpression,
-            RunAtUtc = runAtUtc?.ToString("O"),
+            RunAtMs = runAtUtc.HasValue ? TimeBase.ToMs(runAtUtc.Value) : null,
             TargetSessionId = targetSessionId,
             Prompt = prompt,
             IsEnabled = true,
-            CreatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            CreatedAtMs = TimeBase.NowMs(),
         };
 
         using GatewayDbContext db = factory.CreateDbContext();
@@ -76,7 +76,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         using GatewayDbContext db = factory.CreateDbContext();
         CronJobEntity? entity = db.CronJobs.Find(id);
         if (entity is null) return;
-        entity.LastRunAtUtc = lastRunAt.ToString("O");
+        entity.LastRunAtMs = TimeBase.ToMs(lastRunAt);
         db.SaveChanges();
     }
 
@@ -87,7 +87,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         {
             Id = Guid.NewGuid().ToString("N"),
             CronJobId = cronJobId,
-            TriggeredAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+            TriggeredAtMs = TimeBase.NowMs(),
             Status = status,
             DurationMs = durationMs,
             ErrorMessage = errorMessage,
@@ -106,7 +106,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         using GatewayDbContext db = factory.CreateDbContext();
         return db.CronJobRunLogs
             .Where(e => e.CronJobId == cronJobId)
-            .OrderByDescending(e => e.TriggeredAtUtc)
+            .OrderByDescending(e => e.TriggeredAtMs)
             .Take(limit)
             .AsEnumerable()
             .Select(ToLogRecord)
@@ -122,16 +122,14 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         e.TargetSessionId,
         e.Prompt,
         e.IsEnabled,
-        DateTimeOffset.TryParse(e.CreatedAtUtc, out DateTimeOffset created) ? created : DateTimeOffset.MinValue,
-        string.IsNullOrWhiteSpace(e.LastRunAtUtc) ? null
-            : DateTimeOffset.TryParse(e.LastRunAtUtc, out DateTimeOffset last) ? last : null,
-        string.IsNullOrWhiteSpace(e.RunAtUtc) ? null
-            : DateTimeOffset.TryParse(e.RunAtUtc, out DateTimeOffset runAt) ? runAt : null);
+        TimeBase.FromMs(e.CreatedAtMs),
+        e.LastRunAtMs.HasValue ? TimeBase.FromMs(e.LastRunAtMs.Value) : null,
+        e.RunAtMs.HasValue ? TimeBase.FromMs(e.RunAtMs.Value) : null);
 
     private static CronJobRunLog ToLogRecord(CronJobRunLogEntity e) => new(
         e.Id,
         e.CronJobId,
-        DateTimeOffset.TryParse(e.TriggeredAtUtc, out DateTimeOffset t) ? t : DateTimeOffset.MinValue,
+        TimeBase.FromMs(e.TriggeredAtMs),
         e.Status,
         e.DurationMs,
         e.ErrorMessage,

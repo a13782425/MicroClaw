@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   Box, Flex, Text, Button, Badge, Switch, Spinner,
-  Input, Select, Portal, createListCollection,
-  SimpleGrid, Card,
+  Input, Textarea, Select, Portal, createListCollection,
+  SimpleGrid, Card, Collapsible, CheckboxCard,
 } from '@chakra-ui/react'
-import { Plus, Cpu, Link as LinkIcon, Edit, Trash2 } from 'lucide-react'
+import { Plus, Cpu, Link as LinkIcon, Edit, Trash2, ChevronDown } from 'lucide-react'
 import {
   listProviders, createProvider, updateProvider, deleteProvider, setDefaultProvider,
   type ProviderConfig, type ProviderCreateRequest, type ProviderUpdateRequest,
-  type ProviderProtocol,
+  type ProviderProtocol, type ProviderCapabilities,
 } from '@/api/gateway'
 import { AppDialog } from '@/components/ui/app-dialog'
 import { toaster } from '@/components/ui/toaster'
@@ -25,6 +25,20 @@ const PROTOCOL_OPTIONS = [
 ]
 const protocolCollection = createListCollection({ items: PROTOCOL_OPTIONS })
 
+// ─── 模态 & 能力选项 ──────────────────────────────────────────────────────────
+const INPUT_MODALITIES = [
+  { key: 'inputImage', label: '图片' },
+  { key: 'inputAudio', label: '音频' },
+  { key: 'inputVideo', label: '视频' },
+  { key: 'inputFile', label: '文件' },
+] as const
+
+const OUTPUT_MODALITIES = [
+  { key: 'outputImage', label: '图片' },
+  { key: 'outputAudio', label: '音频' },
+  { key: 'outputVideo', label: '视频' },
+] as const
+
 // ─── 默认表单 ─────────────────────────────────────────────────────────────────
 function defaultForm() {
   return {
@@ -35,10 +49,57 @@ function defaultForm() {
     modelName: '',
     maxOutputTokens: 8192,
     isEnabled: true,
+    inputImage: false,
+    inputAudio: false,
+    inputVideo: false,
+    inputFile: false,
+    outputImage: false,
+    outputAudio: false,
+    outputVideo: false,
+    supportsFunctionCalling: false,
+    supportsResponsesApi: false,
+    inputPricePerMToken: '',
+    outputPricePerMToken: '',
+    cacheInputPricePerMToken: '',
+    cacheOutputPricePerMToken: '',
+    notes: '',
   }
 }
 
 type FormState = ReturnType<typeof defaultForm>
+
+function hasNonDefaultCapabilities(caps: ProviderCapabilities | undefined | null): boolean {
+  if (!caps) return false
+  return caps.inputImage || caps.inputAudio || caps.inputVideo || caps.inputFile
+    || caps.outputImage || caps.outputAudio || caps.outputVideo
+    || caps.supportsFunctionCalling || caps.supportsResponsesApi
+}
+
+function hasNonDefaultPricing(caps: ProviderCapabilities | undefined | null): boolean {
+  if (!caps) return false
+  return !!(caps.inputPricePerMToken || caps.outputPricePerMToken
+    || caps.cacheInputPricePerMToken || caps.cacheOutputPricePerMToken
+    || caps.notes)
+}
+
+function buildCapabilities(form: FormState): Partial<ProviderCapabilities> {
+  return {
+    inputImage: form.inputImage,
+    inputAudio: form.inputAudio,
+    inputVideo: form.inputVideo,
+    inputFile: form.inputFile,
+    outputImage: form.outputImage,
+    outputAudio: form.outputAudio,
+    outputVideo: form.outputVideo,
+    supportsFunctionCalling: form.supportsFunctionCalling,
+    supportsResponsesApi: form.supportsResponsesApi,
+    inputPricePerMToken: parseFloat(form.inputPricePerMToken) || null,
+    outputPricePerMToken: parseFloat(form.outputPricePerMToken) || null,
+    cacheInputPricePerMToken: parseFloat(form.cacheInputPricePerMToken) || null,
+    cacheOutputPricePerMToken: parseFloat(form.cacheOutputPricePerMToken) || null,
+    notes: form.notes || null,
+  }
+}
 
 // ─── 编辑/新建弹窗 ────────────────────────────────────────────────────────────
 interface ProviderDialogProps {
@@ -55,6 +116,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
   useEffect(() => {
     if (open) {
       if (editing) {
+        const caps = editing.capabilities
         setForm({
           displayName: editing.displayName,
           protocol: editing.protocol,
@@ -63,6 +125,20 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           modelName: editing.modelName,
           maxOutputTokens: editing.maxOutputTokens,
           isEnabled: editing.isEnabled,
+          inputImage: caps?.inputImage ?? false,
+          inputAudio: caps?.inputAudio ?? false,
+          inputVideo: caps?.inputVideo ?? false,
+          inputFile: caps?.inputFile ?? false,
+          outputImage: caps?.outputImage ?? false,
+          outputAudio: caps?.outputAudio ?? false,
+          outputVideo: caps?.outputVideo ?? false,
+          supportsFunctionCalling: caps?.supportsFunctionCalling ?? false,
+          supportsResponsesApi: caps?.supportsResponsesApi ?? false,
+          inputPricePerMToken: caps?.inputPricePerMToken?.toString() ?? '',
+          outputPricePerMToken: caps?.outputPricePerMToken?.toString() ?? '',
+          cacheInputPricePerMToken: caps?.cacheInputPricePerMToken?.toString() ?? '',
+          cacheOutputPricePerMToken: caps?.cacheOutputPricePerMToken?.toString() ?? '',
+          notes: caps?.notes ?? '',
         })
       } else {
         setForm(defaultForm())
@@ -85,6 +161,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
     }
     setSaving(true)
     try {
+      const capabilities = buildCapabilities(form)
       if (editing) {
         const req: ProviderUpdateRequest = {
           id: editing.id,
@@ -95,6 +172,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           modelName: form.modelName,
           maxOutputTokens: form.maxOutputTokens,
           isEnabled: form.isEnabled,
+          capabilities,
         }
         await updateProvider(req)
       } else {
@@ -106,6 +184,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           modelName: form.modelName,
           maxOutputTokens: form.maxOutputTokens,
           isEnabled: form.isEnabled,
+          capabilities,
         }
         await createProvider(req)
       }
@@ -124,7 +203,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
       open={open}
       onClose={onClose}
       title={editing ? '编辑提供方' : '添加提供方'}
-      contentProps={{ maxW: '480px' }}
+      contentProps={{ maxW: '540px' }}
       bodyProps={{ maxH: '90vh', overflowY: 'auto' }}
       footer={(
         <>
@@ -183,7 +262,7 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
         />
       </Box>
 
-      <Box>
+      <Box mb="3">
         <Text fontSize="sm" mb="1" fontWeight="medium">最大输出 Tokens</Text>
         <Input
           type="number"
@@ -192,6 +271,123 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           min={256} max={131072}
         />
       </Box>
+
+      {/* ─── 能力配置 ─────────────────────────────────────── */}
+      <Collapsible.Root defaultOpen={editing ? hasNonDefaultCapabilities(editing.capabilities) : false}>
+        <Collapsible.Trigger asChild>
+          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
+            <Text fontSize="sm" fontWeight="medium">能力配置</Text>
+            <ChevronDown size={14} />
+          </Button>
+        </Collapsible.Trigger>
+        <Collapsible.Content>
+          <Box borderWidth="1px" rounded="md" p="3" mb="3">
+            <Text fontSize="xs" color="gray.500" mb="2">输入模态</Text>
+            <Flex gap="3" flexWrap="wrap" mb="3">
+              {INPUT_MODALITIES.map((m) => (
+                <CheckboxCard.Root
+                  key={m.key}
+                  variant="subtle"
+                  size="sm"
+                  colorPalette="teal"
+                  checked={form[m.key as keyof FormState] as boolean}
+                  onCheckedChange={(e) => set(m.key as keyof FormState, !!e.checked)}
+                >
+                  <CheckboxCard.HiddenInput />
+                  <CheckboxCard.Control>
+                    <CheckboxCard.Indicator />
+                    <CheckboxCard.Label>{m.label}</CheckboxCard.Label>
+                  </CheckboxCard.Control>
+                </CheckboxCard.Root>
+              ))}
+            </Flex>
+
+            <Text fontSize="xs" color="gray.500" mb="2">输出模态</Text>
+            <Flex gap="3" flexWrap="wrap" mb="3">
+              {OUTPUT_MODALITIES.map((m) => (
+                <CheckboxCard.Root
+                  key={m.key}
+                  variant="subtle"
+                  size="sm"
+                  colorPalette="teal"
+                  checked={form[m.key as keyof FormState] as boolean}
+                  onCheckedChange={(e) => set(m.key as keyof FormState, !!e.checked)}
+                >
+                  <CheckboxCard.HiddenInput />
+                  <CheckboxCard.Control>
+                    <CheckboxCard.Indicator />
+                    <CheckboxCard.Label>{m.label}</CheckboxCard.Label>
+                  </CheckboxCard.Control>
+                </CheckboxCard.Root>
+              ))}
+            </Flex>
+
+            <Text fontSize="xs" color="gray.500" mb="2">特殊能力</Text>
+            <Flex gap="4">
+              <Switch.Root size="sm" checked={form.supportsFunctionCalling} onCheckedChange={(d) => set('supportsFunctionCalling', d.checked)}>
+                <Switch.HiddenInput />
+                <Switch.Control><Switch.Thumb /></Switch.Control>
+                <Switch.Label fontSize="xs">Function Calling</Switch.Label>
+              </Switch.Root>
+              <Switch.Root size="sm" checked={form.supportsResponsesApi} onCheckedChange={(d) => set('supportsResponsesApi', d.checked)}>
+                <Switch.HiddenInput />
+                <Switch.Control><Switch.Thumb /></Switch.Control>
+                <Switch.Label fontSize="xs">Responses API</Switch.Label>
+              </Switch.Root>
+            </Flex>
+          </Box>
+        </Collapsible.Content>
+      </Collapsible.Root>
+
+      {/* ─── 价格 & 备注 ─────────────────────────────────── */}
+      <Collapsible.Root defaultOpen={editing ? hasNonDefaultPricing(editing.capabilities) : false}>
+        <Collapsible.Trigger asChild>
+          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
+            <Text fontSize="sm" fontWeight="medium">价格 & 备注</Text>
+            <ChevronDown size={14} />
+          </Button>
+        </Collapsible.Trigger>
+        <Collapsible.Content>
+          <Box borderWidth="1px" rounded="md" p="3" mb="3">
+            <Text fontSize="xs" color="gray.500" mb="2">单价（$ / 1M tokens）</Text>
+            <SimpleGrid columns={2} gap="3" mb="3">
+              <Box>
+                <Text fontSize="xs" mb="1">输入</Text>
+                <Input size="sm" type="number" step="0.01" min={0}
+                  value={form.inputPricePerMToken}
+                  onChange={(e) => set('inputPricePerMToken', e.target.value)}
+                  placeholder="0.00" />
+              </Box>
+              <Box>
+                <Text fontSize="xs" mb="1">输出</Text>
+                <Input size="sm" type="number" step="0.01" min={0}
+                  value={form.outputPricePerMToken}
+                  onChange={(e) => set('outputPricePerMToken', e.target.value)}
+                  placeholder="0.00" />
+              </Box>
+              <Box>
+                <Text fontSize="xs" mb="1">缓存输入</Text>
+                <Input size="sm" type="number" step="0.01" min={0}
+                  value={form.cacheInputPricePerMToken}
+                  onChange={(e) => set('cacheInputPricePerMToken', e.target.value)}
+                  placeholder="0.00" />
+              </Box>
+              <Box>
+                <Text fontSize="xs" mb="1">缓存输出</Text>
+                <Input size="sm" type="number" step="0.01" min={0}
+                  value={form.cacheOutputPricePerMToken}
+                  onChange={(e) => set('cacheOutputPricePerMToken', e.target.value)}
+                  placeholder="0.00" />
+              </Box>
+            </SimpleGrid>
+            <Text fontSize="xs" mb="1">备注</Text>
+            <Textarea size="sm" rows={2}
+              value={form.notes}
+              onChange={(e) => set('notes', e.target.value)}
+              placeholder="可选备注信息" />
+          </Box>
+        </Collapsible.Content>
+      </Collapsible.Root>
     </AppDialog>
   )
 }
@@ -298,11 +494,20 @@ export default function ModelsPage() {
                 )}
 
                 <Flex gap="1" flexWrap="wrap" mb="3">
-                  {p.capabilities?.inputImage && <Badge size="sm" colorPalette="cyan" variant="subtle">图片</Badge>}
-                  {p.capabilities?.inputAudio && <Badge size="sm" colorPalette="teal" variant="subtle">音频</Badge>}
+                  {p.capabilities?.inputImage && <Badge size="sm" colorPalette="cyan" variant="subtle">图片输入</Badge>}
+                  {p.capabilities?.inputAudio && <Badge size="sm" colorPalette="teal" variant="subtle">音频输入</Badge>}
+                  {p.capabilities?.inputVideo && <Badge size="sm" colorPalette="blue" variant="subtle">视频输入</Badge>}
                   {p.capabilities?.inputFile && <Badge size="sm" colorPalette="gray" variant="subtle">文件</Badge>}
+                  {p.capabilities?.outputImage && <Badge size="sm" colorPalette="cyan" variant="outline">图片输出</Badge>}
+                  {p.capabilities?.outputAudio && <Badge size="sm" colorPalette="teal" variant="outline">音频输出</Badge>}
+                  {p.capabilities?.outputVideo && <Badge size="sm" colorPalette="blue" variant="outline">视频输出</Badge>}
                   {p.capabilities?.supportsFunctionCalling && <Badge size="sm" colorPalette="orange" variant="subtle">Functions</Badge>}
                   {p.capabilities?.supportsResponsesApi && <Badge size="sm" colorPalette="green" variant="subtle">Responses</Badge>}
+                  {(p.capabilities?.inputPricePerMToken || p.capabilities?.outputPricePerMToken) && (
+                    <Badge size="sm" variant="outline" colorPalette="purple">
+                      ${p.capabilities.inputPricePerMToken ?? '?'}/{p.capabilities.outputPricePerMToken ?? '?'}/M
+                    </Badge>
+                  )}
                 </Flex>
 
                 <Flex align="center" justify="space-between">

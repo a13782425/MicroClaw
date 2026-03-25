@@ -27,7 +27,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ProviderId).HasColumnName("provider_id");
             b.Property(e => e.IsApproved).HasColumnName("is_approved");
             b.Property(e => e.ChannelType).HasColumnName("channel_type");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.ChannelId).HasColumnName("channel_id");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.AgentId).HasColumnName("agent_id");
             b.Property(e => e.ParentSessionId).HasColumnName("parent_session_id");
             b.Property(e => e.ApprovalReason).HasColumnName("approval_reason");
@@ -72,7 +73,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.BoundSkillIdsJson).HasColumnName("bound_skill_ids_json");
             b.Property(e => e.EnabledMcpServerIdsJson).HasColumnName("enabled_mcp_server_ids_json");
             b.Property(e => e.ToolGroupConfigsJson).HasColumnName("tool_group_configs_json");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.IsDefault).HasColumnName("is_default");
             b.Property(e => e.ContextWindowMessages).HasColumnName("context_window_messages");
         });
@@ -85,12 +86,12 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Name).HasColumnName("name");
             b.Property(e => e.Description).HasColumnName("description");
             b.Property(e => e.CronExpression).HasColumnName("cron_expression").IsRequired(false);
-            b.Property(e => e.RunAtUtc).HasColumnName("run_at_utc");
+            b.Property(e => e.RunAtMs).HasColumnName("run_at_ms");
             b.Property(e => e.TargetSessionId).HasColumnName("target_session_id").HasMaxLength(64);
             b.Property(e => e.Prompt).HasColumnName("prompt");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
-            b.Property(e => e.LastRunAtUtc).HasColumnName("last_run_at_utc");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.Property(e => e.LastRunAtMs).HasColumnName("last_run_at_ms");
         });
 
         modelBuilder.Entity<CronJobRunLogEntity>(b =>
@@ -99,7 +100,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.CronJobId).HasColumnName("cron_job_id").HasMaxLength(64);
-            b.Property(e => e.TriggeredAtUtc).HasColumnName("triggered_at_utc");
+            b.Property(e => e.TriggeredAtMs).HasColumnName("triggered_at_ms");
             b.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
             b.Property(e => e.DurationMs).HasColumnName("duration_ms");
             b.Property(e => e.ErrorMessage).HasColumnName("error_message");
@@ -113,7 +114,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
         });
 
         modelBuilder.Entity<UsageEntity>(b =>
@@ -127,10 +128,17 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Source).HasColumnName("source").HasMaxLength(32);
             b.Property(e => e.InputTokens).HasColumnName("input_tokens");
             b.Property(e => e.OutputTokens).HasColumnName("output_tokens");
-            b.Property(e => e.InputPricePerMToken).HasColumnName("input_price_per_m_token").IsRequired(false);
-            b.Property(e => e.OutputPricePerMToken).HasColumnName("output_price_per_m_token").IsRequired(false);
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
-            b.HasIndex(e => e.CreatedAtUtc).HasDatabaseName("ix_usages_created_at_utc");
+            b.Property(e => e.CachedInputTokens).HasColumnName("cached_input_tokens").HasDefaultValue(0L);
+            b.Property(e => e.DayNumber).HasColumnName("day_number");
+            b.Property(e => e.InputCostUsd).HasColumnName("input_cost_usd");
+            b.Property(e => e.OutputCostUsd).HasColumnName("output_cost_usd");
+            b.Property(e => e.CacheInputCostUsd).HasColumnName("cache_input_cost_usd");
+            b.Property(e => e.CacheOutputCostUsd).HasColumnName("cache_output_cost_usd");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.Property(e => e.UpdatedAtMs).HasColumnName("updated_at_ms");
+            b.HasIndex(e => new { e.SessionId, e.ProviderId, e.Source, e.DayNumber })
+                .HasDatabaseName("ix_usages_session_provider_source_day")
+                .IsUnique();
         });
 
         // F-D-1: 渠道消息失败重试队列
@@ -146,8 +154,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.UserText).HasColumnName("user_text");
             b.Property(e => e.RetryCount).HasColumnName("retry_count").HasDefaultValue(0);
             b.Property(e => e.Status).HasColumnName("status").HasMaxLength(20);
-            b.Property(e => e.NextRetryAt).HasColumnName("next_retry_at");
-            b.Property(e => e.CreatedAt).HasColumnName("created_at");
+            b.Property(e => e.NextRetryAtMs).HasColumnName("next_retry_at_ms");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.LastErrorMessage).HasColumnName("last_error_message");
             b.HasIndex(e => e.Status).HasDatabaseName("ix_channel_retry_queue_status");
             b.HasIndex(e => e.MessageId).HasDatabaseName("ix_channel_retry_queue_message_id").IsUnique();
@@ -166,7 +174,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Url).HasColumnName("url").IsRequired(false);
             b.Property(e => e.HeadersJson).HasColumnName("headers_json").IsRequired(false);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
         });
 
         modelBuilder.Entity<RagConfigEntity>(b =>
@@ -179,7 +187,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64).IsRequired(false);
             b.Property(e => e.SourceType).HasColumnName("source_type").HasMaxLength(64);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_configs_scope");
         });
     }

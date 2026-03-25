@@ -1,3 +1,4 @@
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -76,12 +77,12 @@ public sealed partial class SkillStore(IDbContextFactory<GatewayDbContext> facto
     private static SkillConfig ToConfig(SkillConfigEntity e) => new(
         e.Id,
         e.IsEnabled,
-        e.CreatedAtUtc);
+        TimeBase.FromMs(e.CreatedAtMs));
 
     private static SkillConfigEntity ToEntity(SkillConfig c) => new()
     {
         Id = c.Id,
         IsEnabled = c.IsEnabled,
-        CreatedAtUtc = c.CreatedAtUtc,
+        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
     };
 }

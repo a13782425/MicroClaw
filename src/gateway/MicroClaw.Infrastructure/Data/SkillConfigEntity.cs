@@ -4,5 +4,6 @@ public sealed class SkillConfigEntity
 {
     public string Id { get; set; } = string.Empty;
     public bool IsEnabled { get; set; } = true;
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
 }

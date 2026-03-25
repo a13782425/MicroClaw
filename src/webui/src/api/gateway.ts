@@ -789,6 +789,13 @@ export type SourceUsage = {
   outputTokens: number
 }
 
+export type DailyProviderUsage = {
+  date: string
+  providerId: string
+  providerName: string
+  estimatedCostUsd: number
+}
+
 export type UsageSummary = {
   totalInputTokens: number
   totalOutputTokens: number
@@ -799,6 +806,7 @@ export type UsageQueryResult = {
   daily: DailyUsage[]
   byProvider: ProviderUsage[]
   bySource: SourceUsage[]
+  dailyByProvider: DailyProviderUsage[]
   summary: UsageSummary
 }
 

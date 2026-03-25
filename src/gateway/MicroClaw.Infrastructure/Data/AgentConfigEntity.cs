@@ -9,7 +9,8 @@ public sealed class AgentConfigEntity
     public string? BoundSkillIdsJson { get; set; }
     public string? EnabledMcpServerIdsJson { get; set; }
     public string? ToolGroupConfigsJson { get; set; }
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
     public bool IsDefault { get; set; }
     public int? ContextWindowMessages { get; set; }
 }

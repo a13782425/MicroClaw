@@ -26,11 +26,11 @@ public sealed class ChannelRetryQueueEntity
     /// <summary>状态：pending / exhausted。</summary>
     public string Status { get; set; } = "pending";
 
-    /// <summary>下次允许重试的时间（UTC ISO 8601）。</summary>
-    public string NextRetryAt { get; set; } = string.Empty;
+    /// <summary>下次允许重试的时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long NextRetryAtMs { get; set; }
 
-    /// <summary>入队时间（UTC ISO 8601）。</summary>
-    public string CreatedAt { get; set; } = string.Empty;
+    /// <summary>入队时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
 
     /// <summary>最近一次失败的错误摘要。</summary>
     public string? LastErrorMessage { get; set; }

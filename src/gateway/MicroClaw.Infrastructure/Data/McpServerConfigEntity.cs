@@ -17,5 +17,6 @@ public sealed class McpServerConfigEntity
     /// <summary>SSE / Http 传输：自定义 HTTP 请求头，JSON 对象序列化</summary>
     public string? HeadersJson { get; set; }
     public bool IsEnabled { get; set; } = true;
-    public DateTimeOffset CreatedAtUtc { get; set; }
+    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
 }

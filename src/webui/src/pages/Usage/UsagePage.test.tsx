@@ -77,6 +77,10 @@ const mockResult: UsageQueryResult = {
     { source: 'web', inputTokens: 800000, outputTokens: 400000 },
     { source: 'feishu', inputTokens: 700000, outputTokens: 350000 },
   ],
+  dailyByProvider: [
+    { date: '2024-01-01', providerId: 'p1', providerName: 'GPT-4o', estimatedCostUsd: 0.3 },
+    { date: '2024-01-02', providerId: 'p1', providerName: 'GPT-4o', estimatedCostUsd: 0.7 },
+  ],
 }
 
 const wrap = (ui: React.ReactElement) =>

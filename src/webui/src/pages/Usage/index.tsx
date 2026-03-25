@@ -9,7 +9,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   type PieSectorShapeProps,
 } from 'recharts'
-import { fetchUsageStats, type UsageQueryResult } from '@/api/gateway'
+import { fetchUsageStats, type UsageQueryResult, type DailyProviderUsage } from '@/api/gateway'
 import { DateInput } from '@/components/ui/date-input'
 import { toaster } from '@/components/ui/toaster'
 
@@ -181,13 +181,26 @@ function SourcePieChart({ data }: { data: UsageQueryResult['bySource'] }) {
 
 // ─── Token 日趋势 AreaChart ──────────────────────────────────────────────────
 
+const TOKEN_SERIES = [
+  { label: '输入 Token', dataKey: 'inputTokens', color: 'blue.solid', gradientId: 'token-input' },
+  { label: '输出 Token', dataKey: 'outputTokens', color: 'green.solid', gradientId: 'token-output' },
+  { label: '总 Token', dataKey: 'totalTokens', color: 'orange.solid', gradientId: 'token-total' },
+] as const
+
 function TokenTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
+  const enriched = useMemo(
+    () => data.map((d) => ({
+      date: d.date,
+      '输入 Token': d.inputTokens,
+      '输出 Token': d.outputTokens,
+      '总 Token': d.inputTokens + d.outputTokens,
+    })),
+    [data],
+  )
+
   const chart = useChart({
-    data,
-    series: [
-      { name: 'inputTokens', color: 'blue.solid' },
-      { name: 'outputTokens', color: 'green.solid' },
-    ],
+    data: enriched,
+    series: TOKEN_SERIES.map(({ label, color }) => ({ name: label, color })),
   })
 
   return (
@@ -209,10 +222,10 @@ function TokenTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
         <Tooltip cursor={false} animationDuration={100} content={<Chart.Tooltip />} />
         <Legend content={<Chart.Legend />} />
 
-        {chart.series.map((item) => (
-          <defs key={`${item.name}-def`}>
+        {TOKEN_SERIES.map((item) => (
+          <defs key={item.gradientId}>
             <Chart.Gradient
-              id={`${item.name}-gradient`}
+              id={item.gradientId}
               stops={[
                 { offset: '0%', color: item.color, opacity: 0.4 },
                 { offset: '100%', color: item.color, opacity: 0.05 },
@@ -221,16 +234,16 @@ function TokenTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
           </defs>
         ))}
 
-        {chart.series.map((item) => (
+        {TOKEN_SERIES.map((item) => (
           <Area
-            key={item.name}
+            key={item.label}
             type="monotone"
             isAnimationActive={false}
-            dataKey={chart.key(item.name)}
-            fill={`url(#${item.name}-gradient)`}
+            dataKey={chart.key(item.label)}
+            fill={`url(#${item.gradientId})`}
             stroke={chart.color(item.color)}
             strokeWidth={2}
-            name={item.name === 'inputTokens' ? '输入 Token' : '输出 Token'}
+            name={item.label}
           />
         ))}
       </AreaChart>
@@ -240,11 +253,55 @@ function TokenTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
 
 // ─── 费用趋势 AreaChart ─────────────────────────────────────────────────────
 
-function CostTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
-  const chart = useChart({
-    data,
-    series: [{ name: 'estimatedCostUsd', color: 'purple.solid' }],
-  })
+const COST_COLORS = [
+  'blue.solid', 'green.solid', 'orange.solid', 'teal.solid',
+  'pink.solid', 'cyan.solid', 'red.solid', 'yellow.solid',
+] as const
+
+function CostTrendChart({
+  daily,
+  dailyByProvider,
+}: {
+  daily: UsageQueryResult['daily']
+  dailyByProvider: DailyProviderUsage[]
+}) {
+  // 提取所有唯一 providerName（按 dailyByProvider 出现顺序去重）
+  const providerNames = useMemo(() => {
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const row of dailyByProvider) {
+      if (!seen.has(row.providerName)) {
+        seen.add(row.providerName)
+        names.push(row.providerName)
+      }
+    }
+    return names
+  }, [dailyByProvider])
+
+  const TOTAL_LABEL = '总费用（USD）'
+
+  // Pivot：以 daily 为骨架，合并每个 provider 的每日费用
+  const pivoted = useMemo(() => {
+    // 建立 date+providerName → cost 的索引
+    const index = new Map<string, number>()
+    for (const row of dailyByProvider) {
+      index.set(`${row.date}|${row.providerName}`, row.estimatedCostUsd)
+    }
+    return daily.map((d) => {
+      const row: Record<string, unknown> = { date: d.date, [TOTAL_LABEL]: d.estimatedCostUsd }
+      for (const name of providerNames) {
+        row[name] = index.get(`${d.date}|${name}`) ?? 0
+      }
+      return row
+    })
+  }, [daily, dailyByProvider, providerNames])
+
+  const series = useMemo(() => [
+    { name: TOTAL_LABEL, color: 'purple.solid' },
+    ...providerNames.map((name, i) => ({ name, color: COST_COLORS[i % COST_COLORS.length] })),
+  ], [providerNames])
+
+  const chart = useChart({ data: pivoted, series })
 
   return (
     <Chart.Root maxH="xs" chart={chart}>
@@ -259,30 +316,36 @@ function CostTrendChart({ data }: { data: UsageQueryResult['daily'] }) {
         <YAxis
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => `$${Number(v).toFixed(2)}`}
+          tickFormatter={(v) => `$${Number(v).toFixed(4)}`}
           tick={{ fontSize: 11 }}
         />
         <Tooltip cursor={false} animationDuration={100} content={<Chart.Tooltip />} />
+        <Legend content={<Chart.Legend />} />
 
-        <defs>
-          <Chart.Gradient
-            id="cost-gradient"
-            stops={[
-              { offset: '0%', color: 'purple.solid', opacity: 0.4 },
-              { offset: '100%', color: 'purple.solid', opacity: 0.05 },
-            ]}
+        {series.map((item, i) => (
+          <defs key={`cost-grad-${i}`}>
+            <Chart.Gradient
+              id={`cost-grad-${i}`}
+              stops={[
+                { offset: '0%', color: item.color, opacity: 0.4 },
+                { offset: '100%', color: item.color, opacity: 0.05 },
+              ]}
+            />
+          </defs>
+        ))}
+
+        {series.map((item, i) => (
+          <Area
+            key={item.name}
+            type="monotone"
+            isAnimationActive={false}
+            dataKey={chart.key(item.name)}
+            fill={`url(#cost-grad-${i})`}
+            stroke={chart.color(item.color)}
+            strokeWidth={2}
+            name={item.name}
           />
-        </defs>
-
-        <Area
-          type="monotone"
-          isAnimationActive={false}
-          dataKey={chart.key('estimatedCostUsd')}
-          fill="url(#cost-gradient)"
-          stroke={chart.color('purple.solid')}
-          strokeWidth={2}
-          name="预估费用（USD）"
-        />
+        ))}
       </AreaChart>
     </Chart.Root>
   )
@@ -397,7 +460,7 @@ export default function UsagePage() {
               {/* AreaChart：费用趋势 */}
               <Box mb="6" p="4" borderWidth="1px" rounded="md">
                 <Text fontWeight="medium" mb="3" fontSize="sm">费用趋势（USD）</Text>
-                <CostTrendChart data={data.daily} />
+                <CostTrendChart daily={data.daily} dailyByProvider={data.dailyByProvider ?? []} />
               </Box>
             </SimpleGrid>
           )}
@@ -407,11 +470,11 @@ export default function UsagePage() {
           {data.byProvider.length > 0 && (
             <SimpleGrid columns={{ base: 1, md: 2 }} gap="4" mb="6">
               <Box p="4" borderWidth="1px" rounded="md">
-                <Text fontWeight="medium" mb="3" fontSize="sm">按 Provider 占比</Text>
+                <Text fontWeight="medium" mb="3" fontSize="sm">按 模型 占比</Text>
                 <ProviderPieChart data={data.byProvider} />
               </Box>
               <Box p="4" borderWidth="1px" rounded="md">
-                <Text fontWeight="medium" mb="3" fontSize="sm">按 Provider 分组（绝对量）</Text>
+                <Text fontWeight="medium" mb="3" fontSize="sm">按 模型 分组（绝对量）</Text>
                 <ProviderBarChart data={data.byProvider} />
               </Box>
             </SimpleGrid>
@@ -425,39 +488,11 @@ export default function UsagePage() {
                 <SourcePieChart data={data.bySource} />
               </Box>
               <Box p="4" borderWidth="1px" rounded="md">
-                <Text fontWeight="medium" mb="3" fontSize="sm">按 Source 分组（绝对量）</Text>
+                <Text fontWeight="medium" mb="3" fontSize="sm">按来源占比（绝对量）</Text>
                 <SourceBarChart data={data.bySource} />
               </Box>
             </SimpleGrid>
           )}
-
-          {data.bySource.length > 0 && (
-            <Box mb="6">
-              <Text fontWeight="medium" mb="3" fontSize="sm">按来源明细</Text>
-              <Table.Root variant="outline">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeader>来源</Table.ColumnHeader>
-                    <Table.ColumnHeader textAlign="end">输入 Token</Table.ColumnHeader>
-                    <Table.ColumnHeader textAlign="end">输出 Token</Table.ColumnHeader>
-                    <Table.ColumnHeader textAlign="end">合计</Table.ColumnHeader>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {data.bySource.map((row) => (
-                    <Table.Row key={row.source}>
-                      <Table.Cell fontSize="sm">{row.source || '—'}</Table.Cell>
-                      <Table.Cell textAlign="end" fontSize="sm">{fmtTokens(row.inputTokens)}</Table.Cell>
-                      <Table.Cell textAlign="end" fontSize="sm">{fmtTokens(row.outputTokens)}</Table.Cell>
-                      <Table.Cell textAlign="end" fontSize="sm" fontWeight="medium">{fmtTokens(row.inputTokens + row.outputTokens)}</Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
-            </Box>
-          )}
-
-          
 
           {data.daily.length === 0 && data.byProvider.length === 0 && data.bySource.length === 0 && (
             <Box py="8" textAlign="center" color="gray.400">该时间段内无用量数据</Box>

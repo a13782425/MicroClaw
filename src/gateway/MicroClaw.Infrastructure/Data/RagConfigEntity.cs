@@ -14,5 +14,6 @@ public sealed class RagConfigEntity
     public string? SessionId { get; set; }
     public string SourceType { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
+    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
 }

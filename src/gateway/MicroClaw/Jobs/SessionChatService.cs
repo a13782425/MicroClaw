@@ -71,16 +71,30 @@ public sealed class SessionChatService(
             {
                 try
                 {
+                    long inputTokens = usage.InputTokenCount ?? 0L;
+                    long outputTokens = usage.OutputTokenCount ?? 0L;
+                    long cachedInputTokens = usage.CachedInputTokenCount ?? 0L;
+                    long nonCachedInput = inputTokens - cachedInputTokens;
+
+                    decimal inputCost = nonCachedInput > 0 && provider.Capabilities.InputPricePerMToken.HasValue
+                        ? nonCachedInput * provider.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+                    decimal outputCost = provider.Capabilities.OutputPricePerMToken.HasValue
+                        ? outputTokens * provider.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
+                    decimal cacheInputCost = cachedInputTokens > 0
+                        ? cachedInputTokens * (provider.Capabilities.CacheInputPricePerMToken ?? provider.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
+
                     await usageTracker.TrackAsync(
                         sessionId,
                         provider.Id,
                         provider.DisplayName,
                         source: "cron",
-                        inputTokens: usage.InputTokenCount ?? 0L,
-                        outputTokens: usage.OutputTokenCount ?? 0L,
-                        inputPricePerMToken: provider.Capabilities.InputPricePerMToken,
-                        outputPricePerMToken: provider.Capabilities.OutputPricePerMToken,
-                        ct);
+                        inputTokens: inputTokens,
+                        outputTokens: outputTokens,
+                        cachedInputTokens: cachedInputTokens,
+                        inputCostUsd: inputCost,
+                        outputCostUsd: outputCost,
+                        cacheInputCostUsd: cacheInputCost,
+                        ct: ct);
                 }
                 catch (Exception ex)
                 {

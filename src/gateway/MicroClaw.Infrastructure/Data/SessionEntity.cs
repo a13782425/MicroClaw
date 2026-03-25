@@ -8,7 +8,8 @@ public sealed class SessionEntity
     public bool IsApproved { get; set; }
     public string ChannelType { get; set; } = "web";
     public string ChannelId { get; set; } = "web";
-    public string CreatedAtUtc { get; set; } = string.Empty;
+    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
     public string? AgentId { get; set; }
     public string? ParentSessionId { get; set; }
     public string? ApprovalReason { get; set; }

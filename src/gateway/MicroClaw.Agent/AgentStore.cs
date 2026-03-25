@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Tools;
 using Microsoft.EntityFrameworkCore;
@@ -166,7 +167,7 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         DeserializeList<string>(e.BoundSkillIdsJson),
         DeserializeList<string>(e.EnabledMcpServerIdsJson),
         DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
-        e.CreatedAtUtc,
+        TimeBase.FromMs(e.CreatedAtMs),
         e.IsDefault,
         e.ContextWindowMessages);
 
@@ -185,7 +186,7 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         ToolGroupConfigsJson = c.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(c.ToolGroupConfigs, JsonOpts)
             : null,
-        CreatedAtUtc = c.CreatedAtUtc,
+        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
         IsDefault = c.IsDefault,
         ContextWindowMessages = c.ContextWindowMessages,
     };

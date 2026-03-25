@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -22,7 +21,7 @@ namespace MicroClaw.Infrastructure.Migrations
                     bound_skill_ids_json = table.Column<string>(type: "TEXT", nullable: true),
                     enabled_mcp_server_ids_json = table.Column<string>(type: "TEXT", nullable: true),
                     tool_group_configs_json = table.Column<string>(type: "TEXT", nullable: true),
-                    created_at_utc = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     is_default = table.Column<bool>(type: "INTEGER", nullable: false),
                     context_window_messages = table.Column<int>(type: "INTEGER", nullable: true)
                 },
@@ -43,8 +42,8 @@ namespace MicroClaw.Infrastructure.Migrations
                     user_text = table.Column<string>(type: "TEXT", nullable: false),
                     retry_count = table.Column<int>(type: "INTEGER", nullable: false, defaultValue: 0),
                     status = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
-                    next_retry_at = table.Column<string>(type: "TEXT", nullable: false),
-                    created_at = table.Column<string>(type: "TEXT", nullable: false),
+                    next_retry_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     last_error_message = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
@@ -74,7 +73,7 @@ namespace MicroClaw.Infrastructure.Migrations
                 {
                     id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     cron_job_id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    triggered_at_utc = table.Column<string>(type: "TEXT", nullable: false),
+                    triggered_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     status = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
                     duration_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     error_message = table.Column<string>(type: "TEXT", nullable: true),
@@ -93,12 +92,12 @@ namespace MicroClaw.Infrastructure.Migrations
                     name = table.Column<string>(type: "TEXT", nullable: false),
                     description = table.Column<string>(type: "TEXT", nullable: true),
                     cron_expression = table.Column<string>(type: "TEXT", nullable: true),
-                    run_at_utc = table.Column<string>(type: "TEXT", nullable: true),
+                    run_at_ms = table.Column<long>(type: "INTEGER", nullable: true),
                     target_session_id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     prompt = table.Column<string>(type: "TEXT", nullable: false),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at_utc = table.Column<string>(type: "TEXT", nullable: false),
-                    last_run_at_utc = table.Column<string>(type: "TEXT", nullable: true)
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
+                    last_run_at_ms = table.Column<long>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -118,7 +117,7 @@ namespace MicroClaw.Infrastructure.Migrations
                     url = table.Column<string>(type: "TEXT", nullable: true),
                     headers_json = table.Column<string>(type: "TEXT", nullable: true),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at_utc = table.Column<DateTimeOffset>(type: "TEXT", nullable: false)
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -155,7 +154,7 @@ namespace MicroClaw.Infrastructure.Migrations
                     session_id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
                     source_type = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at_utc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -171,8 +170,8 @@ namespace MicroClaw.Infrastructure.Migrations
                     provider_id = table.Column<string>(type: "TEXT", nullable: false),
                     is_approved = table.Column<bool>(type: "INTEGER", nullable: false),
                     channel_type = table.Column<string>(type: "TEXT", nullable: false),
-                    ChannelId = table.Column<string>(type: "TEXT", nullable: false),
-                    created_at_utc = table.Column<string>(type: "TEXT", nullable: false),
+                    channel_id = table.Column<string>(type: "TEXT", nullable: false),
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     agent_id = table.Column<string>(type: "TEXT", nullable: true),
                     parent_session_id = table.Column<string>(type: "TEXT", nullable: true),
                     approval_reason = table.Column<string>(type: "TEXT", nullable: true)
@@ -188,7 +187,7 @@ namespace MicroClaw.Infrastructure.Migrations
                 {
                     id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at_utc = table.Column<DateTimeOffset>(type: "TEXT", nullable: false)
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -207,9 +206,14 @@ namespace MicroClaw.Infrastructure.Migrations
                     source = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     input_tokens = table.Column<long>(type: "INTEGER", nullable: false),
                     output_tokens = table.Column<long>(type: "INTEGER", nullable: false),
-                    input_price_per_m_token = table.Column<decimal>(type: "TEXT", nullable: true),
-                    output_price_per_m_token = table.Column<decimal>(type: "TEXT", nullable: true),
-                    created_at_utc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    cached_input_tokens = table.Column<long>(type: "INTEGER", nullable: false, defaultValue: 0L),
+                    day_number = table.Column<int>(type: "INTEGER", nullable: false),
+                    input_cost_usd = table.Column<decimal>(type: "TEXT", nullable: false),
+                    output_cost_usd = table.Column<decimal>(type: "TEXT", nullable: false),
+                    cache_input_cost_usd = table.Column<decimal>(type: "TEXT", nullable: false),
+                    cache_output_cost_usd = table.Column<decimal>(type: "TEXT", nullable: false),
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
+                    updated_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -238,9 +242,10 @@ namespace MicroClaw.Infrastructure.Migrations
                 column: "scope");
 
             migrationBuilder.CreateIndex(
-                name: "ix_usages_created_at_utc",
+                name: "ix_usages_session_provider_source_day",
                 table: "usages",
-                column: "created_at_utc");
+                columns: new[] { "session_id", "provider_id", "source", "day_number" },
+                unique: true);
         }
 
         /// <inheritdoc />

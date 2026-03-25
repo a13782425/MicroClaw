@@ -1,13 +1,14 @@
 namespace MicroClaw.Infrastructure.Data;
 
 /// <summary>
-/// Token 使用量记录，快照价格保证历史费用计算准确。
+/// Token 使用量记录，按 (SessionId, ProviderId, Source, DayNumber) 每日累加。
+/// 费用在写入时实时计算并累加，不再保存快照价格。
 /// </summary>
 public sealed class UsageEntity
 {
     public int Id { get; set; }
 
-    /// <summary>关联会话 ID（子代理调用、渠道消息等场景可能为 null）。</summary>
+    /// <summary>关联会话 ID（子代理调用时使用父 Agent 的 SessionId）。</summary>
     public string? SessionId { get; set; }
 
     public string ProviderId { get; set; } = string.Empty;
@@ -19,11 +20,27 @@ public sealed class UsageEntity
     public long InputTokens { get; set; }
     public long OutputTokens { get; set; }
 
-    /// <summary>记录时快照的输入单价（USD/1M tokens），可 null 表示未配置。</summary>
-    public decimal? InputPricePerMToken { get; set; }
+    /// <summary>缓存命中的输入 token 数（已包含在 InputTokens 中，用于独立计费）。</summary>
+    public long CachedInputTokens { get; set; }
 
-    /// <summary>记录时快照的输出单价（USD/1M tokens），可 null 表示未配置。</summary>
-    public decimal? OutputPricePerMToken { get; set; }
+    /// <summary>日期维度：相对于 TimeBase.BaseTime 的天数偏移。</summary>
+    public int DayNumber { get; set; }
 
-    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    /// <summary>当日累计输入费用（USD）。</summary>
+    public decimal InputCostUsd { get; set; }
+
+    /// <summary>当日累计输出费用（USD）。</summary>
+    public decimal OutputCostUsd { get; set; }
+
+    /// <summary>当日累计缓存输入费用（USD）。</summary>
+    public decimal CacheInputCostUsd { get; set; }
+
+    /// <summary>当日累计缓存输出费用（USD）。</summary>
+    public decimal CacheOutputCostUsd { get; set; }
+
+    /// <summary>首次创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long CreatedAtMs { get; set; }
+
+    /// <summary>最后更新时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    public long UpdatedAtMs { get; set; }
 }

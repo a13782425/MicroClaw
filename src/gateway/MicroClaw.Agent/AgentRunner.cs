@@ -81,8 +81,9 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
+        IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
         SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
-        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId, skillCtx.CatalogFragment);
+        List<ChatMessage> messages = BuildChatMessages(agent, validatedHistory, sessionId, skillCtx.CatalogFragment);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
@@ -151,8 +152,10 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
+        IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
+
         SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
-        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId, skillCtx.CatalogFragment);
+        List<ChatMessage> messages = BuildChatMessages(agent, validatedHistory, sessionId, skillCtx.CatalogFragment);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
@@ -345,6 +348,55 @@ public sealed class AgentRunner(
             .Build();
     }
 
+    /// <summary>校验消息历史中的附件是否被 Provider 模态能力支持。不支持的附件记录警告日志并从历史中移除。</summary>
+    private IReadOnlyList<SessionMessage> ValidateModalities(
+        IReadOnlyList<SessionMessage> history,
+        ProviderConfig provider)
+    {
+        var caps = provider.Capabilities;
+        // 快速路径：无附件则直接返回
+        if (!history.Any(m => m.Attachments is { Count: > 0 }))
+            return history;
+
+        var filtered = new List<SessionMessage>(history.Count);
+        foreach (SessionMessage msg in history)
+        {
+            if (msg.Attachments is not { Count: > 0 })
+            {
+                filtered.Add(msg);
+                continue;
+            }
+
+            var kept = new List<MessageAttachment>();
+            foreach (MessageAttachment att in msg.Attachments)
+            {
+                bool supported = att.MimeType switch
+                {
+                    string m when m.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => caps.InputImage,
+                    string m when m.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => caps.InputAudio,
+                    string m when m.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => caps.InputVideo,
+                    _ => caps.InputFile, // 其他类型视为文件
+                };
+
+                if (supported)
+                {
+                    kept.Add(att);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Attachment '{FileName}' ({MimeType}) skipped: provider '{Provider}' does not support this modality",
+                        att.FileName, att.MimeType, provider.DisplayName);
+                }
+            }
+
+            // 重建消息：保留受支持的附件，其余丢弃
+            filtered.Add(msg with { Attachments = kept.Count > 0 ? kept : null });
+        }
+
+        return filtered;
+    }
+
     private static ChatOptions BuildChatOptions(
         IReadOnlyList<AITool> tools,
         ProviderConfig provider,
@@ -358,7 +410,8 @@ public sealed class AgentRunner(
         };
         if (!string.IsNullOrWhiteSpace(effortOverride))
             options.AdditionalProperties ??= new() { ["thinking_effort"] = effortOverride };
-        if (tools.Count > 0)
+        // 仅在 Provider 声明支持 Function Calling 时附加工具
+        if (tools.Count > 0 && provider.Capabilities.SupportsFunctionCalling)
             options.Tools = [.. tools];
         return options;
     }
@@ -384,6 +437,18 @@ public sealed class AgentRunner(
         long outputTokens = usage.OutputTokenCount ?? 0L;
         if (inputTokens <= 0 && outputTokens <= 0) return;
 
+        long cachedInputTokens = usage.CachedInputTokenCount ?? 0L;
+        long nonCachedInput = inputTokens - cachedInputTokens;
+
+        // 实时计算费用
+        decimal inputCost = nonCachedInput > 0 && provider.Capabilities.InputPricePerMToken.HasValue
+            ? nonCachedInput * provider.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal outputCost = provider.Capabilities.OutputPricePerMToken.HasValue
+            ? outputTokens * provider.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal cacheInputCost = cachedInputTokens > 0
+            ? cachedInputTokens * (provider.Capabilities.CacheInputPricePerMToken ?? provider.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
+        decimal cacheOutputCost = 0m; // 预留
+
         try
         {
             await usageTracker.TrackAsync(
@@ -393,8 +458,11 @@ public sealed class AgentRunner(
                 source,
                 inputTokens,
                 outputTokens,
-                provider.Capabilities.InputPricePerMToken,
-                provider.Capabilities.OutputPricePerMToken,
+                cachedInputTokens,
+                inputCost,
+                outputCost,
+                cacheInputCost,
+                cacheOutputCost,
                 ct);
         }
         catch (Exception ex)

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,11 +42,12 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
 
     public McpServerConfig Add(McpServerConfig config)
     {
-        McpServerConfigEntity entity = ToEntity(config with
+        McpServerConfig toAdd = config with
         {
             Id = Guid.NewGuid().ToString("N"),
             CreatedAtUtc = DateTimeOffset.UtcNow,
-        });
+        };
+        McpServerConfigEntity entity = ToEntity(toAdd);
         using GatewayDbContext db = factory.CreateDbContext();
         db.McpServers.Add(entity);
         db.SaveChanges();
@@ -112,7 +114,7 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
             ? JsonSerializer.Deserialize<Dictionary<string, string>>(e.HeadersJson)
             : null,
         IsEnabled: e.IsEnabled,
-        CreatedAtUtc: e.CreatedAtUtc);
+        CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs));
 
     private static McpServerConfigEntity ToEntity(McpServerConfig c) => new()
     {
@@ -125,7 +127,7 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
         Url          = c.Url,
         HeadersJson  = c.Headers is not null ? JsonSerializer.Serialize(c.Headers, JsonOpts) : null,
         IsEnabled    = c.IsEnabled,
-        CreatedAtUtc = c.CreatedAtUtc,
+        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
     };
 
     private static McpTransportType ParseTransport(string? value) =>
