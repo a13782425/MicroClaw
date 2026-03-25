@@ -101,7 +101,7 @@ function CreateSessionDialog({
       contentProps={{ maxW: '400px' }}
       footer={(
         <>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button
             colorPalette="blue"
             loading={creating}

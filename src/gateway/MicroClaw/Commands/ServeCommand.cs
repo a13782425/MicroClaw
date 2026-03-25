@@ -25,6 +25,7 @@ using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Quartz;
 using Serilog;
@@ -236,6 +237,9 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IBuiltinToolProvider, ShellToolProvider>();
 		builder.Services.AddSingleton<IBuiltinToolProvider, CronToolProvider>();
 		builder.Services.AddSingleton<IBuiltinToolProvider, SubAgentToolProvider>();
+		builder.Services.Configure<FileToolsOptions>(builder.Configuration.GetSection("filesystem"));
+		builder.Services.AddSingleton<IBuiltinToolProvider>(sp =>
+			new FileToolProvider(sessionsDir, sp.GetRequiredService<IOptions<FileToolsOptions>>()));
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();

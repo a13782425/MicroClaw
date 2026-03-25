@@ -32,7 +32,7 @@ export function ConfirmDialog({
       contentProps={{ maxW: '400px' }}
       footer={(
         <>
-          <Button variant="ghost" onClick={onClose} disabled={loading}>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
             {cancelText}
           </Button>
           <Button colorPalette={colorPalette} onClick={onConfirm} loading={loading}>

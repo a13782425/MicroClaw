@@ -204,10 +204,9 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
       onClose={onClose}
       title={editing ? '编辑提供方' : '添加提供方'}
       contentProps={{ maxW: '540px' }}
-      bodyProps={{ maxH: '90vh', overflowY: 'auto' }}
       footer={(
         <>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
           <Button colorPalette="blue" loading={saving} onClick={handleSave}>保存</Button>
         </>
       )}

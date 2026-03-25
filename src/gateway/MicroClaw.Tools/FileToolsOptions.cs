@@ -1,0 +1,14 @@
+namespace MicroClaw.Tools;
+
+/// <summary>
+/// 文件操作工具的限额配置。沙箱目录由 <see cref="FileToolProvider"/> 根据 sessionId 自动计算。
+/// 通过配置节 "filesystem" 绑定。
+/// </summary>
+public sealed class FileToolsOptions
+{
+    /// <summary>单次读取返回的最大字符数（默认 100,000）。</summary>
+    public int MaxReadChars { get; set; } = 100_000;
+
+    /// <summary>单次写入的最大字节数（默认 10 MB）。</summary>
+    public long MaxFileWriteBytes { get; set; } = 10_000_000;
+}

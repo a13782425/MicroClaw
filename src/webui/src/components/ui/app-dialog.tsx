@@ -25,14 +25,14 @@ export function AppDialog({
       <Portal>
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content maxW="480px" {...contentProps}>
-            <Dialog.Header>
+          <Dialog.Content maxW="480px" maxH="86vh" display="flex" flexDirection="column" {...contentProps}>
+            <Dialog.Header flexShrink={0}>
               <Dialog.Title>{title}</Dialog.Title>
             </Dialog.Header>
-            <Dialog.Body {...bodyProps}>
+            <Dialog.Body flex="1" overflowY="auto" {...bodyProps}>
               {children}
             </Dialog.Body>
-            {footer && <Dialog.Footer gap="2">{footer}</Dialog.Footer>}
+            {footer && <Dialog.Footer gap="2" flexShrink={0}>{footer}</Dialog.Footer>}
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
