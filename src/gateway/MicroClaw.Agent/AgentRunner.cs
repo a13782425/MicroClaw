@@ -374,7 +374,25 @@ public sealed class AgentRunner(
         foreach (SessionMessage msg in windowed)
         {
             ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
-            messages.Add(new ChatMessage(role, msg.Content));
+
+            if (msg.Attachments is { Count: > 0 })
+            {
+                var contents = new List<AIContent>();
+                if (!string.IsNullOrEmpty(msg.Content))
+                    contents.Add(new TextContent(msg.Content));
+
+                foreach (MessageAttachment att in msg.Attachments)
+                {
+                    byte[] bytes = Convert.FromBase64String(att.Base64Data);
+                    contents.Add(new DataContent(bytes, att.MimeType));
+                }
+
+                messages.Add(new ChatMessage(role, contents));
+            }
+            else
+            {
+                messages.Add(new ChatMessage(role, msg.Content));
+            }
         }
 
         return messages;

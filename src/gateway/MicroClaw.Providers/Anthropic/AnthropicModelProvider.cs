@@ -1,4 +1,4 @@
-using Anthropic.SDK;
+using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -6,7 +6,7 @@ namespace MicroClaw.Providers.Claude;
 
 /// <summary>
 /// IModelProvider implementation for the Anthropic Claude API.
-/// Extend Create() via ChatClientBuilder middleware to add Memory or RAG.
+/// Uses the official Anthropic C# SDK with IChatClient integration.
 /// </summary>
 public sealed class AnthropicModelProvider : IModelProvider
 {
@@ -21,11 +21,12 @@ public sealed class AnthropicModelProvider : IModelProvider
 
     public IChatClient Create(ProviderConfig config)
     {
-        AnthropicClient client = new(new APIAuthentication(config.ApiKey));
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            client.ApiUrlFormat = config.BaseUrl.TrimEnd('/') + "/{0}/{1}";
+        IAnthropicClient client = new AnthropicClient { ApiKey = config.ApiKey };
 
-        return new ChatClientBuilder(client.Messages)
+        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
+            client = client.WithOptions(o => o with { BaseUrl = config.BaseUrl });
+
+        return new ChatClientBuilder(client.AsIChatClient(config.ModelName))
             .UseLogging(_loggerFactory)
             .Build();
     }

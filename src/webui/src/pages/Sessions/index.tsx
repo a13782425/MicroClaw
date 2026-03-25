@@ -343,6 +343,33 @@ export default function SessionsPage() {
     e.target.value = ''
   }
 
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? [])
+    const imageItems = items.filter((item) => item.type.startsWith('image/'))
+    if (imageItems.length === 0) return
+
+    e.preventDefault()
+    const results = await Promise.all(imageItems.map(async (item) => {
+      const file = item.getAsFile()
+      if (!file) return null
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1] ?? '')
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const ext = file.type.split('/')[1] ?? 'png'
+      return { fileName: `image.${ext}`, mimeType: file.type, base64Data } satisfies MessageAttachment
+    }))
+    const valid = results.filter((r): r is MessageAttachment => r !== null)
+    if (valid.length > 0) {
+      setPendingAttachments((prev) => [...prev, ...valid])
+    }
+  }, [])
+
   const handleSwitchProvider = async (providerId: string) => {
     const id = store.currentSessionId
     if (!id) return
@@ -635,6 +662,7 @@ export default function SessionsPage() {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   disabled={chatting}
                 />
 
