@@ -9,7 +9,8 @@ namespace MicroClaw.Agent;
 public sealed class SubAgentToolProvider(
     AgentStore agentStore,
     ISubAgentRunner subAgentRunner,
-    MemoryService memoryService) : IBuiltinToolProvider
+    AgentDnaService agentDnaService,
+    ISessionReader sessionReader) : IBuiltinToolProvider
 {
     public string GroupId => "subagent";
 
@@ -19,6 +20,6 @@ public sealed class SubAgentToolProvider(
     public IReadOnlyList<AIFunction> CreateTools(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return [];
-        return SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, memoryService);
+        return SubAgentTools.CreateForSession(sessionId, agentStore, subAgentRunner, agentDnaService, sessionReader);
     }
 }

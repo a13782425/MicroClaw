@@ -490,35 +490,9 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at_utc");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("description");
-
-                    b.Property<string>("EntryPoint")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("entry_point");
-
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("name");
-
-                    b.Property<string>("SkillType")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("skill_type");
-
-                    b.Property<int>("TimeoutSeconds")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(30)
-                        .HasColumnName("timeout_seconds");
 
                     b.HasKey("Id");
 

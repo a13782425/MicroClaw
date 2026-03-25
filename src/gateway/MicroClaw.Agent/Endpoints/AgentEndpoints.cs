@@ -36,7 +36,7 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents", (AgentCreateRequest req, AgentStore store) =>
+        endpoints.MapPost("/agents", (AgentCreateRequest req, AgentStore store, AgentDnaService agentDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
@@ -55,6 +55,7 @@ public static class AgentEndpoints
             try
             {
                 AgentConfig created = store.Add(config);
+                agentDna.InitializeAgent(created.Id);
                 return Results.Ok(new { created.Id });
             }
             catch (InvalidOperationException ex)
@@ -97,7 +98,7 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/delete", (AgentDeleteRequest req, AgentStore store) =>
+        endpoints.MapPost("/agents/delete", (AgentDeleteRequest req, AgentStore store, AgentDnaService agentDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -109,6 +110,7 @@ public static class AgentEndpoints
                 return Results.BadRequest(new { success = false, message = "Cannot delete the default agent.", errorCode = "BAD_REQUEST" });
 
             store.Delete(req.Id);
+            agentDna.DeleteAgentFiles(req.Id);
             return Results.Ok();
         })
         .WithTags("Agents");
@@ -312,6 +314,47 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
+        // ── Agent DNA 文件管理（SOUL.md / MEMORY.md）──────────────────────────
+
+        endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, AgentDnaService agentDna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            IReadOnlyList<AgentDnaFileInfo> files = agentDna.ListFiles(id);
+            return Results.Ok(files.Select(f => new { f.FileName, f.Description, f.UpdatedAt }));
+        })
+        .WithTags("Agents");
+
+        endpoints.MapGet("/agents/{id}/dna/{fileName}", (string id, string fileName, AgentStore store, AgentDnaService agentDna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            AgentDnaFileInfo? file = agentDna.Read(id, fileName);
+            if (file is null)
+                return Results.BadRequest(new { success = false, message = $"不允许的文件名: {fileName}。仅支持 SOUL.md 和 MEMORY.md。", errorCode = "BAD_REQUEST" });
+
+            return Results.Ok(new { file.FileName, file.Content, file.UpdatedAt });
+        })
+        .WithTags("Agents");
+
+        endpoints.MapPost("/agents/{id}/dna", (string id, AgentDnaUpdateRequest req, AgentStore store, AgentDnaService agentDna) =>
+        {
+            if (store.GetById(id) is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            if (string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest(new { success = false, message = "fileName is required.", errorCode = "BAD_REQUEST" });
+
+            AgentDnaFileInfo? result = agentDna.Update(id, req.FileName, req.Content ?? string.Empty);
+            if (result is null)
+                return Results.BadRequest(new { success = false, message = $"不允许的文件名: {req.FileName}。仅支持 SOUL.md 和 MEMORY.md。", errorCode = "BAD_REQUEST" });
+
+            return Results.Ok(new { success = true });
+        })
+        .WithTags("Agents");
+
         return endpoints;
     }
 
@@ -360,6 +403,8 @@ public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds)
 public sealed record AgentBoundSkillsRequest(IReadOnlyList<string>? SkillIds);
 
 public sealed record AgentDeleteRequest(string Id);
+
+public sealed record AgentDnaUpdateRequest(string FileName, string? Content);
 
 public sealed record ToolGroupConfigRequest(
     string GroupId,

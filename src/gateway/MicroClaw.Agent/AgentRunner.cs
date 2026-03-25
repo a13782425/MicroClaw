@@ -14,12 +14,13 @@ namespace MicroClaw.Agent;
 
 /// <summary>
 /// Agent 执行引擎：实现 ReAct 循环（推理 → 工具调用 → 观察 → 循环）。
-/// System Prompt 由 Session DNA（SOUL/USER/AGENTS）+ Session 记忆（长期+每日权重衰减）构成。
+/// System Prompt 由 Agent DNA（SOUL + MEMORY）+ Session DNA（USER/AGENTS）+ Session 记忆（长期+每日权重衰减）构成。
 /// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.EnabledMcpServerIds 过滤。
 /// 实现 IAgentMessageHandler，供渠道消息处理器路由调用。
 /// </summary>
 public sealed class AgentRunner(
     AgentStore agentStore,
+    AgentDnaService agentDnaService,
     SessionDnaService sessionDnaService,
     MemoryService memoryService,
     McpServerConfigStore mcpServerConfigStore,
@@ -27,6 +28,7 @@ public sealed class AgentRunner(
     ProviderClientFactory clientFactory,
     ISessionReader sessionReader,
     SkillToolFactory skillToolFactory,
+    SkillInvocationTool skillInvocationTool,
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
     IAgentStatusNotifier agentStatusNotifier,
@@ -79,7 +81,8 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
-        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
+        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
+        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId, skillCtx.CatalogFragment);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
@@ -92,9 +95,9 @@ public sealed class AgentRunner(
         List<AITool> allTools = [.. filteredMcpTools];
         allTools.AddRange(CollectBuiltinTools(agent, sessionId));
 
-        // 追加技能工具（需要 sessionId，与 Agent.BoundSkillIds 绑定）
-        if (!string.IsNullOrWhiteSpace(sessionId))
-            allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
+        // 若 Agent 绑定了技能，注入 invoke_skill 工具（懒加载全文）
+        if (agent.BoundSkillIds.Count > 0)
+            allTools.Add(skillInvocationTool.Create(agent.BoundSkillIds, sessionId));
 
         // 按会话所在渠道类型注入对应的渠道专属工具
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -119,7 +122,7 @@ public sealed class AgentRunner(
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions chatOptions = BuildChatOptions(allTools, provider);
+            ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
             ChatResponse response = await client.GetResponseAsync(messages, chatOptions, ct);
 
             await TrackUsageAsync(response.Usage, sessionId, provider, source, ct);
@@ -148,7 +151,8 @@ public sealed class AgentRunner(
         if (provider is null || !provider.IsEnabled)
             throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
 
-        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId);
+        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
+        List<ChatMessage> messages = BuildChatMessages(agent, history, sessionId, skillCtx.CatalogFragment);
 
         // 按工具配置过滤要连接的 MCP Server
         IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
@@ -161,9 +165,9 @@ public sealed class AgentRunner(
         List<AITool> allTools = [.. filteredMcpTools];
         allTools.AddRange(CollectBuiltinTools(agent, sessionId));
 
-        // 追加技能工具（需要 sessionId，与 Agent.BoundSkillIds 绑定）
-        if (!string.IsNullOrWhiteSpace(sessionId))
-            allTools.AddRange(skillToolFactory.CreateTools(agent.BoundSkillIds, sessionId));
+        // 若 Agent 绑定了技能，注入 invoke_skill 工具（懒加载全文）
+        if (agent.BoundSkillIds.Count > 0)
+            allTools.Add(skillInvocationTool.Create(agent.BoundSkillIds, sessionId));
 
         // 按会话所在渠道类型注入对应的渠道专属工具
         if (!string.IsNullOrWhiteSpace(sessionId))
@@ -190,7 +194,7 @@ public sealed class AgentRunner(
         try
         {
             IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions chatOptions = BuildChatOptions(allTools, provider);
+            ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
 
             await foreach (ChatResponseUpdate update in
                 client.GetStreamingResponseAsync(messages, chatOptions, ct))
@@ -274,10 +278,9 @@ public sealed class AgentRunner(
         }
     }
 
-    private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null)
+    private List<ChatMessage> BuildChatMessages(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null)
     {
-        string skillContext = skillToolFactory.BuildSkillSystemPromptFragment(agent.BoundSkillIds);
-        string systemPrompt = BuildSystemPrompt(sessionId, skillContext);
+        string systemPrompt = BuildSystemPrompt(agent, sessionId, skillCatalogFragment);
         if (!string.IsNullOrEmpty(systemPrompt))
         {
             int promptBytes = System.Text.Encoding.UTF8.GetByteCount(systemPrompt);
@@ -303,19 +306,29 @@ public sealed class AgentRunner(
     }
 
     /// <summary>
-    /// 构建 System Prompt：Session DNA（SOUL+USER+AGENTS）+ 长期/每日记忆（权重衰减）。
-    /// sessionId 为空时返回空字符串（子代理场景，无 Session 上下文）。
+    /// 构建 System Prompt：Agent DNA（SOUL + MEMORY）→ Session DNA（USER + AGENTS）→ Session 记忆 → Skill Context。
+    /// sessionId 为空时仅注入 Agent DNA（子代理场景）。
     /// </summary>
-    internal string BuildSystemPrompt(string? sessionId, string? skillContext = null)
+    internal string BuildSystemPrompt(AgentConfig agent, string? sessionId, string? skillContext = null)
     {
-        if (string.IsNullOrWhiteSpace(sessionId)) return string.Empty;
+        var parts = new List<string>(5);
 
-        string dnaContext = sessionDnaService.BuildDnaContext(sessionId);
-        string memoryContext = memoryService.BuildMemoryContext(sessionId);
+        // 1. Agent 级 DNA（SOUL + MEMORY，跨会话共享）
+        string agentContext = agentDnaService.BuildAgentContext(agent.Id);
+        if (!string.IsNullOrWhiteSpace(agentContext)) parts.Add(agentContext);
 
-        var parts = new List<string>(3);
-        if (!string.IsNullOrWhiteSpace(dnaContext)) parts.Add(dnaContext);
-        if (!string.IsNullOrWhiteSpace(memoryContext)) parts.Add(memoryContext);
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            // 2. Session 级 DNA（USER + AGENTS）
+            string sessionDna = sessionDnaService.BuildDnaContext(sessionId);
+            if (!string.IsNullOrWhiteSpace(sessionDna)) parts.Add(sessionDna);
+
+            // 3. Session 记忆（长期 + 每日权重衰减）
+            string memoryContext = memoryService.BuildMemoryContext(sessionId);
+            if (!string.IsNullOrWhiteSpace(memoryContext)) parts.Add(memoryContext);
+        }
+
+        // 4. Skill Context
         if (!string.IsNullOrWhiteSpace(skillContext)) parts.Add(skillContext);
         return string.Join("\n\n", parts);
     }
@@ -332,13 +345,19 @@ public sealed class AgentRunner(
             .Build();
     }
 
-    private static ChatOptions BuildChatOptions(IReadOnlyList<AITool> tools, ProviderConfig provider)
+    private static ChatOptions BuildChatOptions(
+        IReadOnlyList<AITool> tools,
+        ProviderConfig provider,
+        string? modelOverride = null,
+        string? effortOverride = null)
     {
         var options = new ChatOptions
         {
-            ModelId = provider.ModelName,
+            ModelId = modelOverride ?? provider.ModelName,
             MaxOutputTokens = provider.MaxOutputTokens,
         };
+        if (!string.IsNullOrWhiteSpace(effortOverride))
+            options.AdditionalProperties ??= new() { ["thinking_effort"] = effortOverride };
         if (tools.Count > 0)
             options.Tools = [.. tools];
         return options;

@@ -39,6 +39,15 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         return entity is null ? null : ToConfig(entity);
     }
 
+    /// <summary>按名称查找已启用的 Agent（用于 Skills context:fork 的 agent 类型路由）。</summary>
+    public AgentConfig? GetByName(string name)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        AgentConfigEntity? entity = db.Agents.FirstOrDefault(
+            a => a.Name == name && a.IsEnabled);
+        return entity is null ? null : ToConfig(entity);
+    }
+
     /// <summary>
     /// 确保存在默认代理（main）。若已有 IsDefault=true 的代理则直接返回，否则创建。
     /// 幂等：多次调用不会创建重复记录。

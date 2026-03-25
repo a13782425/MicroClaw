@@ -1,17 +1,11 @@
 namespace MicroClaw.Skills;
 
 /// <summary>
-/// Skill 技能配置数据模型。
+/// Skill 技能管控元数据（数据库存储）。
+/// name/description 等运行时配置统一从 SKILL.md frontmatter 实时读取，不再双写。
+/// Id = 目录名 slug（小写字母+数字+连字符，max 64）。
 /// </summary>
 public sealed record SkillConfig(
     string Id,
-    string Name,
-    string Description,
-    /// <summary>执行类型：python / nodejs / shell</summary>
-    string SkillType,
-    /// <summary>入口脚本文件名（相对于 workspace/skills/{id}/ 目录）</summary>
-    string EntryPoint,
     bool IsEnabled,
-    DateTimeOffset CreatedAtUtc,
-    /// <summary>执行超时秒数（默认 30 秒）</summary>
-    int TimeoutSeconds = 30);
+    DateTimeOffset CreatedAtUtc);

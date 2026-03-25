@@ -14,7 +14,7 @@ public static class SubAgentTools
     private static readonly IReadOnlyList<(string Name, string Description)> BuiltinToolDescriptions =
     [
         ("spawn_subagent", "启动子代理会话执行专项任务，并等待结果。当主任务需要将部分工作委派给具有特定专长的子代理时使用。子代理会话会被持久化，可在会话列表中查看执行历史。"),
-        ("write_session_dna", "将重要信息追加写入当前会话的长期记忆（MEMORY.md）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
+        ("write_agent_memory", "将重要信息追加写入当前 Agent 的长期记忆（MEMORY.md）。该记忆在所有会话中共享，下次对话时自动注入 SystemPrompt。适合存储用户偏好、关键约定、阶段性结论等跨会话经验。"),
     ];
 
     /// <summary>返回内置工具元数据（供工具列表 API 使用，不需要 sessionId）。</summary>
@@ -22,13 +22,14 @@ public static class SubAgentTools
         BuiltinToolDescriptions;
 
     /// <summary>
-    /// 为指定 Session 创建内置工具列表（子代理 + 会话记忆写入）。
+    /// 为指定 Session 创建内置工具列表（子代理 + Agent 记忆写入）。
     /// </summary>
     public static IReadOnlyList<AIFunction> CreateForSession(
         string sessionId,
         AgentStore agentStore,
         ISubAgentRunner subAgentRunner,
-        MemoryService memoryService)
+        AgentDnaService agentDnaService,
+        ISessionReader sessionReader)
     {
         return
         [
@@ -61,30 +62,38 @@ public static class SubAgentTools
 
             AIFunctionFactory.Create(
                 (
-                    [Description("要追加写入长期记忆的 Markdown 格式内容（如用户偏好、关键约定、阶段性结论）。")] string content) =>
+                    [Description("要追加写入 Agent 长期记忆的 Markdown 格式内容（如用户偏好、关键约定、阶段性结论）。")] string content) =>
                 {
                     if (string.IsNullOrWhiteSpace(content))
                         return (object)new { success = false, error = "content 不能为空。" };
 
                     try
                     {
-                        // 追加到当日记忆
-                        string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                        DailyMemoryInfo? existing = memoryService.GetDailyMemory(sessionId, today);
-                        string current = existing?.Content ?? string.Empty;
-                        string newContent = string.IsNullOrWhiteSpace(current)
-                            ? content.Trim()
-                            : current.TrimEnd() + "\n\n" + content.Trim();
-                        memoryService.WriteDailyMemory(sessionId, today, newContent);
-                        return (object)new { success = true, date = today, charCount = newContent.Length };
+                        // 从当前会话获取关联的 AgentId
+                        SessionInfo? session = sessionReader.Get(sessionId);
+                        string? agentId = session?.AgentId;
+
+                        // 若会话未绑定 Agent，回退到默认 Agent
+                        if (string.IsNullOrWhiteSpace(agentId))
+                        {
+                            AgentConfig? defaultAgent = agentStore.GetDefault();
+                            agentId = defaultAgent?.Id;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(agentId))
+                            return (object)new { success = false, error = "无法确定当前 Agent，无法写入记忆。" };
+
+                        agentDnaService.AppendMemory(agentId, content);
+                        string currentMemory = agentDnaService.GetMemory(agentId);
+                        return (object)new { success = true, agentId, charCount = currentMemory.Length };
                     }
                     catch (Exception ex)
                     {
                         return (object)new { success = false, error = ex.Message };
                     }
                 },
-                name: "write_session_dna",
-                description: "将重要信息追加写入当前会话的长期记忆（MEMORY.md）。下次对话时该信息会自动注入 SystemPrompt，无需用户重复说明。适合存储用户偏好、关键约定、阶段性结论等。"),
+                name: "write_agent_memory",
+                description: "将重要信息追加写入当前 Agent 的长期记忆（MEMORY.md）。该记忆在所有会话中共享，下次对话时自动注入 SystemPrompt。适合存储用户偏好、关键约定、阶段性结论等跨会话经验。"),
         ];
     }
 }

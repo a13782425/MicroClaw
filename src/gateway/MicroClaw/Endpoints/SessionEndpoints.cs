@@ -265,9 +265,10 @@ public static class SessionEndpoints
             })
         .WithTags("Sessions");
 
-        // ── 会话 DNA 端点（B-03 固定三文件模式）────────────────────────────────────────────
+        // ── 会话 DNA 端点（固定两文件模式：USER / AGENTS）──────────────────────────────────
+        // SOUL.md 已迁移至 Agent 级别（通过 /agents/{id}/dna 管理）
 
-        // GET /api/sessions/{id}/dna — 列出三个固定 DNA 文件（SOUL / USER / AGENTS）
+        // GET /api/sessions/{id}/dna — 列出固定 DNA 文件（USER / AGENTS）
         endpoints.MapGet("/sessions/{id}/dna", (string id, SessionStore store, SessionDnaService sessionDna) =>
         {
             if (store.Get(id) is null)
@@ -285,7 +286,7 @@ public static class SessionEndpoints
 
             SessionDnaFileInfo? file = sessionDna.Read(id, fileName);
             return file is null
-                ? Results.NotFound(new { success = false, message = $"File '{fileName}' is not a valid Session DNA file. Allowed: SOUL.md, USER.md, AGENTS.md", errorCode = "NOT_FOUND" })
+                ? Results.NotFound(new { success = false, message = $"File '{fileName}' is not a valid Session DNA file. Allowed: USER.md, AGENTS.md", errorCode = "NOT_FOUND" })
                 : Results.Ok(file);
         })
         .WithTags("SessionDNA");
@@ -298,7 +299,7 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.FileName))
                 return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
             if (!SessionDnaService.IsAllowedFileName(req.FileName))
-                return Results.BadRequest(new { success = false, message = $"'{req.FileName}' is not a valid Session DNA file. Allowed: SOUL.md, USER.md, AGENTS.md", errorCode = "INVALID_FILE_NAME" });
+                return Results.BadRequest(new { success = false, message = $"'{req.FileName}' is not a valid Session DNA file. Allowed: USER.md, AGENTS.md (SOUL.md 已迁移至 Agent 级别)", errorCode = "INVALID_FILE_NAME" });
 
             SessionDnaFileInfo? updated = sessionDna.Update(id, req.FileName, req.Content ?? string.Empty);
             return updated is null

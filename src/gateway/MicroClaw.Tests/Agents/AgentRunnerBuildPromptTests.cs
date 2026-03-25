@@ -18,9 +18,8 @@ using NSubstitute;
 namespace MicroClaw.Tests.Agents;
 
 /// <summary>
-/// 验证 M-04/M-05 重构后的 AgentRunner.BuildSystemPrompt：
-/// System Prompt 由 Session DNA（SOUL/USER/AGENTS）+ Session 记忆（长期+每日权重）构建，
-/// 不再依赖旧 DNAService。
+/// ?? AgentRunner.BuildSystemPrompt?
+/// System Prompt ? Agent DNA?SOUL/MEMORY?+ Session DNA?USER/AGENTS?+ Session ?? ???
 /// </summary>
 public sealed class AgentRunnerBuildPromptTests : IDisposable
 {
@@ -31,25 +30,36 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
 
     private readonly SessionDnaService _sessionDna;
     private readonly MemoryService _memory;
+    private readonly AgentDnaService _agentDna;
     private readonly AgentRunner _runner;
+    private readonly AgentConfig _testAgent;
 
     public AgentRunnerBuildPromptTests()
     {
         _sessionDna = new SessionDnaService(_tempDir.Path);
         _memory = new MemoryService(_tempDir.Path);
 
+        string agentsDir = Path.Combine(_tempDir.Path, "agents");
+        _agentDna = new AgentDnaService(agentsDir);
+
         IDbContextFactory<GatewayDbContext> dbFactory = _db.CreateFactory();
 
         var skillService = new SkillService(_tempDir.Path);
-        var skillRunner = new SkillRunner(skillService,
-            NullLogger<SkillRunner>.Instance);
         var skillStore = new SkillStore(dbFactory);
-        var skillToolFactory = new SkillToolFactory(
-            skillStore, skillService, skillRunner,
-            _tempDir.Path, NullLoggerFactory.Instance);
+        var skillOptions = Microsoft.Extensions.Options.Options.Create(new SkillOptions());
+        var skillToolFactory = new SkillToolFactory(skillStore, skillService, skillOptions);
+        var skillInvocationTool = new SkillInvocationTool(
+            skillToolFactory,
+            skillService,
+            new SkillOptions(),
+            NullLoggerFactory.Instance.CreateLogger<SkillInvocationTool>(),
+            subAgentRunner: null);
+
+        var agentStore = new AgentStore(dbFactory);
 
         _runner = new AgentRunner(
-            agentStore:            new AgentStore(dbFactory),
+            agentStore:            agentStore,
+            agentDnaService:       _agentDna,
             sessionDnaService:     _sessionDna,
             memoryService:         _memory,
             mcpServerConfigStore:  new McpServerConfigStore(dbFactory),
@@ -57,12 +67,25 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
             skillToolFactory:      skillToolFactory,
+            skillInvocationTool:   skillInvocationTool,
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
             agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
             channelConfigStore:    new ChannelConfigStore(dbFactory),
             toolProviders:         [],
             builtinToolProviders:  []);
+
+        // ????? Agent
+        _testAgent = new AgentConfig(
+            Id: "test-agent-001",
+            Name: "Test Agent",
+            Description: "",
+            IsEnabled: true,
+            BoundSkillIds: [],
+            EnabledMcpServerIds: [],
+            ToolGroupConfigs: [],
+            CreatedAtUtc: DateTimeOffset.UtcNow);
+        _agentDna.InitializeAgent(_testAgent.Id);
     }
 
     public void Dispose()
@@ -71,147 +94,146 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
         _db.Dispose();
     }
 
-    // ── BuildSystemPrompt：无 sessionId ──────────────────────────────────────
+    // ?? BuildSystemPrompt?? sessionId ??????????????????????????????????????
 
     [Fact]
-    public void BuildSystemPrompt_NullSessionId_ReturnsEmpty()
+    public void BuildSystemPrompt_NullSessionId_ReturnsAgentDnaOnly()
     {
-        _runner.BuildSystemPrompt(null).Should().BeEmpty();
+        // sessionId ? null ????? Agent ? SOUL?Agent DNA ??? sessionId?
+        string prompt = _runner.BuildSystemPrompt(_testAgent, null);
+
+        // Agent SOUL ?????? "Soul" ??
+        prompt.Should().Contain("Soul");
     }
 
     [Fact]
-    public void BuildSystemPrompt_EmptySessionId_ReturnsEmpty()
+    public void BuildSystemPrompt_EmptySessionId_ReturnsAgentDnaOnly()
     {
-        _runner.BuildSystemPrompt(string.Empty).Should().BeEmpty();
+        string prompt = _runner.BuildSystemPrompt(_testAgent, string.Empty);
+        prompt.Should().Contain("Soul");
     }
 
+    // ?? BuildSystemPrompt?? Session DNA ?? ????????????????????????????????
+
     [Fact]
-    public void BuildSystemPrompt_WhitespaceSessionId_ReturnsEmpty()
+    public void BuildSystemPrompt_NoSessionFilesExist_ReturnsAgentDnaOnly()
     {
-        _runner.BuildSystemPrompt("   ").Should().BeEmpty();
+        // Session ?????? Session DNA ???? Agent DNA ??
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
+
+        prompt.Should().Contain("Soul");
     }
 
-    // ── BuildSystemPrompt：无 DNA 文件 ────────────────────────────────────────
+    // ?? BuildSystemPrompt?Session DNA ?? ??????????????????????????????????
 
     [Fact]
-    public void BuildSystemPrompt_NoFilesExist_ReturnsEmpty()
-    {
-        // Session 未初始化，无任何文件
-        _runner.BuildSystemPrompt(SessionId).Should().BeEmpty();
-    }
-
-    // ── BuildSystemPrompt：仅 DNA 文件 ────────────────────────────────────────
-
-    [Fact]
-    public void BuildSystemPrompt_WithDnaFilesInitialized_ContainsDefaultTemplateContent()
+    public void BuildSystemPrompt_WithSessionDnaFilesInitialized_ContainsUserAndAgents()
     {
         _sessionDna.InitializeSession(SessionId);
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        // 默认模板至少包含 SOUL/USER/AGENTS 的 Markdown 标题标记
-        prompt.Should().Contain("Soul");
         prompt.Should().Contain("User");
         prompt.Should().Contain("Agents");
     }
 
+    // ?? BuildSystemPrompt?Agent SOUL ????????????????????????????????????????
+
     [Fact]
-    public void BuildSystemPrompt_WithCustomSoulContent_IncludesSoulContent()
+    public void BuildSystemPrompt_WithCustomAgentSoul_IncludesSoulContent()
     {
-        _sessionDna.InitializeSession(SessionId);
-        _sessionDna.Update(SessionId, "SOUL.md", "# Soul\n你是一个专业的技术助手。");
+        _agentDna.UpdateSoul(_testAgent.Id, "# Soul\n????????????");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        prompt.Should().Contain("你是一个专业的技术助手。");
+        prompt.Should().Contain("????????????");
     }
 
     [Fact]
-    public void BuildSystemPrompt_WithAllThreeDnaFiles_IncludesAllContent()
+    public void BuildSystemPrompt_WithAllDnaFiles_IncludesAllContent()
     {
+        _agentDna.UpdateSoul(_testAgent.Id, "AGENT-SOUL-CONTENT");
+        _agentDna.AppendMemory(_testAgent.Id, "AGENT-MEMORY-CONTENT");
         _sessionDna.InitializeSession(SessionId);
-        _sessionDna.Update(SessionId, "SOUL.md", "SOUL-CONTENT");
         _sessionDna.Update(SessionId, "USER.md", "USER-CONTENT");
         _sessionDna.Update(SessionId, "AGENTS.md", "AGENTS-CONTENT");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        prompt.Should().Contain("SOUL-CONTENT");
+        prompt.Should().Contain("AGENT-SOUL-CONTENT");
+        prompt.Should().Contain("AGENT-MEMORY-CONTENT");
         prompt.Should().Contain("USER-CONTENT");
         prompt.Should().Contain("AGENTS-CONTENT");
     }
 
-    // ── BuildSystemPrompt：仅记忆 ─────────────────────────────────────────────
+    // ?? BuildSystemPrompt???? ?????????????????????????????????????????????
 
     [Fact]
     public void BuildSystemPrompt_WithLongTermMemory_IncludesMemoryContent()
     {
-        _memory.UpdateLongTermMemory(SessionId, "# Long Term Memory\n用户喜欢简洁的回答。");
+        _memory.UpdateLongTermMemory(SessionId, "# Long Term Memory\n??????????");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        prompt.Should().Contain("用户喜欢简洁的回答。");
+        prompt.Should().Contain("??????????");
     }
 
     [Fact]
     public void BuildSystemPrompt_WithRecentDailyMemory_IncludesFullDailyContent()
     {
         string today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
-        _memory.WriteDailyMemory(SessionId, today, "今日讨论了 API 设计方案。");
+        _memory.WriteDailyMemory(SessionId, today, "????? API ?????");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        prompt.Should().Contain("今日讨论了 API 设计方案。");
+        prompt.Should().Contain("????? API ?????");
     }
 
-    // ── BuildSystemPrompt：DNA + 记忆组合 ────────────────────────────────────
+    // ?? BuildSystemPrompt?DNA + ???? ????????????????????????????????????
 
     [Fact]
     public void BuildSystemPrompt_WithDnaAndMemory_IncludesBoth()
     {
-        _sessionDna.InitializeSession(SessionId);
-        _sessionDna.Update(SessionId, "SOUL.md", "# Soul\nDNA-MARKER");
+        _agentDna.UpdateSoul(_testAgent.Id, "# Soul\nDNA-MARKER");
         _memory.UpdateLongTermMemory(SessionId, "# Memory\nMEMORY-MARKER");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
         prompt.Should().Contain("DNA-MARKER");
         prompt.Should().Contain("MEMORY-MARKER");
     }
 
     [Fact]
-    public void BuildSystemPrompt_DnaAppearsBeforeMemory_InCorrectOrder()
+    public void BuildSystemPrompt_AgentDnaAppearsBeforeSessionMemory_InCorrectOrder()
     {
-        _sessionDna.InitializeSession(SessionId);
-        _sessionDna.Update(SessionId, "SOUL.md", "DNA-SECTION");
+        _agentDna.UpdateSoul(_testAgent.Id, "AGENT-DNA-SECTION");
         _memory.UpdateLongTermMemory(SessionId, "MEMORY-SECTION");
 
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        int dnaIndex = prompt.IndexOf("DNA-SECTION", StringComparison.Ordinal);
+        int dnaIndex = prompt.IndexOf("AGENT-DNA-SECTION", StringComparison.Ordinal);
         int memIndex = prompt.IndexOf("MEMORY-SECTION", StringComparison.Ordinal);
 
         dnaIndex.Should().BeLessThan(memIndex,
-            "DNA 内容应出现在记忆内容之前（按构建顺序：DNA → Memory）");
+            "Agent DNA ?????? Session ?????????????Agent DNA ? Session DNA ? Memory?");
     }
 
     [Fact]
-    public void BuildSystemPrompt_EmptyDnaFiles_SkipsEmptyFiles()
+    public void BuildSystemPrompt_EmptySessionDnaFiles_StillContainsAgentDna()
     {
-        // 初始化后清空所有文件内容
+        // Session DNA ??????
         _sessionDna.InitializeSession(SessionId);
-        _sessionDna.Update(SessionId, "SOUL.md", "   ");
         _sessionDna.Update(SessionId, "USER.md", "");
         _sessionDna.Update(SessionId, "AGENTS.md", "  \n  ");
 
-        // 无记忆
-        string prompt = _runner.BuildSystemPrompt(SessionId);
+        // ????? Agent SOUL ??
+        string prompt = _runner.BuildSystemPrompt(_testAgent, SessionId);
 
-        // 所有 DNA 文件全为空白，且无记忆，整体应为空
-        prompt.Should().BeEmpty();
+        // Agent ?? SOUL ??????
+        prompt.Should().Contain("Soul");
     }
 
-    // ── 辅助方法 ──────────────────────────────────────────────────────────────
+    // ?? ???? ??????????????????????????????????????????????????????????????
 
     private static ProviderClientFactory CreateNoOpClientFactory()
     {

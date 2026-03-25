@@ -112,13 +112,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.ToTable("skills");
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
-            b.Property(e => e.Name).HasColumnName("name");
-            b.Property(e => e.Description).HasColumnName("description");
-            b.Property(e => e.SkillType).HasColumnName("skill_type");
-            b.Property(e => e.EntryPoint).HasColumnName("entry_point");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
-            b.Property(e => e.TimeoutSeconds).HasColumnName("timeout_seconds").HasDefaultValue(30);
         });
 
         modelBuilder.Entity<UsageEntity>(b =>

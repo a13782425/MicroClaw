@@ -8,20 +8,23 @@ public sealed record SessionDnaFileInfo(
     DateTimeOffset UpdatedAt);
 
 /// <summary>
-/// Session DNA 固定文件服务：每个 Session 拥有三个固定 DNA 文件（SOUL / USER / AGENTS），
+/// Session DNA 固定文件服务：每个 Session 拥有两个固定 DNA 文件（USER / AGENTS），
 /// 不可新建或删除，只能编辑内容。文件直接存储于 {sessionsDir}/{sessionId}/ 下。
+/// SOUL.md 已移至 Agent 级别管理（AgentDnaService），旧 Session 中已有的 SOUL.md 仍可读写以保持向后兼容。
 /// </summary>
 public sealed class SessionDnaService(string sessionsDir)
 {
     // ── 常量 ─────────────────────────────────────────────────────────────────
 
+    /// <summary>当前活跃的固定文件（新 Session 初始化只生成这两个）。</summary>
     public static readonly IReadOnlyList<string> FixedFileNames =
-        ["SOUL.md", "USER.md", "AGENTS.md"];
+        ["USER.md", "AGENTS.md"];
 
+    /// <summary>所有允许读写的文件名（含已废弃的 SOUL.md 以保持向后兼容）。</summary>
     private static readonly IReadOnlyDictionary<string, string> FileDescriptions =
         new Dictionary<string, string>
         {
-            ["SOUL.md"] = "定义 AI 的人格、语气和表达风格",
+            ["SOUL.md"] = "定义 AI 的人格、语气和表达风格（已移至 Agent 级别）",
             ["USER.md"] = "定义对话对象的画像、偏好和背景信息",
             ["AGENTS.md"] = "定义工作流、决策规则和处理步骤",
         };
@@ -29,17 +32,6 @@ public sealed class SessionDnaService(string sessionsDir)
     private static readonly IReadOnlyDictionary<string, string> DefaultTemplates =
         new Dictionary<string, string>
         {
-            ["SOUL.md"] = """
-                # Soul — AI 人格与风格
-
-                在此描述 AI 的人格特质、语气和表达风格。
-
-                例如：
-                - 语气：专业、友好、简洁
-                - 表达风格：使用结构化列表；避免过于学术的措辞
-                - 禁忌：不主动推销；不使用感叹号
-                """,
-
             ["USER.md"] = """
                 # User — 用户画像
 
@@ -72,14 +64,15 @@ public sealed class SessionDnaService(string sessionsDir)
 
     // ── 校验 ─────────────────────────────────────────────────────────────────
 
-    /// <summary>检查文件名是否属于允许的三个固定文件之一。</summary>
+    /// <summary>检查文件名是否属于允许的固定文件（含已废弃的 SOUL.md）。</summary>
     public static bool IsAllowedFileName(string fileName) =>
         FileDescriptions.ContainsKey(fileName);
 
     // ── 初始化 ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 新建 Session 时自动初始化三个 DNA 文件（幂等，已存在则跳过）。
+    /// 新建 Session 时自动初始化 DNA 文件（幂等，已存在则跳过）。
+    /// 只初始化 USER.md 和 AGENTS.md（SOUL.md 已移至 Agent 级别）。
     /// </summary>
     public void InitializeSession(string sessionId)
     {
@@ -96,7 +89,7 @@ public sealed class SessionDnaService(string sessionsDir)
 
     // ── 读取 ─────────────────────────────────────────────────────────────────
 
-    /// <summary>列出三个固定 DNA 文件（包含内容和元数据）。</summary>
+    /// <summary>列出固定 DNA 文件（包含内容和元数据）。</summary>
     public IReadOnlyList<SessionDnaFileInfo> ListFiles(string sessionId) =>
         FixedFileNames
             .Select(fileName => ReadFile(sessionId, fileName))
@@ -131,7 +124,8 @@ public sealed class SessionDnaService(string sessionsDir)
     // ── 构建 System Prompt ────────────────────────────────────────────────────
 
     /// <summary>
-    /// 将三个 DNA 文件内容按顺序拼接，用于注入 System Prompt。
+    /// 将 DNA 文件内容按顺序拼接，用于注入 System Prompt。
+    /// 只拼接 USER.md + AGENTS.md（SOUL.md 已移至 Agent 级别）。
     /// 文件不存在或为空时跳过。
     /// </summary>
     public string BuildDnaContext(string sessionId)
@@ -154,10 +148,12 @@ public sealed class SessionDnaService(string sessionsDir)
 
     // ── 清理 ─────────────────────────────────────────────────────────────────
 
-    /// <summary>删除 Session 的三个固定 DNA 文件（Session 删除时调用）。</summary>
+    /// <summary>删除 Session 的固定 DNA 文件（Session 删除时调用）。</summary>
     public void DeleteSessionDnaFiles(string sessionId)
     {
-        foreach (string fileName in FixedFileNames)
+        // 同时清理旧 SOUL.md（如果存在）
+        string[] filesToDelete = ["SOUL.md", .. FixedFileNames];
+        foreach (string fileName in filesToDelete)
         {
             string path = FilePath(sessionId, fileName);
             if (File.Exists(path))

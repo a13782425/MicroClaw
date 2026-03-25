@@ -195,7 +195,9 @@ public class ServeCommand : Command
 
 		// Agent 服务
 		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
+		string agentsDir = Path.Combine(workspaceRoot, "agents");
 		builder.Services.AddSingleton<AgentStore>();
+		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
 		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
@@ -210,9 +212,23 @@ public class ServeCommand : Command
 		// Skills 服务
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ => new SkillService(workspaceRoot));
-		builder.Services.AddSingleton<SkillRunner>();
-
-		// MCP Server 全局管理
+		builder.Services.Configure<MicroClaw.Skills.SkillOptions>(builder.Configuration.GetSection("skills"));
+		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
+			sp.GetRequiredService<SkillStore>(),
+			sp.GetRequiredService<SkillService>(),
+			Microsoft.Extensions.Options.Options.Create(
+				builder.Configuration.GetSection("skills").Get<MicroClaw.Skills.SkillOptions>()
+					?? new MicroClaw.Skills.SkillOptions())));
+		builder.Services.AddSingleton<MicroClaw.Skills.SkillInvocationTool>(sp => new MicroClaw.Skills.SkillInvocationTool(
+			sp.GetRequiredService<SkillToolFactory>(),
+			sp.GetRequiredService<SkillService>(),
+			builder.Configuration.GetSection("skills").Get<MicroClaw.Skills.SkillOptions>()
+				?? new MicroClaw.Skills.SkillOptions(),
+			sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+				.CreateLogger<MicroClaw.Skills.SkillInvocationTool>(),
+			sp.GetService<ISubAgentRunner>(),
+			sp.GetService<MicroClaw.Skills.IAgentLookup>()));
+		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.AgentStoreAgentLookup>();
 		builder.Services.AddSingleton<McpServerConfigStore>();
 
 		// 内置工具提供者（实现 IBuiltinToolProvider，AgentRunner 自动加载，无需手动硬编码）
@@ -220,13 +236,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IBuiltinToolProvider, ShellToolProvider>();
 		builder.Services.AddSingleton<IBuiltinToolProvider, CronToolProvider>();
 		builder.Services.AddSingleton<IBuiltinToolProvider, SubAgentToolProvider>();
-
-		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
-			sp.GetRequiredService<SkillStore>(),
-			sp.GetRequiredService<SkillService>(),
-			sp.GetRequiredService<SkillRunner>(),
-			workspaceRoot,
-			sp.GetRequiredService<ILoggerFactory>()));
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();
@@ -306,7 +315,9 @@ public class ServeCommand : Command
 	{
 		using var scope = app.Services.CreateScope();
 		var agentStore = scope.ServiceProvider.GetRequiredService<AgentStore>();
-		agentStore.EnsureMainAgent();
+		AgentConfig main = agentStore.EnsureMainAgent();
+		var agentDna = scope.ServiceProvider.GetRequiredService<AgentDnaService>();
+		agentDna.InitializeAgent(main.Id);
 	}
 
 	/// <summary>确保内置 Web Channel 存在（幂等）。</summary>

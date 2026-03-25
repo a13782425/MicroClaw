@@ -1,0 +1,668 @@
+import {
+  useEffect, useRef, useState, useCallback, useLayoutEffect,
+} from 'react'
+import {
+  Box, Flex, Text, Button, IconButton, Input, Textarea, Badge,
+  Spinner, Select, Portal, createListCollection,
+} from '@chakra-ui/react'
+import {
+  MessageCircle, Plus, Trash2, Send, Square, Paperclip, X,
+  ChevronUp,
+} from 'lucide-react'
+import {
+  listProviders, listChannels, listAgents,
+  switchSessionProvider,
+  type ProviderConfig, type ChannelConfig, type AgentConfig,
+  type MessageAttachment, type CreateSessionRequest,
+  SYSTEM_SOURCES,
+} from '@/api/gateway'
+import { AppDialog } from '@/components/ui/app-dialog'
+import { useSessionStore, isDisplayMessage } from '@/store/sessionStore'
+import { eventBus } from '@/services/eventBus'
+import { toaster } from '@/components/ui/toaster'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import ChatMessage from '@/components/ChatMessage'
+
+// ─── 渠道类型标签 ─────────────────────────────────────────────────────────────
+const CHANNEL_LABELS: Record<string, string> = {
+  feishu: '飞书', wecom: '企微', wechat: '微信', web: 'Web',
+}
+
+function channelBadge(type: string) {
+  const colors: Record<string, string> = {
+    feishu: 'cyan', wecom: 'green', wechat: 'teal', web: 'gray',
+  }
+  if (type === 'web') return null
+  return (
+    <Badge size="sm" colorPalette={colors[type] ?? 'gray'} ml="1">
+      {CHANNEL_LABELS[type] ?? type}
+    </Badge>
+  )
+}
+
+// ─── 新建 Session 弹窗 ────────────────────────────────────────────────────────
+interface CreateDialogProps {
+  open: boolean
+  onClose: () => void
+  providers: ProviderConfig[]
+  channels: ChannelConfig[]
+  agents: AgentConfig[]
+  onCreated: (sessionId: string) => void
+}
+
+function CreateSessionDialog({
+  open, onClose, providers, channels, agents, onCreated,
+}: CreateDialogProps) {
+  const { addSession } = useSessionStore()
+  const [title, setTitle] = useState('')
+  const [providerId, setProviderId] = useState('')
+  const [channelId, setChannelId] = useState('')
+  const [agentId, setAgentId] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setTitle('')
+      const def = providers.find((p) => p.isDefault) ?? providers[0]
+      setProviderId(def?.id ?? '')
+      setChannelId('')
+      const defAgent = agents.find((a) => a.isDefault) ?? agents[0]
+      setAgentId(defAgent?.id ?? '')
+    }
+  }, [open, providers, agents])
+
+  if (!open) return null
+
+  const handleCreate = async () => {
+    if (!title.trim() || !providerId) return
+    setCreating(true)
+    try {
+      const req: CreateSessionRequest = {
+        title: title.trim(),
+        providerId,
+        channelId: channelId || undefined,
+        agentId: agentId || undefined,
+      }
+      const session = await addSession(req)
+      onCreated(session.id)
+      onClose()
+    } catch (err: unknown) {
+      toaster.create({ type: 'error', title: '创建失败', description: String(err) })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <AppDialog
+      open={open}
+      onClose={onClose}
+      title="新建会话"
+      contentProps={{ maxW: '400px' }}
+      footer={(
+        <>
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button
+            colorPalette="blue"
+            loading={creating}
+            disabled={!title.trim() || !providerId}
+            onClick={handleCreate}
+          >
+            创建
+          </Button>
+        </>
+      )}
+    >
+      <Box mb="3">
+        <Text fontSize="sm" mb="1" fontWeight="medium">会话名称 *</Text>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="输入会话名称"
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
+        />
+      </Box>
+
+      <Box mb="3">
+        <Text fontSize="sm" mb="1" fontWeight="medium">AI 模型 *</Text>
+        <Select.Root
+          value={[providerId]}
+          onValueChange={(v) => setProviderId(v.value[0] ?? '')}
+          collection={createListCollection({ items: providers.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })) })}
+        >
+          <Select.Trigger>
+            <Select.ValueText placeholder="选择模型" />
+          </Select.Trigger>
+          <Portal>
+            <Select.Positioner>
+              <Select.Content>
+                {providers.map((p) => (
+                  <Select.Item key={p.id} item={{ value: p.id, label: `${p.displayName} (${p.modelName})` }}>
+                    {p.displayName} ({p.modelName})
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Positioner>
+          </Portal>
+        </Select.Root>
+      </Box>
+
+      <Box mb="3">
+        <Text fontSize="sm" mb="1" fontWeight="medium">渠道（可选）</Text>
+        <Select.Root
+          value={channelId ? [channelId] : []}
+          onValueChange={(v) => setChannelId(v.value[0] ?? '')}
+          collection={createListCollection({ items: [{ value: '', label: '默认 Web' }, ...channels.map((c) => ({ value: c.id, label: c.displayName }))] })}
+        >
+          <Select.Trigger>
+            <Select.ValueText placeholder="默认 Web" />
+          </Select.Trigger>
+          <Portal>
+            <Select.Positioner>
+              <Select.Content>
+                <Select.Item item={{ value: '', label: '默认 Web' }}>默认 Web</Select.Item>
+                {channels.map((c) => (
+                  <Select.Item key={c.id} item={{ value: c.id, label: c.displayName }}>
+                    {c.displayName}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Positioner>
+          </Portal>
+        </Select.Root>
+      </Box>
+
+      <Box>
+        <Text fontSize="sm" mb="1" fontWeight="medium">Agent（可选）</Text>
+        <Select.Root
+          value={agentId ? [agentId] : []}
+          onValueChange={(v) => setAgentId(v.value[0] ?? '')}
+          collection={createListCollection({ items: [{ value: '', label: '默认' }, ...agents.map((a) => ({ value: a.id, label: a.name }))] })}
+        >
+          <Select.Trigger>
+            <Select.ValueText placeholder="默认" />
+          </Select.Trigger>
+          <Portal>
+            <Select.Positioner>
+              <Select.Content>
+                <Select.Item item={{ value: '', label: '默认' }}>默认</Select.Item>
+                {agents.map((a) => (
+                  <Select.Item key={a.id} item={{ value: a.id, label: a.name }}>
+                    {a.name}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Positioner>
+          </Portal>
+        </Select.Root>
+      </Box>
+    </AppDialog>
+  )
+}
+
+// ─── 主组件 ───────────────────────────────────────────────────────────────────
+export default function SessionsPage() {
+  const store = useSessionStore()
+  const {
+    sessions, messages, chatting, streamingContent, loading,
+    messagesHasMore, loadingEarlier,
+    fetchSessions, selectSession, removeSession, loadEarlierMessages,
+    sendMessage, stopChat,
+  } = store
+
+  const [showCreate, setShowCreate] = useState(false)
+  const [inputText, setInputText] = useState('')
+  const [pendingAttachments, setPendingAttachments] = useState<MessageAttachment[]>([])
+  const [providers, setProviders] = useState<ProviderConfig[]>([])
+  const [channels, setChannels] = useState<ChannelConfig[]>([])
+  const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set())
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null)
+
+  const messagesEl = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const prevScrollHeight = useRef(0)
+
+  // 初始化数据
+  useEffect(() => {
+    fetchSessions()
+    Promise.all([listProviders(), listChannels(), listAgents()]).then(([ps, cs, as]) => {
+      setProviders(ps.filter((p) => p.isEnabled))
+      setChannels(cs.filter((c) => c.isEnabled))
+      setAgents(as.filter((a) => a.isEnabled))
+    })
+
+    const onSessionEvent = () => { fetchSessions() }
+
+    const onCronJobExecuted = (payload: unknown) => {
+      const { sessionId } = payload as { sessionId: string }
+      if (sessionId === useSessionStore.getState().currentSessionId) {
+        selectSession(sessionId).then(scrollToBottom)
+      }
+    }
+
+    const onAgentStatusChanged = (payload: unknown) => {
+      const { sessionId, status } = payload as { sessionId: string; status: string }
+      setRunningSessionIds((prev) => {
+        const next = new Set(prev)
+        if (status === 'running') {
+          next.add(sessionId)
+        } else {
+          next.delete(sessionId)
+          const state = useSessionStore.getState()
+          if (sessionId === state.currentSessionId && !state.chatting) {
+            selectSession(sessionId).then(scrollToBottom)
+          }
+        }
+        return next
+      })
+    }
+
+    eventBus.on('session:created', onSessionEvent)
+    eventBus.on('session:approved', onSessionEvent)
+    eventBus.on('session:disabled', onSessionEvent)
+    eventBus.on('cron:jobExecuted', onCronJobExecuted)
+    eventBus.on('agent:statusChanged', onAgentStatusChanged)
+
+    return () => {
+      eventBus.off('session:created', onSessionEvent)
+      eventBus.off('session:approved', onSessionEvent)
+      eventBus.off('session:disabled', onSessionEvent)
+      eventBus.off('cron:jobExecuted', onCronJobExecuted)
+      eventBus.off('agent:statusChanged', onAgentStatusChanged)
+    }
+  }, [fetchSessions, selectSession])
+
+  function scrollToBottom() {
+    if (messagesEl.current) {
+      messagesEl.current.scrollTop = messagesEl.current.scrollHeight
+    }
+  }
+
+  // 消息列表更新时滚动到底（排除加载更早消息的情况）
+  useLayoutEffect(() => {
+    if (!messagesEl.current) return
+    if (loadingEarlier) {
+      // 加载更早消息完成后：保持滚动位置
+      const newScrollHeight = messagesEl.current.scrollHeight
+      messagesEl.current.scrollTop = newScrollHeight - prevScrollHeight.current
+    } else {
+      scrollToBottom()
+    }
+  }, [messages.length, chatting, loading])
+
+  function handleMessagesScroll() {
+    if (!messagesEl.current) return
+    if (messagesEl.current.scrollTop < 80 && messagesHasMore && !loadingEarlier) {
+      prevScrollHeight.current = messagesEl.current.scrollHeight
+      loadEarlierMessages()
+    }
+  }
+
+  const handleSelect = useCallback(async (id: string) => {
+    await selectSession(id)
+    scrollToBottom()
+  }, [selectSession])
+
+  const handleDelete = useCallback(async (id: string) => {
+    await removeSession(id)
+    setDeleteSessionId(null)
+  }, [removeSession])
+
+  const handleSend = useCallback(() => {
+    const content = inputText.trim()
+    if (!content || chatting) return
+    sendMessage({ content, attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined })
+    setInputText('')
+    setPendingAttachments([])
+  }, [inputText, chatting, pendingAttachments, sendMessage])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    const results = await Promise.all(files.map(async (file) => {
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          resolve(result.split(',')[1] ?? '')
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      return { fileName: file.name, mimeType: file.type, base64Data } satisfies MessageAttachment
+    }))
+    setPendingAttachments((prev) => [...prev, ...results])
+    e.target.value = ''
+  }
+
+  const handleSwitchProvider = async (providerId: string) => {
+    const id = store.currentSessionId
+    if (!id) return
+    try {
+      await switchSessionProvider(id, providerId)
+      await fetchSessions()
+    } catch (err) {
+      toaster.create({ type: 'error', title: '切换模型失败', description: String(err) })
+    }
+  }
+
+  const displayMessages = messages.filter(isDisplayMessage)
+  const currentSession = store.currentSession()
+  const enabledProviders = providers
+
+  return (
+    <Flex h="full" overflow="hidden">
+      {/* ── 左侧 Session 列表 ── */}
+      <Box
+        w="260px" flexShrink={0} borderRightWidth="1px"
+        display="flex" flexDir="column" overflow="hidden"
+      >
+        {/* 列表头部 */}
+        <Flex
+          px="3" py="3" align="center" justify="space-between"
+          borderBottomWidth="1px"
+        >
+          <Text fontWeight="semibold" fontSize="sm">会话列表</Text>
+          <IconButton
+            size="sm" variant="ghost" colorPalette="blue"
+            aria-label="新建会话"
+            onClick={() => setShowCreate(true)}
+          >
+            <Plus size={16} />
+          </IconButton>
+        </Flex>
+
+        {/* 会话列表 */}
+        <Box flex="1" overflowY="auto" py="1">
+          {sessions.length === 0 && (
+            <Flex align="center" justify="center" h="full" flexDir="column" gap="2" color="gray.400">
+              <MessageCircle size={32} />
+              <Text fontSize="sm">暂无会话</Text>
+              <Button size="sm" onClick={() => setShowCreate(true)}>新建会话</Button>
+            </Flex>
+          )}
+          {sessions.map((session) => {
+            const isActive = session.id === store.currentSessionId
+            const isRunning = runningSessionIds.has(session.id)
+            return (
+              <Flex
+                key={session.id}
+                px="3" py="2.5"
+                align="center"
+                cursor="pointer"
+                bg={isActive ? 'blue.50' : undefined}
+                _dark={{ bg: isActive ? 'blue.900' : undefined }}
+                _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.700' } }}
+                onClick={() => handleSelect(session.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleSelect(session.id)
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="group"
+                _focusVisible={{ outline: '2px solid', outlineColor: 'blue.400', outlineOffset: '-2px' }}
+              >
+                {/* 图标 */}
+                <Box color={isActive ? 'blue.500' : 'gray.400'} mr="2" flexShrink={0}>
+                  {isRunning && !isActive
+                    ? <Spinner size="xs" color="blue.400" />
+                    : <MessageCircle size={14} />}
+                </Box>
+
+                {/* 标题 + badges */}
+                <Box flex="1" minW="0">
+                  <Text
+                    fontSize="sm" fontWeight={isActive ? 'medium' : 'normal'}
+                    color={isActive ? 'blue.600' : undefined}
+                    _dark={{ color: isActive ? 'blue.300' : undefined }}
+                    truncate
+                  >
+                    {session.title}
+                  </Text>
+                  <Flex gap="1" mt="0.5">
+                    {channelBadge(session.channelType)}
+                    {session.agentId && (
+                      <Badge size="sm" colorPalette="orange">Agent</Badge>
+                    )}
+                  </Flex>
+                </Box>
+
+                {/* 删除按钮 */}
+                <IconButton
+                  size="xs" variant="ghost" colorPalette="red"
+                  aria-label="删除会话"
+                  opacity={isActive ? 1 : 0}
+                  _groupHover={{ opacity: 1 }}
+                  _groupFocusWithin={{ opacity: 1 }}
+                  onClick={(e) => { e.stopPropagation(); setDeleteSessionId(session.id) }}
+                >
+                  <Trash2 size={12} />
+                </IconButton>
+              </Flex>
+            )
+          })}
+        </Box>
+      </Box>
+
+      {/* ── 右侧聊天区 ── */}
+      <Flex flex="1" flexDir="column" overflow="hidden">
+        {!store.currentSessionId ? (
+          <Flex align="center" justify="center" flex="1" flexDir="column" gap="3" color="gray.400">
+            <MessageCircle size={48} />
+            <Text>选择或创建一个会话开始对话</Text>
+            <Button colorPalette="blue" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> 新建会话
+            </Button>
+          </Flex>
+        ) : (
+          <>
+            {/* 聊天头部 */}
+            <Flex
+              px="4" py="2.5" borderBottomWidth="1px"
+              align="center" justify="space-between" flexShrink={0}
+            >
+              <Flex align="center" gap="2">
+                <MessageCircle size={16} />
+                <Text fontWeight="medium" fontSize="sm">{currentSession?.title}</Text>
+              </Flex>
+              <Select.Root
+                value={currentSession ? [currentSession.providerId] : []}
+                onValueChange={(v) => handleSwitchProvider(v.value[0] ?? '')}
+                disabled={chatting}
+                collection={createListCollection({
+                  items: enabledProviders.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })),
+                })}
+                size="sm"
+              >
+                <Select.Trigger w="220px">
+                  <Select.ValueText placeholder="切换模型" />
+                </Select.Trigger>
+                <Portal>
+                  <Select.Positioner>
+                    <Select.Content>
+                      {enabledProviders.map((p) => (
+                        <Select.Item key={p.id} item={{ value: p.id, label: `${p.displayName} (${p.modelName})` }}>
+                          {p.displayName} ({p.modelName})
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Positioner>
+                </Portal>
+              </Select.Root>
+            </Flex>
+
+            {/* 消息列表 */}
+            <Box
+              ref={messagesEl}
+              flex="1" overflowY="auto" px="2" py="3"
+              onScroll={handleMessagesScroll}
+            >
+              {loading ? (
+                <Flex align="center" justify="center" py="8">
+                  <Spinner />
+                </Flex>
+              ) : (
+                <>
+                  {/* 加载更早 */}
+                  {(messagesHasMore || loadingEarlier) && (
+                    <Flex justify="center" py="2">
+                      {loadingEarlier ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        <Button
+                          size="xs" variant="ghost" colorPalette="blue"
+                          onClick={() => {
+                            prevScrollHeight.current = messagesEl.current?.scrollHeight ?? 0
+                            loadEarlierMessages()
+                          }}
+                        >
+                          <ChevronUp size={12} /> 加载更早消息
+                        </Button>
+                      )}
+                    </Flex>
+                  )}
+
+                  {/* 历史消息 */}
+                  {displayMessages.map((msg, idx) => (
+                    <ChatMessage
+                      key={idx}
+                      message={msg}
+                      isStreaming={chatting && idx === displayMessages.length - 1}
+                    />
+                  ))}
+
+                  {/* 流式输出中的消息 */}
+                  {chatting && streamingContent && (
+                    <ChatMessage
+                      message={{
+                        role: 'assistant',
+                        content: streamingContent,
+                        timestamp: new Date().toISOString(),
+                      }}
+                      isStreaming
+                    />
+                  )}
+                </>
+              )}
+            </Box>
+
+            {/* 输入区 */}
+            <Box borderTopWidth="1px" p="3" flexShrink={0}>
+              {/* 附件预览 */}
+              {pendingAttachments.length > 0 && (
+                <Flex gap="2" mb="2" flexWrap="wrap">
+                  {pendingAttachments.map((att, i) => (
+                    <Flex
+                      key={i} align="center" gap="1"
+                      px="2" py="1" borderRadius="md"
+                      bg="gray.100" _dark={{ bg: 'gray.700' }}
+                      fontSize="xs"
+                    >
+                      {att.mimeType.startsWith('image/') ? (
+                        <img
+                          src={`data:${att.mimeType};base64,${att.base64Data}`}
+                          alt={att.fileName}
+                          style={{ height: 32, borderRadius: 4 }}
+                        />
+                      ) : (
+                        <><Paperclip size={10} />{att.fileName}</>
+                      )}
+                      <IconButton
+                        size="2xs" variant="ghost" aria-label="移除附件"
+                        onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        <X size={10} />
+                      </IconButton>
+                    </Flex>
+                  ))}
+                </Flex>
+              )}
+
+              <Flex gap="2" align="flex-end">
+                {/* 附件按钮 */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf,.txt,.md,.json,.csv"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                <IconButton
+                  size="sm" variant="ghost" aria-label="添加附件"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={chatting}
+                >
+                  <Paperclip size={16} />
+                </IconButton>
+
+                {/* 输入框 */}
+                <Textarea
+                  ref={textareaRef}
+                  flex="1"
+                  size="sm"
+                  minH="60px"
+                  maxH="200px"
+                  resize="none"
+                  placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={chatting}
+                />
+
+                {/* 停止 / 发送按钮 */}
+                {chatting ? (
+                  <IconButton
+                    size="sm" colorPalette="red" aria-label="停止"
+                    onClick={stopChat}
+                  >
+                    <Square size={16} />
+                  </IconButton>
+                ) : (
+                  <IconButton
+                    size="sm" colorPalette="blue" aria-label="发送"
+                    disabled={!inputText.trim()}
+                    onClick={handleSend}
+                  >
+                    <Send size={16} />
+                  </IconButton>
+                )}
+              </Flex>
+            </Box>
+          </>
+        )}
+      </Flex>
+
+      {/* ── 新建会话弹窗 ── */}
+      <CreateSessionDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        providers={providers}
+        channels={channels}
+        agents={agents}
+        onCreated={(id) => handleSelect(id)}
+      />
+
+      <ConfirmDialog
+        open={!!deleteSessionId}
+        onClose={() => setDeleteSessionId(null)}
+        onConfirm={() => deleteSessionId && handleDelete(deleteSessionId)}
+        title="删除会话"
+        description="确认删除此会话？"
+        confirmText="删除"
+      />
+    </Flex>
+  )
+}
