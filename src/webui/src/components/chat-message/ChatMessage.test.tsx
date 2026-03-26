@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import ChatMessage from '@/components/ChatMessage'
+import ChatMessage from '@/components/chat-message'
 import type { SessionMessage } from '@/api/gateway'
 
 // mermaid 可能触发 DOM 相关 API，这里 mock 掉

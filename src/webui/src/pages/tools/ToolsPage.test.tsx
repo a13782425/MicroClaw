@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import ToolsPage from '@/pages/Tools'
+import ToolsPage from '@/pages/tools'
 import * as gateway from '@/api/gateway'
 import type { GlobalToolGroup, McpServerConfig, ChannelToolInfo } from '@/api/gateway'
 

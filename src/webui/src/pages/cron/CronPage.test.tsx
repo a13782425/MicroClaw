@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import CronPage from '@/pages/Cron'
+import CronPage from '@/pages/cron'
 import * as cronModule from '@/api/cron'
 import * as gateway from '@/api/gateway'
 import type { CronJob } from '@/api/cron'

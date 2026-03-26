@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import UsagePage from '@/pages/Usage'
+import UsagePage from '@/pages/usage'
 import * as gateway from '@/api/gateway'
 import type { UsageQueryResult } from '@/api/gateway'
 

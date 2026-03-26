@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import McpPage from '@/pages/Mcp'
+import McpPage from '@/pages/mcp'
 import * as gateway from '@/api/gateway'
 import type { McpServerConfig } from '@/api/gateway'
 

@@ -3,19 +3,19 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 
 const AppLayout = lazy(() => import('@/components/layout/AppLayout'))
-const LoginPage = lazy(() => import('@/pages/Login'))
-const SessionsPage = lazy(() => import('@/pages/Sessions'))
-const AgentsPage = lazy(() => import('@/pages/Agents'))
-const SkillsPage = lazy(() => import('@/pages/Skills'))
-const McpPage = lazy(() => import('@/pages/Mcp'))
-const RagPage = lazy(() => import('@/pages/Rag'))
-const ToolsPage = lazy(() => import('@/pages/Tools'))
-const ModelsPage = lazy(() => import('@/pages/Models'))
-const ChannelsPage = lazy(() => import('@/pages/Channels'))
-const SessionManagePage = lazy(() => import('@/pages/SessionManage'))
-const CronPage = lazy(() => import('@/pages/Cron'))
-const UsagePage = lazy(() => import('@/pages/Usage'))
-const ConfigPage = lazy(() => import('@/pages/Config'))
+const LoginPage = lazy(() => import('@/pages/login'))
+const SessionsPage = lazy(() => import('@/pages/sessions'))
+const AgentsPage = lazy(() => import('@/pages/agents'))
+const SkillsPage = lazy(() => import('@/pages/skills'))
+const McpPage = lazy(() => import('@/pages/mcp'))
+const RagPage = lazy(() => import('@/pages/rag'))
+const ToolsPage = lazy(() => import('@/pages/tools'))
+const ModelsPage = lazy(() => import('@/pages/models'))
+const ChannelsPage = lazy(() => import('@/pages/channels'))
+const SessionManagePage = lazy(() => import('@/pages/session-manage'))
+const CronPage = lazy(() => import('@/pages/cron'))
+const UsagePage = lazy(() => import('@/pages/usage'))
+const ConfigPage = lazy(() => import('@/pages/config'))
 
 function RouteFallback() {
   return (

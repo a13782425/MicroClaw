@@ -21,7 +21,7 @@ import { useSessionStore, isDisplayMessage } from '@/store/sessionStore'
 import { eventBus } from '@/services/eventBus'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import ChatMessage from '@/components/ChatMessage'
+import ChatMessage from '@/components/chat-message'
 
 // ─── 渠道类型标签 ─────────────────────────────────────────────────────────────
 const CHANNEL_LABELS: Record<string, string> = {

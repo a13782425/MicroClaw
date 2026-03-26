@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
-import ModelsPage from '@/pages/Models'
+import ModelsPage from '@/pages/models'
 import * as gateway from '@/api/gateway'
 import type { ProviderConfig } from '@/api/gateway'
 
