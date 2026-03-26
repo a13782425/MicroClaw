@@ -19,4 +19,9 @@ public sealed record AgentConfig(
     /// 传给 LLM 前保留的最近消息条数（含 user + assistant 轮次）。
     /// null 表示不限制，全量历史传入。建议设置为 20~100 左右。
     /// </summary>
-    int? ContextWindowMessages = null);
+    int? ContextWindowMessages = null,
+    /// <summary>
+    /// 是否通过 A2A（Agent-to-Agent）协议对外暴露此 Agent。
+    /// 启用后将在 /a2a/agent/{id} 提供符合 A2A 规范的 JSON-RPC 端点。
+    /// </summary>
+    bool ExposeAsA2A = false);

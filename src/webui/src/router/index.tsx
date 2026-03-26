@@ -16,6 +16,8 @@ const SessionManagePage = lazy(() => import('@/pages/session-manage'))
 const CronPage = lazy(() => import('@/pages/cron'))
 const UsagePage = lazy(() => import('@/pages/usage'))
 const ConfigPage = lazy(() => import('@/pages/config'))
+const WorkflowsPage = lazy(() => import('@/pages/workflows'))
+const DevPage = lazy(() => import('@/pages/dev'))
 
 function RouteFallback() {
   return (
@@ -80,6 +82,8 @@ export const router = createBrowserRouter([
       { path: 'cron',           element: withSuspense(<CronPage />) },
       { path: 'usage',          element: withSuspense(<UsagePage />) },
       { path: 'config',         element: withSuspense(<ConfigPage />) },
+      { path: 'workflows',      element: withSuspense(<WorkflowsPage />) },
+      { path: 'dev',            element: withSuspense(<DevPage />) },
       { path: 'dna',            element: <Navigate to="/session-manage" replace /> },
     ],
   },

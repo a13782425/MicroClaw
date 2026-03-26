@@ -301,6 +301,14 @@ export type SseChunk =
   | { type: 'tool_result'; callId: string; toolName: string; result: string; success: boolean; durationMs: number }
   | { type: 'sub_agent_start'; agentId: string; agentName: string; task: string; childSessionId: string }
   | { type: 'sub_agent_done'; agentId: string; agentName: string; result: string; durationMs: number }
+  | { type: 'data_content'; mimeType: string; data: string }
+  // ── 工作流事件 ─────────────────────────────────────────────────────────
+  | { type: 'workflow_start'; workflowId: string; workflowName: string; executionId: string }
+  | { type: 'workflow_node_start'; executionId: string; nodeId: string; nodeLabel: string; nodeType: string }
+  | { type: 'workflow_node_complete'; executionId: string; nodeId: string; result: string; durationMs: number }
+  | { type: 'workflow_edge'; executionId: string; sourceNodeId: string; targetNodeId: string; condition?: string }
+  | { type: 'workflow_complete'; executionId: string; finalResult: string; totalDurationMs: number }
+  | { type: 'workflow_error'; executionId: string; nodeId: string; error: string }
 
 export interface PagedMessagesResponse {
   messages: SessionMessage[]
@@ -496,6 +504,7 @@ export type AgentConfig = {
   boundSkillIds: string[]
   enabledMcpServerIds: string[]
   createdAtUtc: string
+  exposeAsA2A: boolean
 }
 
 export type AgentCreateRequest = {
@@ -513,6 +522,7 @@ export type AgentUpdateRequest = {
   isEnabled?: boolean
   boundSkillIds?: string[]
   enabledMcpServerIds?: string[]
+  exposeAsA2A?: boolean
 }
 
 export type ToolItem = {
@@ -826,5 +836,202 @@ export type UsageQueryResult = {
 
 export async function fetchUsageStats(startDate: string, endDate: string): Promise<UsageQueryResult> {
   const { data } = await request.post<UsageQueryResult>('/api/usage/query', { startDate, endDate })
+  return data
+}
+
+// ─── Workflows ────────────────────────────────────────────────────────────────
+
+export type WorkflowNodeType = 'Agent' | 'Function' | 'Router' | 'Start' | 'End'
+
+export type WorkflowPosition = {
+  x: number
+  y: number
+}
+
+export type WorkflowNodeConfig = {
+  nodeId: string
+  label: string
+  type: WorkflowNodeType
+  agentId?: string | null
+  functionName?: string | null
+  config?: Record<string, string> | null
+  position?: WorkflowPosition | null
+}
+
+export type WorkflowEdgeConfig = {
+  sourceNodeId: string
+  targetNodeId: string
+  condition?: string | null
+  label?: string | null
+}
+
+export type WorkflowConfig = {
+  id: string
+  name: string
+  description: string
+  isEnabled: boolean
+  nodes: WorkflowNodeConfig[]
+  edges: WorkflowEdgeConfig[]
+  entryNodeId?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type WorkflowCreateRequest = {
+  name: string
+  description?: string
+  isEnabled?: boolean
+  nodes?: WorkflowNodeConfig[]
+  edges?: WorkflowEdgeConfig[]
+  entryNodeId?: string
+}
+
+export type WorkflowUpdateRequest = {
+  name?: string
+  description?: string
+  isEnabled?: boolean
+  nodes?: WorkflowNodeConfig[]
+  edges?: WorkflowEdgeConfig[]
+  entryNodeId?: string
+}
+
+export async function listWorkflows(): Promise<WorkflowConfig[]> {
+  const { data } = await request.get<WorkflowConfig[]>('/api/workflows')
+  return data
+}
+
+export async function getWorkflow(id: string): Promise<WorkflowConfig> {
+  const { data } = await request.get<WorkflowConfig>(`/api/workflows/${id}`)
+  return data
+}
+
+export async function createWorkflow(req: WorkflowCreateRequest): Promise<WorkflowConfig> {
+  const { data } = await request.post<WorkflowConfig>('/api/workflows', req)
+  return data
+}
+
+export async function updateWorkflow(id: string, req: WorkflowUpdateRequest): Promise<WorkflowConfig> {
+  const { data } = await request.put<WorkflowConfig>(`/api/workflows/${id}`, req)
+  return data
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+  await request.delete(`/api/workflows/${id}`)
+}
+
+/**
+ * SSE 流式执行工作流。
+ * 返回 AbortController 供调用方取消。
+ */
+export function streamWorkflow(
+  workflowId: string,
+  input: string,
+  onChunk: (chunk: SseChunk) => void,
+  onError: (err: string) => void,
+  onDone: () => void,
+): AbortController {
+  const controller = new AbortController()
+  const token = useAuthStore.getState().token
+
+  fetch(`/api/workflows/${workflowId}/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ input }),
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        onError(`HTTP ${res.status}`)
+        return
+      }
+      const reader = res.body?.getReader()
+      if (!reader) {
+        onError('No response body')
+        return
+      }
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+        for (const part of parts) {
+          const raw = part.replace(/^data: /, '').trim()
+          if (!raw) continue
+          if (raw === '[DONE]') {
+            onDone()
+            return
+          }
+          try {
+            const chunk = JSON.parse(raw) as SseChunk
+            onChunk(chunk)
+          } catch {
+            // 忽略无法解析的事件
+          }
+        }
+      }
+      onDone()
+    })
+    .catch((err) => {
+      if (err?.name !== 'AbortError') {
+        onError(String(err))
+      }
+    })
+
+  return controller
+}
+
+// ─── Dev Metrics (Development 环境专用) ────────────────────────────────────────
+
+export type ToolStatsDto = {
+  callCount: number
+  errorCount: number
+  totalElapsedMs: number
+  maxElapsedMs: number
+  averageElapsedMs: number
+}
+
+export type AgentRunRecord = {
+  agentId: string
+  success: boolean
+  durationMs: number
+  executedAt: string
+}
+
+export type DevMetricsSnapshot = {
+  startedAt: string
+  totalAgentRuns: number
+  failedAgentRuns: number
+  toolStats: Record<string, ToolStatsDto>
+  recentRuns: AgentRunRecord[]
+}
+
+export type ContextProviderInfoDto = {
+  name: string
+  order: number
+}
+
+export type MiddlewareLimitsDto = {
+  iterations: { min: number; max: number }
+  maxDepth: { default: number }
+}
+
+export async function getDevMetrics(): Promise<DevMetricsSnapshot> {
+  const { data } = await request.get<DevMetricsSnapshot>('/dev/metrics')
+  return data
+}
+
+export async function getDevContextProviders(): Promise<ContextProviderInfoDto[]> {
+  const { data } = await request.get<ContextProviderInfoDto[]>('/dev/context-providers')
+  return data
+}
+
+export async function getDevMiddlewareLimits(): Promise<MiddlewareLimitsDto> {
+  const { data } = await request.get<MiddlewareLimitsDto>('/dev/middleware-limits')
   return data
 }

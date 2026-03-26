@@ -44,6 +44,12 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("enabled_mcp_server_ids_json");
 
+                    b.Property<bool>("ExposeAsA2A")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("expose_as_a2a");
+
                     b.Property<bool>("IsDefault")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_default");
@@ -567,6 +573,53 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasDatabaseName("ix_usages_session_provider_source_day");
 
                     b.ToTable("usages", (string)null);
+                });
+
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.WorkflowConfigEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_ms");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EdgesJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("edges_json");
+
+                    b.Property<string>("EntryNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entry_node_id");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NodesJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("nodes_json");
+
+                    b.Property<long>("UpdatedAtMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_ms");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("workflows", (string)null);
                 });
 #pragma warning restore 612, 618
         }

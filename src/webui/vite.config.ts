@@ -78,6 +78,10 @@ export default defineConfig(({ mode }) => {
           ws: true,
           changeOrigin: true,
         },
+        '/dev': {
+          target: gatewayUrl,
+          changeOrigin: true,
+        },
       },
     },
   }

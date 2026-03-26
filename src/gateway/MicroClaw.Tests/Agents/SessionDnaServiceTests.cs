@@ -19,10 +19,11 @@ public sealed class SessionDnaServiceTests : IDisposable
     // ── FixedFileNames ────────────────────────────────────────────────────────
 
     [Fact]
-    public void FixedFileNames_Contains_ThreeExpectedFiles()
+    public void FixedFileNames_ContainsTwoActiveFiles()
     {
+        // SOUL.md 已移至 AgentDnaService，Session 级别只有 USER.md + AGENTS.md
         SessionDnaService.FixedFileNames.Should().BeEquivalentTo(
-            ["SOUL.md", "USER.md", "AGENTS.md"],
+            ["USER.md", "AGENTS.md"],
             opts => opts.WithStrictOrdering());
     }
 
@@ -66,15 +67,15 @@ public sealed class SessionDnaServiceTests : IDisposable
     [Fact]
     public void InitializeSession_FilesContainTemplateContent()
     {
+        // SOUL.md 已移至 Agent 级别，InitializeSession 只创建 USER.md + AGENTS.md
         _svc.InitializeSession("sess1");
 
-        string soul = File.ReadAllText(Path.Combine(_dir.Path, "sess1", "SOUL.md"));
         string user = File.ReadAllText(Path.Combine(_dir.Path, "sess1", "USER.md"));
         string agents = File.ReadAllText(Path.Combine(_dir.Path, "sess1", "AGENTS.md"));
 
-        soul.Should().Contain("Soul").And.NotBeNullOrWhiteSpace();
         user.Should().Contain("User").And.NotBeNullOrWhiteSpace();
         agents.Should().Contain("Agents").And.NotBeNullOrWhiteSpace();
+        File.Exists(Path.Combine(_dir.Path, "sess1", "SOUL.md")).Should().BeFalse();
     }
 
     [Fact]
@@ -96,25 +97,26 @@ public sealed class SessionDnaServiceTests : IDisposable
     // ── ListFiles ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ListFiles_NoFiles_ReturnsThreeEntriesWithEmptyContent()
+    public void ListFiles_NoFiles_ReturnsTwoEntriesWithEmptyContent()
     {
+        // Session 级别只有 USER.md + AGENTS.md
         var files = _svc.ListFiles("sess-no-files");
 
-        files.Should().HaveCount(3);
+        files.Should().HaveCount(2);
         files.Select(f => f.FileName).Should().BeEquivalentTo(
-            ["SOUL.md", "USER.md", "AGENTS.md"],
+            ["USER.md", "AGENTS.md"],
             opts => opts.WithStrictOrdering());
         files.Should().AllSatisfy(f => f.Content.Should().BeEmpty());
     }
 
     [Fact]
-    public void ListFiles_AfterInit_ReturnsThreeFilesWithContent()
+    public void ListFiles_AfterInit_ReturnsTwoFilesWithContent()
     {
         _svc.InitializeSession("sess1");
 
         var files = _svc.ListFiles("sess1");
 
-        files.Should().HaveCount(3);
+        files.Should().HaveCount(2);
         files.Should().AllSatisfy(f => f.Content.Should().NotBeNullOrWhiteSpace());
         files.Should().AllSatisfy(f => f.Description.Should().NotBeNullOrWhiteSpace());
         files.Should().AllSatisfy(f => f.UpdatedAt.Should().BeAfter(DateTimeOffset.MinValue));
@@ -123,11 +125,11 @@ public sealed class SessionDnaServiceTests : IDisposable
     [Fact]
     public void ListFiles_ReturnsDescriptions()
     {
+        // Session 级别 index 0 = USER.md, index 1 = AGENTS.md
         var files = _svc.ListFiles("sess1");
 
-        files[0].Description.Should().Be("定义 AI 的人格、语气和表达风格");
-        files[1].Description.Should().Be("定义对话对象的画像、偏好和背景信息");
-        files[2].Description.Should().Be("定义工作流、决策规则和处理步骤");
+        files[0].Description.Should().Be("定义对话对象的画像、偏好和背景信息");
+        files[1].Description.Should().Be("定义工作流、决策规则和处理步骤");
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
@@ -137,10 +139,10 @@ public sealed class SessionDnaServiceTests : IDisposable
     {
         _svc.InitializeSession("sess1");
 
-        var file = _svc.Read("sess1", "SOUL.md");
+        var file = _svc.Read("sess1", "USER.md");
 
         file.Should().NotBeNull();
-        file!.FileName.Should().Be("SOUL.md");
+        file!.FileName.Should().Be("USER.md");
         file.Content.Should().NotBeNullOrWhiteSpace();
     }
 
@@ -217,13 +219,13 @@ public sealed class SessionDnaServiceTests : IDisposable
     }
 
     [Fact]
-    public void BuildDnaContext_AfterInit_ContainsAllThreeFiles()
+    public void BuildDnaContext_AfterInit_ContainsBothActiveFiles()
     {
+        // SOUL.md 已移至 Agent 级别，BuildDnaContext 只含 USER.md + AGENTS.md
         _svc.InitializeSession("sess1");
 
         string ctx = _svc.BuildDnaContext("sess1");
 
-        ctx.Should().Contain("Soul");
         ctx.Should().Contain("User");
         ctx.Should().Contain("Agents");
     }
@@ -231,13 +233,11 @@ public sealed class SessionDnaServiceTests : IDisposable
     [Fact]
     public void BuildDnaContext_SkipsEmptyFiles()
     {
-        _svc.Update("sess1", "SOUL.md", "Soul content");
         _svc.Update("sess1", "USER.md", "   ");   // 纯空白，应跳过
         _svc.Update("sess1", "AGENTS.md", "Agents content");
 
         string ctx = _svc.BuildDnaContext("sess1");
 
-        ctx.Should().Contain("Soul content");
         ctx.Should().NotContain("   ");
         ctx.Should().Contain("Agents content");
     }
@@ -245,14 +245,13 @@ public sealed class SessionDnaServiceTests : IDisposable
     [Fact]
     public void BuildDnaContext_JoinsWithDoubleNewline()
     {
-        _svc.Update("sess1", "SOUL.md", "SoulContent");
         _svc.Update("sess1", "USER.md", "UserContent");
         _svc.Update("sess1", "AGENTS.md", "AgentsContent");
 
         string ctx = _svc.BuildDnaContext("sess1");
 
-        // 三段之间用双换行分隔
-        ctx.Should().Contain("SoulContent\n\nUserContent\n\nAgentsContent");
+        // 两段之间用双换行分隔
+        ctx.Should().Be("UserContent\n\nAgentsContent");
     }
 
     // ── DeleteSessionDnaFiles ─────────────────────────────────────────────────

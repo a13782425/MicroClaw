@@ -218,12 +218,11 @@ public static class SessionEndpoints
                     await foreach (StreamItem item in
                         agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
                     {
+                        // 持久化逻辑（与 SSE 序列化解耦）
                         switch (item)
                         {
                             case TokenItem token:
                                 fullContent.Append(token.Content);
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new { type = "token", content = token.Content }, JsonOpts), ct);
                                 break;
 
                             case ToolCallItem toolCall:
@@ -240,14 +239,6 @@ public static class SessionEndpoints
                                         ["toolName"] = toolCall.ToolName,
                                         ["arguments"] = toolCall.Arguments
                                     })));
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        type = "tool_call",
-                                        callId = toolCall.CallId,
-                                        toolName = toolCall.ToolName,
-                                        arguments = toolCall.Arguments
-                                    }, JsonOpts), ct);
                                 break;
 
                             case ToolResultItem toolResult:
@@ -265,16 +256,6 @@ public static class SessionEndpoints
                                         ["success"] = toolResult.Success,
                                         ["durationMs"] = toolResult.DurationMs
                                     })));
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        type = "tool_result",
-                                        callId = toolResult.CallId,
-                                        toolName = toolResult.ToolName,
-                                        result = toolResult.Result,
-                                        success = toolResult.Success,
-                                        durationMs = toolResult.DurationMs
-                                    }, JsonOpts), ct);
                                 break;
 
                             case SubAgentStartItem subStart:
@@ -292,15 +273,6 @@ public static class SessionEndpoints
                                         ["task"] = subStart.Task,
                                         ["childSessionId"] = subStart.ChildSessionId
                                     })));
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        type = "sub_agent_start",
-                                        agentId = subStart.AgentId,
-                                        agentName = subStart.AgentName,
-                                        task = subStart.Task,
-                                        childSessionId = subStart.ChildSessionId
-                                    }, JsonOpts), ct);
                                 break;
 
                             case SubAgentResultItem subResult:
@@ -317,29 +289,16 @@ public static class SessionEndpoints
                                         ["agentName"] = subResult.AgentName,
                                         ["durationMs"] = subResult.DurationMs
                                     })));
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        type = "sub_agent_done",
-                                        agentId = subResult.AgentId,
-                                        agentName = subResult.AgentName,
-                                        result = subResult.Result,
-                                        durationMs = subResult.DurationMs
-                                    }, JsonOpts), ct);
                                 break;
 
                             case DataContentItem dataItem:
                                 string base64 = Convert.ToBase64String(dataItem.Data);
                                 collectedAttachments.Add(new MessageAttachment("attachment", dataItem.MimeType, base64));
-                                await WriteSseAsync(ctx.Response,
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        type = "data_content",
-                                        mimeType = dataItem.MimeType,
-                                        data = base64
-                                    }, JsonOpts), ct);
                                 break;
                         }
+
+                        // 统一 SSE 序列化（所有类型）
+                        await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
                     }
 
                     // 解析 think 块

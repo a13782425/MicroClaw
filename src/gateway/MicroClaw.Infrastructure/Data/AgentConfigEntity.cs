@@ -13,4 +13,5 @@ public sealed class AgentConfigEntity
     public long CreatedAtMs { get; set; }
     public bool IsDefault { get; set; }
     public int? ContextWindowMessages { get; set; }
+    public bool ExposeAsA2A { get; set; }
 }

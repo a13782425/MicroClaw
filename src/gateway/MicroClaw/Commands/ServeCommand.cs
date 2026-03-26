@@ -1,6 +1,8 @@
 using System.CommandLine;
 using System.Text;
 using MicroClaw.Agent;
+using MicroClaw.Agent.ContextProviders;
+using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
@@ -157,6 +159,21 @@ public class ServeCommand : Command
 					ValidateAudience = false,
 					ClockSkew = TimeSpan.Zero
 				};
+				// SignalR WebSocket 握手时浏览器无法附加 Authorization 请求头，
+				// JS SDK 会自动将 token 作为 access_token query 参数发送，此处从中读取。
+				opts.Events = new JwtBearerEvents
+				{
+					OnMessageReceived = ctx =>
+					{
+						var token = ctx.Request.Query["access_token"];
+						if (!string.IsNullOrEmpty(token) &&
+							ctx.HttpContext.Request.Path.StartsWithSegments("/ws"))
+						{
+							ctx.Token = token;
+						}
+						return Task.CompletedTask;
+					}
+				};
 			});
 		builder.Services.AddAuthorization();
 	}
@@ -201,6 +218,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
 		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
+		// Context Providers（按 Order 聚合 System Prompt）
+		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();
+		builder.Services.AddSingleton<IAgentContextProvider, SessionDnaContextProvider>();
+		builder.Services.AddSingleton<IAgentContextProvider, SessionMemoryContextProvider>();
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
 			sp.GetRequiredService<SessionStore>(),
@@ -209,6 +230,13 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		builder.Services.AddSingleton<AgentRunner>();
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
+
+		// Workflow 服务
+		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowEngine>();
+
+		// 开发调试指标服务（始终注册；调试端点仅在 Development 环境映射）
+		builder.Services.AddSingleton<IDevMetricsService, DevMetricsService>();
 
 		// Skills 服务
 		builder.Services.AddSingleton<SkillStore>();
@@ -418,6 +446,8 @@ public class ServeCommand : Command
 	private static void MapEndpoints(WebApplication app)
 	{
 		app.MapGatewayEndpoints();
+		// if (app.Environment.IsDevelopment())
+		app.MapDevEndpoints();
 		app.MapHub<GatewayHub>("/ws/gateway");
 		app.MapFallbackToFile("index.html");
 	}

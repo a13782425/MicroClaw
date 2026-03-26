@@ -50,7 +50,8 @@ public static class AgentEndpoints
                 EnabledMcpServerIds: req.EnabledMcpServerIds ?? [],
                 ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow,
-                ContextWindowMessages: req.ContextWindowMessages);
+                ContextWindowMessages: req.ContextWindowMessages,
+                ExposeAsA2A: req.ExposeAsA2A);
 
             try
             {
@@ -82,6 +83,7 @@ public static class AgentEndpoints
                 BoundSkillIds = req.BoundSkillIds ?? existing.BoundSkillIds,
                 EnabledMcpServerIds = req.EnabledMcpServerIds ?? existing.EnabledMcpServerIds,
                 ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
+                ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
             };
 
             try
@@ -376,6 +378,7 @@ public static class AgentEndpoints
         a.CreatedAtUtc,
         a.IsDefault,
         a.ContextWindowMessages,
+        a.ExposeAsA2A,
     };
 }
 
@@ -387,7 +390,8 @@ public sealed record AgentCreateRequest(
     bool IsEnabled = true,
     IReadOnlyList<string>? BoundSkillIds = null,
     IReadOnlyList<string>? EnabledMcpServerIds = null,
-    int? ContextWindowMessages = null);
+    int? ContextWindowMessages = null,
+    bool ExposeAsA2A = false);
 
 public sealed record AgentUpdateRequest(
     string Id,
@@ -396,7 +400,8 @@ public sealed record AgentUpdateRequest(
     bool? IsEnabled = null,
     IReadOnlyList<string>? BoundSkillIds = null,
     IReadOnlyList<string>? EnabledMcpServerIds = null,
-    int? ContextWindowMessages = null);
+    int? ContextWindowMessages = null,
+    bool? ExposeAsA2A = null);
 
 public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);
 

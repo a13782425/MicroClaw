@@ -15,6 +15,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
     public DbSet<McpServerConfigEntity> McpServers => Set<McpServerConfigEntity>();
     public DbSet<RagConfigEntity> RagConfigs => Set<RagConfigEntity>();
+    public DbSet<WorkflowConfigEntity> Workflows => Set<WorkflowConfigEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -75,6 +76,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.IsDefault).HasColumnName("is_default");
             b.Property(e => e.ContextWindowMessages).HasColumnName("context_window_messages");
+            b.Property(e => e.ExposeAsA2A).HasColumnName("expose_as_a2a").HasDefaultValue(false);
         });
 
         modelBuilder.Entity<CronJobEntity>(b =>
@@ -188,6 +190,21 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_configs_scope");
+        });
+
+        modelBuilder.Entity<WorkflowConfigEntity>(b =>
+        {
+            b.ToTable("workflows");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.Name).HasColumnName("name");
+            b.Property(e => e.Description).HasColumnName("description");
+            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.NodesJson).HasColumnName("nodes_json").IsRequired(false);
+            b.Property(e => e.EdgesJson).HasColumnName("edges_json").IsRequired(false);
+            b.Property(e => e.EntryNodeId).HasColumnName("entry_node_id").HasMaxLength(64).IsRequired(false);
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.Property(e => e.UpdatedAtMs).HasColumnName("updated_at_ms");
         });
     }
 }

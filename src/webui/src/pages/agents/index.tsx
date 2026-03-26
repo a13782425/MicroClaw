@@ -460,6 +460,7 @@ function AgentDetail({
 }) {
   const [deleting, setDeleting] = useState(false)
   const [togglingEnabled, setTogglingEnabled] = useState(false)
+  const [togglingA2A, setTogglingA2A] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const toggleEnabled = async (val: boolean) => {
@@ -471,6 +472,19 @@ function AgentDetail({
       toaster.create({ type: 'error', title: '操作失败' })
     } finally {
       setTogglingEnabled(false)
+    }
+  }
+
+  const toggleA2A = async (val: boolean) => {
+    setTogglingA2A(true)
+    try {
+      await updateAgent({ id: agent.id, exposeAsA2A: val })
+      onUpdated({ ...agent, exposeAsA2A: val })
+      toaster.create({ type: 'success', title: val ? 'A2A 协议已开启' : 'A2A 协议已关闭' })
+    } catch {
+      toaster.create({ type: 'error', title: 'A2A 切换失败' })
+    } finally {
+      setTogglingA2A(false)
     }
   }
 
@@ -516,6 +530,16 @@ function AgentDetail({
             <Switch.HiddenInput />
             <Switch.Control><Switch.Thumb /></Switch.Control>
             <Switch.Label fontSize="sm">{agent.isEnabled ? '启用' : '停用'}</Switch.Label>
+          </Switch.Root>
+          <Switch.Root
+            size="sm"
+            checked={agent.exposeAsA2A}
+            disabled={togglingA2A}
+            onCheckedChange={(e) => toggleA2A(e.checked)}
+          >
+            <Switch.HiddenInput />
+            <Switch.Control><Switch.Thumb /></Switch.Control>
+            <Switch.Label fontSize="sm">A2A</Switch.Label>
           </Switch.Root>
           <Button
             size="sm"
@@ -576,6 +600,20 @@ function AgentDetail({
                 : <Text fontSize="sm" color="gray.400">（未设置）</Text>
               }
             </Box>
+            {agent.exposeAsA2A && (
+              <Box mt="4">
+                <Text fontSize="xs" color="gray.500" mb="1">A2A 端点</Text>
+                <Box
+                  bg="gray.50" _dark={{ bg: 'gray.800' }} p="2" rounded="md"
+                  fontFamily="mono" fontSize="xs"
+                  wordBreak="break-all"
+                  cursor="text"
+                  userSelect="all"
+                >
+                  {`${window.location.origin}/a2a/agent/${agent.id}`}
+                </Box>
+              </Box>
+            )}
           </Box>
         </Tabs.Content>
 

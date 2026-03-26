@@ -1,3 +1,4 @@
+using MicroClaw.Agent.A2A;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Skills.Endpoints;
 using MicroClaw.Tools.Endpoints;
@@ -14,6 +15,9 @@ public static class GatewayEndpointRouteBuilderExtensions
 		api.MapAuthEndpoints();
 		api.MapChannelWebhookEndpoints();
 
+		// A2A 端点（公开访问，无需 JWT）
+		endpoints.MapA2AEndpoints();
+
 		var protectedApi = api.RequireAuthorization();
 		protectedApi.MapSystemEndpoints();
 		protectedApi.MapChannelEndpoints();
@@ -26,6 +30,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapUsageEndpoints();
 		protectedApi.MapMcpEndpoints();
 		protectedApi.MapToolsEndpoints();
+		protectedApi.MapWorkflowEndpoints();
 
 		return endpoints;
 	}

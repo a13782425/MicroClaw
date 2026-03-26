@@ -1,7 +1,7 @@
 import {
   MessageSquare, Timer, BarChart2,
   Bot, Zap, Server, Database, Wrench,
-  CpuIcon, Radio, ListTree, Settings,
+  CpuIcon, Radio, ListTree, Settings, GitBranch, Bug,
 } from 'lucide-react'
 
 export interface MenuItem {
@@ -20,8 +20,10 @@ export const MENU_GROUPS: MenuGroup[] = [
     title: '功能',
     items: [
       { path: '/sessions', label: '对话', icon: <MessageSquare size={18} /> },
+      { path: '/workflows', label: '工作流', icon: <GitBranch size={18} /> },
       { path: '/cron', label: '计划任务', icon: <Timer size={18} /> },
       { path: '/usage', label: '用量统计', icon: <BarChart2 size={18} /> },
+      { path: '/dev', label: 'DevUI', icon: <Bug size={18} /> },
     ],
   },
   {

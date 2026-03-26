@@ -35,8 +35,12 @@ public sealed class OpenAIModelProvider : IModelProvider
 
         var credential = new ApiKeyCredential(config.ApiKey);
 
+        // 有自定义 BaseUrl 时降级为 Chat Completions（ResponsesAPI 需官方端点）
+        bool useResponsesApi = config.Capabilities.SupportsResponsesApi
+            && string.IsNullOrWhiteSpace(config.BaseUrl);
+
         IChatClient inner;
-        if (config.Capabilities.SupportsResponsesApi)
+        if (useResponsesApi)
         {
             var openAiClient = new OpenAIClient(credential, options);
             inner = openAiClient.GetResponsesClient(config.ModelName).AsIChatClient();
