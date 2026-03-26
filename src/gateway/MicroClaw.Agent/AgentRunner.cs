@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Agent.Streaming;
+using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -51,11 +51,11 @@ public sealed class AgentRunner(
         return main is { IsEnabled: true };
     }
 
-    public async Task<string> HandleMessageAsync(
+    public async IAsyncEnumerable<StreamItem> HandleMessageAsync(
         string channelId,
         string sessionId,
         IReadOnlyList<SessionMessage> history,
-        CancellationToken ct = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         AgentConfig? agent = agentStore.GetDefault();
         if (agent is null || !agent.IsEnabled)
@@ -67,89 +67,19 @@ public sealed class AgentRunner(
             ? session.ProviderId
             : providerStore.GetDefault()?.Id ?? string.Empty;
 
-        return await RunReActAsync(agent, providerId, history, sessionId, ct, source: "channel");
+        await foreach (StreamItem item in StreamReActAsync(agent, providerId, history, sessionId, ct, source: "channel"))
+            yield return item;
     }
 
-    // ── 核心 ReAct 循环（非流式）────────────────────────────────────────────
-
-    public async Task<string> RunReActAsync(
-        AgentConfig agent,
-        string providerId,
-        IReadOnlyList<SessionMessage> history,
-        string? sessionId = null,
-        CancellationToken ct = default,
-        string source = "subagent")
-    {
-        ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == providerId);
-        if (provider is null || !provider.IsEnabled)
-            throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
-
-        IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
-        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
-        List<ChatMessage> messages = BuildChatMessages(agent, validatedHistory, sessionId, skillCtx.CatalogFragment);
-
-        // 按工具配置过滤要连接的 MCP Server
-        IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
-        var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(enabledMcpServers, loggerFactory, ct);
-
-        // 过滤 MCP 工具中被单独禁用的工具
-        IEnumerable<McpClientTool> filteredMcpTools = FilterMcpTools(agent, mcpTools);
-
-        // 追加内置工具（通过 IBuiltinToolProvider 自动注册，按 ToolGroupConfig 过滤）
-        List<AITool> allTools = [.. filteredMcpTools];
-        allTools.AddRange(CollectBuiltinTools(agent, sessionId));
-
-        // 若 Agent 绑定了技能，注入 invoke_skill 工具（懒加载全文）
-        if (agent.BoundSkillIds.Count > 0)
-            allTools.Add(skillInvocationTool.Create(agent.BoundSkillIds, sessionId));
-
-        // 按会话所在渠道类型注入对应的渠道专属工具
-        if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            SessionInfo? sessionForTools = sessionReader.Get(sessionId);
-            if (sessionForTools is not null)
-            {
-                ChannelConfig? channelCfg = channelConfigStore.GetById(sessionForTools.ChannelId);
-                IChannelToolProvider? toolProvider = toolProviders.FirstOrDefault(p => p.ChannelType == sessionForTools.ChannelType);
-                if (toolProvider is not null && channelCfg is not null)
-                    allTools.AddRange(toolProvider.CreateToolsForChannel(channelCfg));
-            }
-        }
-
-        _logger.LogInformation("Agent {AgentId} loaded {ToolCount} tools ({McpCount} MCP + {BuiltinCount} built-in)",
-            agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
-
-        if (!string.IsNullOrWhiteSpace(sessionId))
-            await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
-
-        bool succeeded = false;
-        try
-        {
-            IChatClient client = BuildClient(provider, allTools.Count > 0);
-            ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
-            ChatResponse response = await client.GetResponseAsync(messages, chatOptions, ct);
-
-            await TrackUsageAsync(response.Usage, sessionId, provider, source, ct);
-
-            succeeded = true;
-            return response.Text ?? "（无回复）";
-        }
-        finally
-        {
-            await DisposeConnectionsAsync(connections);
-            if (!string.IsNullOrWhiteSpace(sessionId))
-                await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
-        }
-    }
-
-    // ── 流式 ReAct 循环（供 SSE API 使用，手动工具调用循环使过程可观测）──────
+    // ── 流式 ReAct 循环（统一引擎，手动工具调用循环使过程可观测）──────
 
     public async IAsyncEnumerable<StreamItem> StreamReActAsync(
         AgentConfig agent,
         string providerId,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default,
+        string source = "chat")
     {
         ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == providerId);
         if (provider is null || !provider.IsEnabled)
@@ -228,6 +158,13 @@ public sealed class AgentRunner(
                 ChatMessage lastMsg = response.Messages[response.Messages.Count - 1];
                 messages.Add(lastMsg);
 
+                // ── 输出多模态内容（图片/音频等 DataContent）──
+                foreach (DataContent dc in lastMsg.Contents.OfType<DataContent>())
+                {
+                    if (dc.Data is { Length: > 0 })
+                        yield return new DataContentItem(dc.MediaType ?? "application/octet-stream", dc.Data.ToArray());
+                }
+
                 // ── 检查是否有函数调用请求 ──
                 List<FunctionCallContent> functionCalls = lastMsg.Contents
                     .OfType<FunctionCallContent>()
@@ -290,7 +227,7 @@ public sealed class AgentRunner(
         finally
         {
             await DisposeConnectionsAsync(connections);
-            await TrackUsageAsync(lastUsage, sessionId, provider, "chat", CancellationToken.None);
+            await TrackUsageAsync(lastUsage, sessionId, provider, source, CancellationToken.None);
             if (!string.IsNullOrWhiteSpace(sessionId))
                 await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
         }
@@ -426,18 +363,6 @@ public sealed class AgentRunner(
         return string.Join("\n\n", parts);
     }
 
-    private IChatClient BuildClient(ProviderConfig provider, bool withTools)
-    {
-        IChatClient inner = clientFactory.Create(provider);
-        if (!withTools) return inner;
-
-        // UseFunctionInvocation 中间件自动处理 Tool Call → Invoke → Observation 轮次
-        // MaximumIterationsPerRequest=10 防止无限循环（默认为 int.MaxValue）
-        return inner.AsBuilder()
-            .UseFunctionInvocation(loggerFactory, configure: c => c.MaximumIterationsPerRequest = 10)
-            .Build();
-    }
-
     /// <summary>构建不带 UseFunctionInvocation 的客户端，供流式手动工具调用循环使用。</summary>
     private IChatClient BuildRawClient(ProviderConfig provider) => clientFactory.Create(provider);
 
@@ -506,6 +431,8 @@ public sealed class AgentRunner(
         // 仅在 Provider 声明支持 Function Calling 时附加工具
         if (tools.Count > 0 && provider.Capabilities.SupportsFunctionCalling)
             options.Tools = [.. tools];
+        options.ToolMode = ChatToolMode.Auto;
+        options.AllowMultipleToolCalls = true;
         return options;
     }
 

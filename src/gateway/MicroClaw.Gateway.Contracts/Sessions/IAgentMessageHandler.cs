@@ -1,3 +1,5 @@
+using MicroClaw.Gateway.Contracts.Streaming;
+
 namespace MicroClaw.Gateway.Contracts.Sessions;
 
 /// <summary>
@@ -9,8 +11,8 @@ public interface IAgentMessageHandler
     /// <summary>检查指定渠道是否有启用的 Agent 绑定。</summary>
     bool HasAgentForChannel(string channelId);
 
-    /// <summary>将消息路由到 Agent 执行 ReAct 循环，返回 AI 回复文本。</summary>
-    Task<string> HandleMessageAsync(
+    /// <summary>将消息路由到 Agent 执行 ReAct 循环，返回流式事件。调用方可用 MaterializeAsync() 收集为完整 AgentResponse。</summary>
+    IAsyncEnumerable<StreamItem> HandleMessageAsync(
         string channelId,
         string sessionId,
         IReadOnlyList<SessionMessage> history,

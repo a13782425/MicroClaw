@@ -1,6 +1,7 @@
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Services;
@@ -98,7 +99,8 @@ public sealed class ChannelRetryJob(
             string aiReply;
             if (agentHandler?.HasAgentForChannel(channel.Id) == true)
             {
-                aiReply = await agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct);
+                AgentResponse agentResponse = await agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct).MaterializeAsync(ct);
+                aiReply = agentResponse.Text;
             }
             else
             {

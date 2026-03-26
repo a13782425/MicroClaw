@@ -4,7 +4,7 @@ using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Agent.Streaming;
+using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -211,6 +211,7 @@ public static class SessionEndpoints
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
                 StringBuilder fullContent = new();
+                List<MessageAttachment> collectedAttachments = [];
 
                 try
                 {
@@ -326,13 +327,25 @@ public static class SessionEndpoints
                                         durationMs = subResult.DurationMs
                                     }, JsonOpts), ct);
                                 break;
+
+                            case DataContentItem dataItem:
+                                string base64 = Convert.ToBase64String(dataItem.Data);
+                                collectedAttachments.Add(new MessageAttachment("attachment", dataItem.MimeType, base64));
+                                await WriteSseAsync(ctx.Response,
+                                    JsonSerializer.Serialize(new
+                                    {
+                                        type = "data_content",
+                                        mimeType = dataItem.MimeType,
+                                        data = base64
+                                    }, JsonOpts), ct);
+                                break;
                         }
                     }
 
                     // 解析 think 块
-                    (string Think, string Main) parsed = ExtractThinkContent(fullContent.ToString());
+                    (string Think, string Main) parsed = ThinkContentParser.Extract(fullContent.ToString());
 
-                    // 保存助手文本消息（带 think 内容）
+                    // 保存助手文本消息（带 think 内容和多模态附件）
                     if (!string.IsNullOrWhiteSpace(parsed.Main))
                     {
                         SessionMessage assistantMessage = new(
@@ -340,7 +353,7 @@ public static class SessionEndpoints
                             Content: parsed.Main,
                             ThinkContent: string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think,
                             Timestamp: DateTimeOffset.UtcNow,
-                            Attachments: null);
+                            Attachments: collectedAttachments.Count > 0 ? collectedAttachments : null);
                         store.AddMessage(id, assistantMessage);
                     }
 
@@ -481,22 +494,7 @@ public static class SessionEndpoints
                     .Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 
-    private static (string Think, string Main) ExtractThinkContent(string raw)
-    {
-        string think = string.Empty;
-        string main = raw;
 
-        int start = raw.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
-        int end = raw.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
-
-        if (start >= 0 && end > start)
-        {
-            think = raw[(start + 7)..end].Trim();
-            main = (raw[..start] + raw[(end + 8)..]).Trim();
-        }
-
-        return (think, main);
-    }
 
     private static async Task WriteSseAsync(HttpResponse response, string data, CancellationToken ct)
     {

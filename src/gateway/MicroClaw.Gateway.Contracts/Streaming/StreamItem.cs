@@ -1,4 +1,4 @@
-namespace MicroClaw.Agent.Streaming;
+namespace MicroClaw.Gateway.Contracts.Streaming;
 
 /// <summary>流式 ReAct 循环中产出的事件基类。</summary>
 public abstract record StreamItem;
@@ -33,3 +33,6 @@ public sealed record SubAgentResultItem(
     string AgentName,
     string Result,
     long DurationMs) : StreamItem;
+
+/// <summary>AI 输出的非文本内容（图片/音频等），对应 DataContent。</summary>
+public sealed record DataContentItem(string MimeType, byte[] Data) : StreamItem;

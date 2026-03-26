@@ -39,7 +39,7 @@ public sealed class OpenAIModelProvider : IModelProvider
         if (config.Capabilities.SupportsResponsesApi)
         {
             var openAiClient = new OpenAIClient(credential, options);
-            inner = openAiClient.GetResponsesClient().AsIChatClient(config.ModelName);
+            inner = openAiClient.GetResponsesClient(config.ModelName).AsIChatClient();
         }
         else
         {

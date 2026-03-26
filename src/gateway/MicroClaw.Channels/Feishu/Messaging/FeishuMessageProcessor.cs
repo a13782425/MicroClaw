@@ -7,6 +7,7 @@ using FeishuNetSdk.Im;
 using FeishuNetSdk.Im.Events;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Providers;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,7 +157,8 @@ public sealed class FeishuMessageProcessor(
             if (agentHandler?.HasAgentForChannel(channel.Id) == true)
             {
                 logger.LogInformation("[{TraceId}] 路由到 Agent channel={ChannelId}", traceId, channel.Id);
-                aiReply = await agentHandler.HandleMessageAsync(channel.Id, session.Id, history, ct);
+                AgentResponse agentResponse = await agentHandler.HandleMessageAsync(channel.Id, session.Id, history, ct).MaterializeAsync(ct);
+                aiReply = agentResponse.Text;
             }
             else
             {

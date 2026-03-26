@@ -1,6 +1,7 @@
 using MicroClaw.Agent;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Gateway.Contracts.Streaming;
 
 namespace MicroClaw.Sessions;
 
@@ -73,14 +74,19 @@ public sealed class SubAgentRunnerService(
         SessionMessage userMsg = new("user", task, null, DateTimeOffset.UtcNow, null);
         sessionStore.AddMessage(subSession.Id, userMsg);
 
-        // 执行子 Agent ReAct 循环
-        string result = await AgentRunner.RunReActAsync(agent, providerId, [userMsg], subSession.Id, ct);
+        // 执行子 Agent ReAct 循环（统一走流式引擎，Materialize 收集完整结果）
+        AgentResponse response = await AgentRunner.StreamReActAsync(agent, providerId, [userMsg], subSession.Id, ct, source: "subagent").MaterializeAsync(ct);
 
-        // 保存 AI 回复，Source 标记来源
-        SessionMessage assistantMsg = new("assistant", result, null, DateTimeOffset.UtcNow, null,
+        // 保存 AI 回复，Source 标记来源，携带 ThinkContent 和多模态附件
+        List<MessageAttachment>? attachments = response.Attachments.Count > 0
+            ? response.Attachments.Select(a => new MessageAttachment(
+                a.FileName ?? "attachment", a.MimeType, Convert.ToBase64String(a.Data))).ToList()
+            : null;
+
+        SessionMessage assistantMsg = new("assistant", response.Text, response.ThinkContent, DateTimeOffset.UtcNow, attachments,
             Source: $"sub-agent:{agentId}");
         sessionStore.AddMessage(subSession.Id, assistantMsg);
 
-        return result;
+        return response.Text;
     }
 }
