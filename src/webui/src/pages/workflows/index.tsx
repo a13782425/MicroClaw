@@ -11,6 +11,7 @@ import { useWorkflowStore } from '@/store/workflowStore'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowExecutePanel } from './WorkflowExecutePanel'
 import { NodeConfigDialog } from './NodeConfigDialog'
+import { EdgeConfigDialog } from './EdgeConfigDialog'
 import { listAgents } from '@/api/gateway'
 import type { WorkflowConfig, WorkflowCreateRequest, WorkflowNodeConfig, WorkflowEdgeConfig, AgentConfig } from '@/api/gateway'
 
@@ -177,7 +178,10 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
 
   // 节点配置面板状态
   const [selectedNode, setSelectedNode] = useState<WorkflowNodeConfig | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<WorkflowEdgeConfig | null>(null)
   const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [canvasChanged, setCanvasChanged] = useState(false)
+  const [canvasSaving, setCanvasSaving] = useState(false)
 
   // 切换工作流时重置表单
   useEffect(() => {
@@ -186,6 +190,7 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
     setIsEnabled(workflow.isEnabled)
     setDirty(false)
     setSelectedNode(null)
+    setCanvasChanged(false)
   }, [workflow.id])
 
   // 首次打开节点配置时加载 Agent 列表
@@ -208,10 +213,12 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
 
   const handleNodesChange = useCallback((nodes: WorkflowNodeConfig[]) => {
     updateNodes(nodes)
+    setCanvasChanged(true)
   }, [updateNodes])
 
   const handleEdgesChange = useCallback((edges: WorkflowEdgeConfig[]) => {
     updateEdges(edges)
+    setCanvasChanged(true)
   }, [updateEdges])
 
   const handleNodeClick = useCallback((node: WorkflowNodeConfig) => {
@@ -220,8 +227,37 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
 
   const handleNodeSave = useCallback((updated: WorkflowNodeConfig) => {
     updateNode(updated)
+    setCanvasChanged(true)
     toaster.create({ type: 'success', title: '节点已更新' })
   }, [updateNode])
+
+  const handleEdgeSave = useCallback((updated: WorkflowEdgeConfig) => {
+    const newEdges = (workflow.edges ?? []).map((e) =>
+      e.sourceNodeId === updated.sourceNodeId && e.targetNodeId === updated.targetNodeId
+        ? updated
+        : e,
+    )
+    updateEdges(newEdges)
+    setCanvasChanged(true)
+    setSelectedEdge(null)
+    toaster.create({ type: 'success', title: '连线已更新' })
+  }, [workflow.edges, updateEdges])
+
+  const saveCanvas = useCallback(async () => {
+    setCanvasSaving(true)
+    try {
+      await updateWorkflow(workflow.id, {
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+      })
+      setCanvasChanged(false)
+      toaster.create({ type: 'success', title: '画布已保存' })
+    } catch {
+      toaster.create({ type: 'error', title: '保存失败' })
+    } finally {
+      setCanvasSaving(false)
+    }
+  }, [workflow.id, workflow.nodes, workflow.edges, updateWorkflow])
 
   return (
     <Flex direction="column" h="100%" gap="3">
@@ -290,15 +326,41 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
         </Tabs.List>
 
         <Tabs.Content value="canvas" flex={1} overflow="hidden" p="0" mt="3">
-          <Box h="100%" minH="400px">
-            <WorkflowCanvas
-              workflow={workflow}
-              nodeStates={nodeStates}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onNodeClick={handleNodeClick}
-            />
-          </Box>
+          <Flex direction="column" h="100%">
+            {canvasChanged && (
+              <HStack
+                px="3"
+                py="1.5"
+                bg="orange.50"
+                _dark={{ bg: 'orange.950' }}
+                justify="space-between"
+                borderBottomWidth="1px"
+                borderColor="orange.200"
+              >
+                <Text fontSize="xs" color="orange.700" _dark={{ color: 'orange.300' }}>
+                  画布有未保存的更改
+                </Text>
+                <Button
+                  size="xs"
+                  colorPalette="orange"
+                  loading={canvasSaving}
+                  onClick={saveCanvas}
+                >
+                  保存画布
+                </Button>
+              </HStack>
+            )}
+            <Box flex={1} minH="400px">
+              <WorkflowCanvas
+                workflow={workflow}
+                nodeStates={nodeStates}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={(edge) => setSelectedEdge(edge)}
+              />
+            </Box>
+          </Flex>
         </Tabs.Content>
 
         <Tabs.Content value="execute" p="3" overflowY="auto">
@@ -312,6 +374,12 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
         agents={agents}
         onClose={() => setSelectedNode(null)}
         onSave={handleNodeSave}
+      />
+      {/* 连线条件配置面板 */}
+      <EdgeConfigDialog
+        edge={selectedEdge}
+        onClose={() => setSelectedEdge(null)}
+        onSave={handleEdgeSave}
       />
     </Flex>
   )

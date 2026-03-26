@@ -1,14 +1,16 @@
 /**
  * WorkflowCanvas — 基于 @xyflow/react 的可视化工作流画布。
- * 显示节点和连线，支持基本拖拽编辑后保存。
+ * 支持节点连接、拖拽移动、删除（Delete 键/右键菜单）、边条件点击编辑。
  */
-import { useCallback, useEffect, useMemo, type MouseEvent } from 'react'
+import { useState, useCallback, useEffect, useMemo, type MouseEvent } from 'react'
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
   Panel,
+  Handle,
+  Position,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -16,9 +18,11 @@ import {
   type Edge,
   type Connection,
   type NodeTypes,
+  type NodeChange,
+  type EdgeChange,
 } from '@xyflow/react'
-import { Box, Badge, Button, HStack } from '@chakra-ui/react'
-import { Plus } from 'lucide-react'
+import { Box, Badge, Button, HStack, VStack } from '@chakra-ui/react'
+import { Plus, Settings, Trash2 } from 'lucide-react'
 import { useColorModeValue } from '@/components/ui/color-mode'
 import type { WorkflowNodeConfig, WorkflowEdgeConfig, WorkflowConfig } from '@/api/gateway'
 import type { NodeExecutionState } from '@/store/workflowStore'
@@ -41,6 +45,14 @@ const NODE_TYPE_LIST: { type: WorkflowNodeConfig['type']; colorPalette: string }
   { type: 'Router', colorPalette: 'orange' },
 ]
 
+const HANDLE_STYLE = {
+  width: 10,
+  height: 10,
+  background: 'white',
+  border: '2px solid rgba(255,255,255,0.4)',
+  borderRadius: '50%',
+}
+
 function WorkflowNode({ data }: { data: { label: string; type: string; status?: string } }) {
   const bg = NODE_COLORS[data.type] ?? '#64748b'
   const statusColor =
@@ -53,25 +65,33 @@ function WorkflowNode({ data }: { data: { label: string; type: string; status?: 
           : undefined
 
   return (
-    <Box
-      bg={bg}
-      color="white"
-      px="3"
-      py="2"
-      borderRadius="md"
-      fontSize="sm"
-      fontWeight="medium"
-      minW="100px"
-      textAlign="center"
-      border={statusColor ? `2px solid ${statusColor}` : '2px solid transparent'}
-      boxShadow={statusColor ? `0 0 8px ${statusColor}` : 'md'}
-      transition="all 0.2s"
-    >
-      <Badge size="xs" colorPalette="whiteAlpha" mb="1" display="block">
-        {data.type}
-      </Badge>
-      {data.label}
-    </Box>
+    <>
+      {data.type !== 'Start' && (
+        <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
+      )}
+      <Box
+        bg={bg}
+        color="white"
+        px="3"
+        py="2"
+        borderRadius="md"
+        fontSize="sm"
+        fontWeight="medium"
+        minW="100px"
+        textAlign="center"
+        border={statusColor ? `2px solid ${statusColor}` : '2px solid transparent'}
+        boxShadow={statusColor ? `0 0 8px ${statusColor}` : 'md'}
+        transition="all 0.2s"
+      >
+        <Badge size="xs" colorPalette="whiteAlpha" mb="1" display="block">
+          {data.type}
+        </Badge>
+        {data.label}
+      </Box>
+      {data.type !== 'End' && (
+        <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
+      )}
+    </>
   )
 }
 
@@ -147,6 +167,7 @@ interface WorkflowCanvasProps {
   onNodesChange?: (nodes: WorkflowNodeConfig[]) => void
   onEdgesChange?: (edges: WorkflowEdgeConfig[]) => void
   onNodeClick?: (node: WorkflowNodeConfig) => void
+  onEdgeClick?: (edge: WorkflowEdgeConfig) => void
 }
 
 export function WorkflowCanvas({
@@ -156,9 +177,12 @@ export function WorkflowCanvas({
   onNodesChange,
   onEdgesChange,
   onNodeClick,
+  onEdgeClick,
 }: WorkflowCanvasProps) {
   const bgLineColor = useColorModeValue('#e2e8f0', '#334155')
   const minimapBg = useColorModeValue('#f8fafc', '#1e293b')
+
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
 
   const initialNodes = useMemo(
     () => toFlowNodes(workflow.nodes, nodeStates),
@@ -195,6 +219,19 @@ export function WorkflowCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeStates])
 
+  // 当 workflow.edges 外部更新时（如条件编辑后）同步边的显示标签
+  useEffect(() => {
+    setEdges((prev) =>
+      prev.map((flowEdge) => {
+        const wfEdge = workflow.edges.find(
+          (e) => e.sourceNodeId === flowEdge.source && e.targetNodeId === flowEdge.target,
+        )
+        return { ...flowEdge, label: wfEdge?.label ?? wfEdge?.condition ?? undefined }
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflow.edges])
+
   const onConnect = useCallback(
     (params: Connection) => {
       if (readOnly) return
@@ -206,14 +243,18 @@ export function WorkflowCanvas({
   )
 
   const handleNodesChange = useCallback(
-    (changes: Parameters<typeof onNodesStateChange>[0]) => {
+    (changes: NodeChange[]) => {
       onNodesStateChange(changes)
       if (!readOnly && onNodesChange) {
-        // 在拖拽结束后通知父组件（节流到 dragStop 事件，此处简化为每次变化）
-        setNodes((current) => {
-          onNodesChange(fromFlowNodes(current, workflow.nodes))
-          return current
-        })
+        const needsSync = changes.some(
+          (c) => c.type === 'remove' || (c.type === 'position' && !c.dragging),
+        )
+        if (needsSync) {
+          setNodes((current) => {
+            onNodesChange(fromFlowNodes(current, workflow.nodes))
+            return current
+          })
+        }
       }
     },
     [onNodesStateChange, readOnly, onNodesChange, workflow.nodes, setNodes],
@@ -255,19 +296,81 @@ export function WorkflowCanvas({
     [setNodes, onNodesChange, workflow.nodes],
   )
 
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      onEdgesStateChange(changes)
+      if (!readOnly && changes.some((c) => c.type === 'remove')) {
+        setEdges((current) => {
+          onEdgesChange?.(fromFlowEdges(current, workflow.edges))
+          return current
+        })
+      }
+    },
+    [onEdgesStateChange, readOnly, onEdgesChange, workflow.edges, setEdges],
+  )
+
+  const handleEdgeClick = useCallback(
+    (_: MouseEvent, flowEdge: Edge) => {
+      if (readOnly || !onEdgeClick) return
+      const original = workflow.edges.find(
+        (e) => e.sourceNodeId === flowEdge.source && e.targetNodeId === flowEdge.target,
+      )
+      if (original) onEdgeClick(original)
+    },
+    [readOnly, onEdgeClick, workflow.edges],
+  )
+
+  const handleNodeContextMenu = useCallback(
+    (e: MouseEvent, node: Node) => {
+      if (readOnly) return
+      e.preventDefault()
+      setContextMenu({ nodeId: node.id, x: e.clientX, y: e.clientY })
+    },
+    [readOnly],
+  )
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  const handleContextMenuDelete = useCallback(() => {
+    if (!contextMenu) return
+    const { nodeId } = contextMenu
+    setNodes((prev) => {
+      const updated = prev.filter((n) => n.id !== nodeId)
+      onNodesChange?.(fromFlowNodes(updated, workflow.nodes))
+      return updated
+    })
+    setEdges((prev) => {
+      const updated = prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
+      onEdgesChange?.(fromFlowEdges(updated, workflow.edges))
+      return updated
+    })
+    setContextMenu(null)
+  }, [contextMenu, setNodes, setEdges, onNodesChange, onEdgesChange, workflow.nodes, workflow.edges])
+
+  const handleContextMenuConfigure = useCallback(() => {
+    if (!contextMenu || !onNodeClick) return
+    const n = workflow.nodes.find((nd) => nd.nodeId === contextMenu.nodeId)
+    if (n) onNodeClick(n)
+    setContextMenu(null)
+  }, [contextMenu, onNodeClick, workflow.nodes])
+
   return (
-    <Box h="100%" w="100%" bg="gray.100" _dark={{ bg: 'gray.950' }} borderRadius="md" overflow="hidden">
+    <Box h="100%" w="100%" bg="gray.100" _dark={{ bg: 'gray.950' }} borderRadius="md" overflow="hidden" position="relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
-        onEdgesChange={onEdgesStateChange}
+        onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
+        onNodeContextMenu={handleNodeContextMenu}
+        onPaneClick={closeContextMenu}
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         elementsSelectable={!readOnly}
+        deleteKeyCode="Delete"
         fitView
         fitViewOptions={{ padding: 0.3 }}
       >
@@ -306,6 +409,54 @@ export function WorkflowCanvas({
           </Panel>
         )}
       </ReactFlow>
+
+      {/* 节点右键上下文菜单 */}
+      {contextMenu && (
+        <Box
+          position="fixed"
+          top={`${contextMenu.y}px`}
+          left={`${contextMenu.x}px`}
+          zIndex={9999}
+          bg="white"
+          _dark={{ bg: 'gray.800', borderColor: 'gray.700' }}
+          borderRadius="md"
+          shadow="lg"
+          borderWidth="1px"
+          borderColor="gray.200"
+          overflow="hidden"
+          minW="130px"
+        >
+          <VStack gap="0" align="stretch">
+            {onNodeClick && (
+              <Button
+                size="sm"
+                variant="ghost"
+                w="full"
+                justifyContent="flex-start"
+                gap="2"
+                borderRadius="0"
+                onClick={handleContextMenuConfigure}
+              >
+                <Settings size={13} />
+                配置节点
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              colorPalette="red"
+              w="full"
+              justifyContent="flex-start"
+              gap="2"
+              borderRadius="0"
+              onClick={handleContextMenuDelete}
+            >
+              <Trash2 size={13} />
+              删除节点
+            </Button>
+          </VStack>
+        </Box>
+      )}
     </Box>
   )
 }

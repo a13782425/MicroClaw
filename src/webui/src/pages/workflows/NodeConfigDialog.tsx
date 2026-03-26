@@ -14,6 +14,7 @@ import {
   Textarea,
   VStack,
 } from '@chakra-ui/react'
+import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import type { WorkflowNodeConfig } from '@/api/gateway'
 import type { AgentConfig } from '@/api/gateway'
 
@@ -32,6 +33,8 @@ export function NodeConfigDialog({ node, agents, onClose, onSave }: NodeConfigDi
   const [agentId, setAgentId] = useState('')
   const [functionName, setFunctionName] = useState('')
   const [condition, setCondition] = useState('')
+  const [configEntries, setConfigEntries] = useState<[string, string][]>([])
+  const [showConfig, setShowConfig] = useState(false)
 
   // 当选中节点改变时，重置表单
   useEffect(() => {
@@ -41,16 +44,22 @@ export function NodeConfigDialog({ node, agents, onClose, onSave }: NodeConfigDi
     setAgentId(node.agentId ?? '')
     setFunctionName(node.functionName ?? '')
     setCondition('')
+    setConfigEntries(Object.entries(node.config ?? {}))
+    setShowConfig(false)
   }, [node])
 
   const handleSave = () => {
     if (!node) return
+    const config = configEntries
+      .filter(([k]) => k.trim())
+      .reduce<Record<string, string>>((acc, [k, v]) => ({ ...acc, [k.trim()]: v }), {})
     const updated: WorkflowNodeConfig = {
       ...node,
       label: label.trim() || node.label,
       type,
       agentId: type === 'Agent' && agentId ? agentId : null,
       functionName: type === 'Function' && functionName.trim() ? functionName.trim() : null,
+      config: Object.keys(config).length > 0 ? config : null,
     }
     onSave(updated)
     onClose()
@@ -182,6 +191,81 @@ export function NodeConfigDialog({ node, agents, onClose, onSave }: NodeConfigDi
                 <Text fontSize="xs" color="gray.500" fontFamily="mono">
                   {node?.nodeId}
                 </Text>
+              </Box>
+
+              {/* 扩展配置键值对 */}
+              <Box borderTopWidth="1px" borderColor="gray.200" _dark={{ borderColor: 'gray.700' }} pt="3">
+                <HStack justify="space-between" mb="2">
+                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} fontWeight="medium">
+                    扩展配置
+                    {configEntries.length > 0 && (
+                      <Text as="span" color="blue.500" ml="1">({configEntries.length})</Text>
+                    )}
+                  </Text>
+                  <Button
+                    size="2xs"
+                    variant="ghost"
+                    colorPalette="gray"
+                    onClick={() => setShowConfig(!showConfig)}
+                  >
+                    {showConfig ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    {showConfig ? '收起' : '展开'}
+                  </Button>
+                </HStack>
+                {showConfig && (
+                  <VStack gap="2" align="stretch">
+                    {configEntries.map(([k, v], i) => (
+                      <HStack key={i} gap="1.5">
+                        <Input
+                          size="xs"
+                          flex={1}
+                          value={k}
+                          onChange={(e) => {
+                            const updated = [...configEntries]
+                            updated[i] = [e.target.value, updated[i][1]]
+                            setConfigEntries(updated)
+                          }}
+                          placeholder="键"
+                          fontFamily="mono"
+                          bg="gray.50"
+                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                          borderColor="gray.300"
+                        />
+                        <Input
+                          size="xs"
+                          flex={2}
+                          value={v}
+                          onChange={(e) => {
+                            const updated = [...configEntries]
+                            updated[i] = [updated[i][0], e.target.value]
+                            setConfigEntries(updated)
+                          }}
+                          placeholder="值"
+                          bg="gray.50"
+                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                          borderColor="gray.300"
+                        />
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          colorPalette="red"
+                          onClick={() => setConfigEntries(configEntries.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 size={11} />
+                        </Button>
+                      </HStack>
+                    ))}
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      colorPalette="gray"
+                      onClick={() => setConfigEntries([...configEntries, ['', '']])}
+                    >
+                      <Plus size={11} />
+                      添加配置项
+                    </Button>
+                  </VStack>
+                )}
               </Box>
             </VStack>
           </Dialog.Body>
