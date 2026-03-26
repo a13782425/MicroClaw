@@ -55,7 +55,6 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
 
         entity.DisplayName = incoming.DisplayName;
         entity.ChannelType = SerializeChannelType(incoming.ChannelType);
-        entity.ProviderId = incoming.ProviderId;
         entity.IsEnabled = incoming.IsEnabled;
 
         // 如果 settings 中包含掩码密钥，保留原值
@@ -89,7 +88,6 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
             Id          = WebChannelId,
             DisplayName = "Web Console",
             ChannelType = "web",
-            ProviderId  = string.Empty,
             IsEnabled   = true,
             SettingsJson = "{}"
         });
@@ -134,7 +132,6 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
             Id = e.Id,
             DisplayName = e.DisplayName,
             ChannelType = ParseChannelType(e.ChannelType),
-            ProviderId = e.ProviderId,
             IsEnabled = e.IsEnabled,
             SettingsJson = ResolveEnvVars(e.SettingsJson) ?? "{}"
         };
@@ -145,7 +142,6 @@ public sealed class ChannelConfigStore(IDbContextFactory<GatewayDbContext> facto
             Id = c.Id,
             DisplayName = c.DisplayName,
             ChannelType = SerializeChannelType(c.ChannelType),
-            ProviderId = c.ProviderId,
             IsEnabled = c.IsEnabled,
             SettingsJson = c.SettingsJson
         };

@@ -57,7 +57,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
             b.Property(e => e.DisplayName).HasColumnName("display_name");
             b.Property(e => e.ChannelType).HasColumnName("channel_type");
-            b.Property(e => e.ProviderId).HasColumnName("provider_id");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.SettingsJson).HasColumnName("settings_json");
         });

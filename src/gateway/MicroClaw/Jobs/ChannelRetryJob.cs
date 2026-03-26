@@ -4,6 +4,7 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Services;
+using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -22,6 +23,7 @@ public sealed class ChannelRetryJob(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IChannelSessionService sessionService,
+    SessionStore sessionStore,
     FeishuMessageProcessor feishuProcessor,
     IAgentMessageHandler? agentHandler,
     ILogger<ChannelRetryJob> logger) : BackgroundService
@@ -100,11 +102,15 @@ public sealed class ChannelRetryJob(
             }
             else
             {
-                ProviderConfig? providerConfig = providerStore.All.FirstOrDefault(p => p.Id == channel.ProviderId);
+                SessionInfo? session = sessionStore.Get(entry.SessionId);
+                string resolvedProviderId = session?.ProviderId ?? string.Empty;
+                ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
+                    ? providerStore.GetDefault()
+                    : providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
                 if (providerConfig is null || !providerConfig.IsEnabled)
                 {
                     throw new InvalidOperationException(
-                        $"Provider {channel.ProviderId} 未找到或已禁用");
+                        $"找不到可用的 Provider（sessionId={entry.SessionId}）");
                 }
 
                 List<ChatMessage> chatMessages = history

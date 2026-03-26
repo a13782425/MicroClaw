@@ -51,7 +51,6 @@ public sealed class FeishuWebhookIntegrationTests : IDisposable
         {
             DisplayName  = "Test Feishu",
             ChannelType  = ChannelType.Feishu,
-            ProviderId   = "provider-1",
             IsEnabled    = enabled,
             SettingsJson = JsonSerializer.Serialize(settings),
         });
@@ -132,7 +131,6 @@ public sealed class FeishuWebhookIntegrationTests : IDisposable
         {
             DisplayName  = "WeChat",
             ChannelType  = ChannelType.WeChat,
-            ProviderId   = "provider-1",
             IsEnabled    = true,
             SettingsJson = "{}",
         });

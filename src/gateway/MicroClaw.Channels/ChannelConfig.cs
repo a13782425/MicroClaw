@@ -189,7 +189,6 @@ public sealed record ChannelConfig
     public string Id { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public ChannelType ChannelType { get; init; }
-    public string ProviderId { get; init; } = string.Empty;
     public bool IsEnabled { get; init; } = true;
     public string SettingsJson { get; init; } = "{}";
 }

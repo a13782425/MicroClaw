@@ -80,7 +80,6 @@ public sealed class ChannelConfigTests
         config.Id.Should().BeEmpty();
         config.DisplayName.Should().BeEmpty();
         config.ChannelType.Should().Be(ChannelType.Web);
-        config.ProviderId.Should().BeEmpty();
         config.IsEnabled.Should().BeTrue();
         config.SettingsJson.Should().Be("{}");
     }

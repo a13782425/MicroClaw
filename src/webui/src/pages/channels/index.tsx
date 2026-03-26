@@ -60,37 +60,29 @@ interface ChannelDialogProps {
   open: boolean
   channelType: ChannelType
   editing: ChannelConfig | null
-  providers: { id: string; label: string }[]
   onClose: () => void
   onSaved: () => void
 }
 
-function ChannelDialog({ open, channelType, editing, providers, onClose, onSaved }: ChannelDialogProps) {
+function ChannelDialog({ open, channelType, editing, onClose, onSaved }: ChannelDialogProps) {
   const [displayName, setDisplayName] = useState('')
-  const [providerId, setProviderId] = useState('')
   const [isEnabled, setIsEnabled] = useState(true)
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-
-  const providerCollection = createListCollection({
-    items: providers.map((p) => ({ value: p.id, label: p.label })),
-  })
 
   useEffect(() => {
     if (open) {
       if (editing) {
         setDisplayName(editing.displayName)
-        setProviderId(editing.providerId)
         setIsEnabled(editing.isEnabled)
         setSettings(parseSettings(editing.settings))
       } else {
         setDisplayName('')
-        setProviderId(providers[0]?.id ?? '')
         setIsEnabled(true)
         setSettings({})
       }
     }
-  }, [open, editing, providers])
+  }, [open, editing])
 
   if (!open) return null
 
@@ -108,7 +100,6 @@ function ChannelDialog({ open, channelType, editing, providers, onClose, onSaved
         const req: ChannelUpdateRequest = {
           id: editing.id,
           displayName,
-          providerId,
           isEnabled,
           settings: settingsStr,
         }
@@ -117,7 +108,6 @@ function ChannelDialog({ open, channelType, editing, providers, onClose, onSaved
         const req: ChannelCreateRequest = {
           displayName,
           channelType,
-          providerId,
           isEnabled,
           settings: settingsStr,
         }
@@ -151,28 +141,6 @@ function ChannelDialog({ open, channelType, editing, providers, onClose, onSaved
         <Text fontSize="sm" mb="1" fontWeight="medium">渠道名称 *</Text>
         <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="输入渠道名称" />
       </Box>
-
-      {providers.length > 0 && (
-        <Box mb="3">
-          <Text fontSize="sm" mb="1" fontWeight="medium">绑定 AI 模型</Text>
-          <Select.Root
-            value={[providerId]}
-            onValueChange={(v) => setProviderId(v.value[0] ?? '')}
-            collection={providerCollection}
-          >
-            <Select.Trigger><Select.ValueText placeholder="选择模型" /></Select.Trigger>
-            <Portal>
-              <Select.Positioner>
-                <Select.Content>
-                  {providers.map((p) => (
-                    <Select.Item key={p.id} item={{ value: p.id, label: p.label }}>{p.label}</Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Positioner>
-            </Portal>
-          </Select.Root>
-        </Box>
-      )}
 
       {fields.map((f) => (
         <Box key={f.key} mb="3">
@@ -275,7 +243,6 @@ export default function ChannelsPage() {
   const [allChannels, setAllChannels] = useState<ChannelConfig[]>([])
   const [loading, setLoading] = useState(false)
   const [typeLoading, setTypeLoading] = useState(true)
-  const [providers, setProviders] = useState<{ id: string; label: string }[]>([])
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ChannelConfig | null>(null)
@@ -316,14 +283,12 @@ export default function ChannelsPage() {
     const init = async () => {
       setTypeLoading(true)
       try {
-        const [types, { data: ps }, ss] = await Promise.all([
+        const [types, ss] = await Promise.all([
           getChannelTypes(),
-          import('@/api/gateway').then((m) => m.listProviders().then((d) => ({ data: d }))),
           listSessions(),
         ])
         setChannelTypes(types)
         if (types.length > 0) setSelectedType(types[0].type as ChannelType)
-        setProviders(ps.map((p) => ({ id: p.id, label: `${p.displayName} (${p.modelName})` })))
         setSessions(ss)
       } finally {
         setTypeLoading(false)
@@ -534,7 +499,6 @@ export default function ChannelsPage() {
         open={dialogOpen}
         channelType={selectedType}
         editing={editing}
-        providers={providers}
         onClose={() => setDialogOpen(false)}
         onSaved={() => loadChannels(selectedType)}
       />

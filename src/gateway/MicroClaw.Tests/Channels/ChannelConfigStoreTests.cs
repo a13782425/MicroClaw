@@ -27,7 +27,6 @@ public sealed class ChannelConfigStoreTests : IDisposable
         {
             DisplayName = displayName,
             ChannelType = ChannelType.Feishu,
-            ProviderId = "provider-1",
             IsEnabled = true,
             SettingsJson = JsonSerializer.Serialize(new FeishuChannelSettings
             {
@@ -44,7 +43,6 @@ public sealed class ChannelConfigStoreTests : IDisposable
         {
             DisplayName = displayName,
             ChannelType = ChannelType.Web,
-            ProviderId = "provider-1",
             IsEnabled = true,
             SettingsJson = "{}"
         };
@@ -65,7 +63,6 @@ public sealed class ChannelConfigStoreTests : IDisposable
         result.Id.Should().NotBeNullOrWhiteSpace();
         result.DisplayName.Should().Be("Test Feishu");
         result.ChannelType.Should().Be(ChannelType.Feishu);
-        result.ProviderId.Should().Be("provider-1");
         result.IsEnabled.Should().BeTrue();
     }
 

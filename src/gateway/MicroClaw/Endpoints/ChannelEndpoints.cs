@@ -5,7 +5,6 @@ using MicroClaw.Channels.Models;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Gateway.Contracts;
-using MicroClaw.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Endpoints;
@@ -21,7 +20,6 @@ public static class ChannelEndpoints
                 c.Id,
                 c.DisplayName,
                 ChannelType = ChannelConfigStore.SerializeChannelType(c.ChannelType),
-                c.ProviderId,
                 c.IsEnabled,
                 Settings = ChannelConfigStore.MaskSettingsSecrets(c.SettingsJson, c.ChannelType)
             });
@@ -63,20 +61,15 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelConfigStore store, ProviderConfigStore providerStore) =>
+        endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
                 return ApiErrors.BadRequest("DisplayName is required.");
-
-            // 验证 Provider（如果指定了 ProviderId）
-            if (!string.IsNullOrWhiteSpace(req.ProviderId) && providerStore.All.All(p => p.Id != req.ProviderId))
-                return ApiErrors.BadRequest($"Provider '{req.ProviderId}' not found.");
 
             ChannelConfig config = new()
             {
                 DisplayName = req.DisplayName.Trim(),
                 ChannelType = ChannelConfigStore.ParseChannelType(req.ChannelType),
-                ProviderId = req.ProviderId?.Trim() ?? string.Empty,
                 IsEnabled = req.IsEnabled,
                 SettingsJson = req.Settings ?? "{}"
             };
@@ -86,20 +79,15 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelConfigStore store, ProviderConfigStore providerStore) =>
+        endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelConfigStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
-
-            // 验证 Provider 存在（如果指定了新的 ProviderId）
-            if (!string.IsNullOrWhiteSpace(req.ProviderId) && providerStore.All.All(p => p.Id != req.ProviderId))
-                return ApiErrors.BadRequest($"Provider '{req.ProviderId}' not found.");
 
             ChannelConfig incoming = new()
             {
                 DisplayName = req.DisplayName?.Trim() ?? string.Empty,
                 ChannelType = ChannelConfigStore.ParseChannelType(req.ChannelType),
-                ProviderId = req.ProviderId?.Trim() ?? string.Empty,
                 IsEnabled = req.IsEnabled,
                 SettingsJson = req.Settings ?? "{}"
             };
@@ -568,7 +556,6 @@ public static class ChannelEndpoints
 public sealed record ChannelCreateRequest(
     string DisplayName,
     string ChannelType,
-    string ProviderId,
     bool IsEnabled = true,
     string? Settings = null);
 
@@ -576,7 +563,6 @@ public sealed record ChannelUpdateRequest(
     string Id,
     string? DisplayName,
     string? ChannelType,
-    string? ProviderId,
     bool IsEnabled = true,
     string? Settings = null);
 

@@ -53,7 +53,6 @@ public sealed class FeishuDeduplicationTests : IDisposable
             Id = "ch-dedup-test",
             DisplayName = "Dedup Test Channel",
             ChannelType = ChannelType.Feishu,
-            ProviderId = "nonexistent-provider-id",  // 确保 provider 查找失败 → 提前返回
             IsEnabled = true,
             SettingsJson = JsonSerializer.Serialize(new FeishuChannelSettings
             {

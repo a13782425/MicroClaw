@@ -97,20 +97,18 @@ public sealed class FeishuMessageProcessor(
 
         // 查找或创建对应会话（模型与会话绑定）
         SessionInfo session = sessionService.FindOrCreateSession(
-            ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, channel.ProviderId);
+            ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, string.Empty);
 
-        // 解析 Provider：优先使用会话绑定的模型，回退到渠道配置的模型，最后回退到默认 Provider
-        string resolvedProviderId = !string.IsNullOrWhiteSpace(session.ProviderId) ? session.ProviderId
-            : !string.IsNullOrWhiteSpace(channel.ProviderId) ? channel.ProviderId
-            : string.Empty;
+        // 解析 Provider：使用会话绑定的模型，回退到默认 Provider
+        string resolvedProviderId = session.ProviderId;
         ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
             ? providerStore.GetDefault()
             : providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
 
         if (providerConfig is null)
         {
-            logger.LogWarning("[{TraceId}] 渠道 {ChannelId} 找不到可用的 Provider（session={ProviderId}，channel={ChannelProviderId}）",
-                traceId, channel.Id, session.ProviderId, channel.ProviderId);
+            logger.LogWarning("[{TraceId}] 渠道 {ChannelId} 找不到可用的 Provider（session={ProviderId}）",
+                traceId, channel.Id, session.ProviderId);
             return;
         }
 

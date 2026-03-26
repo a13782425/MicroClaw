@@ -129,7 +129,6 @@ export type ChannelConfig = {
   id: string
   displayName: string
   channelType: ChannelType
-  providerId: string
   isEnabled: boolean
   settings: string // JSON string
 }
@@ -137,7 +136,6 @@ export type ChannelConfig = {
 export type ChannelCreateRequest = {
   displayName: string
   channelType: ChannelType
-  providerId: string
   isEnabled: boolean
   settings?: string
 }
@@ -146,7 +144,6 @@ export type ChannelUpdateRequest = {
   id: string
   displayName?: string
   channelType?: ChannelType
-  providerId?: string
   isEnabled: boolean
   settings?: string
 }
