@@ -114,7 +114,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.ToTable("skills");
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
-            b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
         });
 

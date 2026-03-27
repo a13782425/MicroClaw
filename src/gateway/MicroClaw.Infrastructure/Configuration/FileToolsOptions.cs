@@ -1,7 +1,7 @@
-namespace MicroClaw.Tools;
+namespace MicroClaw.Infrastructure.Configuration;
 
 /// <summary>
-/// 文件操作工具的限额配置。沙箱目录由 <see cref="FileToolProvider"/> 根据 sessionId 自动计算。
+/// 文件操作工具的限额配置。沙箱目录由 FileToolProvider 根据 sessionId 自动计算。
 /// 通过配置节 "filesystem" 绑定。
 /// </summary>
 public sealed class FileToolsOptions

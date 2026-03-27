@@ -45,17 +45,6 @@ public sealed partial class SkillStore(IDbContextFactory<GatewayDbContext> facto
         return ToConfig(entity);
     }
 
-    public SkillConfig? Update(string id, bool isEnabled)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SkillConfigEntity? entity = db.Skills.Find(id);
-        if (entity is null) return null;
-
-        entity.IsEnabled = isEnabled;
-        db.SaveChanges();
-        return ToConfig(entity);
-    }
-
     /// <summary>判断指定 ID 的技能是否已存在。</summary>
     public bool Exists(string id)
     {
@@ -76,13 +65,11 @@ public sealed partial class SkillStore(IDbContextFactory<GatewayDbContext> facto
 
     private static SkillConfig ToConfig(SkillConfigEntity e) => new(
         e.Id,
-        e.IsEnabled,
         TimeBase.FromMs(e.CreatedAtMs));
 
     private static SkillConfigEntity ToEntity(SkillConfig c) => new()
     {
         Id = c.Id,
-        IsEnabled = c.IsEnabled,
         CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
     };
 }

@@ -633,13 +633,7 @@ export type SkillConfig = {
   agent: string | null
   argumentHint: string
   hooks: string
-  isEnabled: boolean
   createdAtUtc: string
-}
-
-export type SkillUpdateRequest = {
-  id: string
-  isEnabled?: boolean
 }
 
 export type SkillFileInfo = {
@@ -662,11 +656,6 @@ export async function scanSkills(): Promise<{ added: number; found: number }> {
   return data
 }
 
-export async function updateSkill(req: SkillUpdateRequest): Promise<{ id: string }> {
-  const { data } = await request.post<{ id: string }>('/api/skills/update', req)
-  return data
-}
-
 export async function deleteSkill(id: string): Promise<void> {
   await request.post('/api/skills/delete', { id })
 }
@@ -679,18 +668,6 @@ export async function listSkillFiles(skillId: string): Promise<SkillFileInfo[]> 
 export async function getSkillFileContent(skillId: string, filePath: string): Promise<string> {
   const { data } = await request.get<{ content: string }>(`/api/skills/${skillId}/files/${filePath}`)
   return data.content
-}
-
-export async function writeSkillFile(
-  skillId: string,
-  fileName: string,
-  content: string,
-): Promise<void> {
-  await request.post(`/api/skills/${skillId}/files`, { fileName, content })
-}
-
-export async function deleteSkillFile(skillId: string, fileName: string): Promise<void> {
-  await request.post(`/api/skills/${skillId}/files/delete`, { fileName })
 }
 
 // ─── MCP Servers ─────────────────────────────────────────────────────────────

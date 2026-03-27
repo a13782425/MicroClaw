@@ -1,6 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
@@ -153,7 +153,7 @@ public static class AgentEndpoints
 
         // ── 工具列表（内置分组 + 全局 MCP 分组，含启用状态）────────────────────
 
-        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, McpServerConfigStore mcpStore, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, McpServerConfigStore mcpStore, IEnumerable<IBuiltinToolProvider> builtinProviders, IEnumerable<IChannelToolProvider> channelProviders, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
             AgentConfig? agent = store.GetById(id);
             if (agent is null)
@@ -161,56 +161,56 @@ public static class AgentEndpoints
 
             var groups = new List<object>();
 
-            // ── 内置分组：cron ──────────────────────────────────────────────
-            ToolGroupConfig? cronCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "cron");
-            bool cronGroupEnabled = cronCfg is null || cronCfg.IsEnabled;
-            groups.Add(new
+            // ── 内置分组：遍历所有 IBuiltinToolProvider，按 Agent 的 ToolGroupConfig 过滤 ──
+            var groupNames = new Dictionary<string, string>
             {
-                id = "cron",
-                name = "定时任务",
-                type = "builtin",
-                isEnabled = cronGroupEnabled,
-                tools = CronTools.GetToolDescriptions().Select(t => new
+                ["fetch"]    = "HTTP 抓取",
+                ["shell"]    = "Shell 命令",
+                ["cron"]     = "定时任务",
+                ["subagent"] = "子代理 & DNA",
+                ["file"]     = "文件操作",
+            };
+            foreach (IBuiltinToolProvider provider in builtinProviders)
+            {
+                string displayName = groupNames.TryGetValue(provider.GroupId, out string? n) ? n : provider.GroupId;
+                ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == provider.GroupId);
+                bool groupEnabled = cfg is null || cfg.IsEnabled;
+                groups.Add(new
                 {
-                    name = t.Name,
-                    description = t.Description,
-                    isEnabled = cronGroupEnabled && (cronCfg is null || !cronCfg.DisabledToolNames.Contains(t.Name))
-                }).ToList()
-            });
+                    id = provider.GroupId,
+                    name = displayName,
+                    type = "builtin",
+                    isEnabled = groupEnabled,
+                    tools = provider.GetToolDescriptions().Select(t => new
+                    {
+                        name = t.Name,
+                        description = t.Description,
+                        isEnabled = groupEnabled && (cfg is null || !cfg.DisabledToolNames.Contains(t.Name))
+                    }).ToList()
+                });
+            }
 
-            // ── 内置分组：subagent + DNA ────────────────────────────────────
-            ToolGroupConfig? subagentCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "subagent");
-            bool subagentGroupEnabled = subagentCfg is null || subagentCfg.IsEnabled;
-            groups.Add(new
+            // ── 渠道工具分组：遍历所有 IChannelToolProvider ──────────────────
+            foreach (IChannelToolProvider channelProvider in channelProviders)
             {
-                id = "subagent",
-                name = "子代理 & DNA",
-                type = "builtin",
-                isEnabled = subagentGroupEnabled,
-                tools = SubAgentTools.GetToolDescriptions().Select(t => new
+                string groupId = channelProvider.ChannelType.ToString().ToLowerInvariant();
+                string displayName = channelProvider.ChannelType.ToString();
+                ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == groupId);
+                bool groupEnabled = cfg is null || cfg.IsEnabled;
+                groups.Add(new
                 {
-                    name = t.Name,
-                    description = t.Description,
-                    isEnabled = subagentGroupEnabled && (subagentCfg is null || !subagentCfg.DisabledToolNames.Contains(t.Name))
-                }).ToList()
-            });
-
-            // ── 内置分组：feishu ────────────────────────────────────────────
-            ToolGroupConfig? feishuCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == "feishu");
-            bool feishuGroupEnabled = feishuCfg is null || feishuCfg.IsEnabled;
-            groups.Add(new
-            {
-                id = "feishu",
-                name = "飞书",
-                type = "builtin",
-                isEnabled = feishuGroupEnabled,
-                tools = FeishuToolsFactory.GetToolDescriptions().Select(t => new
-                {
-                    name = t.Name,
-                    description = t.Description,
-                    isEnabled = feishuGroupEnabled && (feishuCfg is null || !feishuCfg.DisabledToolNames.Contains(t.Name))
-                }).ToList()
-            });
+                    id = groupId,
+                    name = displayName,
+                    type = "builtin",
+                    isEnabled = groupEnabled,
+                    tools = channelProvider.GetToolDescriptions().Select(t => new
+                    {
+                        name = t.Name,
+                        description = t.Description,
+                        isEnabled = groupEnabled && (cfg is null || !cfg.DisabledToolNames.Contains(t.Name))
+                    }).ToList()
+                });
+            }
 
             // ── 全局 MCP Server 分组（EnabledMcpServerIds 为空时默认全部启用）──────────────────────────────
             HashSet<string> enabledIds = agent.EnabledMcpServerIds.ToHashSet();

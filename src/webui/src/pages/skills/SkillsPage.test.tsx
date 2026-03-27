@@ -11,12 +11,9 @@ vi.mock('@/api/gateway', async (importOriginal) => {
     ...actual,
     listSkills: vi.fn(),
     scanSkills: vi.fn(),
-    updateSkill: vi.fn(),
     deleteSkill: vi.fn(),
     listSkillFiles: vi.fn(),
     getSkillFileContent: vi.fn(),
-    writeSkillFile: vi.fn(),
-    deleteSkillFile: vi.fn(),
   }
 })
 
@@ -34,7 +31,6 @@ const mockSkills: SkillConfig[] = [
     agent: null,
     argumentHint: '',
     hooks: '',
-    isEnabled: true,
     createdAtUtc: '2024-01-01T00:00:00Z',
   },
   {
@@ -50,7 +46,6 @@ const mockSkills: SkillConfig[] = [
     agent: null,
     argumentHint: '',
     hooks: '',
-    isEnabled: false,
     createdAtUtc: '2024-01-02T00:00:00Z',
   },
 ]
@@ -62,7 +57,6 @@ describe('SkillsPage', () => {
   beforeEach(() => {
     vi.mocked(gateway.listSkills).mockResolvedValue(mockSkills)
     vi.mocked(gateway.scanSkills).mockResolvedValue({ found: 2, added: 0 })
-    vi.mocked(gateway.updateSkill).mockResolvedValue({ id: 's1' })
     vi.mocked(gateway.deleteSkill).mockResolvedValue(undefined)
     vi.mocked(gateway.listSkillFiles).mockResolvedValue([])
   })

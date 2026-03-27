@@ -1,3 +1,4 @@
+using MicroClaw.Infrastructure.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace MicroClaw.Skills;
@@ -10,9 +11,9 @@ namespace MicroClaw.Skills;
 public sealed class SkillToolFactory(
     SkillStore skillStore,
     SkillService skillService,
-    IOptions<SkillOptions> options)
+    IOptions<MicroClaw.Infrastructure.Configuration.SkillOptions> options)
 {
-    private readonly SkillOptions _options = options.Value;
+    private readonly MicroClaw.Infrastructure.Configuration.SkillOptions _options = options.Value;
     // ── Public API ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -34,7 +35,7 @@ public sealed class SkillToolFactory(
         foreach (string id in boundSkillIds)
         {
             SkillConfig? skill = skillStore.GetById(id);
-            if (skill is null || !skill.IsEnabled) continue;
+            if (skill is null) continue;
 
             SkillManifest manifest = skillService.ParseManifest(id);
             if (manifest.DisableModelInvocation) continue;
@@ -146,7 +147,7 @@ public sealed class SkillToolFactory(
         foreach (string id in boundSkillIds)
         {
             SkillConfig? skill = skillStore.GetById(id);
-            if (skill is null || !skill.IsEnabled) continue;
+            if (skill is null) continue;
 
             SkillManifest manifest = skillService.ParseManifest(id);
             string resolvedName = !string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Name : id;

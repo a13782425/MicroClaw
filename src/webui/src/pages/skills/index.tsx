@@ -1,29 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import {
   Box, Flex, Text, Badge, Button, HStack, VStack, Spinner,
-  Input, Textarea, Tabs, Switch,
+  Tabs,
 } from '@chakra-ui/react'
 import { RefreshCw, Trash2, Code2, FileCode2, FileText } from 'lucide-react'
 import {
-  listSkills, scanSkills, updateSkill, deleteSkill,
-  listSkillFiles, getSkillFileContent, writeSkillFile, deleteSkillFile,
+  listSkills, scanSkills, deleteSkill,
+  listSkillFiles, getSkillFileContent,
   type SkillConfig, type SkillFileInfo,
 } from '@/api/gateway'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
-// ─── 文件面板 ──────────────────────────────────────────────────────────────────
+//  文件面板（只读） 
 
 function FilesTab({ skill }: { skill: SkillConfig }) {
   const [files, setFiles] = useState<SkillFileInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [content, setContent] = useState('')
-  const [contentDirty, setContentDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [newFileName, setNewFileName] = useState('')
-  const [showNewFile, setShowNewFile] = useState(false)
-  const [deleteFilePath, setDeleteFilePath] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -41,7 +36,6 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
 
   const selectFile = async (path: string) => {
     setSelectedFile(path)
-    setContentDirty(false)
     try {
       const c = await getSkillFileContent(skill.id, path)
       setContent(c)
@@ -50,212 +44,117 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
     }
   }
 
-  const saveFile = async () => {
-    if (!selectedFile) return
-    setSaving(true)
-    try {
-      await writeSkillFile(skill.id, selectedFile, content)
-      toaster.create({ type: 'success', title: '文件已保存' })
-      setContentDirty(false)
-    } catch {
-      toaster.create({ type: 'error', title: '保存失败' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const createFile = async () => {
-    if (!newFileName.trim()) return
-    try {
-      await writeSkillFile(skill.id, newFileName.trim(), '')
-      toaster.create({ type: 'success', title: '文件已创建' })
-      setNewFileName('')
-      setShowNewFile(false)
-      await load()
-      await selectFile(newFileName.trim())
-    } catch {
-      toaster.create({ type: 'error', title: '创建文件失败' })
-    }
-  }
-
-  const removeFile = async (path: string) => {
-    try {
-      await deleteSkillFile(skill.id, path)
-      toaster.create({ type: 'success', title: '文件已删除' })
-      if (selectedFile === path) { setSelectedFile(null); setContent('') }
-      await load()
-    } catch {
-      toaster.create({ type: 'error', title: '删除失败' })
-    } finally {
-      setDeleteFilePath(null)
-    }
-  }
-
   if (loading) return <Box p="4"><Spinner /></Box>
 
   return (
     <Flex h="100%" minH="400px">
-      {/* 左：文件列表 */}
-      <Box w="200px" borderRightWidth="1px" flexShrink={0}>
-        <HStack px="3" py="2" justify="space-between" borderBottomWidth="1px">
-          <Text fontSize="xs" fontWeight="medium" color="gray.500">文件</Text>
-          <Button size="xs" variant="ghost" onClick={() => setShowNewFile((v) => !v)}>
-            <FileCode2 size={12} />
-          </Button>
-        </HStack>
-        {showNewFile && (
-          <HStack px="2" py="1" borderBottomWidth="1px">
-            <Input size="xs" placeholder="文件名" value={newFileName} onChange={(e) => setNewFileName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') createFile() }} />
-            <Button size="xs" colorPalette="blue" onClick={createFile} disabled={!newFileName.trim()}>+</Button>
-          </HStack>
+      {/* 文件列表 */}
+      <Box w="200px" borderRightWidth="1px" overflowY="auto" flexShrink={0}>
+        {files.length === 0 && (
+          <Text p="3" fontSize="sm" color="gray.400">暂无文件</Text>
         )}
-        {files.length === 0 && <Text p="3" fontSize="xs" color="gray.400">暂无文件</Text>}
-        {files.map((f) => (
-          <HStack key={f.path} px="3" py="2" cursor="pointer" _hover={{ bg: 'gray.50', _dark: { bg: 'gray.800' } }}
-            bg={selectedFile === f.path ? 'blue.50' : undefined} _dark={{ bg: selectedFile === f.path ? 'blue.900' : undefined }}
+        {files.map(f => (
+          <Box
+            key={f.path}
+            px="3" py="2" cursor="pointer"
+            bg={selectedFile === f.path ? 'blue.50' : 'transparent'}
+            _dark={{ bg: selectedFile === f.path ? 'blue.900' : 'transparent' }}
+            _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
             onClick={() => selectFile(f.path)}
           >
-            <FileCode2 size={12} />
-            <Text fontSize="xs" flex="1" truncate>{f.path}</Text>
-            <Button size="xs" variant="ghost" colorPalette="red" onClick={(e) => { e.stopPropagation(); setDeleteFilePath(f.path) }}>
-              <Trash2 size={10} />
-            </Button>
-          </HStack>
+            <HStack gap="1">
+              {f.path.endsWith('.md') ? <FileText size={14} /> : <FileCode2 size={14} />}
+              <Text fontSize="xs" truncate>{f.path}</Text>
+            </HStack>
+            <Text fontSize="xs" color="gray.400">{(f.sizeBytes / 1024).toFixed(1)} KB</Text>
+          </Box>
         ))}
       </Box>
-      {/* 右：编辑器 */}
-      <Box flex="1" p="2" overflow="hidden">
+
+      {/* 文件内容（只读） */}
+      <Box flex="1" overflowY="auto" p="3">
         {selectedFile ? (
-          <VStack h="100%" align="stretch" gap="2">
-            <HStack justify="space-between">
-              <HStack>
-                <FileText size={14} />
-                <Text fontSize="xs" color="gray.500">{selectedFile}</Text>
-              </HStack>
-              {contentDirty && (
-                <Button size="xs" colorPalette="blue" loading={saving} onClick={saveFile}>保存</Button>
-              )}
+          <>
+            <HStack mb="2" justify="space-between">
+              <Text fontSize="xs" color="gray.500">{selectedFile}</Text>
             </HStack>
-            <Textarea
-              flex="1"
-              fontFamily="mono"
+            <Box
+              as="pre"
               fontSize="xs"
-              value={content}
-              onChange={(e) => { setContent(e.target.value); setContentDirty(true) }}
-              placeholder="文件内容..."
-              rows={20}
-            />
-          </VStack>
+              fontFamily="mono"
+              whiteSpace="pre-wrap"
+              wordBreak="break-all"
+              p="3"
+              borderWidth="1px"
+              borderRadius="md"
+              bg="gray.50"
+              _dark={{ bg: 'gray.900' }}
+              minH="200px"
+            >
+              {content}
+            </Box>
+          </>
         ) : (
-          <Flex h="100%" align="center" justify="center">
-            <Text color="gray.400" fontSize="sm">请选择左侧文件进行编辑</Text>
-          </Flex>
+          <Text color="gray.400" fontSize="sm">请从左侧选择文件</Text>
         )}
       </Box>
-
-      <ConfirmDialog
-        open={!!deleteFilePath}
-        onClose={() => setDeleteFilePath(null)}
-        onConfirm={() => deleteFilePath && removeFile(deleteFilePath)}
-        title="删除文件"
-        description={`确认删除文件 ${deleteFilePath}？`}
-        confirmText="删除"
-      />
     </Flex>
   )
 }
 
-// ─── 信息面板 ──────────────────────────────────────────────────────────────────
+//  信息面板 
 
 function InfoTab({ skill }: { skill: SkillConfig }) {
+  const rows: [string, React.ReactNode][] = [
+    ['ID', <Text fontFamily="mono" fontSize="xs">{skill.id}</Text>],
+    ['描述', skill.description || <Text color="gray.400">无</Text>],
+    ['用户可见', skill.userInvocable ? '是' : '否'],
+    ['允许工具', skill.allowedTools || <Text color="gray.400">全部</Text>],
+    ['模型', skill.model || <Text color="gray.400">继承</Text>],
+    ['推理强度', skill.effort || <Text color="gray.400">继承</Text>],
+    ['禁止模型调用', skill.disableModelInvocation ? '是' : '否'],
+    ['创建时间', new Date(skill.createdAtUtc).toLocaleString()],
+  ]
+
   return (
-    <Box p="4">
-      <VStack gap="3" align="stretch">
-        {skill.description && (
-          <Box>
-            <Text fontSize="sm" mb="1" fontWeight="medium" color="gray.500">描述</Text>
-            <Text fontSize="sm">{skill.description}</Text>
-          </Box>
-        )}
-        {skill.allowedTools && (
-          <Box>
-            <Text fontSize="sm" mb="1" fontWeight="medium" color="gray.500">自动批准工具</Text>
-            <Text fontSize="sm" fontFamily="mono">{skill.allowedTools}</Text>
-          </Box>
-        )}
-        <HStack gap="4" flexWrap="wrap">
-          {skill.model && (
-            <Box>
-              <Text fontSize="xs" color="gray.400">模型覆盖</Text>
-              <Badge size="sm">{skill.model}</Badge>
-            </Box>
-          )}
-          {skill.effort && (
-            <Box>
-              <Text fontSize="xs" color="gray.400">推理强度</Text>
-              <Badge size="sm" colorPalette="purple">{skill.effort}</Badge>
-            </Box>
-          )}
-          {skill.context && (
-            <Box>
-              <Text fontSize="xs" color="gray.400">执行上下文</Text>
-              <Badge size="sm" colorPalette="orange">{skill.context}</Badge>
-            </Box>
-          )}
-        </HStack>
-        <Box>
-          <Text fontSize="xs" color="gray.400">创建时间</Text>
-          <Text fontSize="sm">{new Date(skill.createdAtUtc).toLocaleString()}</Text>
-        </Box>
-        <Box>
-          <Text fontSize="xs" color="gray.400" mb="1">提示</Text>
-          <Text fontSize="xs" color="gray.500">
-            技能元数据（名称、描述、指令等）通过编辑 <Text as="span" fontFamily="mono">SKILL.md</Text> 文件管理，
-            切换到「文件」选项卡进行编辑。
-          </Text>
-        </Box>
-      </VStack>
-    </Box>
+    <VStack align="stretch" gap="2" p="4">
+      {rows.map(([label, value]) => (
+        <Flex key={label} gap="3" align="baseline">
+          <Text fontSize="sm" color="gray.500" w="100px" flexShrink={0}>{label}</Text>
+          <Box flex="1" fontSize="sm">{value}</Box>
+        </Flex>
+      ))}
+    </VStack>
   )
 }
 
-// ─── 主页面 ────────────────────────────────────────────────────────────────────
+//  主页面 
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState<SkillConfig[]>([])
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [selected, setSelected] = useState<SkillConfig | null>(null)
-  const [toggling, setToggling] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<SkillConfig | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await listSkills()
-      setSkills(data)
-      if (selected) {
-        const updated = data.find((s) => s.id === selected.id)
-        if (updated) setSelected(updated)
-      }
+      setSkills(await listSkills())
     } catch {
       toaster.create({ type: 'error', title: '加载技能列表失败' })
     } finally {
       setLoading(false)
     }
-  }, [selected])
+  }, [])
 
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [load])
 
   const handleScan = async () => {
     setScanning(true)
     try {
-      const result = await scanSkills()
-      toaster.create({
-        type: 'success',
-        title: `扫描完成：发现 ${result.found} 个技能，新增 ${result.added} 个`,
-      })
+      const r = await scanSkills()
+      toaster.create({ type: 'success', title: `扫描完成：共 ${r.found} 个，新增 ${r.added} 个` })
       await load()
     } catch {
       toaster.create({ type: 'error', title: '扫描失败' })
@@ -264,26 +163,13 @@ export default function SkillsPage() {
     }
   }
 
-  const handleToggle = async (skill: SkillConfig, val: boolean) => {
-    setToggling(true)
+  const handleDelete = async () => {
+    if (!deleteTarget) return
     try {
-      await updateSkill({ id: skill.id, isEnabled: val })
-      const updated = { ...skill, isEnabled: val }
-      setSkills((prev) => prev.map((s) => s.id === skill.id ? updated : s))
-      if (selected?.id === skill.id) setSelected(updated)
-    } catch {
-      toaster.create({ type: 'error', title: '切换失败' })
-    } finally {
-      setToggling(false)
-    }
-  }
-
-  const handleDelete = async (skill: SkillConfig) => {
-    try {
-      await deleteSkill(skill.id)
-      toaster.create({ type: 'success', title: '技能已删除' })
-      setSkills((prev) => prev.filter((s) => s.id !== skill.id))
-      if (selected?.id === skill.id) setSelected(null)
+      await deleteSkill(deleteTarget.id)
+      toaster.create({ type: 'success', title: '已删除' })
+      if (selected?.id === deleteTarget.id) setSelected(null)
+      await load()
     } catch {
       toaster.create({ type: 'error', title: '删除失败' })
     } finally {
@@ -292,88 +178,99 @@ export default function SkillsPage() {
   }
 
   return (
-    <Flex h="calc(100vh - 64px)" overflow="hidden">
-      {/* 左侧：技能列表 */}
-      <Box w="280px" borderRightWidth="1px" flexShrink={0} overflow="auto">
-        <HStack px="4" py="3" borderBottomWidth="1px" justify="space-between">
-          <Text fontWeight="semibold">技能列表</Text>
-          <Button size="sm" colorPalette="blue" loading={scanning} onClick={handleScan}>
+    <Box h="100%" display="flex" flexDir="column">
+      {/* 头部工具栏 */}
+      <HStack px="4" py="3" borderBottomWidth="1px" justify="space-between">
+        <Text fontWeight="semibold">技能列表</Text>
+        <HStack>
+          <Button size="sm" variant="outline" onClick={handleScan} loading={scanning}>
             <RefreshCw size={14} />扫描
           </Button>
         </HStack>
-        {loading && <Box p="4"><Spinner /></Box>}
-        {!loading && skills.length === 0 && (
-          <Text p="4" fontSize="sm" color="gray.400">
-            暂无技能，点击「扫描」从文件夹加载，或使用 AI 技能创建
-          </Text>
-        )}
-        {skills.map((s) => (
-          <HStack key={s.id} px="4" py="3" cursor="pointer" borderBottomWidth="1px"
-            bg={selected?.id === s.id ? 'blue.50' : undefined}
-            _dark={{ bg: selected?.id === s.id ? 'blue.900' : undefined }}
-            _hover={{ bg: selected?.id === s.id ? undefined : 'gray.50', _dark: { bg: 'gray.800' } }}
-            onClick={() => setSelected(s)}
-          >
-            <Code2 size={16} />
-            <Box flex="1" overflow="hidden">
-              <Text fontSize="sm" fontWeight="medium" truncate>{s.name}</Text>
-              {s.description && (
-                <Text fontSize="xs" color="gray.400" truncate>{s.description}</Text>
-              )}
-            </Box>
-            <Box w="6px" h="6px" rounded="full" bg={s.isEnabled ? 'green.400' : 'gray.300'} flexShrink={0} />
-          </HStack>
-        ))}
-      </Box>
+      </HStack>
 
-      {/* 右侧：详情 */}
-      {selected ? (
-        <Box flex="1" overflow="auto">
-          {/* 顶部工具栏 */}
-          <HStack px="6" py="4" borderBottomWidth="1px" gap="3" flexWrap="wrap">
-            <Text fontWeight="semibold" fontSize="lg">{selected.name}</Text>
-            <Switch.Root
-              size="sm"
-              checked={selected.isEnabled}
-              disabled={toggling}
-              onCheckedChange={(e) => handleToggle(selected, e.checked)}
+      <Flex flex="1" overflow="hidden">
+        {/* 左侧技能列表 */}
+        <Box w="240px" borderRightWidth="1px" overflowY="auto" flexShrink={0}>
+          {loading && <Box p="4"><Spinner /></Box>}
+          {skills.map(s => (
+            <Box
+              key={s.id}
+              px="3" py="2" cursor="pointer"
+              bg={selected?.id === s.id ? 'blue.50' : 'transparent'}
+              _dark={{ bg: selected?.id === s.id ? 'blue.900' : 'transparent' }}
+              _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
+              onClick={() => setSelected(s)}
             >
-              <Switch.HiddenInput />
-              <Switch.Control><Switch.Thumb /></Switch.Control>
-              <Switch.Label fontSize="sm">{selected.isEnabled ? '已启用' : '已禁用'}</Switch.Label>
-            </Switch.Root>
-            <Button size="sm" colorPalette="red" variant="outline" onClick={() => setDeleteTarget(selected)}>
-              <Trash2 size={14} />删除
-            </Button>
-          </HStack>
-          {/* Tabs */}
-          <Tabs.Root defaultValue="info">
-            <Tabs.List px="6">
-              <Tabs.Trigger value="info">信息</Tabs.Trigger>
-              <Tabs.Trigger value="files">文件</Tabs.Trigger>
-            </Tabs.List>
-            <Tabs.Content value="info">
-              <InfoTab skill={selected} />
-            </Tabs.Content>
-            <Tabs.Content value="files">
-              <FilesTab skill={selected} />
-            </Tabs.Content>
-          </Tabs.Root>
+              <HStack justify="space-between">
+                <HStack gap="2">
+                  <Code2 size={14} />
+                  <Text fontSize="sm" fontWeight="medium">{s.name}</Text>
+                </HStack>
+              </HStack>
+              {s.description && (
+                <Text fontSize="xs" color="gray.500" truncate>{s.description}</Text>
+              )}
+              <HStack mt="1" gap="1">
+                {s.userInvocable && <Badge size="sm" colorPalette="blue">用户可见</Badge>}
+                {s.disableModelInvocation && <Badge size="sm" colorPalette="orange">无模型</Badge>}
+              </HStack>
+            </Box>
+          ))}
+          {!loading && skills.length === 0 && (
+            <Text p="3" fontSize="sm" color="gray.400">暂无技能，请点扫描</Text>
+          )}
         </Box>
-      ) : (
-        <Flex flex="1" align="center" justify="center">
-          <Text color="gray.400">请从左侧选择技能</Text>
-        </Flex>
-      )}
 
+        {/* 右侧详情 */}
+        <Box flex="1" overflow="hidden">
+          {selected ? (
+            <Flex flexDir="column" h="100%">
+              {/* 详情头部 */}
+              <HStack px="4" py="3" borderBottomWidth="1px" justify="space-between">
+                <HStack gap="2">
+                  <Code2 size={16} />
+                  <Text fontWeight="semibold">{selected.name}</Text>
+                </HStack>
+                <Button
+                  size="sm" colorPalette="red" variant="ghost"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  <Trash2 size={14} />删除
+                </Button>
+              </HStack>
+
+              {/* Tab 面板 */}
+              <Tabs.Root defaultValue="info" flex="1" display="flex" flexDir="column" overflow="hidden">
+                <Tabs.List px="4">
+                  <Tabs.Trigger value="info">信息</Tabs.Trigger>
+                  <Tabs.Trigger value="files">文件</Tabs.Trigger>
+                </Tabs.List>
+                <Tabs.Content value="info" flex="1" overflow="auto" p="0">
+                  <InfoTab skill={selected} />
+                </Tabs.Content>
+                <Tabs.Content value="files" flex="1" overflow="hidden" p="0">
+                  <FilesTab skill={selected} />
+                </Tabs.Content>
+              </Tabs.Root>
+            </Flex>
+          ) : (
+            <Flex h="100%" align="center" justify="center">
+              <Text color="gray.400">请从左侧选择技能</Text>
+            </Flex>
+          )}
+        </Box>
+      </Flex>
+
+      {/* 删除确认 */}
       <ConfirmDialog
         open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
         title="删除技能"
-        description={`确认删除技能「${deleteTarget?.name}」？此操作不会删除文件系统上的技能目录。`}
+        description={`确定要删除技能「${deleteTarget?.name}」吗？此操作不可撤销。`}
         confirmText="删除"
+        onConfirm={handleDelete}
+        onClose={() => setDeleteTarget(null)}
       />
-    </Flex>
+    </Box>
   )
 }

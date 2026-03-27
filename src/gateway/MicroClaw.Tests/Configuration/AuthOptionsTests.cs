@@ -1,5 +1,5 @@
 using FluentAssertions;
-using MicroClaw.Configuration;
+using MicroClaw.Infrastructure.Configuration;
 
 namespace MicroClaw.Tests.Configuration;
 

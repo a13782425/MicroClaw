@@ -9,6 +9,7 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
+using MicroClaw.Infrastructure.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;

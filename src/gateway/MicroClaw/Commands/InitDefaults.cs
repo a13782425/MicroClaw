@@ -78,6 +78,20 @@ internal static class InitDefaults
         providers: []
         """;
 
+    internal const string SkillsYaml = """
+        # Skills 技能配置
+        # 技能文件夹相对于工作目录（workspace/），或使用绝对路径
+
+        skills:
+          # 默认技能文件夹（新技能将写入此目录）
+          default_folder: skills
+          # 附加技能文件夹（只读，不会往这些目录创建新技能）
+          # additional_folders:
+          #   - /path/to/shared-skills
+          # 允许技能 SKILL.md 中执行 !`command` shell 注入（生产环境建议关闭）
+          allow_command_injection: false
+        """;
+
     internal const string DotEnvExample = """
         # MicroClaw 环境变量示例
         # 复制为 .env 并填入实际值，服务启动时会自动加载

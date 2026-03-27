@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Infrastructure.Configuration;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
