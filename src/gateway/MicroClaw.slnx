@@ -8,4 +8,5 @@
   <Project Path="MicroClaw.Agent/MicroClaw.Agent.csproj" />
   <Project Path="MicroClaw.Tools/MicroClaw.Tools.csproj" />
   <Project Path="MicroClaw.Skills/MicroClaw.Skills.csproj" />
+  <Project Path="MicroClaw.Configuration/MicroClaw.Configuration.csproj" />
 </Solution>

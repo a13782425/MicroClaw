@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using FluentAssertions;
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
 using MicroClaw.Gateway.Contracts.Auth;
 using Microsoft.AspNetCore.Builder;

@@ -1,4 +1,4 @@
-namespace MicroClaw.Infrastructure.Configuration;
+namespace MicroClaw.Configuration;
 
 /// <summary>
 /// Skills 模块配置选项，从配置文件 skills: 节点读取。

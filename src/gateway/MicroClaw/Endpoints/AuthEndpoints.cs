@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts.Auth;
 
 namespace MicroClaw.Endpoints;

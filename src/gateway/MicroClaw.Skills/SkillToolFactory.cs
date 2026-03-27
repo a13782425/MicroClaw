@@ -1,4 +1,4 @@
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace MicroClaw.Skills;
@@ -11,9 +11,9 @@ namespace MicroClaw.Skills;
 public sealed class SkillToolFactory(
     SkillStore skillStore,
     SkillService skillService,
-    IOptions<MicroClaw.Infrastructure.Configuration.SkillOptions> options)
+    IOptions<SkillOptions> options)
 {
-    private readonly MicroClaw.Infrastructure.Configuration.SkillOptions _options = options.Value;
+    private readonly SkillOptions _options = options.Value;
     // ── Public API ───────────────────────────────────────────────────────────
 
     /// <summary>

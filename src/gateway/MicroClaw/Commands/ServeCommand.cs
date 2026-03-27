@@ -11,7 +11,6 @@ using MicroClaw.Channels.WeCom;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
-using MicroClaw.Infrastructure.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Gateway.Contracts;
@@ -255,8 +254,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ =>
 		{
-			var skillOpts = builder.Configuration.GetSection("skills").Get<MicroClaw.Infrastructure.Configuration.SkillOptions>()
-				?? new MicroClaw.Infrastructure.Configuration.SkillOptions();
+			var skillOpts = builder.Configuration.GetSection("skills").Get<SkillOptions>()
+				?? new SkillOptions();
 
 			// 解析技能文件夹路径：相对路径以 workspaceRoot 为基准，绝对路径直接使用
 			static string ResolveFolder(string folder, string wsRoot) =>
@@ -273,18 +272,18 @@ public class ServeCommand : Command
 
 			return new SkillService(workspaceRoot, roots);
 		});
-		builder.Services.Configure<MicroClaw.Infrastructure.Configuration.SkillOptions>(builder.Configuration.GetSection("skills"));
+		builder.Services.Configure<SkillOptions>(builder.Configuration.GetSection("skills"));
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),
 			sp.GetRequiredService<SkillService>(),
 			Microsoft.Extensions.Options.Options.Create(
-				builder.Configuration.GetSection("skills").Get<MicroClaw.Infrastructure.Configuration.SkillOptions>()
-					?? new MicroClaw.Infrastructure.Configuration.SkillOptions())));
+				builder.Configuration.GetSection("skills").Get<SkillOptions>()
+					?? new SkillOptions())));
 		builder.Services.AddSingleton<MicroClaw.Skills.SkillInvocationTool>(sp => new MicroClaw.Skills.SkillInvocationTool(
 			sp.GetRequiredService<SkillToolFactory>(),
 			sp.GetRequiredService<SkillService>(),
-			builder.Configuration.GetSection("skills").Get<MicroClaw.Infrastructure.Configuration.SkillOptions>()
-				?? new MicroClaw.Infrastructure.Configuration.SkillOptions(),
+			builder.Configuration.GetSection("skills").Get<SkillOptions>()
+				?? new SkillOptions(),
 			sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
 				.CreateLogger<MicroClaw.Skills.SkillInvocationTool>(),
 			sp.GetService<ISubAgentRunner>(),

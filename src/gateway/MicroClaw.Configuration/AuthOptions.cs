@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace MicroClaw.Infrastructure.Configuration;
+namespace MicroClaw.Configuration;
 
 public sealed class AuthOptions
 {

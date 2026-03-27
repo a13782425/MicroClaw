@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Tools", "MicroCla
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Skills", "MicroClaw.Skills\MicroClaw.Skills.csproj", "{E2F3A4B5-C6D7-4E8F-9A0B-2C3D4E5F6A7B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Configuration", "MicroClaw.Configuration\MicroClaw.Configuration.csproj", "{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -139,6 +141,18 @@ Global
 		{E2F3A4B5-C6D7-4E8F-9A0B-2C3D4E5F6A7B}.Release|x64.Build.0 = Release|Any CPU
 		{E2F3A4B5-C6D7-4E8F-9A0B-2C3D4E5F6A7B}.Release|x86.ActiveCfg = Release|Any CPU
 		{E2F3A4B5-C6D7-4E8F-9A0B-2C3D4E5F6A7B}.Release|x86.Build.0 = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|x64.Build.0 = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Debug|x86.Build.0 = Debug|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|x64.ActiveCfg = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|x64.Build.0 = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|x86.ActiveCfg = Release|Any CPU
+		{9E8FC508-4AB6-4BEC-B537-E1F14180C2FC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

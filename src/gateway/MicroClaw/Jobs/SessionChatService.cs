@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -119,6 +120,41 @@ public sealed class SessionChatService(
         var messages = new List<ChatMessage>(history.Count);
         foreach (SessionMessage msg in history)
         {
+            // ── 工具调用：还原为 MEAI FunctionCallContent ──────────────────
+            if (msg.MessageType == "tool_call" && msg.Metadata is not null)
+            {
+                string? callId = msg.Metadata.TryGetValue("callId", out var cidEl) ? cidEl.GetString() : null;
+                string? toolName = msg.Metadata.TryGetValue("toolName", out var tnEl) ? tnEl.GetString() : null;
+                if (callId is not null && toolName is not null)
+                {
+                    IDictionary<string, object?>? args = msg.Metadata.TryGetValue("arguments", out var argsEl)
+                        && argsEl.ValueKind == System.Text.Json.JsonValueKind.Object
+                        ? argsEl.Deserialize<Dictionary<string, object?>>() : null;
+                    messages.Add(new ChatMessage(ChatRole.Assistant,
+                        [new FunctionCallContent(callId, toolName, args)]));
+                }
+                continue;
+            }
+
+            // ── 工具结果：还原为 MEAI FunctionResultContent ─────────────────
+            if (msg.MessageType == "tool_result" && msg.Metadata is not null)
+            {
+                string? callId = msg.Metadata.TryGetValue("callId", out var cidEl) ? cidEl.GetString() : null;
+                if (callId is not null)
+                {
+                    messages.Add(new ChatMessage(ChatRole.Tool,
+                        [new FunctionResultContent(callId, msg.Content)]));
+                }
+                continue;
+            }
+
+            // ── 子 Agent / 其他系统消息：跳过 ────────────────────────────────
+            if (msg.MessageType is "sub_agent_start" or "sub_agent_result")
+                continue;
+            if (msg.Role is "system" or "tool")
+                continue;
+
+            // ── 常规 user / assistant 消息 ───────────────────────────────────
             ChatRole role = msg.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
                 ? ChatRole.User
                 : ChatRole.Assistant;

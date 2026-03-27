@@ -8,7 +8,7 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;

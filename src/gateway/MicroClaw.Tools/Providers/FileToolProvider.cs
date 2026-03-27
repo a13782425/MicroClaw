@@ -1,4 +1,4 @@
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 

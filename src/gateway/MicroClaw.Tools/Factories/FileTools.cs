@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.RegularExpressions;
-using MicroClaw.Infrastructure.Configuration;
+using MicroClaw.Configuration;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Tools;
