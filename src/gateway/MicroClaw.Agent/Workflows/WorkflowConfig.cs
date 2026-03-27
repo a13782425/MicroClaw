@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>工作流定义（领域模型，对应 workflows 表）。</summary>
@@ -9,16 +11,18 @@ public sealed record WorkflowConfig(
     IReadOnlyList<WorkflowNodeConfig> Nodes,
     IReadOnlyList<WorkflowEdgeConfig> Edges,
     string? EntryNodeId,
+    string? DefaultProviderId,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc);
 
-/// <summary>工作流节点（对应 Agent、函数、路由等执行单元）。</summary>
+/// <summary>工作流节点（对应 Agent、函数、工具、路由等执行单元）。</summary>
 public sealed record WorkflowNodeConfig(
     string NodeId,
     string Label,
     WorkflowNodeType Type,
     string? AgentId,
     string? FunctionName,
+    string? ProviderId,
     IReadOnlyDictionary<string, string>? Config,
     WorkflowPosition? Position);
 
@@ -30,11 +34,14 @@ public sealed record WorkflowEdgeConfig(
     string? Label);
 
 /// <summary>工作流节点类型。</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum WorkflowNodeType
 {
     Agent,
     Function,
+    Tool,
     Router,
+    SwitchModel,
     Start,
     End
 }

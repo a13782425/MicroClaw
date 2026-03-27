@@ -96,16 +96,44 @@ public sealed class WorkflowStreamItemSerializerTests
     }
 
     [Fact]
-    public void Serialize_UnknownType_ThrowsNotSupportedException()
+    public void Serialize_WorkflowWarningItem_OutputsCorrectJson()
     {
-        // 使用匿名子类验证 switch exhaustion guard
-        StreamItem unknown = new UnknownItem();
+        var item = new WorkflowWarningItem("exec-001", "node-1", "Tool 节点使用了不同 Agent 的工具");
 
-        var act = () => StreamItemSerializer.Serialize(unknown);
+        string json = StreamItemSerializer.Serialize(item);
 
-        act.Should().Throw<NotSupportedException>()
-            .WithMessage("*UnknownItem*");
+        json.Should().Contain("\"type\":\"workflow_warning\"");
+        json.Should().Contain("\"executionId\":\"exec-001\"");
+        json.Should().Contain("\"nodeId\":\"node-1\"");
+        json.Should().Contain("\"warning\":\"Tool 节点使用了不同 Agent 的工具\"");
     }
 
-    private sealed record UnknownItem : StreamItem;
+    [Fact]
+    public void Serialize_WorkflowModelSwitchItem_OutputsCorrectJson()
+    {
+        var item = new WorkflowModelSwitchItem("exec-001", "node-sw", "provider-123");
+
+        string json = StreamItemSerializer.Serialize(item);
+
+        json.Should().Contain("\"type\":\"workflow_model_switch\"");
+        json.Should().Contain("\"executionId\":\"exec-001\"");
+        json.Should().Contain("\"nodeId\":\"node-sw\"");
+        json.Should().Contain("\"providerId\":\"provider-123\"");
+    }
+
+    [Fact]
+    public void Serialize_UnknownType_SerializesWithTypeNameAndPayload()
+    {
+        StreamItem unknown = new UnknownItem();
+
+        string json = StreamItemSerializer.Serialize(unknown);
+
+        json.Should().Contain("\"type\":\"unknown_test\"");
+    }
+
+    private sealed record UnknownItem : StreamItem
+    {
+        public override string TypeName => "unknown_test";
+        public override object ToSerializablePayload() => new { info = "test" };
+    }
 }

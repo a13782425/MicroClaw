@@ -82,7 +82,8 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             channelConfigStore:    new ChannelConfigStore(dbFactory),
             toolProviders:         [],
             builtinToolProviders:  [],
-            devMetrics:            Substitute.For<IDevMetricsService>());
+            devMetrics:            Substitute.For<IDevMetricsService>(),
+            contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()));
 
         // 初始化测试 Agent
         _testAgent = new AgentConfig(

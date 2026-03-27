@@ -13,7 +13,7 @@ public sealed class SkillService(string workspaceRoot)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime LastWrite, SkillManifest Manifest)> _manifestCache = new();
 
     private string SkillDirectory(string skillId) =>
-        Path.Combine(workspaceRoot, "skills", skillId);
+        Path.Combine(WorkspaceRoot, "skills", skillId);
 
     /// <summary>返回技能的工作目录完整路径（供 ${CLAUDE_SKILL_DIR} 替换使用）。</summary>
     public string GetSkillDirectory(string skillId) => Path.GetFullPath(SkillDirectory(skillId));

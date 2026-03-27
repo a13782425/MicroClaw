@@ -54,6 +54,7 @@ public static class WorkflowEndpoints
                 Nodes: req.Nodes ?? [],
                 Edges: req.Edges ?? [],
                 EntryNodeId: req.EntryNodeId,
+                DefaultProviderId: req.DefaultProviderId,
                 CreatedAtUtc: DateTimeOffset.UtcNow,
                 UpdatedAtUtc: DateTimeOffset.UtcNow);
 
@@ -77,6 +78,7 @@ public static class WorkflowEndpoints
                 Nodes = req.Nodes ?? existing.Nodes,
                 Edges = req.Edges ?? existing.Edges,
                 EntryNodeId = req.EntryNodeId ?? existing.EntryNodeId,
+                DefaultProviderId = req.DefaultProviderId ?? existing.DefaultProviderId,
                 UpdatedAtUtc = DateTimeOffset.UtcNow
             };
 
@@ -179,6 +181,7 @@ public static class WorkflowEndpoints
         wf.Nodes,
         wf.Edges,
         wf.EntryNodeId,
+        wf.DefaultProviderId,
         CreatedAt = wf.CreatedAtUtc.ToString("o"),
         UpdatedAt = wf.UpdatedAtUtc.ToString("o")
     };
@@ -198,7 +201,8 @@ public sealed record WorkflowCreateRequest(
     bool IsEnabled,
     IReadOnlyList<WorkflowNodeConfig>? Nodes,
     IReadOnlyList<WorkflowEdgeConfig>? Edges,
-    string? EntryNodeId);
+    string? EntryNodeId,
+    string? DefaultProviderId = null);
 
 public sealed record WorkflowUpdateRequest(
     string? Name,
@@ -206,6 +210,7 @@ public sealed record WorkflowUpdateRequest(
     bool? IsEnabled,
     IReadOnlyList<WorkflowNodeConfig>? Nodes,
     IReadOnlyList<WorkflowEdgeConfig>? Edges,
-    string? EntryNodeId);
+    string? EntryNodeId,
+    string? DefaultProviderId = null);
 
 public sealed record WorkflowExecuteRequest(string Input);

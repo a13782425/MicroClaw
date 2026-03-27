@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
@@ -11,6 +10,7 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
+using MicroClaw.Streaming;
 using Microsoft.AspNetCore.SignalR;
 
 namespace MicroClaw.Endpoints;
@@ -156,6 +156,7 @@ public static class SessionEndpoints
             async (string id, ChatRequest req, SessionStore store,
                    ProviderConfigStore providerStore,
                    AgentStore agentStore, AgentRunner agentRunner,
+                   IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers,
                    HttpContext ctx, CancellationToken ct) =>
             {
                 SessionInfo? session = store.Get(id);
@@ -210,117 +211,32 @@ public static class SessionEndpoints
                 ctx.Response.Headers.Connection = "keep-alive";
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-                StringBuilder fullContent = new();
-                List<MessageAttachment> collectedAttachments = [];
+                var persistencePipeline = new StreamItemPersistencePipeline(persistenceHandlers);
 
                 try
                 {
                     await foreach (StreamItem item in
                         agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
                     {
-                        // 持久化逻辑（与 SSE 序列化解耦）
-                        switch (item)
-                        {
-                            case TokenItem token:
-                                fullContent.Append(token.Content);
-                                break;
-
-                            case ToolCallItem toolCall:
-                                store.AddMessage(id, new SessionMessage(
-                                    Role: "assistant",
-                                    Content: $"调用工具: {toolCall.ToolName}",
-                                    ThinkContent: null,
-                                    Timestamp: DateTimeOffset.UtcNow,
-                                    Attachments: null,
-                                    MessageType: "tool_call",
-                                    Metadata: ToJsonElements(new Dictionary<string, object?>
-                                    {
-                                        ["callId"] = toolCall.CallId,
-                                        ["toolName"] = toolCall.ToolName,
-                                        ["arguments"] = toolCall.Arguments
-                                    })));
-                                break;
-
-                            case ToolResultItem toolResult:
-                                store.AddMessage(id, new SessionMessage(
-                                    Role: "tool",
-                                    Content: toolResult.Result,
-                                    ThinkContent: null,
-                                    Timestamp: DateTimeOffset.UtcNow,
-                                    Attachments: null,
-                                    MessageType: "tool_result",
-                                    Metadata: ToJsonElements(new Dictionary<string, object?>
-                                    {
-                                        ["callId"] = toolResult.CallId,
-                                        ["toolName"] = toolResult.ToolName,
-                                        ["success"] = toolResult.Success,
-                                        ["durationMs"] = toolResult.DurationMs
-                                    })));
-                                break;
-
-                            case SubAgentStartItem subStart:
-                                store.AddMessage(id, new SessionMessage(
-                                    Role: "system",
-                                    Content: $"子代理 {subStart.AgentName} 开始执行",
-                                    ThinkContent: null,
-                                    Timestamp: DateTimeOffset.UtcNow,
-                                    Attachments: null,
-                                    MessageType: "sub_agent_start",
-                                    Metadata: ToJsonElements(new Dictionary<string, object?>
-                                    {
-                                        ["agentId"] = subStart.AgentId,
-                                        ["agentName"] = subStart.AgentName,
-                                        ["task"] = subStart.Task,
-                                        ["childSessionId"] = subStart.ChildSessionId
-                                    })));
-                                break;
-
-                            case SubAgentResultItem subResult:
-                                store.AddMessage(id, new SessionMessage(
-                                    Role: "system",
-                                    Content: subResult.Result,
-                                    ThinkContent: null,
-                                    Timestamp: DateTimeOffset.UtcNow,
-                                    Attachments: null,
-                                    MessageType: "sub_agent_result",
-                                    Metadata: ToJsonElements(new Dictionary<string, object?>
-                                    {
-                                        ["agentId"] = subResult.AgentId,
-                                        ["agentName"] = subResult.AgentName,
-                                        ["durationMs"] = subResult.DurationMs
-                                    })));
-                                break;
-
-                            case DataContentItem dataItem:
-                                string base64 = Convert.ToBase64String(dataItem.Data);
-                                collectedAttachments.Add(new MessageAttachment("attachment", dataItem.MimeType, base64));
-                                break;
-                        }
+                        // 持久化逻辑：通过管道分发
+                        SessionMessage? msg = persistencePipeline.ProcessItem(item);
+                        if (msg is not null)
+                            store.AddMessage(id, msg);
 
                         // 统一 SSE 序列化（所有类型）
                         await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
                     }
 
-                    // 解析 think 块
-                    (string Think, string Main) parsed = ThinkContentParser.Extract(fullContent.ToString());
-
-                    // 保存助手文本消息（带 think 内容和多模态附件）
-                    if (!string.IsNullOrWhiteSpace(parsed.Main))
-                    {
-                        SessionMessage assistantMessage = new(
-                            Role: "assistant",
-                            Content: parsed.Main,
-                            ThinkContent: string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think,
-                            Timestamp: DateTimeOffset.UtcNow,
-                            Attachments: collectedAttachments.Count > 0 ? collectedAttachments : null);
-                        store.AddMessage(id, assistantMessage);
-                    }
+                    // 从管道获取最终聚合的 assistant 消息（含文本 + think + 附件）
+                    SessionMessage? finalMessage = persistencePipeline.Finalize();
+                    if (finalMessage is not null)
+                        store.AddMessage(id, finalMessage);
 
                     // 发送完成信号
                     string doneData = JsonSerializer.Serialize(new
                     {
                         type = "done",
-                        thinkContent = string.IsNullOrWhiteSpace(parsed.Think) ? null : parsed.Think
+                        thinkContent = finalMessage?.ThinkContent
                     }, JsonOpts);
                     await WriteSseAsync(ctx.Response, doneData, ct);
                     await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);

@@ -228,6 +228,17 @@ public class ServeCommand : Command
 			sp.GetRequiredService<AgentStore>(),
 			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>())));
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
+		// AIContent→StreamItem 转换管道（Handler + Pipeline）
+		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.TextContentHandler>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.DataContentHandler>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.UsageContentHandler>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.ThinkingContentHandler>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.AIContentPipeline>();
+		// StreamItem 持久化 Handler（供 SessionEndpoints 注入）
+		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolCallPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolResultPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentStartPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentResultPersistenceHandler>();
 		builder.Services.AddSingleton<AgentRunner>();
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
 

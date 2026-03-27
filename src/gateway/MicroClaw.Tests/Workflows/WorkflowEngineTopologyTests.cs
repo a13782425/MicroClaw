@@ -16,9 +16,9 @@ public sealed class WorkflowEngineTopologyTests
         // 构造线性图：start → agent1 → end
         var nodes = new[]
         {
-            new WorkflowNodeConfig("start", "开始", WorkflowNodeType.Start, null, null, null, null),
-            new WorkflowNodeConfig("agent1", "Agent 1", WorkflowNodeType.Agent, "agent-id", null, null, null),
-            new WorkflowNodeConfig("end", "结束", WorkflowNodeType.End, null, null, null, null)
+            new WorkflowNodeConfig("start", "开始", WorkflowNodeType.Start, null, null, null, null, null),
+            new WorkflowNodeConfig("agent1", "Agent 1", WorkflowNodeType.Agent, "agent-id", null, null, null, null),
+            new WorkflowNodeConfig("end", "结束", WorkflowNodeType.End, null, null, null, null, null)
         };
         var edges = new[]
         {
@@ -26,10 +26,9 @@ public sealed class WorkflowEngineTopologyTests
             new WorkflowEdgeConfig("agent1", "end", null, null)
         };
 
-        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, edges, "start",
+        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, edges, "start", null,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
-        // 调用私有静态方法（通过反射测试）
         var sorted = InvokeTopologicalSort(wf);
 
         sorted.Should().HaveCount(3);
@@ -43,11 +42,11 @@ public sealed class WorkflowEngineTopologyTests
     {
         var nodes = new[]
         {
-            new WorkflowNodeConfig("n1", "Node 1", WorkflowNodeType.Agent, "a1", null, null, null),
-            new WorkflowNodeConfig("n2", "Node 2", WorkflowNodeType.Agent, "a2", null, null, null)
+            new WorkflowNodeConfig("n1", "Node 1", WorkflowNodeType.Agent, "a1", null, null, null, null),
+            new WorkflowNodeConfig("n2", "Node 2", WorkflowNodeType.Agent, "a2", null, null, null, null)
         };
 
-        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, [], null,
+        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, [], null, null,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
         var sorted = InvokeTopologicalSort(wf);
@@ -58,14 +57,12 @@ public sealed class WorkflowEngineTopologyTests
     [Fact]
     public void TopologicalSort_DiamondGraph_RespectsTopologicalOrder()
     {
-        // 菱形图：start → A, start → B, A → end, B → end
-        // 拓扑顺序：start 必须在 A 和 B 之前；A/B 必须在 end 之前
         var nodes = new[]
         {
-            new WorkflowNodeConfig("start", "Start", WorkflowNodeType.Start, null, null, null, null),
-            new WorkflowNodeConfig("A", "A", WorkflowNodeType.Agent, "a1", null, null, null),
-            new WorkflowNodeConfig("B", "B", WorkflowNodeType.Agent, "a2", null, null, null),
-            new WorkflowNodeConfig("end", "End", WorkflowNodeType.End, null, null, null, null)
+            new WorkflowNodeConfig("start", "Start", WorkflowNodeType.Start, null, null, null, null, null),
+            new WorkflowNodeConfig("A", "A", WorkflowNodeType.Agent, "a1", null, null, null, null),
+            new WorkflowNodeConfig("B", "B", WorkflowNodeType.Agent, "a2", null, null, null, null),
+            new WorkflowNodeConfig("end", "End", WorkflowNodeType.End, null, null, null, null, null)
         };
         var edges = new[]
         {
@@ -75,7 +72,7 @@ public sealed class WorkflowEngineTopologyTests
             new WorkflowEdgeConfig("B", "end", null, null)
         };
 
-        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, edges, "start",
+        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, edges, "start", null,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
         var sorted = InvokeTopologicalSort(wf);
@@ -88,12 +85,41 @@ public sealed class WorkflowEngineTopologyTests
     [Fact]
     public void TopologicalSort_EmptyGraph_ReturnsEmpty()
     {
-        var wf = new WorkflowConfig("wf1", "Test", "", true, [], [], null,
+        var wf = new WorkflowConfig("wf1", "Test", "", true, [], [], null, null,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
         var sorted = InvokeTopologicalSort(wf);
 
         sorted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TopologicalSort_WithToolAndSwitchModelNodes_ReturnsCorrectOrder()
+    {
+        var nodes = new[]
+        {
+            new WorkflowNodeConfig("start", "Start", WorkflowNodeType.Start, null, null, null, null, null),
+            new WorkflowNodeConfig("sw", "Switch", WorkflowNodeType.SwitchModel, null, null, "provider-1", null, null),
+            new WorkflowNodeConfig("tool", "Tool", WorkflowNodeType.Tool, null, "my_tool", null, null, null),
+            new WorkflowNodeConfig("end", "End", WorkflowNodeType.End, null, null, null, null, null)
+        };
+        var edges = new[]
+        {
+            new WorkflowEdgeConfig("start", "sw", null, null),
+            new WorkflowEdgeConfig("sw", "tool", null, null),
+            new WorkflowEdgeConfig("tool", "end", null, null)
+        };
+
+        var wf = new WorkflowConfig("wf1", "Test", "", true, nodes, edges, "start", null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+        var sorted = InvokeTopologicalSort(wf);
+
+        sorted.Should().HaveCount(4);
+        sorted[0].NodeId.Should().Be("start");
+        sorted[1].NodeId.Should().Be("sw");
+        sorted[2].NodeId.Should().Be("tool");
+        sorted[3].NodeId.Should().Be("end");
     }
 
     // ── WorkflowConfig 数据模型测试 ────────────────────────────────────────
@@ -102,7 +128,7 @@ public sealed class WorkflowEngineTopologyTests
     public void WorkflowConfig_WithPosition_StoredCorrectly()
     {
         var position = new WorkflowPosition(100.5, 200.75);
-        var node = new WorkflowNodeConfig("n1", "My Node", WorkflowNodeType.Agent, "a1", null, null, position);
+        var node = new WorkflowNodeConfig("n1", "My Node", WorkflowNodeType.Agent, "a1", null, null, null, position);
 
         node.Position!.X.Should().Be(100.5);
         node.Position.Y.Should().Be(200.75);
@@ -115,7 +141,9 @@ public sealed class WorkflowEngineTopologyTests
 
         values.Should().Contain(WorkflowNodeType.Agent);
         values.Should().Contain(WorkflowNodeType.Function);
+        values.Should().Contain(WorkflowNodeType.Tool);
         values.Should().Contain(WorkflowNodeType.Router);
+        values.Should().Contain(WorkflowNodeType.SwitchModel);
         values.Should().Contain(WorkflowNodeType.Start);
         values.Should().Contain(WorkflowNodeType.End);
     }

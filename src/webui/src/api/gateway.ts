@@ -309,6 +309,8 @@ export type SseChunk =
   | { type: 'workflow_edge'; executionId: string; sourceNodeId: string; targetNodeId: string; condition?: string }
   | { type: 'workflow_complete'; executionId: string; finalResult: string; totalDurationMs: number }
   | { type: 'workflow_error'; executionId: string; nodeId: string; error: string }
+  | { type: 'workflow_warning'; executionId: string; nodeId: string; warning: string }
+  | { type: 'workflow_model_switch'; executionId: string; nodeId: string; providerId: string }
 
 export interface PagedMessagesResponse {
   messages: SessionMessage[]
@@ -841,7 +843,7 @@ export async function fetchUsageStats(startDate: string, endDate: string): Promi
 
 // ─── Workflows ────────────────────────────────────────────────────────────────
 
-export type WorkflowNodeType = 'Agent' | 'Function' | 'Router' | 'Start' | 'End'
+export type WorkflowNodeType = 'Agent' | 'Function' | 'Tool' | 'Router' | 'SwitchModel' | 'Start' | 'End'
 
 export type WorkflowPosition = {
   x: number
@@ -854,6 +856,7 @@ export type WorkflowNodeConfig = {
   type: WorkflowNodeType
   agentId?: string | null
   functionName?: string | null
+  providerId?: string | null
   config?: Record<string, string> | null
   position?: WorkflowPosition | null
 }
@@ -873,6 +876,7 @@ export type WorkflowConfig = {
   nodes: WorkflowNodeConfig[]
   edges: WorkflowEdgeConfig[]
   entryNodeId?: string | null
+  defaultProviderId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -884,6 +888,7 @@ export type WorkflowCreateRequest = {
   nodes?: WorkflowNodeConfig[]
   edges?: WorkflowEdgeConfig[]
   entryNodeId?: string
+  defaultProviderId?: string | null
 }
 
 export type WorkflowUpdateRequest = {
@@ -893,6 +898,7 @@ export type WorkflowUpdateRequest = {
   nodes?: WorkflowNodeConfig[]
   edges?: WorkflowEdgeConfig[]
   entryNodeId?: string
+  defaultProviderId?: string | null
 }
 
 export async function listWorkflows(): Promise<WorkflowConfig[]> {

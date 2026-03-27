@@ -14,6 +14,7 @@ public static class StreamExtensions
         CancellationToken ct = default)
     {
         StringBuilder text = new();
+        StringBuilder thinkText = new();
         List<ResponseAttachment> attachments = [];
 
         await foreach (StreamItem item in stream.WithCancellation(ct))
@@ -24,19 +25,27 @@ public static class StreamExtensions
                     text.Append(token.Content);
                     break;
 
+                case ThinkingItem thinking:
+                    thinkText.Append(thinking.Content);
+                    break;
+
                 case DataContentItem data:
                     attachments.Add(new ResponseAttachment(data.MimeType, data.Data));
                     break;
 
-                // ToolCallItem, ToolResultItem, SubAgent* items are ignored during materialization
+                // ToolCallItem, ToolResultItem, SubAgent*, Workflow* items are ignored during materialization
             }
         }
 
-        (string think, string main) = ThinkContentParser.Extract(text.ToString());
+        // 合并 MEAI 原生 ThinkingContent 与文本中的 <think> 标签
+        (string extractedThink, string main) = ThinkContentParser.Extract(text.ToString());
+        string? think = thinkText.Length > 0
+            ? (string.IsNullOrWhiteSpace(extractedThink) ? thinkText.ToString() : thinkText + "\n" + extractedThink)
+            : (string.IsNullOrWhiteSpace(extractedThink) ? null : extractedThink);
 
         return new AgentResponse(
             main,
-            string.IsNullOrWhiteSpace(think) ? null : think,
+            think,
             attachments);
     }
 }

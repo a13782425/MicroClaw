@@ -53,6 +53,7 @@ public sealed class WorkflowStore(IDbContextFactory<GatewayDbContext> factory)
         entity.NodesJson = config.Nodes.Count > 0 ? JsonSerializer.Serialize(config.Nodes, JsonOpts) : null;
         entity.EdgesJson = config.Edges.Count > 0 ? JsonSerializer.Serialize(config.Edges, JsonOpts) : null;
         entity.EntryNodeId = config.EntryNodeId;
+        entity.DefaultProviderId = config.DefaultProviderId;
         entity.UpdatedAtMs = now;
 
         db.SaveChanges();
@@ -91,6 +92,7 @@ public sealed class WorkflowStore(IDbContextFactory<GatewayDbContext> factory)
             Nodes: nodes,
             Edges: edges,
             EntryNodeId: e.EntryNodeId,
+            DefaultProviderId: e.DefaultProviderId,
             CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs),
             UpdatedAtUtc: TimeBase.FromMs(e.UpdatedAtMs));
     }
@@ -107,6 +109,7 @@ public sealed class WorkflowStore(IDbContextFactory<GatewayDbContext> factory)
             NodesJson = c.Nodes.Count > 0 ? JsonSerializer.Serialize(c.Nodes, JsonOpts) : null,
             EdgesJson = c.Edges.Count > 0 ? JsonSerializer.Serialize(c.Edges, JsonOpts) : null,
             EntryNodeId = c.EntryNodeId,
+            DefaultProviderId = c.DefaultProviderId,
             CreatedAtMs = now,
             UpdatedAtMs = now
         };

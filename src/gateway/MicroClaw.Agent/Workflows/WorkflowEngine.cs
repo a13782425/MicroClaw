@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>
-/// 工作流执行引擎：按拓扑顺序遍历有向图节点，依次（或并行）执行各节点，
+/// 工作流执行引擎：按拓扑顺序遍历有向图节点，依次执行各节点，
 /// 并通过 IAsyncEnumerable{StreamItem} 实时输出事件流。
-/// 不依赖外部 Workflows 包，使用现有 AgentRunner 驱动每个 Agent 节点。
+/// 使用运行时上下文（currentAgentId / currentProviderId）实现代理和模型的传播。
 /// </summary>
 public sealed class WorkflowEngine(
     AgentStore agentStore,
@@ -16,10 +16,6 @@ public sealed class WorkflowEngine(
     AgentRunner agentRunner,
     ILogger<WorkflowEngine> logger)
 {
-    /// <summary>
-    /// 流式执行工作流：遍历 DAG 节点，逐节点产生 WorkflowNodeStartItem / StreamItem / WorkflowNodeCompleteItem，
-    /// 最终产生 WorkflowCompleteItem。
-    /// </summary>
     public async IAsyncEnumerable<StreamItem> ExecuteAsync(
         WorkflowConfig workflow,
         string userInput,
@@ -30,7 +26,6 @@ public sealed class WorkflowEngine(
 
         yield return new WorkflowStartItem(workflow.Id, workflow.Name, executionId);
 
-        // ── 拓扑排序节点列表 ──────────────────────────────────────────────
         List<WorkflowNodeConfig> orderedNodes = TopologicalSort(workflow);
         if (orderedNodes.Count == 0)
         {
@@ -38,17 +33,18 @@ public sealed class WorkflowEngine(
             yield break;
         }
 
-        // 节点输出暂存：nodeId → 输出文本（用于传递给下个节点）
+        // 运行时上下文：代理与模型在节点间传播
+        string? currentAgentId = agentStore.GetDefault()?.Id;
+        string? currentProviderId = workflow.DefaultProviderId ?? providerStore.GetDefault()?.Id;
+
         Dictionary<string, string> nodeOutputs = new();
         string currentInput = userInput;
         string finalResult = string.Empty;
 
-        // ── 顺序执行各节点 ───────────────────────────────────────────────
         foreach (WorkflowNodeConfig node in orderedNodes)
         {
             if (ct.IsCancellationRequested) yield break;
 
-            // 跳过 Start / End 控制节点（无实际执行逻辑）
             if (node.Type is WorkflowNodeType.Start or WorkflowNodeType.End)
             {
                 if (node.Type == WorkflowNodeType.End)
@@ -56,7 +52,6 @@ public sealed class WorkflowEngine(
                 continue;
             }
 
-            // 发出前置告知边（前一节点 → 当前节点）
             string? sourceNodeId = GetSourceNodeId(workflow, node.NodeId);
             if (sourceNodeId is not null)
                 yield return new WorkflowEdgeItem(executionId, sourceNodeId, node.NodeId, null);
@@ -71,8 +66,17 @@ public sealed class WorkflowEngine(
             {
                 case WorkflowNodeType.Agent:
                 {
-                    // 使用 AgentRunner 流式执行（透传 token 流）
-                    await foreach (StreamItem item in ExecuteAgentNodeAsync(node, currentInput, ct))
+                    string? effectiveAgentId = node.AgentId ?? currentAgentId;
+                    if (string.IsNullOrWhiteSpace(effectiveAgentId))
+                    {
+                        yield return new WorkflowErrorItem(executionId, node.NodeId, "未配置 Agent 且无默认代理可用。");
+                        yield break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(node.AgentId))
+                        currentAgentId = node.AgentId;
+
+                    await foreach (StreamItem item in ExecuteAgentNodeAsync(node, currentInput, effectiveAgentId, currentProviderId ?? string.Empty, ct))
                     {
                         if (item is TokenItem t)
                             outputBuilder.Append(t.Content);
@@ -89,9 +93,31 @@ public sealed class WorkflowEngine(
                     nodeSucceeded = true;
                     break;
                 }
+                case WorkflowNodeType.Tool:
+                {
+                    await foreach (StreamItem item in ExecuteToolNodeAsync(node, currentInput, executionId, currentAgentId, ct))
+                    {
+                        if (item is TokenItem t)
+                            outputBuilder.Append(t.Content);
+                        yield return item;
+                    }
+                    nodeSucceeded = outputBuilder.Length > 0 || true;
+                    break;
+                }
+                case WorkflowNodeType.SwitchModel:
+                {
+                    string? newProviderId = node.ProviderId;
+                    if (!string.IsNullOrWhiteSpace(newProviderId))
+                    {
+                        currentProviderId = newProviderId;
+                        yield return new WorkflowModelSwitchItem(executionId, node.NodeId, newProviderId);
+                    }
+                    outputBuilder.Append(currentInput);
+                    nodeSucceeded = true;
+                    break;
+                }
                 case WorkflowNodeType.Router:
                 {
-                    // 路由节点：按条件选择下一条边（此处直接透传，条件路由在前端可视化处理）
                     outputBuilder.Append(currentInput);
                     nodeSucceeded = true;
                     break;
@@ -124,23 +150,17 @@ public sealed class WorkflowEngine(
     private async IAsyncEnumerable<StreamItem> ExecuteAgentNodeAsync(
         WorkflowNodeConfig node,
         string input,
+        string effectiveAgentId,
+        string providerId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(node.AgentId))
-        {
-            logger.LogWarning("工作流 Agent 节点 {NodeId} 未配置 AgentId，跳过。", node.NodeId);
-            yield break;
-        }
-
-        AgentConfig? agent = agentStore.GetById(node.AgentId);
+        AgentConfig? agent = agentStore.GetById(effectiveAgentId);
         if (agent is null || !agent.IsEnabled)
         {
             logger.LogWarning("工作流节点 {NodeId} 引用的 Agent '{AgentId}' 不存在或已禁用，跳过。",
-                node.NodeId, node.AgentId);
+                node.NodeId, effectiveAgentId);
             yield break;
         }
-
-        string providerId = providerStore.GetDefault()?.Id ?? string.Empty;
 
         var history = new List<Gateway.Contracts.Sessions.SessionMessage>
         {
@@ -153,21 +173,44 @@ public sealed class WorkflowEngine(
 
     private static string ExecuteFunctionNode(WorkflowNodeConfig node, string input)
     {
-        // 内置函数节点的简单实现（可扩展为插件机制）
         string funcName = node.FunctionName ?? string.Empty;
         return funcName switch
         {
             "uppercase" => input.ToUpperInvariant(),
             "lowercase" => input.ToLowerInvariant(),
             "trim" => input.Trim(),
-            _ => input   // 未知函数透传输入
+            _ => input
         };
     }
 
-    /// <summary>
-    /// 拓扑排序：Kahn 算法（BFS 层序），保证入度为 0 的节点先执行。
-    /// 对于没有边的工作流，按 Nodes 列表自然顺序返回。
-    /// </summary>
+    private async IAsyncEnumerable<StreamItem> ExecuteToolNodeAsync(
+        WorkflowNodeConfig node,
+        string input,
+        string executionId,
+        string? currentAgentId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        string toolName = node.FunctionName ?? string.Empty;
+        string? toolAgentId = node.Config?.GetValueOrDefault("toolAgentId");
+
+        if (string.IsNullOrWhiteSpace(toolAgentId))
+        {
+            logger.LogWarning("工作流 Tool 节点 {NodeId} 未配置 toolAgentId。", node.NodeId);
+            yield return new TokenItem(input);
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentAgentId) && toolAgentId != currentAgentId)
+        {
+            yield return new WorkflowWarningItem(executionId, node.NodeId,
+                $"Tool 节点使用的 Agent '{toolAgentId}' 与当前上下文 Agent '{currentAgentId}' 不一致。");
+        }
+
+        string result = await agentRunner.InvokeToolAsync(toolAgentId, toolName, node.Config, input, ct);
+        yield return new TokenItem(result);
+    }
+
+    /// <summary>拓扑排序：Kahn 算法（BFS 层序）。</summary>
     private static List<WorkflowNodeConfig> TopologicalSort(WorkflowConfig workflow)
     {
         Dictionary<string, WorkflowNodeConfig> nodeMap = workflow.Nodes.ToDictionary(n => n.NodeId);
@@ -200,8 +243,6 @@ public sealed class WorkflowEngine(
             }
         }
 
-        // 如果图中有孤立节点（无边），fallback 到入度为 0 已在队列中处理。
-        // 若结果数量少于节点总数说明存在环（不支持），返回已排序部分。
         return result;
     }
 

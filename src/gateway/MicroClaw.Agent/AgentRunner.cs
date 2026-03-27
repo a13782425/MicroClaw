@@ -4,6 +4,8 @@ using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Sessions;
 using MicroClaw.Agent.Middleware;
+using MicroClaw.Agent.Streaming;
+using MicroClaw.Agent.Streaming.Handlers;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -41,7 +43,8 @@ public sealed class AgentRunner(
     ChannelConfigStore channelConfigStore,
     IEnumerable<IChannelToolProvider> toolProviders,
     IEnumerable<IBuiltinToolProvider> builtinToolProviders,
-    IDevMetricsService devMetrics) : IAgentMessageHandler
+    IDevMetricsService devMetrics,
+    AIContentPipeline contentPipeline) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IBuiltinToolProvider> _builtinToolProviders = builtinToolProviders.ToList().AsReadOnly();
@@ -155,31 +158,19 @@ public sealed class AgentRunner(
         UsageCapture usageCapture = new();
         Task? runTask = null;
         var runSw = System.Diagnostics.Stopwatch.StartNew();
+        UsageContentHandler.BindCapture(usageCapture);
 
         try
         {
-            // 后台任务：运行 AF agent，将 token 和 DataContent 写入 eventChannel
+            // 后台任务：运行 AF agent，通过 AIContentPipeline 将内容转换为 StreamItem 写入 eventChannel
             runTask = Task.Run(async () =>
             {
                 try
                 {
                     await foreach (AgentResponseUpdate update in chatAgent.RunStreamingAsync(messages, session: afSession, runOptions, ct))
                     {
-                        // 捕获 Usage（通常在最后一次流式更新的 UsageContent 中）
-                        foreach (Microsoft.Extensions.AI.UsageContent uc in update.Contents.OfType<Microsoft.Extensions.AI.UsageContent>())
-                            usageCapture.LastUsage = uc.Details;
-
-                        // 文本 token
-                        if (update.Text is { Length: > 0 })
-                            await eventChannel.Writer.WriteAsync(new TokenItem(update.Text), ct);
-
-                        // 多模态内容（图片/音频等）
-                        foreach (DataContent dc in update.Contents.OfType<DataContent>())
-                        {
-                            if (dc.Data is { Length: > 0 })
-                                await eventChannel.Writer.WriteAsync(
-                                    new DataContentItem(dc.MediaType ?? "application/octet-stream", dc.Data.ToArray()), ct);
-                        }
+                        foreach (StreamItem item in contentPipeline.Process(update.Contents))
+                            await eventChannel.Writer.WriteAsync(item, ct);
                     }
                 }
                 catch (OperationCanceledException)
@@ -206,12 +197,79 @@ public sealed class AgentRunner(
             runSw.Stop();
             devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
             await DisposeConnectionsAsync(connections);
+            UsageContentHandler.UnbindCapture();
             await UsageTrackingMiddleware.TrackAsync(
                 usageCapture, sessionId, provider, source,
                 usageTracker, _logger, CancellationToken.None);
             if (!string.IsNullOrWhiteSpace(sessionId))
                 await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// 调用指定 Agent 的工具（MCP 或内置），返回工具输出字符串。
+    /// 先搜索 MCP 工具，未找到时回退搜索内置工具。供工作流 Tool 节点使用。
+    /// </summary>
+    public async Task<string> InvokeToolAsync(
+        string agentId, string toolName, IReadOnlyDictionary<string, string>? nodeConfig, string fallbackInput, CancellationToken ct)
+    {
+        AgentConfig? agent = agentStore.GetById(agentId);
+        if (agent is null || !agent.IsEnabled)
+        {
+            _logger.LogWarning("InvokeToolAsync: Agent '{AgentId}' not found or disabled.", agentId);
+            return fallbackInput;
+        }
+
+        // 构建工具参数
+        var arguments = new Dictionary<string, object?>();
+        if (nodeConfig is not null)
+        {
+            foreach (var kv in nodeConfig)
+            {
+                if (kv.Key != "toolAgentId")
+                    arguments[kv.Key] = kv.Value;
+            }
+        }
+        if (arguments.Count == 0)
+            arguments["input"] = fallbackInput;
+
+        // 1) 尝试 MCP 工具
+        IReadOnlyList<McpServerConfig> servers = GetEnabledMcpServers(agent);
+        if (servers.Count > 0)
+        {
+            var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(servers, loggerFactory, ct);
+            try
+            {
+                McpClientTool? mcpTool = mcpTools.FirstOrDefault(t => t.Name == toolName)
+                    ?? mcpTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+                if (mcpTool is not null)
+                {
+                    object? result = await mcpTool.InvokeAsync(new AIFunctionArguments(arguments), ct);
+                    return result?.ToString() ?? string.Empty;
+                }
+            }
+            finally
+            {
+                await DisposeConnectionsAsync(connections);
+            }
+        }
+
+        // 2) 回退到内置工具
+        List<AIFunction> builtinTools = CollectBuiltinTools(agent, sessionId: null).ToList();
+        AIFunction? builtinTool = builtinTools.FirstOrDefault(t => t.Name == toolName)
+            ?? builtinTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+        if (builtinTool is not null)
+        {
+            object? result = await builtinTool.InvokeAsync(new AIFunctionArguments(arguments), ct);
+            return result?.ToString() ?? string.Empty;
+        }
+
+        _logger.LogWarning(
+            "InvokeToolAsync: Tool '{ToolName}' not found (MCP or builtin) for Agent '{AgentId}'.",
+            toolName, agentId);
+        return fallbackInput;
     }
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
@@ -228,7 +286,9 @@ public sealed class AgentRunner(
         return servers
             .Where(s =>
             {
-                ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == s.Name);
+                // GroupId 可能存的是 srv.Name（旧格式）或 srv.Id（新格式），两者都兼容
+                ToolGroupConfig? cfg = agent.ToolGroupConfigs
+                    .FirstOrDefault(g => g.GroupId == s.Name || g.GroupId == s.Id);
                 return cfg is null || cfg.IsEnabled;
             })
             .ToList()

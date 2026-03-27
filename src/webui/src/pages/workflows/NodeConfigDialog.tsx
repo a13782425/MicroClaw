@@ -1,6 +1,7 @@
 /**
  * NodeConfigDialog — 点击画布节点后弹出的属性配置面板。
- * 支持编辑 label、type、agentId（type=Agent）、functionName（type=Function）和条件路由标签。
+ * 支持编辑 label、type、agentId（Agent）、functionName（Function/Tool）、
+ * providerId（SwitchModel）和条件路由标签。
  */
 import { useState, useEffect } from 'react'
 import {
@@ -15,50 +16,71 @@ import {
   VStack,
 } from '@chakra-ui/react'
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
-import type { WorkflowNodeConfig } from '@/api/gateway'
-import type { AgentConfig } from '@/api/gateway'
+import type { WorkflowNodeConfig, AgentConfig, ProviderConfig } from '@/api/gateway'
+import { listAgentTools } from '@/api/gateway'
 
-const NODE_TYPES = ['Agent', 'Function', 'Router', 'Start', 'End'] as const
+const NODE_TYPES = ['Agent', 'Function', 'Tool', 'Router', 'SwitchModel', 'Start', 'End'] as const
 
 interface NodeConfigDialogProps {
   node: WorkflowNodeConfig | null
   agents: AgentConfig[]
+  providers: ProviderConfig[]
   onClose: () => void
   onSave: (updated: WorkflowNodeConfig) => void
 }
 
-export function NodeConfigDialog({ node, agents, onClose, onSave }: NodeConfigDialogProps) {
+export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: NodeConfigDialogProps) {
   const [label, setLabel] = useState('')
   const [type, setType] = useState<WorkflowNodeConfig['type']>('Agent')
   const [agentId, setAgentId] = useState('')
   const [functionName, setFunctionName] = useState('')
+  const [providerId, setProviderId] = useState('')
   const [condition, setCondition] = useState('')
   const [configEntries, setConfigEntries] = useState<[string, string][]>([])
   const [showConfig, setShowConfig] = useState(false)
+  const [toolAgentId, setToolAgentId] = useState('')
+  const [mcpTools, setMcpTools] = useState<{ name: string; group: string }[]>([])
 
-  // 当选中节点改变时，重置表单
   useEffect(() => {
     if (!node) return
     setLabel(node.label)
     setType(node.type)
     setAgentId(node.agentId ?? '')
     setFunctionName(node.functionName ?? '')
+    setProviderId(node.providerId ?? '')
+    setToolAgentId(node.config?.toolAgentId ?? '')
     setCondition('')
     setConfigEntries(Object.entries(node.config ?? {}))
     setShowConfig(false)
   }, [node])
+
+  useEffect(() => {
+    if (!toolAgentId) { setMcpTools([]); return }
+    listAgentTools(toolAgentId)
+      .then((res) => {
+        const flat = res.groups
+          .filter((g) => g.isEnabled)
+          .flatMap((g) => g.tools.filter((t) => t.isEnabled).map((t) => ({ name: t.name, group: g.name })))
+        setMcpTools(flat)
+      })
+      .catch(() => setMcpTools([]))
+  }, [toolAgentId])
 
   const handleSave = () => {
     if (!node) return
     const config = configEntries
       .filter(([k]) => k.trim())
       .reduce<Record<string, string>>((acc, [k, v]) => ({ ...acc, [k.trim()]: v }), {})
+    if (type === 'Tool' && toolAgentId) {
+      config['toolAgentId'] = toolAgentId
+    }
     const updated: WorkflowNodeConfig = {
       ...node,
       label: label.trim() || node.label,
       type,
       agentId: type === 'Agent' && agentId ? agentId : null,
-      functionName: type === 'Function' && functionName.trim() ? functionName.trim() : null,
+      functionName: (type === 'Function' || type === 'Tool') && functionName.trim() ? functionName.trim() : null,
+      providerId: type === 'SwitchModel' && providerId ? providerId : null,
       config: Object.keys(config).length > 0 ? config : null,
     }
     onSave(updated)
@@ -148,21 +170,111 @@ export function NodeConfigDialog({ node, agents, onClose, onSave }: NodeConfigDi
                 </Box>
               )}
 
-              {/* Function 名称（仅 type=Function 时） */}
+              {/* Function 配置（仅 type=Function 时）— 仅内置函数 */}
               {type === 'Function' && (
                 <Box>
                   <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">函数名称</Text>
-                  <Input
-                    size="sm"
-                    value={functionName}
-                    onChange={(e) => setFunctionName(e.target.value)}
-                    placeholder="内置函数名称"
-                    bg="gray.50"
-                    _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                    borderColor="gray.300"
-                    color="gray.900"
-                    fontFamily="mono"
-                  />
+                  <NativeSelect.Root size="sm">
+                    <NativeSelect.Field
+                      value={functionName}
+                      onChange={(e) => setFunctionName(e.target.value)}
+                      bg="gray.50"
+                      _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                      borderColor="gray.300"
+                      color="gray.900"
+                    >
+                      <option value="">（选择函数）</option>
+                      <option value="uppercase">uppercase — 转大写</option>
+                      <option value="lowercase">lowercase — 转小写</option>
+                      <option value="trim">trim — 去空格</option>
+                    </NativeSelect.Field>
+                    <NativeSelect.Indicator />
+                  </NativeSelect.Root>
+                </Box>
+              )}
+
+              {/* Tool 配置（仅 type=Tool 时）— MCP 工具 */}
+              {type === 'Tool' && (
+                <>
+                  <Box>
+                    <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择 Agent</Text>
+                    <NativeSelect.Root size="sm">
+                      <NativeSelect.Field
+                        value={toolAgentId}
+                        onChange={(e) => { setToolAgentId(e.target.value); setFunctionName('') }}
+                        bg="gray.50"
+                        _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                        borderColor="gray.300"
+                        color="gray.900"
+                      >
+                        <option value="">（选择 Agent）</option>
+                        {agents.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} {a.isDefault ? '（默认）' : ''}
+                          </option>
+                        ))}
+                      </NativeSelect.Field>
+                      <NativeSelect.Indicator />
+                    </NativeSelect.Root>
+                  </Box>
+                  {toolAgentId && (
+                    <Box>
+                      <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择工具</Text>
+                      <NativeSelect.Root size="sm">
+                        <NativeSelect.Field
+                          value={functionName}
+                          onChange={(e) => setFunctionName(e.target.value)}
+                          bg="gray.50"
+                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                          borderColor="gray.300"
+                          color="gray.900"
+                        >
+                          <option value="">（选择工具）</option>
+                          {mcpTools.map((t) => (
+                            <option key={t.name} value={t.name}>
+                              {t.name}（{t.group}）
+                            </option>
+                          ))}
+                        </NativeSelect.Field>
+                        <NativeSelect.Indicator />
+                      </NativeSelect.Root>
+                      {mcpTools.length === 0 && (
+                        <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} mt="1">
+                          该 Agent 无可用工具
+                        </Text>
+                      )}
+                    </Box>
+                  )}
+                </>
+              )}
+
+              {/* SwitchModel 配置（仅 type=SwitchModel 时） */}
+              {type === 'SwitchModel' && (
+                <Box>
+                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择 Provider</Text>
+                  <NativeSelect.Root size="sm">
+                    <NativeSelect.Field
+                      value={providerId}
+                      onChange={(e) => setProviderId(e.target.value)}
+                      bg="gray.50"
+                      _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                      borderColor="gray.300"
+                      color="gray.900"
+                    >
+                      <option value="">（选择 Provider）</option>
+                      {providers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.displayName} {p.isDefault ? '（默认）' : ''}
+                        </option>
+                      ))}
+                    </NativeSelect.Field>
+                    <NativeSelect.Indicator />
+                  </NativeSelect.Root>
+                  {providers.length === 0 && (
+                    <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} mt="1">
+                      暂无可用 Provider，请先在模型页面配置
+                    </Text>
+                  )}
                 </Box>
               )}
 

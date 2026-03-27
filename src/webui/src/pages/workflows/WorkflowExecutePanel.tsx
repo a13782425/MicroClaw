@@ -38,6 +38,9 @@ function NodeStatusRow({ nodeId, label, state }: {
       <VStack gap="0.5" align="start" flex={1}>
         <Text fontSize="sm" fontWeight="medium" color="gray.900" _dark={{ color: 'gray.100' }}>{label}</Text>
         <Text fontSize="xs" color="gray.500" fontFamily="mono">{nodeId}</Text>
+        {state?.warning && (
+          <Text fontSize="xs" color="yellow.600" _dark={{ color: 'yellow.300' }}>{state.warning}</Text>
+        )}
         {state?.error && (
           <Text fontSize="xs" color="red.300">{state.error}</Text>
         )}

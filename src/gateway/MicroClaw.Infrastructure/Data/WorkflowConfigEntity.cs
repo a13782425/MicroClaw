@@ -12,6 +12,7 @@ public sealed class WorkflowConfigEntity
     /// <summary>JSON 序列化的 WorkflowEdgeConfig 列表。</summary>
     public string? EdgesJson { get; set; }
     public string? EntryNodeId { get; set; }
+    public string? DefaultProviderId { get; set; }
     public long CreatedAtMs { get; set; }
     public long UpdatedAtMs { get; set; }
 }

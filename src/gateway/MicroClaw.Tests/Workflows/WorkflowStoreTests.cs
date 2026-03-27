@@ -29,6 +29,7 @@ public sealed class WorkflowStoreTests : IDisposable
             Nodes: nodes ?? [],
             Edges: edges ?? [],
             EntryNodeId: null,
+            DefaultProviderId: null,
             CreatedAtUtc: DateTimeOffset.UtcNow,
             UpdatedAtUtc: DateTimeOffset.UtcNow);
 
@@ -122,10 +123,10 @@ public sealed class WorkflowStoreTests : IDisposable
     {
         var nodes = (IReadOnlyList<WorkflowNodeConfig>)
         [
-            new WorkflowNodeConfig("start", "开始", WorkflowNodeType.Start, null, null, null, null),
-            new WorkflowNodeConfig("agent1", "执行 Agent", WorkflowNodeType.Agent, "agent-id-1", null, null,
+            new WorkflowNodeConfig("start", "开始", WorkflowNodeType.Start, null, null, null, null, null),
+            new WorkflowNodeConfig("agent1", "执行 Agent", WorkflowNodeType.Agent, "agent-id-1", null, null, null,
                 new WorkflowPosition(100, 200)),
-            new WorkflowNodeConfig("end", "结束", WorkflowNodeType.End, null, null, null, null)
+            new WorkflowNodeConfig("end", "结束", WorkflowNodeType.End, null, null, null, null, null)
         ];
         var edges = (IReadOnlyList<WorkflowEdgeConfig>)
         [

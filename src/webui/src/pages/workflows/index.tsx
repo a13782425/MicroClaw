@@ -12,8 +12,9 @@ import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowExecutePanel } from './WorkflowExecutePanel'
 import { NodeConfigDialog } from './NodeConfigDialog'
 import { EdgeConfigDialog } from './EdgeConfigDialog'
-import { listAgents } from '@/api/gateway'
-import type { WorkflowConfig, WorkflowCreateRequest, WorkflowNodeConfig, WorkflowEdgeConfig, AgentConfig } from '@/api/gateway'
+import { listAgents, listProviders } from '@/api/gateway'
+import { NativeSelect } from '@chakra-ui/react'
+import type { WorkflowConfig, WorkflowCreateRequest, WorkflowNodeConfig, WorkflowEdgeConfig, AgentConfig, ProviderConfig } from '@/api/gateway'
 
 // ──────────────────── 创建弹窗 ──────────────────────────────────────────────
 
@@ -173,35 +174,38 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
   const [name, setName] = useState(workflow.name)
   const [description, setDescription] = useState(workflow.description)
   const [isEnabled, setIsEnabled] = useState(workflow.isEnabled)
+  const [defaultProviderId, setDefaultProviderId] = useState(workflow.defaultProviderId ?? '')
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
 
-  // 节点配置面板状态
   const [selectedNode, setSelectedNode] = useState<WorkflowNodeConfig | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<WorkflowEdgeConfig | null>(null)
   const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [providers, setProviders] = useState<ProviderConfig[]>([])
   const [canvasChanged, setCanvasChanged] = useState(false)
   const [canvasSaving, setCanvasSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('canvas')
 
-  // 切换工作流时重置表单
   useEffect(() => {
     setName(workflow.name)
     setDescription(workflow.description)
     setIsEnabled(workflow.isEnabled)
+    setDefaultProviderId(workflow.defaultProviderId ?? '')
     setDirty(false)
     setSelectedNode(null)
     setCanvasChanged(false)
+    setActiveTab('canvas')
   }, [workflow.id])
 
-  // 首次打开节点配置时加载 Agent 列表
   useEffect(() => {
     listAgents().then(setAgents).catch(() => setAgents([]))
+    listProviders().then(setProviders).catch(() => setProviders([]))
   }, [])
 
   const saveBasicInfo = async () => {
     setSaving(true)
     try {
-      await updateWorkflow(workflow.id, { name, description, isEnabled })
+      await updateWorkflow(workflow.id, { name, description, isEnabled, defaultProviderId: defaultProviderId || null })
       toaster.create({ type: 'success', title: '已保存' })
       setDirty(false)
     } catch {
@@ -288,6 +292,27 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
               color="gray.900"
             />
           </Box>
+          <Box minW="160px">
+            <Text fontSize="xs" color="gray.500" _dark={{ color: 'gray.400' }} mb="1">默认模型</Text>
+            <NativeSelect.Root size="sm">
+              <NativeSelect.Field
+                value={defaultProviderId}
+                onChange={(e) => { setDefaultProviderId(e.target.value); setDirty(true) }}
+                bg="gray.50"
+                _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
+                borderColor="gray.300"
+                color="gray.900"
+              >
+                <option value="">（跟随全局默认）</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName} {p.isDefault ? '（默认）' : ''}
+                  </option>
+                ))}
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+          </Box>
           <HStack gap="2" alignSelf="center">
             <Text fontSize="sm" color="gray.700" _dark={{ color: 'gray.300' }}>启用</Text>
             <Switch.Root
@@ -302,6 +327,7 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
           {dirty && (
             <Button
               size="sm"
+              variant="solid"
               colorPalette="blue"
               loading={saving}
               onClick={saveBasicInfo}
@@ -313,7 +339,7 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
       </Box>
 
       {/* Tabs: 画布 / 执行 */}
-      <Tabs.Root defaultValue="canvas" flex={1} display="flex" flexDirection="column" overflow="hidden">
+      <Tabs.Root value={activeTab} onValueChange={(e) => setActiveTab(e.value)} flex={1} display="flex" flexDirection="column" overflow="hidden">
         <Tabs.List>
           <Tabs.Trigger value="canvas">
             <GitBranch size={14} />
@@ -326,41 +352,20 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
         </Tabs.List>
 
         <Tabs.Content value="canvas" flex={1} overflow="hidden" p="0" mt="3">
-          <Flex direction="column" h="100%">
-            {canvasChanged && (
-              <HStack
-                px="3"
-                py="1.5"
-                bg="orange.50"
-                _dark={{ bg: 'orange.950' }}
-                justify="space-between"
-                borderBottomWidth="1px"
-                borderColor="orange.200"
-              >
-                <Text fontSize="xs" color="orange.700" _dark={{ color: 'orange.300' }}>
-                  画布有未保存的更改
-                </Text>
-                <Button
-                  size="xs"
-                  colorPalette="orange"
-                  loading={canvasSaving}
-                  onClick={saveCanvas}
-                >
-                  保存画布
-                </Button>
-              </HStack>
-            )}
-            <Box flex={1} minH="400px">
-              <WorkflowCanvas
-                workflow={workflow}
-                nodeStates={nodeStates}
-                onNodesChange={handleNodesChange}
-                onEdgesChange={handleEdgesChange}
-                onNodeClick={handleNodeClick}
-                onEdgeClick={(edge) => setSelectedEdge(edge)}
-              />
-            </Box>
-          </Flex>
+          <Box h="100%" minH="400px">
+            <WorkflowCanvas
+              workflow={workflow}
+              nodeStates={nodeStates}
+              canvasChanged={canvasChanged}
+              canvasSaving={canvasSaving}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onNodeClick={handleNodeClick}
+              onEdgeClick={(edge) => setSelectedEdge(edge)}
+              onSave={saveCanvas}
+              onRun={() => setActiveTab('execute')}
+            />
+          </Box>
         </Tabs.Content>
 
         <Tabs.Content value="execute" p="3" overflowY="auto">
@@ -372,6 +377,7 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
       <NodeConfigDialog
         node={selectedNode}
         agents={agents}
+        providers={providers}
         onClose={() => setSelectedNode(null)}
         onSave={handleNodeSave}
       />

@@ -203,6 +203,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.NodesJson).HasColumnName("nodes_json").IsRequired(false);
             b.Property(e => e.EdgesJson).HasColumnName("edges_json").IsRequired(false);
             b.Property(e => e.EntryNodeId).HasColumnName("entry_node_id").HasMaxLength(64).IsRequired(false);
+            b.Property(e => e.DefaultProviderId).HasColumnName("default_provider_id").HasMaxLength(64).IsRequired(false);
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.UpdatedAtMs).HasColumnName("updated_at_ms");
         });

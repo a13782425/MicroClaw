@@ -22,6 +22,7 @@ export interface NodeExecutionState {
   result?: string
   durationMs?: number
   error?: string
+  warning?: string
 }
 
 interface WorkflowState {
@@ -182,12 +183,26 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
           }))
           break
 
+        case 'workflow_warning':
+          set((s) => ({
+            nodeStates: {
+              ...s.nodeStates,
+              [chunk.nodeId]: {
+                ...s.nodeStates[chunk.nodeId],
+                warning: chunk.warning,
+              },
+            },
+          }))
+          break
+
+        case 'workflow_model_switch':
+          break
+
         case 'workflow_complete':
           set({ executionOutput: chunk.finalResult })
           break
 
         case 'token':
-          // 工作流执行时 token 来自子 Agent，追加到输出
           set((s) => ({ executionOutput: s.executionOutput + chunk.content }))
           break
 
