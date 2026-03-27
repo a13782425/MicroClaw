@@ -5,6 +5,7 @@
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
+    <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Skills\MicroClaw.Skills.csproj" />
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
@@ -17,7 +18,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
@@ -27,7 +28,7 @@
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.13.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.5" />
-    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+
   </ItemGroup>
 
   <PropertyGroup>
