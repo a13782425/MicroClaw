@@ -251,7 +251,26 @@ public class ServeCommand : Command
 
 		// Skills 服务
 		builder.Services.AddSingleton<SkillStore>();
-		builder.Services.AddSingleton<SkillService>(_ => new SkillService(workspaceRoot));
+		builder.Services.AddSingleton<SkillService>(_ =>
+		{
+			var skillOpts = builder.Configuration.GetSection("skills").Get<MicroClaw.Skills.SkillOptions>()
+				?? new MicroClaw.Skills.SkillOptions();
+
+			// 解析技能文件夹路径：相对路径以 workspaceRoot 为基准，绝对路径直接使用
+			static string ResolveFolder(string folder, string wsRoot) =>
+				Path.IsPathRooted(folder)
+					? Path.GetFullPath(folder)
+					: Path.GetFullPath(Path.Combine(wsRoot, folder));
+
+			var roots = new List<string>
+			{
+				ResolveFolder(skillOpts.DefaultFolder, workspaceRoot)
+			};
+			foreach (string extra in skillOpts.AdditionalFolders)
+				roots.Add(ResolveFolder(extra, workspaceRoot));
+
+			return new SkillService(workspaceRoot, roots);
+		});
 		builder.Services.Configure<MicroClaw.Skills.SkillOptions>(builder.Configuration.GetSection("skills"));
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),

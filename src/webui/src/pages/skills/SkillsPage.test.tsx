@@ -10,7 +10,7 @@ vi.mock('@/api/gateway', async (importOriginal) => {
   return {
     ...actual,
     listSkills: vi.fn(),
-    createSkill: vi.fn(),
+    scanSkills: vi.fn(),
     updateSkill: vi.fn(),
     deleteSkill: vi.fn(),
     listSkillFiles: vi.fn(),
@@ -25,8 +25,15 @@ const mockSkills: SkillConfig[] = [
     id: 's1',
     name: 'Python 脚本',
     description: '执行 Python 脚本',
-    skillType: 'python',
-    entryPoint: 'main.py',
+    disableModelInvocation: false,
+    userInvocable: true,
+    allowedTools: '',
+    model: null,
+    effort: null,
+    context: null,
+    agent: null,
+    argumentHint: '',
+    hooks: '',
     isEnabled: true,
     createdAtUtc: '2024-01-01T00:00:00Z',
   },
@@ -34,8 +41,15 @@ const mockSkills: SkillConfig[] = [
     id: 's2',
     name: 'Node 工具',
     description: '',
-    skillType: 'nodejs',
-    entryPoint: 'index.js',
+    disableModelInvocation: false,
+    userInvocable: false,
+    allowedTools: '',
+    model: null,
+    effort: null,
+    context: null,
+    agent: null,
+    argumentHint: '',
+    hooks: '',
     isEnabled: false,
     createdAtUtc: '2024-01-02T00:00:00Z',
   },
@@ -47,7 +61,7 @@ const wrap = (ui: React.ReactElement) =>
 describe('SkillsPage', () => {
   beforeEach(() => {
     vi.mocked(gateway.listSkills).mockResolvedValue(mockSkills)
-    vi.mocked(gateway.createSkill).mockResolvedValue({ id: 'new-id' })
+    vi.mocked(gateway.scanSkills).mockResolvedValue({ found: 2, added: 0 })
     vi.mocked(gateway.updateSkill).mockResolvedValue({ id: 's1' })
     vi.mocked(gateway.deleteSkill).mockResolvedValue(undefined)
     vi.mocked(gateway.listSkillFiles).mockResolvedValue([])
@@ -61,11 +75,12 @@ describe('SkillsPage', () => {
     })
   })
 
-  it('显示技能类型 badge', async () => {
+  it('点击扫描按钮调用 scanSkills', async () => {
     wrap(<SkillsPage />)
+    await waitFor(() => screen.getByText('Python 脚本'))
+    fireEvent.click(screen.getByRole('button', { name: /扫描/ }))
     await waitFor(() => {
-      expect(screen.getByText('Python')).toBeInTheDocument()
-      expect(screen.getByText('Node.js')).toBeInTheDocument()
+      expect(gateway.scanSkills).toHaveBeenCalled()
     })
   })
 
@@ -83,17 +98,6 @@ describe('SkillsPage', () => {
     wrap(<SkillsPage />)
     await waitFor(() => screen.getByText('Python 脚本'))
     expect(screen.getByText('请从左侧选择技能')).toBeInTheDocument()
-  })
-
-  it('点击新建按钮打开弹窗', async () => {
-    wrap(<SkillsPage />)
-    await waitFor(() => screen.getByText('Python 脚本'))
-    // 找到 + 按钮
-    const plusBtn = screen.getByRole('button', { name: '' })
-    fireEvent.click(plusBtn)
-    await waitFor(() => {
-      expect(screen.getByText('新建技能')).toBeInTheDocument()
-    })
   })
 
   it('加载失败时显示 toaster 错误（listSkills rejection）', async () => {

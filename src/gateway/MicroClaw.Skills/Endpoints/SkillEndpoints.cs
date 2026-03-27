@@ -25,30 +25,6 @@ public static class SkillEndpoints
         })
         .WithTags("Skills");
 
-        endpoints.MapPost("/skills", (SkillCreateRequest req, SkillStore store, SkillService skillService) =>
-        {
-            if (string.IsNullOrWhiteSpace(req.Slug))
-                return Results.BadRequest(new { success = false, message = "Slug is required.", errorCode = "BAD_REQUEST" });
-
-            string slug = req.Slug.Trim().ToLowerInvariant();
-            if (!SkillStore.IsValidSlug(slug))
-                return Results.BadRequest(new { success = false, message = "Slug must be 1-64 chars, lowercase letters/digits/hyphens, start and end with letter or digit.", errorCode = "BAD_REQUEST" });
-
-            if (store.Exists(slug))
-                return Results.BadRequest(new { success = false, message = $"Skill '{slug}' already exists.", errorCode = "CONFLICT" });
-
-            SkillConfig config = new(
-                Id: slug,
-                IsEnabled: req.IsEnabled,
-                CreatedAtUtc: DateTimeOffset.UtcNow);
-
-            SkillConfig created = store.Add(config);
-            skillService.EnsureDirectory(created.Id);
-            GenerateSkillMd(skillService, created.Id, req.Name, req.Description);
-            return Results.Ok(new { created.Id });
-        })
-        .WithTags("Skills");
-
         endpoints.MapPost("/skills/update", (SkillUpdateRequest req, SkillStore store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
@@ -65,26 +41,27 @@ public static class SkillEndpoints
 
         endpoints.MapPost("/skills/scan", (SkillStore store, SkillService skillService) =>
         {
-            string skillsRoot = Path.Combine(skillService.WorkspaceRoot, "skills");
-            if (!Directory.Exists(skillsRoot))
-                return Results.Ok(new { added = 0, found = 0 });
-
             int found = 0, added = 0;
-            foreach (string dir in Directory.GetDirectories(skillsRoot))
+            foreach (string root in skillService.SkillRoots)
             {
-                string skillMdPath = Path.Combine(dir, "SKILL.md");
-                if (!File.Exists(skillMdPath)) continue;
+                if (!Directory.Exists(root)) continue;
 
-                found++;
-                string dirName = Path.GetFileName(dir);
-                if (store.Exists(dirName)) continue;
+                foreach (string dir in Directory.GetDirectories(root))
+                {
+                    string skillMdPath = Path.Combine(dir, "SKILL.md");
+                    if (!File.Exists(skillMdPath)) continue;
 
-                SkillConfig config = new(
-                    Id: dirName,
-                    IsEnabled: true,
-                    CreatedAtUtc: DateTimeOffset.UtcNow);
-                store.Add(config);
-                added++;
+                    found++;
+                    string dirName = Path.GetFileName(dir);
+                    if (store.Exists(dirName)) continue;
+
+                    SkillConfig config = new(
+                        Id: dirName,
+                        IsEnabled: true,
+                        CreatedAtUtc: DateTimeOffset.UtcNow);
+                    store.Add(config);
+                    added++;
+                }
             }
 
             return Results.Ok(new { added, found });
@@ -183,41 +160,10 @@ public static class SkillEndpoints
         s.CreatedAtUtc,
     };
 
-    /// <summary>
-    /// 创建技能时生成标准 SKILL.md 模板文件。
-    /// 遵循 Agent Skills 开放标准（agentskills.io）frontmatter 格式。
-    /// </summary>
-    private static void GenerateSkillMd(SkillService skillService, string skillId, string? name, string? description)
-    {
-        string displayName = !string.IsNullOrWhiteSpace(name) ? name.Trim() : skillId;
-        string desc = description?.Trim() ?? string.Empty;
-        string skillMd = $"""
----
-name: {skillId}
-description: {desc}
-argument-hint: "[input]"
-disable-model-invocation: false
-user-invocable: true
----
-
-# {displayName}
-
-{desc}
-
-<!-- 在此处编写技能的详细指令。Claude 将在执行此技能时遵循这些指令。 -->
-""";
-        skillService.WriteFile(skillId, "SKILL.md", skillMd);
-    }
 }
 
 
 // ── Request records ──────────────────────────────────────────────────────────
-
-public sealed record SkillCreateRequest(
-    string Slug,
-    string? Name = null,
-    string? Description = null,
-    bool IsEnabled = true);
 
 public sealed record SkillUpdateRequest(
     string Id,

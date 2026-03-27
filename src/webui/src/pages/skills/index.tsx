@@ -1,111 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Box, Flex, Text, Badge, Button, HStack, VStack, Spinner,
-  Input, Textarea, Tabs, Switch, Dialog,
-  createListCollection, Select, Portal,
+  Input, Textarea, Tabs, Switch,
 } from '@chakra-ui/react'
-import { Plus, Trash2, Code2, FileCode2, FileText } from 'lucide-react'
+import { RefreshCw, Trash2, Code2, FileCode2, FileText } from 'lucide-react'
 import {
-  listSkills, createSkill, updateSkill, deleteSkill,
+  listSkills, scanSkills, updateSkill, deleteSkill,
   listSkillFiles, getSkillFileContent, writeSkillFile, deleteSkillFile,
-  type SkillConfig, type SkillType, type SkillFileInfo,
+  type SkillConfig, type SkillFileInfo,
 } from '@/api/gateway'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-
-const SKILL_TYPE_OPTIONS = [
-  { value: 'python', label: 'Python' },
-  { value: 'nodejs', label: 'Node.js' },
-  { value: 'shell', label: 'Shell' },
-  { value: 'csharp', label: 'C#' },
-]
-const skillTypeCollection = createListCollection({ items: SKILL_TYPE_OPTIONS })
-
-function skillTypeColor(t: SkillType): string {
-  return { python: 'blue', nodejs: 'green', shell: 'orange', csharp: 'purple' }[t] ?? 'gray'
-}
-
-function skillTypeLabel(t: SkillType): string {
-  return { python: 'Python', nodejs: 'Node.js', shell: 'Shell', csharp: 'C#' }[t] ?? t
-}
-
-// ─── 创建弹窗 ──────────────────────────────────────────────────────────────────
-
-interface CreateDialogProps {
-  open: boolean
-  onClose: () => void
-  onCreated: () => void
-}
-
-function CreateDialog({ open, onClose, onCreated }: CreateDialogProps) {
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [skillType, setSkillType] = useState<SkillType>('python')
-  const [entryPoint, setEntryPoint] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const reset = () => { setName(''); setDescription(''); setSkillType('python'); setEntryPoint('') }
-
-  const submit = async () => {
-    if (!name.trim() || !entryPoint.trim()) {
-      toaster.create({ type: 'error', title: '请填写名称和入口文件' })
-      return
-    }
-    setSaving(true)
-    try {
-      await createSkill({ name: name.trim(), description: description.trim() || undefined, skillType, entryPoint: entryPoint.trim(), isEnabled: true })
-      toaster.create({ type: 'success', title: '技能创建成功' })
-      reset()
-      onCreated()
-      onClose()
-    } catch {
-      toaster.create({ type: 'error', title: '创建失败' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog.Root open={open} onOpenChange={(e) => { if (!e.open) { reset(); onClose() } }}>
-      <Dialog.Backdrop />
-      <Dialog.Positioner>
-        <Dialog.Content maxW="480px">
-          <Dialog.Header><Dialog.Title>新建技能</Dialog.Title></Dialog.Header>
-          <Dialog.Body>
-            <VStack gap="3" align="stretch">
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">名称 <Text as="span" color="red.500">*</Text></Text>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="技能名称" />
-              </Box>
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">类型</Text>
-                <Select.Root collection={skillTypeCollection} value={[skillType]} onValueChange={(e) => setSkillType(e.value[0] as SkillType)}>
-                  <Select.HiddenSelect />
-                  <Select.Control><Select.Trigger><Select.ValueText /></Select.Trigger><Select.IndicatorGroup><Select.Indicator /></Select.IndicatorGroup></Select.Control>
-                  <Portal><Select.Positioner><Select.Content>
-                    {SKILL_TYPE_OPTIONS.map((o) => <Select.Item key={o.value} item={o}>{o.label}</Select.Item>)}
-                  </Select.Content></Select.Positioner></Portal>
-                </Select.Root>
-              </Box>
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">入口文件 <Text as="span" color="red.500">*</Text></Text>
-                <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="如 main.py" />
-              </Box>
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">描述</Text>
-                <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="功能描述（可选）" />
-              </Box>
-            </VStack>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button colorPalette="blue" loading={saving} onClick={submit} disabled={!name.trim() || !entryPoint.trim()}>创建</Button>
-          </Dialog.Footer>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
-  )
-}
 
 // ─── 文件面板 ──────────────────────────────────────────────────────────────────
 
@@ -195,7 +100,7 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
         <HStack px="3" py="2" justify="space-between" borderBottomWidth="1px">
           <Text fontSize="xs" fontWeight="medium" color="gray.500">文件</Text>
           <Button size="xs" variant="ghost" onClick={() => setShowNewFile((v) => !v)}>
-            <Plus size={12} />
+            <FileCode2 size={12} />
           </Button>
         </HStack>
         {showNewFile && (
@@ -263,48 +168,53 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
 
 // ─── 信息面板 ──────────────────────────────────────────────────────────────────
 
-function InfoTab({ skill, onUpdated }: { skill: SkillConfig; onUpdated: (s: SkillConfig) => void }) {
-  const [description, setDescription] = useState(skill.description)
-  const [entryPoint, setEntryPoint] = useState(skill.entryPoint)
-  const [saving, setSaving] = useState(false)
-  const dirty = description !== skill.description || entryPoint !== skill.entryPoint
-
-  useEffect(() => {
-    setDescription(skill.description)
-    setEntryPoint(skill.entryPoint)
-  }, [skill.id, skill.description, skill.entryPoint])
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      await updateSkill({ id: skill.id, description: description.trim(), entryPoint: entryPoint.trim() })
-      onUpdated({ ...skill, description: description.trim(), entryPoint: entryPoint.trim() })
-      toaster.create({ type: 'success', title: '技能信息已保存' })
-    } catch {
-      toaster.create({ type: 'error', title: '保存失败' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
+function InfoTab({ skill }: { skill: SkillConfig }) {
   return (
     <Box p="4">
-      <VStack gap="4" align="stretch">
-        <Box>
-          <Text fontSize="sm" mb="1" fontWeight="medium">技能类型</Text>
-          <Badge colorPalette={skillTypeColor(skill.skillType)}>{skillTypeLabel(skill.skillType)}</Badge>
-        </Box>
-        <Box>
-          <Text fontSize="sm" mb="1" fontWeight="medium">入口文件</Text>
-          <Input value={entryPoint} onChange={(e) => setEntryPoint(e.target.value)} placeholder="如 main.py" />
-        </Box>
-        <Box>
-          <Text fontSize="sm" mb="1" fontWeight="medium">描述</Text>
-          <Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="技能描述" />
-        </Box>
-        <HStack justify="flex-end">
-          <Button colorPalette="blue" size="sm" loading={saving} disabled={!dirty} onClick={save}>保存</Button>
+      <VStack gap="3" align="stretch">
+        {skill.description && (
+          <Box>
+            <Text fontSize="sm" mb="1" fontWeight="medium" color="gray.500">描述</Text>
+            <Text fontSize="sm">{skill.description}</Text>
+          </Box>
+        )}
+        {skill.allowedTools && (
+          <Box>
+            <Text fontSize="sm" mb="1" fontWeight="medium" color="gray.500">自动批准工具</Text>
+            <Text fontSize="sm" fontFamily="mono">{skill.allowedTools}</Text>
+          </Box>
+        )}
+        <HStack gap="4" flexWrap="wrap">
+          {skill.model && (
+            <Box>
+              <Text fontSize="xs" color="gray.400">模型覆盖</Text>
+              <Badge size="sm">{skill.model}</Badge>
+            </Box>
+          )}
+          {skill.effort && (
+            <Box>
+              <Text fontSize="xs" color="gray.400">推理强度</Text>
+              <Badge size="sm" colorPalette="purple">{skill.effort}</Badge>
+            </Box>
+          )}
+          {skill.context && (
+            <Box>
+              <Text fontSize="xs" color="gray.400">执行上下文</Text>
+              <Badge size="sm" colorPalette="orange">{skill.context}</Badge>
+            </Box>
+          )}
         </HStack>
+        <Box>
+          <Text fontSize="xs" color="gray.400">创建时间</Text>
+          <Text fontSize="sm">{new Date(skill.createdAtUtc).toLocaleString()}</Text>
+        </Box>
+        <Box>
+          <Text fontSize="xs" color="gray.400" mb="1">提示</Text>
+          <Text fontSize="xs" color="gray.500">
+            技能元数据（名称、描述、指令等）通过编辑 <Text as="span" fontFamily="mono">SKILL.md</Text> 文件管理，
+            切换到「文件」选项卡进行编辑。
+          </Text>
+        </Box>
       </VStack>
     </Box>
   )
@@ -315,11 +225,9 @@ function InfoTab({ skill, onUpdated }: { skill: SkillConfig; onUpdated: (s: Skil
 export default function SkillsPage() {
   const [skills, setSkills] = useState<SkillConfig[]>([])
   const [loading, setLoading] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [selected, setSelected] = useState<SkillConfig | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [editingName, setEditingName] = useState(false)
-  const [nameInput, setNameInput] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<SkillConfig | null>(null)
 
   const load = useCallback(async () => {
@@ -339,6 +247,22 @@ export default function SkillsPage() {
   }, [selected])
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleScan = async () => {
+    setScanning(true)
+    try {
+      const result = await scanSkills()
+      toaster.create({
+        type: 'success',
+        title: `扫描完成：发现 ${result.found} 个技能，新增 ${result.added} 个`,
+      })
+      await load()
+    } catch {
+      toaster.create({ type: 'error', title: '扫描失败' })
+    } finally {
+      setScanning(false)
+    }
+  }
 
   const handleToggle = async (skill: SkillConfig, val: boolean) => {
     setToggling(true)
@@ -367,38 +291,21 @@ export default function SkillsPage() {
     }
   }
 
-  const startEditName = () => {
-    if (!selected) return
-    setNameInput(selected.name)
-    setEditingName(true)
-  }
-
-  const saveName = async () => {
-    if (!selected || !nameInput.trim()) return
-    try {
-      await updateSkill({ id: selected.id, name: nameInput.trim() })
-      const updated = { ...selected, name: nameInput.trim() }
-      setSelected(updated)
-      setSkills((prev) => prev.map((s) => s.id === selected.id ? updated : s))
-      toaster.create({ type: 'success', title: '名称已更新' })
-    } catch {
-      toaster.create({ type: 'error', title: '更新失败' })
-    } finally {
-      setEditingName(false)
-    }
-  }
-
   return (
     <Flex h="calc(100vh - 64px)" overflow="hidden">
       {/* 左侧：技能列表 */}
       <Box w="280px" borderRightWidth="1px" flexShrink={0} overflow="auto">
         <HStack px="4" py="3" borderBottomWidth="1px" justify="space-between">
           <Text fontWeight="semibold">技能列表</Text>
-          <Button size="sm" colorPalette="blue" onClick={() => setCreateOpen(true)}><Plus size={14} /></Button>
+          <Button size="sm" colorPalette="blue" loading={scanning} onClick={handleScan}>
+            <RefreshCw size={14} />扫描
+          </Button>
         </HStack>
         {loading && <Box p="4"><Spinner /></Box>}
         {!loading && skills.length === 0 && (
-          <Text p="4" fontSize="sm" color="gray.400">暂无技能，点击右上角新建</Text>
+          <Text p="4" fontSize="sm" color="gray.400">
+            暂无技能，点击「扫描」从文件夹加载，或使用 AI 技能创建
+          </Text>
         )}
         {skills.map((s) => (
           <HStack key={s.id} px="4" py="3" cursor="pointer" borderBottomWidth="1px"
@@ -410,7 +317,9 @@ export default function SkillsPage() {
             <Code2 size={16} />
             <Box flex="1" overflow="hidden">
               <Text fontSize="sm" fontWeight="medium" truncate>{s.name}</Text>
-              <Badge size="xs" colorPalette={skillTypeColor(s.skillType)}>{skillTypeLabel(s.skillType)}</Badge>
+              {s.description && (
+                <Text fontSize="xs" color="gray.400" truncate>{s.description}</Text>
+              )}
             </Box>
             <Box w="6px" h="6px" rounded="full" bg={s.isEnabled ? 'green.400' : 'gray.300'} flexShrink={0} />
           </HStack>
@@ -422,20 +331,7 @@ export default function SkillsPage() {
         <Box flex="1" overflow="auto">
           {/* 顶部工具栏 */}
           <HStack px="6" py="4" borderBottomWidth="1px" gap="3" flexWrap="wrap">
-            {editingName ? (
-              <HStack>
-                <Input size="sm" value={nameInput} onChange={(e) => setNameInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false) }}
-                  autoFocus w="200px"
-                />
-                <Button size="sm" colorPalette="blue" onClick={saveName}>确认</Button>
-                <Button size="sm" variant="outline" onClick={() => setEditingName(false)}>取消</Button>
-              </HStack>
-            ) : (
-              <Text fontWeight="semibold" fontSize="lg" cursor="pointer" onClick={startEditName} _hover={{ textDecoration: 'underline' }}>
-                {selected.name}
-              </Text>
-            )}
+            <Text fontWeight="semibold" fontSize="lg">{selected.name}</Text>
             <Switch.Root
               size="sm"
               checked={selected.isEnabled}
@@ -457,7 +353,7 @@ export default function SkillsPage() {
               <Tabs.Trigger value="files">文件</Tabs.Trigger>
             </Tabs.List>
             <Tabs.Content value="info">
-              <InfoTab skill={selected} onUpdated={(s) => { setSelected(s); setSkills((prev) => prev.map((x) => x.id === s.id ? s : x)) }} />
+              <InfoTab skill={selected} />
             </Tabs.Content>
             <Tabs.Content value="files">
               <FilesTab skill={selected} />
@@ -470,14 +366,12 @@ export default function SkillsPage() {
         </Flex>
       )}
 
-      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} />
-
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
         title="删除技能"
-        description={`确认删除技能「${deleteTarget?.name}」？`}
+        description={`确认删除技能「${deleteTarget?.name}」？此操作不会删除文件系统上的技能目录。`}
         confirmText="删除"
       />
     </Flex>

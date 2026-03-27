@@ -620,32 +620,25 @@ export async function updateAgentDna(
 
 // ─── Skills ───────────────────────────────────────────────────────────────────
 
-export type SkillType = 'python' | 'nodejs' | 'shell' | 'csharp'
-
 export type SkillConfig = {
   id: string
   name: string
   description: string
-  skillType: SkillType
-  entryPoint: string
+  disableModelInvocation: boolean
+  userInvocable: boolean
+  allowedTools: string
+  model: string | null
+  effort: string | null
+  context: string | null
+  agent: string | null
+  argumentHint: string
+  hooks: string
   isEnabled: boolean
   createdAtUtc: string
 }
 
-export type SkillCreateRequest = {
-  name: string
-  description?: string
-  skillType: SkillType
-  entryPoint: string
-  isEnabled?: boolean
-}
-
 export type SkillUpdateRequest = {
   id: string
-  name?: string
-  description?: string
-  skillType?: SkillType
-  entryPoint?: string
   isEnabled?: boolean
 }
 
@@ -664,8 +657,8 @@ export async function getSkill(id: string): Promise<SkillConfig> {
   return data
 }
 
-export async function createSkill(req: SkillCreateRequest): Promise<{ id: string }> {
-  const { data } = await request.post<{ id: string }>('/api/skills', req)
+export async function scanSkills(): Promise<{ added: number; found: number }> {
+  const { data } = await request.post<{ added: number; found: number }>('/api/skills/scan')
   return data
 }
 

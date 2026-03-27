@@ -20,4 +20,18 @@ public sealed class SkillOptions
     /// 默认 16000 字符；设为 0 表示不限制。
     /// </summary>
     public int CatalogCharBudget { get; set; } = 16_000;
+
+    /// <summary>
+    /// 默认技能文件夹路径（相对 workspaceRoot 或绝对路径）。
+    /// 相对路径以 workspaceRoot 为基准；绝对路径直接使用。
+    /// 默认值 "skills" 对应 {workspaceRoot}/skills/。
+    /// 新技能（通过 AI 创建）将写入此文件夹。
+    /// </summary>
+    public string DefaultFolder { get; set; } = "skills";
+
+    /// <summary>
+    /// 附加技能文件夹路径列表（相对 workspaceRoot 或绝对路径）。
+    /// 这些文件夹在扫描和查找时会一并考虑，但新技能不会写入这些文件夹。
+    /// </summary>
+    public List<string> AdditionalFolders { get; set; } = [];
 }

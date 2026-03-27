@@ -348,10 +348,7 @@ function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Ag
               style={{ width: 16, height: 16, cursor: 'pointer' }}
             />
             <Box flex="1">
-              <HStack>
-                <Text fontSize="sm" fontWeight="medium">{sk.name}</Text>
-                <Badge size="xs" colorPalette="purple">{sk.skillType}</Badge>
-              </HStack>
+              <Text fontSize="sm" fontWeight="medium">{sk.name}</Text>
               {sk.description && <Text fontSize="xs" color="gray.500">{sk.description}</Text>}
             </Box>
           </HStack>

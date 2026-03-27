@@ -2,21 +2,55 @@ namespace MicroClaw.Skills;
 
 /// <summary>
 /// Skill 技能文件管理服务。
-/// 管理 workspace/skills/{skillId}/ 目录下的脚本文件，防止路径穿越攻击。
+/// 管理一个或多个技能文件夹（skillRoots）下的 {skillId}/ 目录，防止路径穿越攻击。
+/// 第一个 root（DefaultSkillRoot）为新技能的写入目录；其余 root 仅用于读取和扫描。
 /// </summary>
-public sealed class SkillService(string workspaceRoot)
+public sealed class SkillService
 {
-    /// <summary>返回 workspace 根目录路径，供 Scan 等操作使用。</summary>
-    public string WorkspaceRoot { get; } = workspaceRoot;
+    /// <summary>返回 workspace 根目录路径。</summary>
+    public string WorkspaceRoot { get; }
+
+    /// <summary>所有技能文件夹的绝对路径列表（首个为默认写入目录）。</summary>
+    public IReadOnlyList<string> SkillRoots { get; }
+
+    /// <summary>新技能的默认写入目录（SkillRoots[0]）。</summary>
+    public string DefaultSkillRoot => SkillRoots[0];
 
     /// <summary>SkillManifest 文件级缓存：key=skillId, value=(文件最后修改时间, 解析结果)。</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime LastWrite, SkillManifest Manifest)> _manifestCache = new();
 
-    private string SkillDirectory(string skillId) =>
-        Path.Combine(WorkspaceRoot, "skills", skillId);
+    public SkillService(string workspaceRoot, IReadOnlyList<string>? skillRoots = null)
+    {
+        WorkspaceRoot = workspaceRoot;
+        if (skillRoots is { Count: > 0 })
+        {
+            SkillRoots = skillRoots;
+        }
+        else
+        {
+            // 默认使用 {workspaceRoot}/skills/
+            SkillRoots = [Path.GetFullPath(Path.Combine(workspaceRoot, "skills"))];
+        }
+    }
+
+    /// <summary>
+    /// 返回指定 skillId 的技能目录完整路径。
+    /// 按顺序遍历 SkillRoots，返回第一个已存在该子目录的路径；
+    /// 若均不存在，则返回默认 root（SkillRoots[0]）下的路径（供新建使用）。
+    /// </summary>
+    private string SkillDirectory(string skillId)
+    {
+        foreach (string root in SkillRoots)
+        {
+            string candidate = Path.GetFullPath(Path.Combine(root, skillId));
+            if (Directory.Exists(candidate))
+                return candidate;
+        }
+        return Path.GetFullPath(Path.Combine(DefaultSkillRoot, skillId));
+    }
 
     /// <summary>返回技能的工作目录完整路径（供 ${CLAUDE_SKILL_DIR} 替换使用）。</summary>
-    public string GetSkillDirectory(string skillId) => Path.GetFullPath(SkillDirectory(skillId));
+    public string GetSkillDirectory(string skillId) => SkillDirectory(skillId);
 
     /// <summary>列出技能目录下所有文件（含子目录，返回相对路径）。</summary>
     public IReadOnlyList<SkillFileInfo> ListFiles(string skillId)
