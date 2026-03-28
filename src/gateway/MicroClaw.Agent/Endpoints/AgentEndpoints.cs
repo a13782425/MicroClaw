@@ -240,7 +240,7 @@ public static class AgentEndpoints
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<AgentDnaFileInfo> files = agentDna.ListFiles(id);
-            return Results.Ok(files.Select(f => new { f.FileName, f.Description, f.UpdatedAt }));
+            return Results.Ok(files.Select(f => new { f.FileName, f.Description, f.Content, f.UpdatedAt }));
         })
         .WithTags("Agents");
 

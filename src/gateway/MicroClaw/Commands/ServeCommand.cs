@@ -169,6 +169,7 @@ public class ServeCommand : Command
 			// opts.ConfigureWarnings(w => w.Ignore(CoreEventId.SensitiveDataLoggingEnabledWarning));
 		});
 
+		builder.Services.AddSingleton<ConfigService>();
 		builder.Services.AddSingleton<ProviderConfigStore>();
 		builder.Services.AddSingleton<SessionStore>(sp =>
 			new SessionStore(sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>(), sessionsDir));

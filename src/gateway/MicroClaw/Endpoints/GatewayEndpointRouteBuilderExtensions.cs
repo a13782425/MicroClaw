@@ -19,6 +19,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		endpoints.MapA2AEndpoints();
 
 		var protectedApi = api.RequireAuthorization();
+		protectedApi.MapConfigEndpoints();
 		protectedApi.MapSystemEndpoints();
 		protectedApi.MapChannelEndpoints();
 		protectedApi.MapAdminEndpoints();
