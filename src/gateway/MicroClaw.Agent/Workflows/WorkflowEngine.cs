@@ -164,7 +164,7 @@ public sealed class WorkflowEngine(
 
         var history = new List<Gateway.Contracts.Sessions.SessionMessage>
         {
-            new(Role: "user", Content: input, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: null)
+            new(Id: Guid.NewGuid().ToString("N"), Role: "user", Content: input, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: null)
         };
 
         await foreach (StreamItem item in agentRunner.StreamReActAsync(agent, providerId, history, sessionId: null, ct, "workflow"))

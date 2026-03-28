@@ -11,7 +11,9 @@ public sealed class ToolCallPersistenceHandler : IStreamItemPersistenceHandler
     public SessionMessage? ToPersistenceMessage(StreamItem item)
     {
         var tc = (ToolCallItem)item;
+        string? visibility = item.Visibility;
         return new SessionMessage(
+            Id: item.MessageId ?? Guid.NewGuid().ToString("N"),
             Role: "assistant",
             Content: $"调用工具: {tc.ToolName}",
             ThinkContent: null,
@@ -23,6 +25,7 @@ public sealed class ToolCallPersistenceHandler : IStreamItemPersistenceHandler
                 ["callId"] = tc.CallId,
                 ["toolName"] = tc.ToolName,
                 ["arguments"] = tc.Arguments
-            }));
+            }),
+            Visibility: visibility);
     }
 }

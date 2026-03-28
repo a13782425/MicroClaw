@@ -71,7 +71,7 @@ public sealed class SubAgentRunnerService(
         sessionStore.Approve(subSession.Id);
 
         // 保存用户任务消息
-        SessionMessage userMsg = new("user", task, null, DateTimeOffset.UtcNow, null);
+        SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null);
         sessionStore.AddMessage(subSession.Id, userMsg);
 
         // 执行子 Agent ReAct 循环（统一走流式引擎，Materialize 收集完整结果）
@@ -83,7 +83,7 @@ public sealed class SubAgentRunnerService(
                 a.FileName ?? "attachment", a.MimeType, Convert.ToBase64String(a.Data))).ToList()
             : null;
 
-        SessionMessage assistantMsg = new("assistant", response.Text, response.ThinkContent, DateTimeOffset.UtcNow, attachments,
+        SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", response.Text, response.ThinkContent, DateTimeOffset.UtcNow, attachments,
             Source: $"sub-agent:{agentId}");
         sessionStore.AddMessage(subSession.Id, assistantMsg);
 

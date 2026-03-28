@@ -206,6 +206,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
 
 internal sealed class MessageJson
 {
+    public string? Id { get; set; }
     public string Role { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string? ThinkContent { get; set; }
@@ -214,9 +215,11 @@ internal sealed class MessageJson
     public string? Source { get; set; }
     public string? MessageType { get; set; }
     public Dictionary<string, JsonElement>? Metadata { get; set; }
+    public string? Visibility { get; set; }
 
     public static MessageJson From(SessionMessage m) => new()
     {
+        Id = m.Id,
         Role = m.Role,
         Content = m.Content,
         ThinkContent = m.ThinkContent,
@@ -224,6 +227,7 @@ internal sealed class MessageJson
         Source = m.Source,
         MessageType = m.MessageType,
         Metadata = m.Metadata is not null ? new Dictionary<string, JsonElement>(m.Metadata) : null,
+        Visibility = m.Visibility,
         Attachments = m.Attachments?.Select(a => new AttachmentJson
         {
             FileName = a.FileName,
@@ -233,12 +237,14 @@ internal sealed class MessageJson
     };
 
     public SessionMessage ToRecord() => new(
+        Id ?? Guid.NewGuid().ToString("N"),
         Role, Content, ThinkContent, Timestamp,
         Attachments?.Select(a => new MessageAttachment(a.FileName, a.MimeType, a.Base64Data))
                    .ToList().AsReadOnly(),
         Source,
         MessageType,
-        Metadata);
+        Metadata,
+        Visibility);
 }
 
 internal sealed class AttachmentJson

@@ -114,7 +114,7 @@ public sealed class ChannelSessionServiceTests : IDisposable
         var session = _service.FindOrCreateSession(
             ChannelType.Feishu, "ch", "sender", "Bot", "p1");
 
-        var msg = new SessionMessage("user", "Hello", null, DateTimeOffset.UtcNow, null);
+        var msg = new SessionMessage(Guid.NewGuid().ToString("N"), "user", "Hello", null, DateTimeOffset.UtcNow, null);
         _service.AddMessage(session.Id, msg);
 
         var messages = _service.GetMessages(session.Id);

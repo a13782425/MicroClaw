@@ -80,7 +80,8 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
             toolCollector:         new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
             devMetrics:            Substitute.For<IDevMetricsService>(),
-            contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()));
+            contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
+            chatContentRestorers:  Array.Empty<MicroClaw.Agent.Restorers.IChatContentRestorer>());
 
         // 初始化测试 Agent
         _testAgent = new AgentConfig(

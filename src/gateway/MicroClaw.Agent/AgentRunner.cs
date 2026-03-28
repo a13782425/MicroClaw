@@ -7,6 +7,7 @@ using MicroClaw.Agent.Sessions;
 using MicroClaw.Agent.Middleware;
 using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
+using MicroClaw.Agent.Restorers;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -39,11 +40,14 @@ public sealed class AgentRunner(
     IAgentStatusNotifier agentStatusNotifier,
     ToolCollector toolCollector,
     IDevMetricsService devMetrics,
-    AIContentPipeline contentPipeline) : IAgentMessageHandler
+    AIContentPipeline contentPipeline,
+    IEnumerable<IChatContentRestorer> chatContentRestorers) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
+    private readonly IReadOnlyList<IChatContentRestorer> _restorers =
+        chatContentRestorers.ToList().AsReadOnly();
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -109,7 +113,7 @@ public sealed class AgentRunner(
 
         ChatOptions chatOptions = BuildChatOptions(toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
         IChatClient rawClient = clientFactory.Create(provider);
-        var (chatAgent, eventChannel, runOptions) = AgentFactory.Create(rawClient, agent.Name, chatOptions, loggerFactory, devMetrics: devMetrics);
+        var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(rawClient, agent.Name, chatOptions, loggerFactory, devMetrics: devMetrics);
 
         // ── 并发流合并：token 流（RunStreamingAsync）+ 工具事件（Channel）──
 
@@ -144,8 +148,15 @@ public sealed class AgentRunner(
                 {
                     await foreach (AgentResponseUpdate update in chatAgent.RunStreamingAsync(messages, session: afSession, runOptions, ct))
                     {
+                        // 从 AgentResponseUpdate 提取 MessageId，供 FunctionInvoker 共享
+                        if (!string.IsNullOrEmpty(update.MessageId))
+                            tracker.Current = update.MessageId;
+
                         foreach (StreamItem item in contentPipeline.Process(update.Contents))
+                        {
+                            item.MessageId ??= tracker.Current;
                             await eventChannel.Writer.WriteAsync(item, ct);
+                        }
                     }
                 }
                 catch (OperationCanceledException)
@@ -246,66 +257,88 @@ public sealed class AgentRunner(
             ? history.TakeLast(agent.ContextWindowMessages.Value)
             : history;
 
+        // 过滤不可见消息，按 Id 分组，保持插入顺序
+        var groups = new List<(string Id, List<SessionMessage> Items)>();
+        string? currentGroupId = null;
+        List<SessionMessage>? currentGroup = null;
+
         foreach (SessionMessage msg in windowed)
         {
-            // ── 工具调用：还原为 MEAI FunctionCallContent ──────────────────
-            if (msg.MessageType == "tool_call" && msg.Metadata is not null)
+            if (!MessageVisibility.IsVisibleToLlm(msg.Visibility))
+                continue;
+
+            if (msg.Id != currentGroupId)
             {
-                string? callId = msg.Metadata.TryGetValue("callId", out var cidEl) ? cidEl.GetString() : null;
-                string? toolName = msg.Metadata.TryGetValue("toolName", out var tnEl) ? tnEl.GetString() : null;
-                if (callId is not null && toolName is not null)
-                {
-                    IDictionary<string, object?>? args = msg.Metadata.TryGetValue("arguments", out var argsEl)
-                        && argsEl.ValueKind == System.Text.Json.JsonValueKind.Object
-                        ? argsEl.Deserialize<Dictionary<string, object?>>() : null;
-                    messages.Add(new ChatMessage(ChatRole.Assistant,
-                        [new FunctionCallContent(callId, toolName, args)]));    
-                }
-                continue;
-            }
-
-            // ── 工具结果：还原为 MEAI FunctionResultContent ─────────────────
-            if (msg.MessageType == "tool_result" && msg.Metadata is not null)
-            {
-                string? callId = msg.Metadata.TryGetValue("callId", out var cidEl) ? cidEl.GetString() : null;
-                if (callId is not null)
-                {
-                    messages.Add(new ChatMessage(ChatRole.Tool,
-                        [new FunctionResultContent(callId, msg.Content)]));    
-                }
-                continue;
-            }
-
-            // ── 子 Agent / 其他系统消息：跳过 ────────────────────────────────
-            if (msg.MessageType is "sub_agent_start" or "sub_agent_result")
-                continue;
-            if (msg.Role is "system" or "tool")
-                continue;
-
-            // ── 常规 user / assistant 消息 ───────────────────────────────────
-            ChatRole role = msg.Role == "user" ? ChatRole.User : ChatRole.Assistant;
-
-            if (msg.Attachments is { Count: > 0 })
-            {
-                var contents = new List<AIContent>();
-                if (!string.IsNullOrEmpty(msg.Content))
-                    contents.Add(new TextContent(msg.Content));
-
-                foreach (MessageAttachment att in msg.Attachments)
-                {
-                    byte[] bytes = Convert.FromBase64String(att.Base64Data);
-                    contents.Add(new DataContent(bytes, att.MimeType));
-                }
-
-                messages.Add(new ChatMessage(role, contents));
+                currentGroupId = msg.Id;
+                currentGroup = [msg];
+                groups.Add((msg.Id, currentGroup));
             }
             else
             {
-                messages.Add(new ChatMessage(role, msg.Content));
+                currentGroup!.Add(msg);
             }
         }
 
+        // 每组内按 Role 拆分为 ChatMessage：先 assistant（含 thinking + text + tool_call + data），再 tool
+        foreach (var (groupId, items) in groups)
+        {
+            // user 消息直接还原
+            if (items.Count == 1 && items[0].Role == "user")
+            {
+                var contents = RestoreContents(items[0]);
+                var chatMsg = new ChatMessage(ChatRole.User, contents) { MessageId = groupId };
+                messages.Add(chatMsg);
+                continue;
+            }
+
+            var assistantContents = new List<AIContent>();
+            var toolContents = new List<AIContent>();
+
+            foreach (SessionMessage msg in items)
+            {
+                if (msg.Role == "tool" || msg.MessageType == "tool_result")
+                {
+                    toolContents.AddRange(RestoreContents(msg));
+                }
+                else if (msg.Role is "system" && msg.MessageType is "sub_agent_start" or "sub_agent_result")
+                {
+                    // 子 Agent 消息跳过（不传给 LLM）
+                    continue;
+                }
+                else
+                {
+                    assistantContents.AddRange(RestoreContents(msg));
+                }
+            }
+
+            if (assistantContents.Count > 0)
+            {
+                ChatRole role = items[0].Role == "user" ? ChatRole.User : ChatRole.Assistant;
+                messages.Add(new ChatMessage(role, assistantContents) { MessageId = groupId });
+            }
+
+            if (toolContents.Count > 0)
+                messages.Add(new ChatMessage(ChatRole.Tool, toolContents) { MessageId = groupId });
+        }
+
         return messages;
+    }
+
+    /// <summary>通过注册的 Restorer 将 SessionMessage 还原为 AIContent 列表。</summary>
+    private List<AIContent> RestoreContents(SessionMessage msg)
+    {
+        var contents = new List<AIContent>();
+        foreach (IChatContentRestorer restorer in _restorers)
+        {
+            if (restorer.CanRestore(msg))
+                contents.AddRange(restorer.Restore(msg));
+        }
+
+        // 如果没有任何 Restorer 匹配但有内容，回退为 TextContent
+        if (contents.Count == 0 && !string.IsNullOrEmpty(msg.Content))
+            contents.Add(new TextContent(msg.Content));
+
+        return contents;
     }
 
     /// <summary>

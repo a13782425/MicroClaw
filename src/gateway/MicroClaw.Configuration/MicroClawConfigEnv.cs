@@ -26,12 +26,12 @@ public sealed class MicroClawConfigEnv
 
     /// <summary>滚动日志文件路径（含日期占位符）。</summary>
     public string LogFilePath { get; }
-
-    /// <summary>前端静态文件根目录。</summary>
-    public string WebRootPath { get; }
-
-    internal MicroClawConfigEnv(string? home, string? configFile)
+    
+    internal MicroClawConfigEnv()
     {
+        string? home = Get(MICROCLAW_HOME);
+        string? configFile = Get(MICROCLAW_CONFIG_FILE);
+        
         Home = HomeInitializer.ResolveHome(home, configFile);
         ConfigFile = configFile;
 
@@ -40,7 +40,6 @@ public sealed class MicroClawConfigEnv
         WorkspaceRoot = ResolveWorkspaceRoot(home, configFile);
         AgentsDir = Path.Combine(WorkspaceRoot, "agents");
         LogFilePath = ResolveLogFilePath(home, configFile);
-        WebRootPath = ResolveWebRootPath();
     }
 
     /// <summary>
@@ -95,12 +94,5 @@ public sealed class MicroClawConfigEnv
         Directory.CreateDirectory(logsDir);
         return Path.Combine(logsDir, "microclaw-.log");
     }
-
-    private static string ResolveWebRootPath()
-    {
-        var webRootPath = Environment.GetEnvironmentVariable("MICROCLAW_WEBUI_PATH");
-        if (string.IsNullOrWhiteSpace(webRootPath))
-            webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        return webRootPath;
-    }
+    
 }

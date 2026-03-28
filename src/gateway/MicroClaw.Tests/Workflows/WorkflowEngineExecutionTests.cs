@@ -73,7 +73,8 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
             agentStatusNotifier: Substitute.For<IAgentStatusNotifier>(),
             toolCollector: new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
             devMetrics: Substitute.For<IDevMetricsService>(),
-            contentPipeline: new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()));
+            contentPipeline: new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
+            chatContentRestorers: Array.Empty<MicroClaw.Agent.Restorers.IChatContentRestorer>());
 
         _engine = new WorkflowEngine(
             _agentStore,

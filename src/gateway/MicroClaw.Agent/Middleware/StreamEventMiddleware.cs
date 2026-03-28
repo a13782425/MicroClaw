@@ -1,4 +1,6 @@
+using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Skills;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using System.Threading.Channels;
@@ -30,9 +32,12 @@ public static class StreamEventMiddleware
         {
             string callId = ctx.CallContent?.CallId ?? ctx.Function.Name;
             IDictionary<string, object?>? args = ctx.Arguments?.ToDictionary(k => k.Key, v => v.Value);
+            string? visibility = SkillToolProvider.InternalToolNames.Contains(ctx.Function.Name)
+                ? MessageVisibility.LlmOnly
+                : null;
 
             // ① 工具调用前 — 写入 ToolCallItem
-            await eventWriter.WriteAsync(new ToolCallItem(callId, ctx.Function.Name, args), ct);
+            await eventWriter.WriteAsync(new ToolCallItem(callId, ctx.Function.Name, args) { Visibility = visibility }, ct);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             bool success = true;
@@ -58,7 +63,7 @@ public static class StreamEventMiddleware
                 };
                 // ② 工具调用后 — 写入 ToolResultItem
                 await eventWriter.WriteAsync(
-                    new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds),
+                    new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds) { Visibility = visibility },
                     CancellationToken.None);
             }
 

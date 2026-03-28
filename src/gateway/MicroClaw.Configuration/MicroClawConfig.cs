@@ -25,8 +25,15 @@ public static class MicroClawConfig
     /// <summary>
     /// 环境变量和路径访问入口。
     /// </summary>
-    public static MicroClawConfigEnv Env => _env ?? throw new InvalidOperationException(
-        "MicroClawConfig 尚未初始化，请先调用 MicroClawConfig.Initialize()。");
+    public static MicroClawConfigEnv Env  
+    {
+        get
+        {
+            if (_env == null)
+                _env = new MicroClawConfigEnv();
+            return _env;
+        }
+    }
 
     /// <summary>
     /// 获取强类型配置对象。类型与配置段的映射在 <see cref="SectionMap"/> 中定义。
@@ -48,14 +55,10 @@ public static class MicroClawConfig
     /// 初始化配置系统。必须在应用启动时调用一次，重复调用将抛出异常。
     /// </summary>
     /// <param name="configuration">ASP.NET Core 配置根对象。</param>
-    /// <param name="home">MICROCLAW_HOME 环境变量值（可为 null）。</param>
-    /// <param name="configFile">MICROCLAW_CONFIG_FILE 环境变量值（可为 null）。</param>
-    public static void Initialize(IConfiguration configuration, string? home, string? configFile)
+    public static void Initialize(IConfiguration configuration)
     {
         if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
             throw new InvalidOperationException("MicroClawConfig.Initialize() 不可重复调用。");
-
-        _env = new MicroClawConfigEnv(home, configFile);
 
         var options = new Dictionary<Type, object>();
         foreach (var (type, section) in SectionMap)

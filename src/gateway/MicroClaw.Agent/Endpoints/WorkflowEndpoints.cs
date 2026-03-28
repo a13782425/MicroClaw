@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Agent.Workflows;
+using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -139,6 +140,10 @@ public static class WorkflowEndpoints
             {
                 await foreach (StreamItem item in engine.ExecuteAsync(wf, req.Input, executionId, ct))
                 {
+                    // 不可见于前端的事件跳过 SSE 推送
+                    if (!MessageVisibility.IsVisibleToFrontend(item.Visibility))
+                        continue;
+
                     await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
                 }
 
@@ -191,6 +196,7 @@ public static class WorkflowEndpoints
         await response.WriteAsync($"data: {data}\n\n", ct);
         await response.Body.FlushAsync(ct);
     }
+
 }
 
 // ── 请求模型 ──────────────────────────────────────────────────────────────────

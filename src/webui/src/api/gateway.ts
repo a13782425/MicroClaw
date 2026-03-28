@@ -259,6 +259,7 @@ export type MessageType =
   | 'status'
 
 export type SessionMessage = {
+  id?: string
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
   thinkContent?: string | null
@@ -267,6 +268,7 @@ export type SessionMessage = {
   source?: MessageSource | null
   messageType?: MessageType | null
   metadata?: Record<string, unknown> | null
+  visibility?: string | null
 }
 
 export type SessionInfo = {
@@ -294,14 +296,14 @@ export type ChatRequest = {
 }
 
 export type SseChunk =
-  | { type: 'token'; content: string }
-  | { type: 'done'; thinkContent?: string | null }
+  | { type: 'token'; content: string; messageId?: string }
+  | { type: 'done'; thinkContent?: string | null; messageId?: string }
   | { type: 'error'; message: string }
-  | { type: 'tool_call'; callId: string; toolName: string; arguments: Record<string, unknown> }
-  | { type: 'tool_result'; callId: string; toolName: string; result: string; success: boolean; durationMs: number }
-  | { type: 'sub_agent_start'; agentId: string; agentName: string; task: string; childSessionId: string }
-  | { type: 'sub_agent_done'; agentId: string; agentName: string; result: string; durationMs: number }
-  | { type: 'data_content'; mimeType: string; data: string }
+  | { type: 'tool_call'; callId: string; toolName: string; arguments: Record<string, unknown>; messageId?: string }
+  | { type: 'tool_result'; callId: string; toolName: string; result: string; success: boolean; durationMs: number; messageId?: string }
+  | { type: 'sub_agent_start'; agentId: string; agentName: string; task: string; childSessionId: string; messageId?: string }
+  | { type: 'sub_agent_done'; agentId: string; agentName: string; result: string; durationMs: number; messageId?: string }
+  | { type: 'data_content'; mimeType: string; data: string; messageId?: string }
   // ── 工作流事件 ─────────────────────────────────────────────────────────
   | { type: 'workflow_start'; workflowId: string; workflowName: string; executionId: string }
   | { type: 'workflow_node_start'; executionId: string; nodeId: string; nodeLabel: string; nodeType: string }

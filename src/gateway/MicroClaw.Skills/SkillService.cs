@@ -193,15 +193,13 @@ public sealed class SkillService
     /// 执行单条 shell 命令，返回结构化结果（ExitCode + Stdout + Stderr）。
     /// 用于 hooks 执行场景，区别于 ApplyCommandInjections 的 inline 替换。
     /// </summary>
-    public CommandResult ExecuteCommand(string command, string workDir, int timeoutSeconds = 30)
+    public CommandResult ExecuteCommand(string command, string workDir, int timeoutSeconds = 30, string? shell = null)
     {
         bool isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
             System.Runtime.InteropServices.OSPlatform.Windows);
 
         using var proc = new System.Diagnostics.Process();
-        proc.StartInfo = isWindows
-            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c {command}")
-            : new System.Diagnostics.ProcessStartInfo("/bin/sh", $"-c \"{command.Replace("\"", "\\\"")}\"");
+        proc.StartInfo = ResolveShellStartInfo(command, shell, isWindows);
 
         proc.StartInfo.WorkingDirectory = workDir;
         proc.StartInfo.RedirectStandardOutput = true;
@@ -221,6 +219,26 @@ public sealed class SkillService
             proc.ExitCode,
             proc.StandardOutput.ReadToEnd().TrimEnd('\r', '\n'),
             proc.StandardError.ReadToEnd().TrimEnd('\r', '\n'));
+    }
+
+    /// <summary>根据指定 shell 或平台默认值构建 ProcessStartInfo。</summary>
+    private static System.Diagnostics.ProcessStartInfo ResolveShellStartInfo(string command, string? shell, bool isWindows)
+    {
+        if (!string.IsNullOrWhiteSpace(shell))
+        {
+            // 显式指定 shell（如 bash, powershell, cmd, sh）
+            return shell.ToLowerInvariant() switch
+            {
+                "cmd" or "cmd.exe" => new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c {command}"),
+                "powershell" or "pwsh" => new System.Diagnostics.ProcessStartInfo(shell, $"-NoProfile -Command \"{command.Replace("\"", "\\\"")}\""),
+                _ => new System.Diagnostics.ProcessStartInfo(shell, $"-c \"{command.Replace("\"", "\\\"")}\"") // bash, sh, zsh etc.
+            };
+        }
+
+        // 平台默认
+        return isWindows
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c {command}")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", $"-c \"{command.Replace("\"", "\\\"")}\"");
     }
 
     /// <summary>解析并验证安全路径，阻止路径穿越攻击。若非法则返回 null。</summary>

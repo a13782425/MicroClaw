@@ -134,6 +134,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!currentSessionId || get().chatting) return null
 
     const userMsg: SessionMessage = {
+      id: crypto.randomUUID(),
       role: 'user',
       content: req.content,
       timestamp: new Date().toISOString(),
@@ -141,11 +142,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     set((s) => ({ messages: [...s.messages, userMsg], chatting: true, streamingContent: '', streamingThink: '' }))
 
+    let currentStreamMessageId: string | undefined
+
     const onChunk = (chunk: SseChunk) => {
+      if ('messageId' in chunk && chunk.messageId) {
+        currentStreamMessageId = chunk.messageId
+      }
+
       if (chunk.type === 'token') {
         set((s) => ({ streamingContent: s.streamingContent + chunk.content }))
+      } else if (chunk.type === 'done') {
+        if (chunk.thinkContent) {
+          set({ streamingThink: chunk.thinkContent })
+        }
       } else if (chunk.type === 'tool_call') {
         const msg: SessionMessage = {
+          id: currentStreamMessageId ?? crypto.randomUUID(),
           role: 'assistant',
           content: `调用工具: ${chunk.toolName}`,
           timestamp: new Date().toISOString(),
@@ -155,6 +167,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         set((s) => ({ messages: [...s.messages, msg] }))
       } else if (chunk.type === 'tool_result') {
         const msg: SessionMessage = {
+          id: currentStreamMessageId ?? crypto.randomUUID(),
           role: 'tool',
           content: chunk.result,
           timestamp: new Date().toISOString(),
@@ -164,6 +177,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         set((s) => ({ messages: [...s.messages, msg] }))
       } else if (chunk.type === 'sub_agent_start') {
         const msg: SessionMessage = {
+          id: currentStreamMessageId ?? crypto.randomUUID(),
           role: 'system',
           content: `子代理 ${chunk.agentName} 开始执行`,
           timestamp: new Date().toISOString(),
@@ -173,6 +187,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         set((s) => ({ messages: [...s.messages, msg] }))
       } else if (chunk.type === 'sub_agent_done') {
         const msg: SessionMessage = {
+          id: currentStreamMessageId ?? crypto.randomUUID(),
           role: 'system',
           content: chunk.result,
           timestamp: new Date().toISOString(),
@@ -191,8 +206,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const onDone = () => {
       set((s) => {
         const assistantMsg: SessionMessage = {
+          id: currentStreamMessageId ?? crypto.randomUUID(),
           role: 'assistant',
           content: s.streamingContent,
+          thinkContent: s.streamingThink || null,
           timestamp: new Date().toISOString(),
         }
         return {

@@ -12,6 +12,7 @@ public sealed class SubAgentStartPersistenceHandler : IStreamItemPersistenceHand
     {
         var s = (SubAgentStartItem)item;
         return new SessionMessage(
+            Id: item.MessageId ?? Guid.NewGuid().ToString("N"),
             Role: "system",
             Content: $"子代理 {s.AgentName} 开始执行",
             ThinkContent: null,

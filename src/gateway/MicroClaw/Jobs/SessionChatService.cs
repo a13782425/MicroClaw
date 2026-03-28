@@ -41,6 +41,7 @@ public sealed class SessionChatService(
 
         // 保存定时触发的用户消息（标记来源为 cron，前端可据此过滤不显示）
         SessionMessage userMsg = new(
+            Id: Guid.NewGuid().ToString("N"),
             Role: "user",
             Content: prompt,
             ThinkContent: null,
@@ -60,6 +61,7 @@ public sealed class SessionChatService(
             string assistantContent = response.Text ?? "（无回复）";
 
             SessionMessage assistantMsg = new(
+                Id: Guid.NewGuid().ToString("N"),
                 Role: "assistant",
                 Content: assistantContent,
                 ThinkContent: null,

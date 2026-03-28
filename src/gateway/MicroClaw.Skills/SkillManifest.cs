@@ -25,6 +25,10 @@ public sealed record SkillManifest(
     string? Agent,
     /// <summary>自动补全提示，如 "[query]"（frontmatter: argument-hint）。</summary>
     string ArgumentHint,
+    /// <summary>技能可访问的路径列表（frontmatter: paths，逗号分隔，可选）。</summary>
+    string? Paths,
+    /// <summary>脚本执行使用的 shell（frontmatter: shell；如 bash/powershell/cmd，可选）。</summary>
+    string? Shell,
     /// <summary>技能生命周期 hooks（frontmatter: hooks，可选）。</summary>
     string? Hooks,
     /// <summary>解析后的 hooks 结构（从 Hooks 字符串懒解析，供 SkillInvocationTool 使用）。</summary>
@@ -43,6 +47,8 @@ public sealed record SkillManifest(
         Context: null,
         Agent: null,
         ArgumentHint: string.Empty,
+        Paths: null,
+        Shell: null,
         Hooks: null,
         ParsedHooks: SkillHooks.Empty,
         Instructions: string.Empty);
@@ -79,6 +85,8 @@ public sealed record SkillManifest(
         string? context = null;
         string? agent = null;
         string argumentHint = string.Empty;
+        string? paths = null;
+        string? shell = null;
         string? hooks = null;
         var hooksLines = new List<string>();
         bool inHooksBlock = false;
@@ -137,6 +145,12 @@ public sealed record SkillManifest(
                 case "argument-hint":
                     argumentHint = value.Trim('"', '\'');
                     break;
+                case "paths":
+                    paths = value.Trim('"', '\'');
+                    break;
+                case "shell":
+                    shell = value.Trim('"', '\'');
+                    break;
                 case "hooks":
                     // 单行值（如 hooks: "..."）或多行块开始（值为空）
                     if (!string.IsNullOrWhiteSpace(value))
@@ -161,6 +175,6 @@ public sealed record SkillManifest(
         }
 
         return new SkillManifest(name, description, disableModelInvocation, userInvocable,
-            allowedTools, model, effort, context, agent, argumentHint, hooks, parsedHooks, instructions);
+            allowedTools, model, effort, context, agent, argumentHint, paths, shell, hooks, parsedHooks, instructions);
     }
 }

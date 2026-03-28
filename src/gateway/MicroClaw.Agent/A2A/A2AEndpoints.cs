@@ -184,7 +184,7 @@ public static class A2AEndpoints
 
         var history = new List<SessionMessage>
         {
-            new(Role: "user", Content: textContent, ThinkContent: null,
+            new(Id: Guid.NewGuid().ToString("N"), Role: "user", Content: textContent, ThinkContent: null,
                 Timestamp: DateTimeOffset.UtcNow, Attachments: null, Source: "a2a")
         };
 

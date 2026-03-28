@@ -144,10 +144,13 @@ public static class SessionEndpoints
                 int actualSkip = Math.Max(0, skip ?? 0);
                 int actualLimit = Math.Clamp(limit.Value, 1, 500);
                 (IReadOnlyList<SessionMessage> messages, int total) = store.GetMessagesPaged(id, actualSkip, actualLimit);
-                return Results.Ok(new { messages, total, hasMore = total > actualSkip + messages.Count });
+                var filtered = messages.Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
+                return Results.Ok(new { messages = filtered, total, hasMore = total > actualSkip + messages.Count });
             }
 
-            return Results.Ok(store.GetMessages(id));
+            var allMessages = store.GetMessages(id)
+                .Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
+            return Results.Ok(allMessages);
         })
         .WithTags("Sessions");
 
@@ -184,6 +187,7 @@ public static class SessionEndpoints
 
                 // 保存用户消息
                 SessionMessage userMessage = new(
+                    Id: Guid.NewGuid().ToString("N"),
                     Role: "user",
                     Content: req.Content,
                     ThinkContent: null,
@@ -219,9 +223,13 @@ public static class SessionEndpoints
                         agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
                     {
                         // 持久化逻辑：通过管道分发
-                        SessionMessage? msg = persistencePipeline.ProcessItem(item);
-                        if (msg is not null)
+                        IReadOnlyList<SessionMessage> msgs = persistencePipeline.ProcessItem(item);
+                        foreach (SessionMessage msg in msgs)
                             store.AddMessage(id, msg);
+
+                        // 不可见于前端的事件跳过 SSE 推送（仅持久化供 LLM 使用）
+                        if (!MessageVisibility.IsVisibleToFrontend(item.Visibility))
+                            continue;
 
                         // 统一 SSE 序列化（所有类型）
                         await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
@@ -236,7 +244,8 @@ public static class SessionEndpoints
                     string doneData = JsonSerializer.Serialize(new
                     {
                         type = "done",
-                        thinkContent = finalMessage?.ThinkContent
+                        thinkContent = finalMessage?.ThinkContent,
+                        messageId = finalMessage?.Id
                     }, JsonOpts);
                     await WriteSseAsync(ctx.Response, doneData, ct);
                     await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);

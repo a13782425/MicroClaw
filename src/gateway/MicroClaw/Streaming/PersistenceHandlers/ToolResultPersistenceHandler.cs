@@ -11,7 +11,9 @@ public sealed class ToolResultPersistenceHandler : IStreamItemPersistenceHandler
     public SessionMessage? ToPersistenceMessage(StreamItem item)
     {
         var tr = (ToolResultItem)item;
+        string? visibility = item.Visibility;
         return new SessionMessage(
+            Id: item.MessageId ?? Guid.NewGuid().ToString("N"),
             Role: "tool",
             Content: tr.Result,
             ThinkContent: null,
@@ -24,6 +26,7 @@ public sealed class ToolResultPersistenceHandler : IStreamItemPersistenceHandler
                 ["toolName"] = tr.ToolName,
                 ["success"] = tr.Success,
                 ["durationMs"] = tr.DurationMs
-            }));
+            }),
+            Visibility: visibility);
     }
 }

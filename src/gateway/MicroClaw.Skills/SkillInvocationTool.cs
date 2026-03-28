@@ -104,6 +104,15 @@ public sealed class SkillInvocationTool
         string instructions = _factory.BuildSkillInstructionsFromManifest(
             skillId, manifest, sessionId, arguments);
 
+        // 列出附加文件（除 SKILL.md 外），供 AI 通过 read_skill_file 按需读取
+        var files = _skillService.ListFiles(skillId)
+            .Where(f => !f.Path.Equals("SKILL.md", StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.Path)
+            .ToList();
+
+        if (files.Count > 0)
+            return new { success = true, instructions, availableFiles = files };
+
         return new { success = true, instructions };
     }
 

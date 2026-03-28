@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Agent.Dev;
+using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Skills;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -32,8 +34,8 @@ internal static class AgentFactory
     /// <param name="loggerFactory"><see cref="ILoggerFactory"/>。</param>
     /// <param name="maxIterations">最大工具调用轮次（默认 10）。</param>
     /// <param name="devMetrics">可选的开发指标服务，非 null 时在每次工具调用后记录耗时。</param>
-    /// <returns>(<see cref="ChatClientAgent"/>, <see cref="Channel{StreamItem}"/> eventChannel, <see cref="ChatClientAgentRunOptions"/> runOptions)</returns>
-    public static (ChatClientAgent Agent, Channel<StreamItem> EventChannel, ChatClientAgentRunOptions RunOptions) Create(
+    /// <returns>(<see cref="ChatClientAgent"/>, <see cref="Channel{StreamItem}"/> eventChannel, <see cref="ChatClientAgentRunOptions"/> runOptions, <see cref="MessageIdTracker"/> tracker)</returns>
+    public static (ChatClientAgent Agent, Channel<StreamItem> EventChannel, ChatClientAgentRunOptions RunOptions, MessageIdTracker Tracker) Create(
         IChatClient baseClient,
         string agentName,
         ChatOptions chatOptions,
@@ -44,12 +46,14 @@ internal static class AgentFactory
         Channel<StreamItem> eventChannel = Channel.CreateUnbounded<StreamItem>(
             new UnboundedChannelOptions { SingleReader = true });
 
+        var tracker = new MessageIdTracker();
+
         // 绑定 FunctionInvoker：在工具执行前后写入事件
         var funcClient = new FunctionInvokingChatClient(baseClient, loggerFactory)
         {
             MaximumIterationsPerRequest = maxIterations,
             AllowConcurrentInvocation = true,
-            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, devMetrics)
+            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, tracker, devMetrics)
         };
 
         // UseProvidedChatClientAsIs = true：让我们自己的 FunctionInvokingChatClient 负责工具循环
@@ -72,7 +76,7 @@ internal static class AgentFactory
         });
 
         ChatClientAgent agent = new(funcClient, agentOptions, loggerFactory, services: null);
-        return (agent, eventChannel, runOptions);
+        return (agent, eventChannel, runOptions, tracker);
     }
 
     // ── 私有辅助 ───────────────────────────────────────────────────────────
@@ -80,15 +84,20 @@ internal static class AgentFactory
     /// <summary>构建 FunctionInvoker 委托：拦截工具调用并向事件 Channel 写入事件，可选上报开发指标。</summary>
     private static Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(
         ChannelWriter<StreamItem> eventWriter,
+        MessageIdTracker tracker,
         IDevMetricsService? devMetrics)
     {
         return async (FunctionInvocationContext ctx, CancellationToken ct) =>
         {
             string callId = ctx.CallContent?.CallId ?? ctx.Function.Name;
             IDictionary<string, object?>? args = ctx.Arguments?.ToDictionary(k => k.Key, v => v.Value);
+            string? messageId = tracker.Current;
+            string? visibility = SkillToolProvider.InternalToolNames.Contains(ctx.Function.Name)
+                ? MessageVisibility.LlmOnly
+                : null;
 
             // ① 发出工具调用事件（执行前）
-            await eventWriter.WriteAsync(new ToolCallItem(callId, ctx.Function.Name, args), ct);
+            await eventWriter.WriteAsync(new ToolCallItem(callId, ctx.Function.Name, args) { MessageId = messageId, Visibility = visibility }, ct);
 
             var sw = Stopwatch.StartNew();
             bool success = true;
@@ -119,7 +128,7 @@ internal static class AgentFactory
 
             // ③ 发出工具结果事件（执行后）
             await eventWriter.WriteAsync(
-                new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds), ct);
+                new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds) { MessageId = messageId, Visibility = visibility }, ct);
 
             return success ? result : resultText;
         };

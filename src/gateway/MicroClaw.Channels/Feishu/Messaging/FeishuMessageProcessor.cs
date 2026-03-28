@@ -129,7 +129,7 @@ public sealed class FeishuMessageProcessor(
         }
 
         // 保存用户消息
-        SessionMessage userMessage = new("user", userText, null, DateTimeOffset.UtcNow, null);
+        SessionMessage userMessage = new(Guid.NewGuid().ToString("N"), "user", userText, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, userMessage);
 
         // 获取历史消息上下文
@@ -222,7 +222,7 @@ public sealed class FeishuMessageProcessor(
         }
 
         // 保存助手消息
-        SessionMessage assistantMessage = new("assistant", aiReply, null, DateTimeOffset.UtcNow, null);
+        SessionMessage assistantMessage = new(Guid.NewGuid().ToString("N"), "assistant", aiReply, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, assistantMessage);
 
         await ReplyMessageAsync(settings, messageId, aiReply, tenantApi, traceId, ct, channel.Id, replyInThread);

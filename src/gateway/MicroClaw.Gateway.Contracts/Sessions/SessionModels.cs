@@ -15,6 +15,7 @@ public sealed record SessionInfo(
     string? ApprovalReason = null);
 
 public sealed record SessionMessage(
+    string Id,
     string Role,
     string Content,
     string? ThinkContent,
@@ -22,7 +23,8 @@ public sealed record SessionMessage(
     IReadOnlyList<MessageAttachment>? Attachments,
     string? Source = null,
     string? MessageType = null,
-    IReadOnlyDictionary<string, JsonElement>? Metadata = null);
+    IReadOnlyDictionary<string, JsonElement>? Metadata = null,
+    string? Visibility = null);
 
 public sealed record MessageAttachment(
     string FileName,

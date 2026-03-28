@@ -48,27 +48,27 @@ public class ServeCommand : Command
 	/// <summary>启动 Web 服务器，完成环境初始化、服务注册、中间件配置后运行 ASP.NET Core 应用。</summary>
 	internal static async Task RunAsync(CancellationToken ct = default)
 	{
-		var (home, configFile) = InitializeEnvironment();
+		DotEnvLoader.Load();
 
-		var webRootPath = MicroClawConfig.Env.WebRootPath;
+		var webRootPath = MicroClawConfig.Env.Get(MICROCLAW_WEBUI_PATH);
 		var options = new WebApplicationOptions
 		{
 			WebRootPath = Directory.Exists(webRootPath) ? webRootPath : null
 		};
 
 		var builder = WebApplication.CreateBuilder(options);
-
+		string? configFile = MicroClawConfig.Env.Get(MICROCLAW_CONFIG_FILE);
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
 
 		// 初始化静态配置门面（必须在 YAML 加载之后、使用配置之前）
-		MicroClawConfig.Initialize(builder.Configuration, home, configFile);
+		MicroClawConfig.Initialize(builder.Configuration);
 
 		ConfigureLogging(builder);
 		ConfigureAuth(builder);
 		ConfigureServices(builder);
 		ConfigureChannels(builder);
-
+		
 		var app = builder.Build();
 
 		ValidateStartupConfiguration(app);
@@ -80,30 +80,6 @@ public class ServeCommand : Command
 		MapEndpoints(app);
 
 		await app.RunAsync(ct);
-	}
-
-	/// <summary>解析 MICROCLAW_HOME / MICROCLAW_CONFIG_FILE 环境变量，加载 .env 文件，并设置 ASPNETCORE_URLS 监听地址。</summary>
-	private static (string? home, string? configFile) InitializeEnvironment()
-	{
-		var home = Environment.GetEnvironmentVariable("MICROCLAW_HOME");
-		var configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
-		if (string.IsNullOrWhiteSpace(configFile) && !string.IsNullOrWhiteSpace(home))
-			configFile = Path.Combine(home, "microclaw.yaml");
-
-		// 确保工作目录和默认配置文件存在（不覆盖用户已有文件）
-		HomeInitializer.EnsureInitialized(home, configFile, force: false, verbose: false);
-
-		if (!string.IsNullOrWhiteSpace(home))
-			DotEnvLoader.Load(Path.Combine(home, ".env"));
-
-		if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
-		{
-			var gatewayHost = Environment.GetEnvironmentVariable("GATEWAY_HOST") ?? "localhost";
-			var gatewayPort = Environment.GetEnvironmentVariable("GATEWAY_PORT") ?? "5080";
-			Environment.SetEnvironmentVariable("ASPNETCORE_URLS", $"http://{gatewayHost}:{gatewayPort}");
-		}
-
-		return (home, configFile);
 	}
 
 	/// <summary>配置 Serilog 结构化日志，输出到控制台和滚动日志文件，最低级别和模板均可由配置文件覆盖。</summary>
@@ -231,6 +207,12 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolResultPersistenceHandler>();
 		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentStartPersistenceHandler>();
 		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentResultPersistenceHandler>();
+		// SessionMessage → AIContent 还原策略（供 BuildChatMessagesAsync 使用）
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.ThinkingContentRestorer>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.TextContentRestorer>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.FunctionCallRestorer>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.FunctionResultRestorer>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.DataContentRestorer>();
 		builder.Services.AddSingleton<AgentRunner>();
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
 

@@ -152,7 +152,7 @@ public sealed class SessionStoreTests : IDisposable
     public void Delete_CleansUpSessionDirectory()
     {
         var session = _store.Create("Test", "p1");
-        _store.AddMessage(session.Id, new SessionMessage("user", "hello", null, DateTimeOffset.UtcNow, null));
+        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hello", null, DateTimeOffset.UtcNow, null));
 
         string sessionDir = Path.Combine(_tempDir.Path, session.Id);
         Directory.Exists(sessionDir).Should().BeTrue();
@@ -178,8 +178,8 @@ public sealed class SessionStoreTests : IDisposable
         var session = _store.Create("Test", "p1");
         var timestamp = DateTimeOffset.UtcNow;
 
-        _store.AddMessage(session.Id, new SessionMessage("user", "Hello", null, timestamp, null));
-        _store.AddMessage(session.Id, new SessionMessage("assistant", "Hi there!", "Thinking...", timestamp.AddSeconds(1), null));
+        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "Hello", null, timestamp, null));
+        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", "Hi there!", "Thinking...", timestamp.AddSeconds(1), null));
 
         var messages = _store.GetMessages(session.Id);
 
@@ -202,7 +202,7 @@ public sealed class SessionStoreTests : IDisposable
         }.AsReadOnly();
 
         _store.AddMessage(session.Id,
-            new SessionMessage("user", "See image", null, DateTimeOffset.UtcNow, attachments));
+            new SessionMessage(Guid.NewGuid().ToString("N"), "user", "See image", null, DateTimeOffset.UtcNow, attachments));
 
         var messages = _store.GetMessages(session.Id);
 
@@ -221,7 +221,7 @@ public sealed class SessionStoreTests : IDisposable
 
         string sessionDir = Path.Combine(_tempDir.Path, customId);
 
-        _store.AddMessage(customId, new SessionMessage("user", "hi", null, DateTimeOffset.UtcNow, null));
+        _store.AddMessage(customId, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hi", null, DateTimeOffset.UtcNow, null));
 
         Directory.Exists(sessionDir).Should().BeTrue();
         File.Exists(Path.Combine(sessionDir, "messages.jsonl")).Should().BeTrue();

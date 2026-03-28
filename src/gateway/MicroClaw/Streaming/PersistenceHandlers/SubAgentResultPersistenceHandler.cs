@@ -12,6 +12,7 @@ public sealed class SubAgentResultPersistenceHandler : IStreamItemPersistenceHan
     {
         var r = (SubAgentResultItem)item;
         return new SessionMessage(
+            Id: item.MessageId ?? Guid.NewGuid().ToString("N"),
             Role: "system",
             Content: r.Result,
             ThinkContent: null,

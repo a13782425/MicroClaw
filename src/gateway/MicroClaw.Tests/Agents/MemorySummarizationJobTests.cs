@@ -41,8 +41,8 @@ public sealed class MemorySummarizationJobTests : IDisposable
     {
         var messages = new List<SessionMessage>
         {
-            new("user", "帮我写一段代码", null, DateTimeOffset.UtcNow, null),
-            new("assistant", "好的，这是代码：...", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "user", "帮我写一段代码", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "assistant", "好的，这是代码：...", null, DateTimeOffset.UtcNow, null),
         };
 
         string result = MemorySummarizationJob.FormatMessages(messages);
@@ -57,7 +57,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
         string longContent = new string('a', 600);
         var messages = new List<SessionMessage>
         {
-            new("user", longContent, null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "user", longContent, null, DateTimeOffset.UtcNow, null),
         };
 
         string result = MemorySummarizationJob.FormatMessages(messages);
@@ -74,9 +74,9 @@ public sealed class MemorySummarizationJobTests : IDisposable
     {
         var messages = new List<SessionMessage>
         {
-            new("user", "用户消息", null, DateTimeOffset.UtcNow, null),
-            new("assistant", "AI消息", null, DateTimeOffset.UtcNow, null),
-            new("system", "系统消息", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "user", "用户消息", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "assistant", "AI消息", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "system", "系统消息", null, DateTimeOffset.UtcNow, null),
         };
 
         // FormatMessages 不做 role 过滤（过滤在 SummarizeSessionAsync），但不应崩溃
@@ -128,8 +128,8 @@ public sealed class MemorySummarizationJobTests : IDisposable
         var client = Substitute.For<IChatClient>();
         var messages = new List<SessionMessage>
         {
-            new("user", "今天我遇到了一个 Bug", null, DateTimeOffset.UtcNow, null),
-            new("assistant", "我帮你找到了原因是 NullReference", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "user", "今天我遇到了一个 Bug", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "assistant", "我帮你找到了原因是 NullReference", null, DateTimeOffset.UtcNow, null),
         };
 
         client.GetResponseAsync(
@@ -160,7 +160,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
 
         var messages = new List<SessionMessage>
         {
-            new("user", "测试消息", null, DateTimeOffset.UtcNow, null),
+            new(Guid.NewGuid().ToString("N"), "user", "测试消息", null, DateTimeOffset.UtcNow, null),
         };
 
         await MemorySummarizationJob.BuildDailySummaryAsync(
@@ -248,9 +248,9 @@ public sealed class MemorySummarizationJobTests : IDisposable
             targetDate.Year, targetDate.Month, targetDate.Day, 12, 0, 0, TimeSpan.Zero);
 
         sessionStore.AddMessage(session.Id, new SessionMessage(
-            "user", "帮我分析这份数据", null, msgTime, null));
+            Guid.NewGuid().ToString("N"), "user", "帮我分析这份数据", null, msgTime, null));
         sessionStore.AddMessage(session.Id, new SessionMessage(
-            "assistant", "数据显示增长趋势明显", null, msgTime.AddMinutes(1), null));
+            Guid.NewGuid().ToString("N"), "assistant", "数据显示增长趋势明显", null, msgTime.AddMinutes(1), null));
 
         // ── 准备 Mock Provider 和 IChatClient ─────────────────────────────────
         var mockChatClient = Substitute.For<IChatClient>();

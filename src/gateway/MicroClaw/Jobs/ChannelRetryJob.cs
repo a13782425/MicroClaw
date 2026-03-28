@@ -128,7 +128,7 @@ public sealed class ChannelRetryJob(
 
             // 保存助手消息并回复用户
             sessionService.AddMessage(entry.SessionId,
-                new SessionMessage("assistant", aiReply, null, DateTimeOffset.UtcNow, null));
+                new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", aiReply, null, DateTimeOffset.UtcNow, null));
 
             await feishuProcessor.SendRetryReplyAsync(entry.MessageId, aiReply, settings, ct);
 
