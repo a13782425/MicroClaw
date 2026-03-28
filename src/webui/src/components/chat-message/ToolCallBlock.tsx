@@ -26,11 +26,18 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
     <Box
       borderWidth="1px"
       borderRadius="md"
-      borderColor="blue.200"
-      _dark={{ borderColor: 'blue.700' }}
+      borderColor={hasResult ? 'blue.200' : 'blue.300'}
+      _dark={{ borderColor: hasResult ? 'blue.700' : 'blue.500' }}
       overflow="hidden"
       mb="2"
       maxW="80%"
+      css={!hasResult ? {
+        animation: 'pulse-border 2s ease-in-out infinite',
+        '@keyframes pulse-border': {
+          '0%, 100%': { borderColor: 'var(--chakra-colors-blue-200)' },
+          '50%': { borderColor: 'var(--chakra-colors-blue-400)' },
+        },
+      } : undefined}
     >
       {/* Header */}
       <Flex
@@ -56,7 +63,7 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
             </Badge>
           )
         ) : (
-          <Loader size={12} className="animate-spin" />
+          <Loader size={14} className="animate-spin" />
         )}
       </Flex>
 

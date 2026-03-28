@@ -304,6 +304,7 @@ export type SseChunk =
   | { type: 'tool_result'; callId: string; toolName: string; result: string; success: boolean; durationMs: number; messageId?: string }
   | { type: 'sub_agent_start'; agentId: string; agentName: string; task: string; childSessionId: string; messageId?: string }
   | { type: 'sub_agent_done'; agentId: string; agentName: string; result: string; durationMs: number; messageId?: string }
+  | { type: 'sub_agent_progress'; agentId: string; step: string; messageId?: string }
   | { type: 'data_content'; mimeType: string; data: string; messageId?: string }
   // ── 工作流事件 ─────────────────────────────────────────────────────────
   | { type: 'workflow_start'; workflowId: string; workflowName: string; executionId: string }

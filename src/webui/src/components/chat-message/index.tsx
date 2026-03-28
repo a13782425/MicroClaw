@@ -114,6 +114,8 @@ interface ChatMessageProps {
   isStreaming?: boolean
   /** 配对的结果消息（tool_result / sub_agent_result） */
   resultMessage?: SessionMessage | null
+  /** 子代理进度步骤 */
+  progressSteps?: string[]
 }
 
 function ThinkBlock({ content }: { content: string }) {
@@ -249,7 +251,15 @@ function MarkdownContent({ content }: { content: string }) {
   )
 }
 
-export default function ChatMessage({ message, isStreaming, resultMessage }: ChatMessageProps) {
+const fadeInUp = {
+  animation: 'fadeInUp 0.25s ease-out',
+  '@keyframes fadeInUp': {
+    from: { opacity: 0, transform: 'translateY(8px)' },
+    to: { opacity: 1, transform: 'translateY(0)' },
+  },
+}
+
+export default function ChatMessage({ message, isStreaming, resultMessage, progressSteps }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -261,7 +271,7 @@ export default function ChatMessage({ message, isStreaming, resultMessage }: Cha
   // 工具调用
   if (message.messageType === 'tool_call') {
     return (
-      <Flex justify="flex-start" mb="3" px="2">
+      <Flex justify="flex-start" mb="3" px="2" css={fadeInUp}>
         <ToolCallBlock message={message} resultMessage={resultMessage} />
       </Flex>
     )
@@ -270,8 +280,8 @@ export default function ChatMessage({ message, isStreaming, resultMessage }: Cha
   // 子代理
   if (message.messageType === 'sub_agent_start') {
     return (
-      <Flex justify="flex-start" mb="3" px="2">
-        <SubAgentBlock message={message} resultMessage={resultMessage} />
+      <Flex justify="flex-start" mb="3" px="2" css={fadeInUp}>
+        <SubAgentBlock message={message} resultMessage={resultMessage} progressSteps={progressSteps} />
       </Flex>
     )
   }
@@ -281,6 +291,7 @@ export default function ChatMessage({ message, isStreaming, resultMessage }: Cha
       justify={isUser ? 'flex-end' : 'flex-start'}
       mb="3"
       px="2"
+      css={fadeInUp}
     >
       <Box
         maxW="80%"

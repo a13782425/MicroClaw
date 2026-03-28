@@ -56,6 +56,8 @@ interface SessionState {
   chatting: boolean
   streamingContent: string
   streamingThink: string
+  /** 子代理执行进度步骤，按 agentId 分组 */
+  subAgentProgress: Record<string, string[]>
   messagesTotal: number
   messagesHasMore: boolean
   loadingEarlier: boolean
@@ -84,6 +86,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   chatting: false,
   streamingContent: '',
   streamingThink: '',
+  subAgentProgress: {},
   messagesTotal: 0,
   messagesHasMore: false,
   loadingEarlier: false,
@@ -222,7 +225,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           messageType: 'sub_agent_result',
           metadata: { agentId: chunk.agentId, agentName: chunk.agentName, durationMs: chunk.durationMs },
         }
-        set((s) => ({ messages: [...s.messages, msg] }))
+        set((s) => {
+          const { [chunk.agentId]: _, ...rest } = s.subAgentProgress
+          return { messages: [...s.messages, msg], subAgentProgress: rest }
+        })
+      } else if (chunk.type === 'sub_agent_progress') {
+        set((s) => ({
+          subAgentProgress: {
+            ...s.subAgentProgress,
+            [chunk.agentId]: [...(s.subAgentProgress[chunk.agentId] ?? []), chunk.step],
+          },
+        }))
       }
     }
 
@@ -245,6 +258,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           chatting: false,
           streamingContent: '',
           streamingThink: '',
+          subAgentProgress: {},
         }
       })
     }

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Text;
+using System.Threading.Channels;
 using MicroClaw.Agent;
 using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts;
@@ -75,19 +78,78 @@ public sealed class SubAgentRunnerService(
         SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null);
         sessionStore.AddMessage(subSession.Id, userMsg);
 
-        // 执行子 Agent ReAct 循环（统一走流式引擎，Materialize 收集完整结果）
-        AgentResponse response = await AgentRunner.StreamReActAsync(agent, providerId, [userMsg], subSession.Id, ct, source: "subagent").MaterializeAsync(ct);
+        // 获取父 SSE 流的事件 Writer（如果有），用于发送进度事件
+        ChannelWriter<StreamItem>? parentWriter = SubAgentEventBridge.Current;
+
+        // 向父 SSE 流发送子代理开始事件
+        if (parentWriter is not null)
+        {
+            await parentWriter.WriteAsync(
+                new SubAgentStartItem(agentId, agent.Name, task, subSession.Id), ct);
+        }
+
+        var sw = Stopwatch.StartNew();
+
+        // 流式执行子 Agent ReAct 循环，同时向父 SSE 流转发进度事件
+        StringBuilder textBuilder = new();
+        StringBuilder thinkBuilder = new();
+        List<ResponseAttachment> attachmentsList = [];
+
+        await foreach (StreamItem item in AgentRunner.StreamReActAsync(agent, providerId, [userMsg], subSession.Id, ct, source: "subagent").WithCancellation(ct))
+        {
+            switch (item)
+            {
+                case TokenItem token:
+                    textBuilder.Append(token.Content);
+                    break;
+
+                case ThinkingItem thinking:
+                    thinkBuilder.Append(thinking.Content);
+                    break;
+
+                case DataContentItem data:
+                    attachmentsList.Add(new ResponseAttachment(data.MimeType, data.Data));
+                    break;
+
+                // 子代理调用工具时，向父 SSE 流发送进度事件
+                case ToolCallItem toolCall when parentWriter is not null:
+                    await parentWriter.WriteAsync(
+                        new SubAgentProgressItem(agentId, $"调用工具: {toolCall.ToolName}"), ct);
+                    break;
+
+                case ToolResultItem toolResult when parentWriter is not null:
+                    string status = toolResult.Success ? $"✓ {toolResult.DurationMs}ms" : "✗ 失败";
+                    await parentWriter.WriteAsync(
+                        new SubAgentProgressItem(agentId, $"{toolResult.ToolName} {status}"), ct);
+                    break;
+            }
+        }
+
+        sw.Stop();
+
+        // 合并 ThinkingContent 与文本中的 <think> 标签
+        (string extractedThink, string main) = ThinkContentParser.Extract(textBuilder.ToString());
+        string? think = thinkBuilder.Length > 0
+            ? (string.IsNullOrWhiteSpace(extractedThink) ? thinkBuilder.ToString() : thinkBuilder + "\n" + extractedThink)
+            : (string.IsNullOrWhiteSpace(extractedThink) ? null : extractedThink);
+
+        // 向父 SSE 流发送子代理完成事件
+        if (parentWriter is not null)
+        {
+            await parentWriter.WriteAsync(
+                new SubAgentResultItem(agentId, agent.Name, main, sw.ElapsedMilliseconds), ct);
+        }
 
         // 保存 AI 回复，Source 标记来源，携带 ThinkContent 和多模态附件
-        List<MessageAttachment>? attachments = response.Attachments.Count > 0
-            ? response.Attachments.Select(a => new MessageAttachment(
+        List<MessageAttachment>? attachments = attachmentsList.Count > 0
+            ? attachmentsList.Select(a => new MessageAttachment(
                 a.FileName ?? "attachment", a.MimeType, Convert.ToBase64String(a.Data))).ToList()
             : null;
 
-        SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", response.Text, response.ThinkContent, DateTimeOffset.UtcNow, attachments,
+        SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", main, think, DateTimeOffset.UtcNow, attachments,
             Source: $"sub-agent:{agentId}");
         sessionStore.AddMessage(subSession.Id, assistantMsg);
 
-        return response.Text;
+        return main;
     }
 }

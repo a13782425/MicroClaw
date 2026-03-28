@@ -99,6 +99,9 @@ internal static class AgentFactory
             // ① 发出工具调用事件（执行前）
             await eventWriter.WriteAsync(new ToolCallItem(callId, ctx.Function.Name, args) { MessageId = messageId, Visibility = visibility }, ct);
 
+            // ② 设置 AsyncLocal 桥接，让子代理运行器可以向父 SSE 流写入进度事件
+            SubAgentEventBridge.Current = eventWriter;
+
             var sw = Stopwatch.StartNew();
             bool success = true;
             object? result = null;

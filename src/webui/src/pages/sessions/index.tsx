@@ -189,10 +189,12 @@ export default function SessionsPage() {
   const store = useSessionStore()
   const {
     sessions, messages, chatting, streamingContent, loading,
-    messagesHasMore, loadingEarlier,
+    messagesHasMore, loadingEarlier, subAgentProgress,
     fetchSessions, selectSession, removeSession, loadEarlierMessages,
     sendMessage, stopChat,
   } = store
+
+  // streamingContent 已在 store 解构中，供 useLayoutEffect 依赖
 
   const [showCreate, setShowCreate] = useState(false)
   const [inputText, setInputText] = useState('')
@@ -207,6 +209,7 @@ export default function SessionsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevScrollHeight = useRef(0)
+  const userScrolledUp = useRef(false)
 
   // 初始化数据
   useEffect(() => {
@@ -271,15 +274,20 @@ export default function SessionsPage() {
       // 加载更早消息完成后：保持滚动位置
       const newScrollHeight = messagesEl.current.scrollHeight
       messagesEl.current.scrollTop = newScrollHeight - prevScrollHeight.current
-    } else {
+    } else if (!userScrolledUp.current) {
       scrollToBottom()
     }
-  }, [messages.length, chatting, loading])
+  }, [messages.length, chatting, loading, streamingContent])
 
   function handleMessagesScroll() {
     if (!messagesEl.current) return
-    if (messagesEl.current.scrollTop < 80 && messagesHasMore && !loadingEarlier) {
-      prevScrollHeight.current = messagesEl.current.scrollHeight
+    const el = messagesEl.current
+    // 用户是否手动上滚（距底部超过 80px）
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    userScrolledUp.current = distanceFromBottom > 80
+
+    if (el.scrollTop < 80 && messagesHasMore && !loadingEarlier) {
+      prevScrollHeight.current = el.scrollHeight
       loadEarlierMessages()
     }
   }
@@ -509,12 +517,15 @@ export default function SessionsPage() {
                         ? displayMessages.find(m => m.messageType === 'sub_agent_result' && m.metadata?.agentId === agentId)
                         : undefined
                     }
+                    const agentId = msg.messageType === 'sub_agent_start' ? (msg.metadata?.agentId as string) : undefined
+                    const steps = agentId ? subAgentProgress[agentId] : undefined
                     return (
                       <ChatMessage
                         key={idx}
                         message={msg}
                         resultMessage={resultMessage}
                         isStreaming={chatting && idx === displayMessages.length - 1}
+                        progressSteps={steps}
                       />
                     )
                   })}
@@ -529,6 +540,30 @@ export default function SessionsPage() {
                       }}
                       isStreaming
                     />
+                  )}
+
+                  {/* AI 正在工作指示器（工具调用/子代理执行期间无 token 流时显示） */}
+                  {chatting && !streamingContent && (
+                    <Flex align="center" gap="2" px="4" py="3" mb="2">
+                      <Flex gap="1" align="center">
+                        <Box
+                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          animation="bounce 1.4s infinite ease-in-out"
+                          css={{ animationDelay: '0s' }}
+                        />
+                        <Box
+                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          animation="bounce 1.4s infinite ease-in-out"
+                          css={{ animationDelay: '0.2s' }}
+                        />
+                        <Box
+                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          animation="bounce 1.4s infinite ease-in-out"
+                          css={{ animationDelay: '0.4s' }}
+                        />
+                      </Flex>
+                      <Text fontSize="xs" color="gray.400">AI 正在思考…</Text>
+                    </Flex>
                   )}
                 </>
               )}

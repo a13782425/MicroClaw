@@ -67,6 +67,15 @@ public sealed record SubAgentResultItem(
     public override object ToSerializablePayload() => new { agentId = AgentId, agentName = AgentName, result = Result, durationMs = DurationMs, messageId = MessageId };
 }
 
+/// <summary>子代理执行过程中的进度步骤（不持久化，仅用于前端实时展示）。</summary>
+public sealed record SubAgentProgressItem(
+    string AgentId,
+    string Step) : StreamItem
+{
+    public override string TypeName => "sub_agent_progress";
+    public override object ToSerializablePayload() => new { agentId = AgentId, step = Step, messageId = MessageId };
+}
+
 /// <summary>AI 输出的非文本内容（图片/音频等），对应 DataContent。</summary>
 public sealed record DataContentItem(string MimeType, byte[] Data) : StreamItem
 {
