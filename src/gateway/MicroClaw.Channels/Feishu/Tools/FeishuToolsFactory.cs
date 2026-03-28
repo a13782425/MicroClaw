@@ -1,25 +1,44 @@
 using MicroClaw.Gateway.Contracts;
+using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
 
 /// <summary>
-/// F-C-1/F-C-3/F-C-4/F-C-5: 飞书工具工厂 — 实现 <see cref="IChannelToolProvider"/>，
+/// F-C-1/F-C-3/F-C-4/F-C-5: 飞书工具工厂 — 实现 <see cref="IToolProvider"/>（Category=Channel），
 /// 按指定渠道配置中的凭据创建 Agent 可调用的飞书工具集。
-/// 注册为单例，同时注册为 IChannelToolProvider，供 AgentRunner 按渠道类型动态注入工具。
+/// 注册为单例，供 ToolCollector 按渠道类型动态注入工具。
 /// </summary>
 public sealed class FeishuToolsFactory(
-    ILogger<FeishuToolsFactory> logger) : IChannelToolProvider
+    ChannelConfigStore channelConfigStore,
+    ILogger<FeishuToolsFactory> logger) : IToolProvider
 {
-    // ── IChannelToolProvider ────────────────────────────────────────────────
+    // ── IToolProvider ──────────────────────────────────────────────────────
 
-    public ChannelType ChannelType => ChannelType.Feishu;
+    public ToolCategory Category => ToolCategory.Channel;
+    public string GroupId => "feishu";
+    public string DisplayName => "飞书";
 
-    IReadOnlyList<(string Name, string Description)> IChannelToolProvider.GetToolDescriptions()
-        => GetToolDescriptions();
+    public IReadOnlyList<(string Name, string Description)> GetToolDescriptions()
+        => GetStaticToolDescriptions();
 
-    public IReadOnlyList<AIFunction> CreateToolsForChannel(ChannelConfig config)
+    public Task<ToolProviderResult> CreateToolsAsync(ToolCreationContext context, CancellationToken ct = default)
+    {
+        if (context.ChannelType != ChannelType.Feishu || string.IsNullOrWhiteSpace(context.ChannelId))
+            return Task.FromResult(ToolProviderResult.Empty);
+
+        ChannelConfig? config = channelConfigStore.GetById(context.ChannelId);
+        if (config is null)
+            return Task.FromResult(ToolProviderResult.Empty);
+
+        IReadOnlyList<AIFunction> tools = CreateToolsFromConfig(config);
+        return Task.FromResult(new ToolProviderResult(tools));
+    }
+
+    // ── 内部实现 ──────────────────────────────────────────────────────────
+
+    private IReadOnlyList<AIFunction> CreateToolsFromConfig(ChannelConfig config)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingsJson) ?? new();
 
@@ -32,9 +51,7 @@ public sealed class FeishuToolsFactory(
         return [.. FeishuDocTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateTools(settings, logger), .. FeishuBitableTools.CreateWriteTools(settings, logger), .. FeishuWikiTools.CreateTools(settings, logger), .. FeishuCalendarTools.CreateTools(settings, logger), .. FeishuApprovalTools.CreateTools(settings, logger)];
     }
 
-    // ── 静态工具描述（不依赖渠道配置，供 UI 展示）──────────────────────────────
-
     /// <summary>返回所有可用飞书工具的元数据描述（不依赖渠道配置）。</summary>
-    public static IReadOnlyList<(string Name, string Description)> GetToolDescriptions() =>
+    public static IReadOnlyList<(string Name, string Description)> GetStaticToolDescriptions() =>
         [.. FeishuDocTools.GetToolDescriptions(), .. FeishuBitableTools.GetToolDescriptions(), .. FeishuWikiTools.GetToolDescriptions(), .. FeishuCalendarTools.GetToolDescriptions(), .. FeishuApprovalTools.GetToolDescriptions()];
 }

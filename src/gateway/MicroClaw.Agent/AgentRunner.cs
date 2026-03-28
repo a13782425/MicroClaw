@@ -7,7 +7,6 @@ using MicroClaw.Agent.Sessions;
 using MicroClaw.Agent.Middleware;
 using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
-using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -19,7 +18,6 @@ using MicroClaw.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Client;
 
 namespace MicroClaw.Agent;
 
@@ -32,23 +30,18 @@ namespace MicroClaw.Agent;
 public sealed class AgentRunner(
     AgentStore agentStore,
     IEnumerable<IAgentContextProvider> contextProviders,
-    McpServerConfigStore mcpServerConfigStore,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     ISessionReader sessionReader,
     SkillToolFactory skillToolFactory,
-    SkillInvocationTool skillInvocationTool,
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
     IAgentStatusNotifier agentStatusNotifier,
-    ChannelConfigStore channelConfigStore,
-    IEnumerable<IChannelToolProvider> toolProviders,
-    IEnumerable<IBuiltinToolProvider> builtinToolProviders,
+    ToolCollector toolCollector,
     IDevMetricsService devMetrics,
     AIContentPipeline contentPipeline) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
-    private readonly IReadOnlyList<IBuiltinToolProvider> _builtinToolProviders = builtinToolProviders.ToList().AsReadOnly();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
 
@@ -100,40 +93,21 @@ public sealed class AgentRunner(
         SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
         List<ChatMessage> messages = await BuildChatMessagesAsync(agent, validatedHistory, sessionId, skillCtx.CatalogFragment, ct);
 
-        // 按工具配置过滤要连接的 MCP Server
-        IReadOnlyList<McpServerConfig> enabledMcpServers = GetEnabledMcpServers(agent);
-        var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(enabledMcpServers, loggerFactory, ct);
+        // 按 Agent 配置收集所有工具（builtin + channel + skill + MCP），统一过滤
+        SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId) ? sessionReader.Get(sessionId) : null;
+        var toolContext = new ToolCreationContext(
+            SessionId: sessionId,
+            ChannelType: sessionForTools?.ChannelType,
+            ChannelId: sessionForTools?.ChannelId,
+            BoundSkillIds: agent.BoundSkillIds);
+        await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, toolContext, ct);
 
-        // 过滤 MCP 工具中被单独禁用的工具
-        IEnumerable<McpClientTool> filteredMcpTools = FilterMcpTools(agent, mcpTools);
-
-        // 追加内置工具（通过 IBuiltinToolProvider 自动注册，按 ToolGroupConfig 过滤）
-        List<AITool> allTools = [.. filteredMcpTools];
-        allTools.AddRange(CollectBuiltinTools(agent, sessionId));
-
-        // 若 Agent 绑定了技能，注入 invoke_skill 工具（懒加载全文）
-        if (agent.BoundSkillIds.Count > 0)
-            allTools.Add(skillInvocationTool.Create(agent.BoundSkillIds, sessionId));
-
-        // 按会话所在渠道类型注入对应的渠道专属工具
-        if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            SessionInfo? sessionForTools = sessionReader.Get(sessionId);
-            if (sessionForTools is not null)
-            {
-                ChannelConfig? channelCfg = channelConfigStore.GetById(sessionForTools.ChannelId);
-                IChannelToolProvider? toolProvider = toolProviders.FirstOrDefault(p => p.ChannelType == sessionForTools.ChannelType);
-                if (toolProvider is not null && channelCfg is not null)
-                    allTools.AddRange(toolProvider.CreateToolsForChannel(channelCfg));
-            }
-        }
-
-        _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools ({McpCount} MCP + {BuiltinCount} built-in)",
-            agent.Id, allTools.Count, mcpTools.Count, allTools.Count - mcpTools.Count);
+        _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools",
+            agent.Id, toolResult.AllTools.Count);
 
         // ── AgentFactory：创建 ChatClientAgent + 事件 Channel ──────────────
 
-        ChatOptions chatOptions = BuildChatOptions(allTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
+        ChatOptions chatOptions = BuildChatOptions(toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
         IChatClient rawClient = clientFactory.Create(provider);
         var (chatAgent, eventChannel, runOptions) = AgentFactory.Create(rawClient, agent.Name, chatOptions, loggerFactory, devMetrics: devMetrics);
 
@@ -197,7 +171,6 @@ public sealed class AgentRunner(
         {
             runSw.Stop();
             devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
-            await DisposeConnectionsAsync(connections);
             UsageContentHandler.UnbindCapture();
             await UsageTrackingMiddleware.TrackAsync(
                 usageCapture, sessionId, provider, source,
@@ -209,7 +182,7 @@ public sealed class AgentRunner(
 
     /// <summary>
     /// 调用指定 Agent 的工具（MCP 或内置），返回工具输出字符串。
-    /// 先搜索 MCP 工具，未找到时回退搜索内置工具。供工作流 Tool 节点使用。
+    /// 通过 ToolCollector 统一收集后按名称查找。供工作流 Tool 节点使用。
     /// </summary>
     public async Task<string> InvokeToolAsync(
         string agentId, string toolName, IReadOnlyDictionary<string, string>? nodeConfig, string fallbackInput, CancellationToken ct)
@@ -234,103 +207,26 @@ public sealed class AgentRunner(
         if (arguments.Count == 0)
             arguments["input"] = fallbackInput;
 
-        // 1) 尝试 MCP 工具
-        IReadOnlyList<McpServerConfig> servers = GetEnabledMcpServers(agent);
-        if (servers.Count > 0)
+        // 通过 ToolCollector 统一收集并查找工具
+        var context = new ToolCreationContext();
+        await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, context, ct);
+
+        AITool? tool = toolResult.AllTools.FirstOrDefault(t => t.Name == toolName)
+            ?? toolResult.AllTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+        if (tool is AIFunction fn)
         {
-            var (mcpTools, connections) = await ToolRegistry.LoadToolsAsync(servers, loggerFactory, ct);
-            try
-            {
-                McpClientTool? mcpTool = mcpTools.FirstOrDefault(t => t.Name == toolName)
-                    ?? mcpTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
-
-                if (mcpTool is not null)
-                {
-                    object? result = await mcpTool.InvokeAsync(new AIFunctionArguments(arguments), ct);
-                    return result?.ToString() ?? string.Empty;
-                }
-            }
-            finally
-            {
-                await DisposeConnectionsAsync(connections);
-            }
-        }
-
-        // 2) 回退到内置工具
-        List<AIFunction> builtinTools = CollectBuiltinTools(agent, sessionId: null).ToList();
-        AIFunction? builtinTool = builtinTools.FirstOrDefault(t => t.Name == toolName)
-            ?? builtinTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
-
-        if (builtinTool is not null)
-        {
-            object? result = await builtinTool.InvokeAsync(new AIFunctionArguments(arguments), ct);
+            object? result = await fn.InvokeAsync(new AIFunctionArguments(arguments), ct);
             return result?.ToString() ?? string.Empty;
         }
 
         _logger.LogWarning(
-            "InvokeToolAsync: Tool '{ToolName}' not found (MCP or builtin) for Agent '{AgentId}'.",
+            "InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.",
             toolName, agentId);
         return fallbackInput;
     }
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
-
-    /// <summary>返回未被整体禁用的 MCP Server 配置列表（从全局库中按引用 ID 加载）。
-    /// EnabledMcpServerIds 为空时，默认使用全局所有已启用的 MCP Server。</summary>
-    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
-    {
-        // 空列表 = 默认启用全部已启用的 MCP Server（opt-out 模型）
-        IReadOnlyList<McpServerConfig> servers = agent.EnabledMcpServerIds.Count == 0
-            ? mcpServerConfigStore.AllEnabled
-            : mcpServerConfigStore.GetEnabledByIds(agent.EnabledMcpServerIds);
-        if (agent.ToolGroupConfigs.Count == 0) return servers;
-        return servers
-            .Where(s =>
-            {
-                // GroupId 可能存的是 srv.Name（旧格式）或 srv.Id（新格式），两者都兼容
-                ToolGroupConfig? cfg = agent.ToolGroupConfigs
-                    .FirstOrDefault(g => g.GroupId == s.Name || g.GroupId == s.Id);
-                return cfg is null || cfg.IsEnabled;
-            })
-            .ToList()
-            .AsReadOnly();
-    }
-
-    /// <summary>从已加载的 MCP 工具中过滤掉被单独禁用的工具。</summary>
-    private static IEnumerable<McpClientTool> FilterMcpTools(AgentConfig agent, IReadOnlyList<McpClientTool> tools)
-    {
-        if (agent.ToolGroupConfigs.Count == 0) return tools;
-        // 保留未被任何启用分组明确禁用的工具
-        return tools.Where(tool =>
-        {
-            bool isDisabledByAnyGroup = agent.ToolGroupConfigs
-                .Any(g => g.IsEnabled && g.DisabledToolNames.Contains(tool.Name));
-            return !isDisabledByAnyGroup;
-        });
-    }
-
-    /// <summary>
-    /// 遍历所有 IBuiltinToolProvider，按 Agent 的 ToolGroupConfig 过滤后返回工具列表。
-    /// 不依赖 sessionId 的 Provider 忽略该参数；需要 sessionId 的 Provider 在其为空时自行返回空列表。
-    /// </summary>
-    private IEnumerable<AIFunction> CollectBuiltinTools(AgentConfig agent, string? sessionId)
-    {
-        foreach (IBuiltinToolProvider provider in _builtinToolProviders)
-        {
-            IReadOnlyList<AIFunction> tools = provider.CreateTools(sessionId);
-            if (tools.Count == 0) continue;
-
-            ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == provider.GroupId);
-            if (cfg is not null && !cfg.IsEnabled) continue;
-
-            IEnumerable<AIFunction> filtered = cfg is null
-                ? tools
-                : tools.Where(t => !cfg.DisabledToolNames.Contains(t.Name));
-
-            foreach (AIFunction tool in filtered)
-                yield return tool;
-        }
-    }
 
     private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, CancellationToken ct = default)
     {
@@ -505,14 +401,5 @@ public sealed class AgentRunner(
         options.ToolMode = ChatToolMode.Auto;
         options.AllowMultipleToolCalls = true;
         return options;
-    }
-
-    private async Task DisposeConnectionsAsync(IAsyncDisposable[] connections)
-    {
-        foreach (IAsyncDisposable conn in connections)
-        {
-            try { await conn.DisposeAsync(); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Error disposing MCP connection"); }
-        }
     }
 }

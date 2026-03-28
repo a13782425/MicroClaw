@@ -5,6 +5,7 @@ using MicroClaw.Channels.Models;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Gateway.Contracts;
+using MicroClaw.Tools;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Endpoints;
@@ -48,10 +49,11 @@ public static class ChannelEndpoints
         // 渠道专属工具列表（支持插件注入的自定义渠道工具）
         endpoints.MapGet("/channels/{channelType}/tools", (
             string channelType,
-            IEnumerable<IChannelToolProvider> toolProviders) =>
+            IEnumerable<IToolProvider> toolProviders) =>
         {
-            IChannelToolProvider? provider = toolProviders.FirstOrDefault(
-                p => string.Equals(p.ChannelType.ToString(), channelType, StringComparison.OrdinalIgnoreCase));
+            IToolProvider? provider = toolProviders.FirstOrDefault(
+                p => p.Category == ToolCategory.Channel
+                     && string.Equals(p.GroupId, channelType, StringComparison.OrdinalIgnoreCase));
             var tools = (provider?.GetToolDescriptions() ?? []).Select(t => new
             {
                 name = t.Name,

@@ -15,16 +15,19 @@ public sealed class SubAgentToolProvider(
     AgentStore agentStore,
     ISubAgentRunner subAgentRunner,
     AgentDnaService agentDnaService,
-    ISessionReader sessionReader) : IBuiltinToolProvider
+    ISessionReader sessionReader) : IToolProvider
 {
+    public ToolCategory Category => ToolCategory.Builtin;
     public string GroupId => "subagent";
+    public string DisplayName => "子代理 & DNA";
 
     public IReadOnlyList<(string Name, string Description)> GetToolDescriptions() =>
         SubAgentTools.GetToolDescriptions();
 
-    public IReadOnlyList<AIFunction> CreateTools(string? sessionId)
+    public Task<ToolProviderResult> CreateToolsAsync(ToolCreationContext context, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(sessionId)) return [];
+        if (string.IsNullOrWhiteSpace(context.SessionId))
+            return Task.FromResult(ToolProviderResult.Empty);
 
         var tools = new List<AIFunction>();
 
@@ -38,6 +41,7 @@ public sealed class SubAgentToolProvider(
                 ? $"调用子代理「{agentName}」执行专项任务并等待结果。"
                 : $"子代理「{agentName}」：{subAgent.Description.TrimEnd('。', '.')}。调用时传入详细的任务描述。";
 
+            string sessionId = context.SessionId;
             tools.Add(AIFunctionFactory.Create(
                 async ([Description("交给子代理详细执行的任务描述，尽量具体，子代理会基于此独立完成任务")] string task,
                        CancellationToken ct) =>
@@ -57,8 +61,8 @@ public sealed class SubAgentToolProvider(
         }
 
         // 固定保留 write_agent_memory 工具
-        tools.Add(SubAgentTools.CreateWriteMemoryTool(sessionId, agentStore, agentDnaService, sessionReader));
+        tools.Add(SubAgentTools.CreateWriteMemoryTool(context.SessionId, agentStore, agentDnaService, sessionReader));
 
-        return tools;
+        return Task.FromResult(new ToolProviderResult(tools));
     }
 }

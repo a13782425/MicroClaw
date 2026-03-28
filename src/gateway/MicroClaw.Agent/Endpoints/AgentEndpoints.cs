@@ -1,13 +1,10 @@
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Channels;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Client;
 
 namespace MicroClaw.Agent.Endpoints;
 
@@ -151,116 +148,15 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        // ── 工具列表（内置分组 + 全局 MCP 分组，含启用状态）────────────────────
+        // ── 工具列表（内置分组 + 渠道 + MCP 分组，含启用状态）────────────────────
 
-        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, McpServerConfigStore mcpStore, IEnumerable<IBuiltinToolProvider> builtinProviders, IEnumerable<IChannelToolProvider> channelProviders, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ToolCollector toolCollector, CancellationToken ct) =>
         {
             AgentConfig? agent = store.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            var groups = new List<object>();
-
-            // ── 内置分组：遍历所有 IBuiltinToolProvider，按 Agent 的 ToolGroupConfig 过滤 ──
-            var groupNames = new Dictionary<string, string>
-            {
-                ["fetch"]    = "HTTP 抓取",
-                ["shell"]    = "Shell 命令",
-                ["cron"]     = "定时任务",
-                ["subagent"] = "子代理 & DNA",
-                ["file"]     = "文件操作",
-            };
-            foreach (IBuiltinToolProvider provider in builtinProviders)
-            {
-                string displayName = groupNames.TryGetValue(provider.GroupId, out string? n) ? n : provider.GroupId;
-                ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == provider.GroupId);
-                bool groupEnabled = cfg is null || cfg.IsEnabled;
-                groups.Add(new
-                {
-                    id = provider.GroupId,
-                    name = displayName,
-                    type = "builtin",
-                    isEnabled = groupEnabled,
-                    tools = provider.GetToolDescriptions().Select(t => new
-                    {
-                        name = t.Name,
-                        description = t.Description,
-                        isEnabled = groupEnabled && (cfg is null || !cfg.DisabledToolNames.Contains(t.Name))
-                    }).ToList()
-                });
-            }
-
-            // ── 渠道工具分组：遍历所有 IChannelToolProvider ──────────────────
-            foreach (IChannelToolProvider channelProvider in channelProviders)
-            {
-                string groupId = channelProvider.ChannelType.ToString().ToLowerInvariant();
-                string displayName = channelProvider.ChannelType.ToString();
-                ToolGroupConfig? cfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == groupId);
-                bool groupEnabled = cfg is null || cfg.IsEnabled;
-                groups.Add(new
-                {
-                    id = groupId,
-                    name = displayName,
-                    type = "builtin",
-                    isEnabled = groupEnabled,
-                    tools = channelProvider.GetToolDescriptions().Select(t => new
-                    {
-                        name = t.Name,
-                        description = t.Description,
-                        isEnabled = groupEnabled && (cfg is null || !cfg.DisabledToolNames.Contains(t.Name))
-                    }).ToList()
-                });
-            }
-
-            // ── 全局 MCP Server 分组（EnabledMcpServerIds 为空时默认全部启用）──────────────────────────────
-            HashSet<string> enabledIds = agent.EnabledMcpServerIds.ToHashSet();
-            bool defaultAllEnabled = enabledIds.Count == 0;
-            foreach (McpServerConfig srv in mcpStore.All)
-            {
-                bool isEnabled = defaultAllEnabled || enabledIds.Contains(srv.Id);
-                // 若 MCP Server 本身被全局禁用，则不启用
-                if (!srv.IsEnabled) isEnabled = false;
-                ToolGroupConfig? srvCfg = agent.ToolGroupConfigs.FirstOrDefault(g => g.GroupId == srv.Name);
-                bool groupEnabled = isEnabled && (srvCfg is null || srvCfg.IsEnabled);
-
-                if (!groupEnabled)
-                {
-                    groups.Add(new
-                    {
-                        id = srv.Id,
-                        name = srv.Name,
-                        type = "mcp",
-                        isEnabled = false,
-                        tools = Array.Empty<object>()
-                    });
-                    continue;
-                }
-
-                // 仅在分组启用时连接 MCP Server 加载工具列表
-                var (tools, connections) = await ToolRegistry.LoadToolsAsync([srv], loggerFactory, ct);
-                try
-                {
-                    groups.Add(new
-                    {
-                        id = srv.Id,
-                        name = srv.Name,
-                        type = "mcp",
-                        isEnabled = true,
-                        tools = tools.Select(t => new
-                        {
-                            name = t.Name,
-                            description = t.Description,
-                            isEnabled = srvCfg is null || !srvCfg.DisabledToolNames.Contains(t.Name)
-                        }).ToList()
-                    });
-                }
-                finally
-                {
-                    foreach (IAsyncDisposable conn in connections)
-                        try { await conn.DisposeAsync(); } catch { }
-                }
-            }
-
+            IReadOnlyList<ToolGroupInfo> groups = await toolCollector.GetToolGroupsAsync(agent, ct);
             return Results.Ok(new { groups });
         })
         .WithTags("Agents");

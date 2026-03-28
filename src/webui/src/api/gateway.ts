@@ -536,7 +536,7 @@ export type ToolItem = {
 export type ToolGroup = {
   id: string
   name: string
-  type: 'builtin' | 'mcp'
+  type: 'builtin' | 'channel' | 'mcp'
   isEnabled: boolean
   tools: ToolItem[]
 }

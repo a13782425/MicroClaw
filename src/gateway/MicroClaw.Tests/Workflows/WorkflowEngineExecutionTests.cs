@@ -64,18 +64,14 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
             {
                 new AgentDnaContextProvider(agentDna),
             },
-            mcpServerConfigStore: new McpServerConfigStore(dbFactory),
             providerStore: _providerStore,
             clientFactory: CreateNoOpClientFactory(),
             sessionReader: Substitute.For<ISessionReader>(),
             skillToolFactory: skillToolFactory,
-            skillInvocationTool: skillInvocationTool,
             usageTracker: Substitute.For<IUsageTracker>(),
             loggerFactory: NullLoggerFactory.Instance,
             agentStatusNotifier: Substitute.For<IAgentStatusNotifier>(),
-            channelConfigStore: new ChannelConfigStore(dbFactory),
-            toolProviders: [],
-            builtinToolProviders: [],
+            toolCollector: new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
             devMetrics: Substitute.For<IDevMetricsService>(),
             contentPipeline: new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()));
 

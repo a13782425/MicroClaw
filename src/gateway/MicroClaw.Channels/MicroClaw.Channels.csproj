@@ -18,6 +18,7 @@
     <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
+    <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
   </ItemGroup>
 
 </Project>

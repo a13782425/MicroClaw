@@ -291,14 +291,16 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.AgentStoreAgentLookup>();
 		builder.Services.AddSingleton<McpServerConfigStore>();
 
-		// 内置工具提供者（实现 IBuiltinToolProvider，AgentRunner 自动加载，无需手动硬编码）
-		builder.Services.AddSingleton<IBuiltinToolProvider, FetchToolProvider>();
-		builder.Services.AddSingleton<IBuiltinToolProvider, ShellToolProvider>();
-		builder.Services.AddSingleton<IBuiltinToolProvider, CronToolProvider>();
-		builder.Services.AddSingleton<IBuiltinToolProvider, SubAgentToolProvider>();
+		// 工具提供者（实现 IToolProvider，ToolCollector 自动发现，无需手动硬编码）
+		builder.Services.AddSingleton<IToolProvider, FetchToolProvider>();
+		builder.Services.AddSingleton<IToolProvider, ShellToolProvider>();
+		builder.Services.AddSingleton<IToolProvider, CronToolProvider>();
+		builder.Services.AddSingleton<IToolProvider, SubAgentToolProvider>();
 		builder.Services.Configure<FileToolsOptions>(builder.Configuration.GetSection("filesystem"));
-		builder.Services.AddSingleton<IBuiltinToolProvider>(sp =>
+		builder.Services.AddSingleton<IToolProvider>(sp =>
 			new FileToolProvider(sessionsDir, sp.GetRequiredService<IOptions<FileToolsOptions>>()));
+		builder.Services.AddSingleton<IToolProvider, SkillToolProvider>();
+		builder.Services.AddSingleton<ToolCollector>();
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();
@@ -338,7 +340,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService(sp => sp.GetRequiredService<FeishuWebSocketManager>());
 		// F-C-1: 飞书文档读取工具工厂（供 AgentRunner 加载工具，并展示到渠道工具面板）
 		builder.Services.AddSingleton<FeishuToolsFactory>();
-		builder.Services.AddSingleton<IChannelToolProvider>(sp => sp.GetRequiredService<FeishuToolsFactory>());
+		builder.Services.AddSingleton<IToolProvider>(sp => sp.GetRequiredService<FeishuToolsFactory>());
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
 		builder.Services.AddHostedService<FeishuDocSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
