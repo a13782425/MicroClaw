@@ -27,8 +27,8 @@ public sealed class A2AAgentStoreTests : IDisposable
             Name: name,
             Description: "A test agent.",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             ExposeAsA2A: exposeAsA2A);

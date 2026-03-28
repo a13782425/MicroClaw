@@ -1,5 +1,4 @@
 using MicroClaw.Configuration;
-using Microsoft.Extensions.Options;
 
 namespace MicroClaw.Skills;
 
@@ -10,10 +9,9 @@ namespace MicroClaw.Skills;
 /// </summary>
 public sealed class SkillToolFactory(
     SkillStore skillStore,
-    SkillService skillService,
-    IOptions<SkillOptions> options)
+    SkillService skillService)
 {
-    private readonly SkillOptions _options = options.Value;
+    private readonly SkillOptions _options = MicroClawConfig.Get<SkillOptions>();
     // ── Public API ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -22,17 +20,22 @@ public sealed class SkillToolFactory(
     /// 全文指令仅在 invoke_skill 工具被调用时通过 <see cref="BuildSkillInstructions"/> 加载。
     /// </summary>
     public SkillContext BuildSkillContext(
-        IReadOnlyList<string> boundSkillIds,
+        IReadOnlyList<string> disabledSkillIds,
         string? sessionId = null)
     {
-        if (boundSkillIds.Count == 0) return SkillContext.Empty;
+        // 全部技能减去排除列表（空排除列表 = 全部启用，opt-out 模型）
+        IReadOnlyList<string> allIds = skillStore.All.Select(s => s.Id).ToList();
+        IReadOnlyList<string> effectiveIds = disabledSkillIds.Count > 0
+            ? allIds.Where(id => !disabledSkillIds.Contains(id)).ToList()
+            : allIds;
+        if (effectiveIds.Count == 0) return SkillContext.Empty;
 
         string? modelOverride = null;
         string? effortOverride = null;
         var approvedTools = new List<string>();
         var catalogEntries = new List<string>();
 
-        foreach (string id in boundSkillIds)
+        foreach (string id in effectiveIds)
         {
             SkillConfig? skill = skillStore.GetById(id);
             if (skill is null) continue;

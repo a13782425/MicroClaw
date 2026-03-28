@@ -5,6 +5,7 @@ using System.Text;
 using FluentAssertions;
 using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
+using MicroClaw.Tests.Fixtures;
 using MicroClaw.Gateway.Contracts.Auth;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Tests.Auth;
 
+[Collection("Config")]
 public sealed class AuthEndpointsTests : IDisposable
 {
     private const string TestJwtSecret = "this-is-a-test-jwt-secret-key-that-is-long-enough-for-hs256";
@@ -24,17 +26,18 @@ public sealed class AuthEndpointsTests : IDisposable
 
     public AuthEndpointsTests()
     {
+        TestConfigFixture.EnsureInitialized(new Dictionary<string, string?>
+        {
+            ["auth:username"] = TestUsername,
+            ["auth:password"] = TestPassword,
+            ["auth:jwt_secret"] = TestJwtSecret,
+            ["auth:expires_hours"] = "8",
+        });
+
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
                 services.AddRouting();
-                services.Configure<AuthOptions>(opts =>
-                {
-                    opts.Username = TestUsername;
-                    opts.Password = TestPassword;
-                    opts.JwtSecret = TestJwtSecret;
-                    opts.ExpiresHours = 8;
-                });
             })
             .Configure(app =>
             {

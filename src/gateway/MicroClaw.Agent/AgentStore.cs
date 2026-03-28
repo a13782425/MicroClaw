@@ -63,8 +63,8 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
             Name: "main",
             Description: string.Empty,
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             IsDefault: true);
@@ -72,14 +72,14 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         return Add(main);
     }
 
-    /// <summary>更新 Agent 启用的全局 MCP Server ID 列表。</summary>
-    public AgentConfig? UpdateEnabledMcpServerIds(string id, IReadOnlyList<string> mcpServerIds)
+    /// <summary>更新 Agent 禁用的 MCP Server ID 排除列表。空列表 = 全部启用。</summary>
+    public AgentConfig? UpdateDisabledMcpServerIds(string id, IReadOnlyList<string> mcpServerIds)
     {
         using GatewayDbContext db = factory.CreateDbContext();
         AgentConfigEntity? entity = db.Agents.Find(id);
         if (entity is null) return null;
 
-        entity.EnabledMcpServerIdsJson = mcpServerIds.Count > 0
+        entity.DisabledMcpServerIdsJson = mcpServerIds.Count > 0
             ? JsonSerializer.Serialize(mcpServerIds, JsonOpts)
             : null;
         db.SaveChanges();
@@ -131,11 +131,11 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
 
         entity.Description = incoming.Description;
         entity.IsEnabled = incoming.IsEnabled;
-        entity.BoundSkillIdsJson = incoming.BoundSkillIds.Count > 0
-            ? JsonSerializer.Serialize(incoming.BoundSkillIds, JsonOpts)
+        entity.DisabledSkillIdsJson = incoming.DisabledSkillIds.Count > 0
+            ? JsonSerializer.Serialize(incoming.DisabledSkillIds, JsonOpts)
             : null;
-        entity.EnabledMcpServerIdsJson = incoming.EnabledMcpServerIds.Count > 0
-            ? JsonSerializer.Serialize(incoming.EnabledMcpServerIds, JsonOpts)
+        entity.DisabledMcpServerIdsJson = incoming.DisabledMcpServerIds.Count > 0
+            ? JsonSerializer.Serialize(incoming.DisabledMcpServerIds, JsonOpts)
             : null;
         entity.ToolGroupConfigsJson = incoming.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(incoming.ToolGroupConfigs, JsonOpts)
@@ -165,8 +165,8 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         e.Name,
         e.Description,
         e.IsEnabled,
-        DeserializeList<string>(e.BoundSkillIdsJson),
-        DeserializeList<string>(e.EnabledMcpServerIdsJson),
+        DeserializeList<string>(e.DisabledSkillIdsJson),
+        DeserializeList<string>(e.DisabledMcpServerIdsJson),
         DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
         TimeBase.FromMs(e.CreatedAtMs),
         e.IsDefault,
@@ -179,11 +179,11 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         Name = c.Name,
         Description = c.Description,
         IsEnabled = c.IsEnabled,
-        BoundSkillIdsJson = c.BoundSkillIds.Count > 0
-            ? JsonSerializer.Serialize(c.BoundSkillIds, JsonOpts)
+        DisabledSkillIdsJson = c.DisabledSkillIds.Count > 0
+            ? JsonSerializer.Serialize(c.DisabledSkillIds, JsonOpts)
             : null,
-        EnabledMcpServerIdsJson = c.EnabledMcpServerIds.Count > 0
-            ? JsonSerializer.Serialize(c.EnabledMcpServerIds, JsonOpts)
+        DisabledMcpServerIdsJson = c.DisabledMcpServerIds.Count > 0
+            ? JsonSerializer.Serialize(c.DisabledMcpServerIds, JsonOpts)
             : null,
         ToolGroupConfigsJson = c.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(c.ToolGroupConfigs, JsonOpts)

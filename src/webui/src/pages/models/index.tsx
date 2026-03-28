@@ -56,7 +56,7 @@ function defaultForm() {
     outputImage: false,
     outputAudio: false,
     outputVideo: false,
-    supportsFunctionCalling: false,
+    supportsFunctionCalling: true,
     supportsResponsesApi: false,
     inputPricePerMToken: '',
     outputPricePerMToken: '',

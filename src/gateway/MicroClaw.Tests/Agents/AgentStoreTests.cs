@@ -25,8 +25,8 @@ public sealed class AgentStoreTests : IDisposable
             Name: name,
             Description: "A test agent.",
             IsEnabled: isEnabled,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             IsDefault: isDefault);
@@ -185,26 +185,26 @@ public sealed class AgentStoreTests : IDisposable
     // --- JSON 序列化往返测试 ---
 
     [Fact]
-    public void BoundSkillIds_RoundTrip_Preserved()
+    public void DisabledSkillIds_RoundTrip_Preserved()
     {
         var skillIds = new[] { "skill-1", "skill-2", "skill-3" };
-        var config = CreateSampleConfig() with { BoundSkillIds = skillIds };
+        var config = CreateSampleConfig() with { DisabledSkillIds = skillIds };
 
         var added = _store.Add(config);
         var retrieved = _store.GetById(added.Id)!;
 
-        retrieved.BoundSkillIds.Should().BeEquivalentTo(skillIds);
+        retrieved.DisabledSkillIds.Should().BeEquivalentTo(skillIds);
     }
 
     [Fact]
-    public void EnabledMcpServerIds_RoundTrip_Preserved()
+    public void DisabledMcpServerIds_RoundTrip_Preserved()
     {
         var mcpIds = new[] { "mcp-id-1", "mcp-id-2" };
-        var config = CreateSampleConfig() with { EnabledMcpServerIds = mcpIds };
+        var config = CreateSampleConfig() with { DisabledMcpServerIds = mcpIds };
 
         var added = _store.Add(config);
         var retrieved = _store.GetById(added.Id)!;
 
-        retrieved.EnabledMcpServerIds.Should().BeEquivalentTo(mcpIds);
+        retrieved.DisabledMcpServerIds.Should().BeEquivalentTo(mcpIds);
     }
 }

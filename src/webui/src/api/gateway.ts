@@ -503,8 +503,8 @@ export type AgentConfig = {
   description: string
   isEnabled: boolean
   isDefault: boolean
-  boundSkillIds: string[]
-  enabledMcpServerIds: string[]
+  disabledSkillIds: string[]
+  disabledMcpServerIds: string[]
   createdAtUtc: string
   exposeAsA2A: boolean
 }
@@ -513,8 +513,8 @@ export type AgentCreateRequest = {
   name: string
   description?: string
   isEnabled?: boolean
-  boundSkillIds?: string[]
-  enabledMcpServerIds?: string[]
+  disabledSkillIds?: string[]
+  disabledMcpServerIds?: string[]
 }
 
 export type AgentUpdateRequest = {
@@ -522,8 +522,8 @@ export type AgentUpdateRequest = {
   name?: string
   description?: string
   isEnabled?: boolean
-  boundSkillIds?: string[]
-  enabledMcpServerIds?: string[]
+  disabledSkillIds?: string[]
+  disabledMcpServerIds?: string[]
   exposeAsA2A?: boolean
 }
 

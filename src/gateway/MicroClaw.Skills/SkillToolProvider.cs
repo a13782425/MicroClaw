@@ -5,9 +5,9 @@ namespace MicroClaw.Skills;
 
 /// <summary>
 /// 技能调用工具提供者 — 包装 <see cref="SkillInvocationTool"/>，将其纳入统一 <see cref="IToolProvider"/> 体系。
-/// 当 Agent 绑定了技能（<see cref="ToolCreationContext.BoundSkillIds"/> 非空）时注入 invoke_skill 工具。
+/// 默认启用所有技能，通过 <see cref="ToolCreationContext.DisabledSkillIds"/> 排除不需要的技能（opt-out 模型）。
 /// </summary>
-public sealed class SkillToolProvider(SkillInvocationTool skillInvocationTool) : IToolProvider
+public sealed class SkillToolProvider(SkillInvocationTool skillInvocationTool, SkillStore skillStore) : IToolProvider
 {
     public ToolCategory Category => ToolCategory.Builtin;
     public string GroupId => "skill";
@@ -18,10 +18,16 @@ public sealed class SkillToolProvider(SkillInvocationTool skillInvocationTool) :
 
     public Task<ToolProviderResult> CreateToolsAsync(ToolCreationContext context, CancellationToken ct = default)
     {
-        if (context.BoundSkillIds is null || context.BoundSkillIds.Count == 0)
+        // 全部技能减去排除列表（空排除列表 = 全部启用）
+        IReadOnlyList<string> allSkillIds = skillStore.All.Select(s => s.Id).ToList();
+        IReadOnlyList<string> effectiveIds = context.DisabledSkillIds is { Count: > 0 }
+            ? allSkillIds.Where(id => !context.DisabledSkillIds.Contains(id)).ToList()
+            : allSkillIds;
+
+        if (effectiveIds.Count == 0)
             return Task.FromResult(ToolProviderResult.Empty);
 
-        AIFunction tool = skillInvocationTool.Create(context.BoundSkillIds, context.SessionId);
+        AIFunction tool = skillInvocationTool.Create(effectiveIds, context.SessionId);
         return Task.FromResult(new ToolProviderResult([tool]));
     }
 }

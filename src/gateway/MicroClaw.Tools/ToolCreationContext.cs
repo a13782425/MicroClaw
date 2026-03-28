@@ -13,5 +13,5 @@ public sealed record ToolCreationContext(
     ChannelType? ChannelType = null,
     /// <summary>当前会话的渠道配置 ID。渠道工具 Provider 据此加载凭据等配置。</summary>
     string? ChannelId = null,
-    /// <summary>Agent 绑定的技能 ID 列表。技能工具 Provider 据此决定是否创建 invoke_skill 工具。</summary>
-    IReadOnlyList<string>? BoundSkillIds = null);
+    /// <summary>Agent 禁用的技能 ID 排除列表。空列表 = 全部启用（opt-out 模型）。</summary>
+    IReadOnlyList<string>? DisabledSkillIds = null);

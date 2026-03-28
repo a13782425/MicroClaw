@@ -1,4 +1,5 @@
 using System.CommandLine;
+using MicroClaw.Configuration;
 
 namespace MicroClaw.Commands;
 

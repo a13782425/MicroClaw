@@ -29,13 +29,19 @@ function parseSettings(settings: string): Record<string, string> {
 }
 
 // ─── 渠道类型特有字段配置 ──────────────────────────────────────────────────────
-const CHANNEL_FIELDS: Record<ChannelType, { key: string; label: string; type?: string }[]> = {
+const CONNECTION_MODE_OPTIONS = [
+  { value: 'websocket', label: 'WebSocket' },
+  { value: 'webhook', label: 'Webhook' },
+]
+const connectionModeCollection = createListCollection({ items: CONNECTION_MODE_OPTIONS })
+
+const CHANNEL_FIELDS: Record<ChannelType, { key: string; label: string; type?: string; required?: boolean; select?: true }[]> = {
   feishu: [
-    { key: 'appId', label: 'App ID' },
-    { key: 'appSecret', label: 'App Secret', type: 'password' },
+    { key: 'appId', label: 'App ID', required: true },
+    { key: 'appSecret', label: 'App Secret', type: 'password', required: true },
     { key: 'encryptKey', label: 'Encrypt Key' },
     { key: 'verificationToken', label: 'Verification Token' },
-    { key: 'connectionMode', label: '连接方式 (websocket/webhook)' },
+    { key: 'connectionMode', label: '连接方式', select: true },
     { key: 'apiBaseUrl', label: 'API Base URL（可选）' },
   ],
   wecom: [
@@ -79,10 +85,10 @@ function ChannelDialog({ open, channelType, editing, onClose, onSaved }: Channel
       } else {
         setDisplayName('')
         setIsEnabled(true)
-        setSettings({})
+        setSettings(channelType === 'feishu' ? { connectionMode: 'websocket' } : {})
       }
     }
-  }, [open, editing])
+  }, [open, editing, channelType])
 
   if (!open) return null
 
@@ -92,6 +98,13 @@ function ChannelDialog({ open, channelType, editing, onClose, onSaved }: Channel
     if (!displayName.trim()) {
       toaster.create({ type: 'error', title: '请填写渠道名称' })
       return
+    }
+    const requiredFields = fields.filter((f) => f.required)
+    for (const f of requiredFields) {
+      if (!settings[f.key]?.trim()) {
+        toaster.create({ type: 'error', title: `请填写 ${f.label}` })
+        return
+      }
     }
     setSaving(true)
     try {
@@ -144,13 +157,32 @@ function ChannelDialog({ open, channelType, editing, onClose, onSaved }: Channel
 
       {fields.map((f) => (
         <Box key={f.key} mb="3">
-          <Text fontSize="sm" mb="1" fontWeight="medium">{f.label}</Text>
-          <Input
-            type={f.type ?? 'text'}
-            value={settings[f.key] ?? ''}
-            onChange={(e) => setSettings((prev) => ({ ...prev, [f.key]: e.target.value }))}
-            placeholder={f.label}
-          />
+          <Text fontSize="sm" mb="1" fontWeight="medium">{f.label}{f.required ? ' *' : ''}</Text>
+          {f.select ? (
+            <Select.Root
+              value={settings[f.key] ? [settings[f.key]] : ['websocket']}
+              onValueChange={(v) => setSettings((prev) => ({ ...prev, [f.key]: v.value[0] ?? '' }))}
+              collection={connectionModeCollection}
+            >
+              <Select.Trigger><Select.ValueText /></Select.Trigger>
+              <Portal>
+                <Select.Positioner>
+                  <Select.Content>
+                    {CONNECTION_MODE_OPTIONS.map((o) => (
+                      <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Positioner>
+              </Portal>
+            </Select.Root>
+          ) : (
+            <Input
+              type={f.type ?? 'text'}
+              value={settings[f.key] ?? ''}
+              onChange={(e) => setSettings((prev) => ({ ...prev, [f.key]: e.target.value }))}
+              placeholder={f.label}
+            />
+          )}
         </Box>
       ))}
     </AppDialog>

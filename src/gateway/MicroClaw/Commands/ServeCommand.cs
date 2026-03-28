@@ -27,7 +27,6 @@ using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Quartz;
 using Serilog;
@@ -51,7 +50,7 @@ public class ServeCommand : Command
 	{
 		var (home, configFile) = InitializeEnvironment();
 
-		var webRootPath = ResolveWebRootPath();
+		var webRootPath = MicroClawConfig.Env.WebRootPath;
 		var options = new WebApplicationOptions
 		{
 			WebRootPath = Directory.Exists(webRootPath) ? webRootPath : null
@@ -62,9 +61,12 @@ public class ServeCommand : Command
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
 
-		ConfigureLogging(builder, home, configFile);
+		// 初始化静态配置门面（必须在 YAML 加载之后、使用配置之前）
+		MicroClawConfig.Initialize(builder.Configuration, home, configFile);
+
+		ConfigureLogging(builder);
 		ConfigureAuth(builder);
-		ConfigureServices(builder, home, configFile);
+		ConfigureServices(builder);
 		ConfigureChannels(builder);
 
 		var app = builder.Build();
@@ -92,7 +94,7 @@ public class ServeCommand : Command
 		HomeInitializer.EnsureInitialized(home, configFile, force: false, verbose: false);
 
 		if (!string.IsNullOrWhiteSpace(home))
-			LoadDotEnv(Path.Combine(home, ".env"));
+			DotEnvLoader.Load(Path.Combine(home, ".env"));
 
 		if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 		{
@@ -104,22 +106,13 @@ public class ServeCommand : Command
 		return (home, configFile);
 	}
 
-	/// <summary>读取 MICROCLAW_WEBUI_PATH，若未设置则默认使用当前目录下的 wwwroot。</summary>
-	private static string ResolveWebRootPath()
-	{
-		var webRootPath = Environment.GetEnvironmentVariable("MICROCLAW_WEBUI_PATH");
-		if (string.IsNullOrWhiteSpace(webRootPath))
-			webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-		return webRootPath;
-	}
-
 	/// <summary>配置 Serilog 结构化日志，输出到控制台和滚动日志文件，最低级别和模板均可由配置文件覆盖。</summary>
-	private static void ConfigureLogging(WebApplicationBuilder builder, string? home, string? configFile)
+	private static void ConfigureLogging(WebApplicationBuilder builder)
 	{
 		builder.Host.UseSerilog((ctx, lc) =>
 		{
 			IConfiguration cfg = ctx.Configuration;
-			string logFilePath = ResolveLogFilePath(home, configFile);
+			string logFilePath = MicroClawConfig.Env.LogFilePath;
 			string consoleTemplate = cfg["serilog:write_to:0:args:output_template"]
 				?? "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 			string fileTemplate = cfg["serilog:write_to:1:args:output_template"]
@@ -146,9 +139,7 @@ public class ServeCommand : Command
 	/// <summary>注册 JWT Bearer 认证和 RBAC 授权，签名密钥从配置项 auth:jwt_secret 读取。</summary>
 	private static void ConfigureAuth(WebApplicationBuilder builder)
 	{
-		builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("auth"));
-
-		var jwtSecret = builder.Configuration["auth:jwt_secret"] ?? "";
+		var jwtSecret = MicroClawConfig.Get<AuthOptions>().JwtSecret;
 		builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 			.AddJwtBearer(opts =>
 			{
@@ -180,7 +171,7 @@ public class ServeCommand : Command
 	}
 
 	/// <summary>注册核心基础设施服务：SQLite DbContext、SessionStore、ProviderConfigStore、各 ModelProvider、SignalR 和 Swagger。</summary>
-	private static void ConfigureServices(WebApplicationBuilder builder, string? home, string? configFile)
+	private static void ConfigureServices(WebApplicationBuilder builder)
 	{
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
@@ -192,8 +183,8 @@ public class ServeCommand : Command
 		});
 
 		// SQLite 数据库路径（会话元数据 + Provider 配置）
-		string dbPath = ResolveDatabasePath(home, configFile);
-		string sessionsDir = ResolveSessionsDir(home, configFile);
+		string dbPath = MicroClawConfig.Env.DbPath;
+		string sessionsDir = MicroClawConfig.Env.SessionsDir;
 		builder.Services.AddDbContextFactory<GatewayDbContext>(opts =>
 		{
 			opts.UseSqlite($"Data Source={dbPath}");
@@ -213,8 +204,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderClientFactory>();
 
 		// Agent 服务
-		string workspaceRoot = ResolveWorkspaceRoot(home, configFile);
-		string agentsDir = Path.Combine(workspaceRoot, "agents");
+		string workspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
+		string agentsDir = MicroClawConfig.Env.AgentsDir;
 		builder.Services.AddSingleton<AgentStore>();
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
@@ -254,8 +245,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ =>
 		{
-			var skillOpts = builder.Configuration.GetSection("skills").Get<SkillOptions>()
-				?? new SkillOptions();
+			var skillOpts = MicroClawConfig.Get<SkillOptions>();
 
 			// 解析技能文件夹路径：相对路径以 workspaceRoot 为基准，绝对路径直接使用
 			static string ResolveFolder(string folder, string wsRoot) =>
@@ -272,18 +262,12 @@ public class ServeCommand : Command
 
 			return new SkillService(workspaceRoot, roots);
 		});
-		builder.Services.Configure<SkillOptions>(builder.Configuration.GetSection("skills"));
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),
-			sp.GetRequiredService<SkillService>(),
-			Microsoft.Extensions.Options.Options.Create(
-				builder.Configuration.GetSection("skills").Get<SkillOptions>()
-					?? new SkillOptions())));
+			sp.GetRequiredService<SkillService>()));
 		builder.Services.AddSingleton<MicroClaw.Skills.SkillInvocationTool>(sp => new MicroClaw.Skills.SkillInvocationTool(
 			sp.GetRequiredService<SkillToolFactory>(),
 			sp.GetRequiredService<SkillService>(),
-			builder.Configuration.GetSection("skills").Get<SkillOptions>()
-				?? new SkillOptions(),
 			sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
 				.CreateLogger<MicroClaw.Skills.SkillInvocationTool>(),
 			sp.GetService<ISubAgentRunner>(),
@@ -296,9 +280,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IToolProvider, ShellToolProvider>();
 		builder.Services.AddSingleton<IToolProvider, CronToolProvider>();
 		builder.Services.AddSingleton<IToolProvider, SubAgentToolProvider>();
-		builder.Services.Configure<FileToolsOptions>(builder.Configuration.GetSection("filesystem"));
-		builder.Services.AddSingleton<IToolProvider>(sp =>
-			new FileToolProvider(sessionsDir, sp.GetRequiredService<IOptions<FileToolsOptions>>()));
+		builder.Services.AddSingleton<IToolProvider>(_ =>
+			new FileToolProvider(sessionsDir));
 		builder.Services.AddSingleton<IToolProvider, SkillToolProvider>();
 		builder.Services.AddSingleton<ToolCollector>();
 
@@ -355,7 +338,7 @@ public class ServeCommand : Command
 	{
 		var logger = app.Logger;
 
-		string jwtSecret = app.Configuration["auth:jwt_secret"] ?? "";
+		string jwtSecret = MicroClawConfig.Get<AuthOptions>().JwtSecret;
 		int jwtSecretBytes = Encoding.UTF8.GetByteCount(jwtSecret);
 		if (jwtSecretBytes < 32)
 		{
@@ -512,62 +495,6 @@ public class ServeCommand : Command
 		app.MapFallbackToFile("index.html");
 	}
 
-	/// <summary>根据 home 或 configFile 路径确定日志目录，返回带日期占位符的滚动日志文件路径。</summary>
-	private static string ResolveLogFilePath(string? home, string? configFile)
-	{
-		string logsDir;
-		if (!string.IsNullOrWhiteSpace(home))
-			logsDir = Path.Combine(home, "logs");
-		else if (!string.IsNullOrWhiteSpace(configFile))
-			logsDir = Path.Combine(Path.GetDirectoryName(configFile)!, "logs");
-		else
-			logsDir = Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "logs");
-
-		Directory.CreateDirectory(logsDir);
-		return Path.Combine(logsDir, "microclaw-.log");
-	}
-
-	/// <summary>将字符串解析为 Serilog 日志级别，解析失败时返回 fallback。</summary>
-	private static LogEventLevel ParseLevel(string? value, LogEventLevel fallback) =>
-		Enum.TryParse<LogEventLevel>(value, ignoreCase: true, out LogEventLevel result)
-			? result
-			: fallback;
-
-	/// <summary>确定 SQLite 数据库文件的存放目录（优先 home，其次 configFile 同级，最后 .microclaw/），返回完整路径。</summary>
-	private static string ResolveDatabasePath(string? home, string? configFile)
-	{
-		string dir;
-		if (!string.IsNullOrWhiteSpace(home))
-			dir = home;
-		else if (!string.IsNullOrWhiteSpace(configFile))
-			dir = Path.GetDirectoryName(Path.GetFullPath(configFile))!;
-		else
-			dir = Path.Combine(Directory.GetCurrentDirectory(), ".microclaw");
-
-		Directory.CreateDirectory(dir);
-		return Path.Combine(dir, "microclaw.db");
-	}
-
-	/// <summary>返回会话消息历史的存储目录路径（workspace/sessions/）。</summary>
-	private static string ResolveSessionsDir(string? home, string? configFile)
-	{
-		if (!string.IsNullOrWhiteSpace(home))
-			return Path.Combine(home, "workspace", "sessions");
-		if (!string.IsNullOrWhiteSpace(configFile))
-			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "sessions");
-		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "sessions");
-	}
-
-	/// <summary>返回 workspace 根目录路径，供 Skills 等子目录使用。</summary>
-	private static string ResolveWorkspaceRoot(string? home, string? configFile)
-	{
-		if (!string.IsNullOrWhiteSpace(home))
-			return Path.Combine(home, "workspace");
-		if (!string.IsNullOrWhiteSpace(configFile))
-			return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace");
-		return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace");
-	}
-
 	/// <summary>根据原始文件扩展名为 Brotli 压缩响应设置正确的 Content-Type 头。</summary>
 	private static void SetBrotliContentType(HttpResponse response, string path)
 	{
@@ -577,19 +504,9 @@ public class ServeCommand : Command
 			response.ContentType = "text/css; charset=utf-8";
 	}
 
-	/// <summary>解析指定路径的 .env 文件，将键值对写入进程环境变量（已存在的变量不覆盖）。</summary>
-	private static void LoadDotEnv(string path)
-	{
-		if (!File.Exists(path)) return;
-		foreach (var line in File.ReadAllLines(path))
-		{
-			var trimmed = line.Trim();
-			if (trimmed.StartsWith('#') || !trimmed.Contains('=')) continue;
-			var idx = trimmed.IndexOf('=');
-			var key = trimmed[..idx].Trim();
-			var value = trimmed[(idx + 1)..].Trim().Trim('"').Trim('\'');
-			if (!string.IsNullOrEmpty(key) && Environment.GetEnvironmentVariable(key) is null)
-				Environment.SetEnvironmentVariable(key, value);
-		}
-	}
+	/// <summary>将字符串解析为 Serilog 日志级别，解析失败时返回 fallback。</summary>
+	private static LogEventLevel ParseLevel(string? value, LogEventLevel fallback) =>
+		Enum.TryParse<LogEventLevel>(value, ignoreCase: true, out LogEventLevel result)
+			? result
+			: fallback;
 }

@@ -24,7 +24,7 @@ namespace MicroClaw.Agent;
 /// <summary>
 /// Agent 执行引擎：实现 ReAct 循环（推理 → 工具调用 → 观察 → 循环）。
 /// System Prompt 由各 <see cref="IAgentContextProvider"/> 按 Order 顺序聚合构成。
-/// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.EnabledMcpServerIds 过滤。
+/// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.DisabledMcpServerIds 排除。
 /// 实现 IAgentMessageHandler，供渠道消息处理器路由调用。
 /// </summary>
 public sealed class AgentRunner(
@@ -90,7 +90,7 @@ public sealed class AgentRunner(
 
         IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
 
-        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.BoundSkillIds, sessionId);
+        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
         List<ChatMessage> messages = await BuildChatMessagesAsync(agent, validatedHistory, sessionId, skillCtx.CatalogFragment, ct);
 
         // 按 Agent 配置收集所有工具（builtin + channel + skill + MCP），统一过滤
@@ -99,7 +99,7 @@ public sealed class AgentRunner(
             SessionId: sessionId,
             ChannelType: sessionForTools?.ChannelType,
             ChannelId: sessionForTools?.ChannelId,
-            BoundSkillIds: agent.BoundSkillIds);
+            DisabledSkillIds: agent.DisabledSkillIds);
         await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, toolContext, ct);
 
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools",

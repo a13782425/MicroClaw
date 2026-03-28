@@ -209,13 +209,13 @@ function ToolsTab({ agent }: { agent: AgentConfig }) {
 function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: AgentConfig) => void }) {
   const [servers, setServers] = useState<McpServerConfig[]>([])
   const [loading, setLoading] = useState(false)
-  const [enabledIds, setEnabledIds] = useState<string[]>(agent.enabledMcpServerIds)
+  const [disabledIds, setDisabledIds] = useState<string[]>(agent.disabledMcpServerIds)
   const [saving, setSaving] = useState(false)
-  const isDirty = JSON.stringify(enabledIds.sort()) !== JSON.stringify([...agent.enabledMcpServerIds].sort())
+  const isDirty = JSON.stringify(disabledIds.sort()) !== JSON.stringify([...agent.disabledMcpServerIds].sort())
 
   useEffect(() => {
-    setEnabledIds(agent.enabledMcpServerIds)
-  }, [agent.id, agent.enabledMcpServerIds])
+    setDisabledIds(agent.disabledMcpServerIds)
+  }, [agent.id, agent.disabledMcpServerIds])
 
   useEffect(() => {
     setLoading(true)
@@ -225,15 +225,15 @@ function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Agent
       .finally(() => setLoading(false))
   }, [])
 
-  const toggle = (id: string, val: boolean) => {
-    setEnabledIds((prev) => val ? [...prev, id] : prev.filter((x) => x !== id))
+  const toggle = (id: string, enabled: boolean) => {
+    setDisabledIds((prev) => enabled ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
   const save = async () => {
     setSaving(true)
     try {
-      const res = await updateAgent({ id: agent.id, enabledMcpServerIds: enabledIds })
-      onUpdated({ ...agent, enabledMcpServerIds: enabledIds })
+      const res = await updateAgent({ id: agent.id, disabledMcpServerIds: disabledIds })
+      onUpdated({ ...agent, disabledMcpServerIds: disabledIds })
       void res
       toaster.create({ type: 'success', title: 'MCP 引用已保存' })
     } catch {
@@ -249,7 +249,7 @@ function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Agent
     <Box p="3">
       <HStack mb="3" justify="space-between">
         <Text fontSize="sm" fontWeight="medium">MCP Servers</Text>
-        <Badge size="sm" colorPalette="blue">{enabledIds.length} 个已启用</Badge>
+        <Badge size="sm" colorPalette="blue">{servers.length - disabledIds.length} 个已启用</Badge>
       </HStack>
       {servers.length === 0 && (
         <Text color="gray.500" fontSize="sm">暂无全局 MCP Server，请先在 MCP 管理页创建</Text>
@@ -259,7 +259,7 @@ function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Agent
           <HStack key={srv.id} px="3" py="2" borderWidth="1px" rounded="md">
             <Switch.Root
               size="sm"
-              checked={enabledIds.includes(srv.id)}
+              checked={!disabledIds.includes(srv.id)}
               onCheckedChange={(e) => toggle(srv.id, e.checked)}
             >
               <Switch.HiddenInput />
@@ -292,11 +292,11 @@ function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Agent
 function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: AgentConfig) => void }) {
   const [skills, setSkills] = useState<SkillConfig[]>([])
   const [loading, setLoading] = useState(false)
-  const [boundIds, setBoundIds] = useState<string[]>(agent.boundSkillIds)
+  const [disabledIds, setDisabledIds] = useState<string[]>(agent.disabledSkillIds)
   const [saving, setSaving] = useState(false)
-  const isDirty = JSON.stringify(boundIds.sort()) !== JSON.stringify([...agent.boundSkillIds].sort())
+  const isDirty = JSON.stringify(disabledIds.sort()) !== JSON.stringify([...agent.disabledSkillIds].sort())
 
-  useEffect(() => { setBoundIds(agent.boundSkillIds) }, [agent.id, agent.boundSkillIds])
+  useEffect(() => { setDisabledIds(agent.disabledSkillIds) }, [agent.id, agent.disabledSkillIds])
 
   useEffect(() => {
     setLoading(true)
@@ -306,16 +306,16 @@ function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Ag
       .finally(() => setLoading(false))
   }, [])
 
-  const toggle = (id: string, val: boolean) => {
-    setBoundIds((prev) => val ? [...prev, id] : prev.filter((x) => x !== id))
+  const toggle = (id: string, enabled: boolean) => {
+    setDisabledIds((prev) => enabled ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
   const save = async () => {
     setSaving(true)
     try {
-      await updateAgent({ id: agent.id, boundSkillIds: boundIds })
-      onUpdated({ ...agent, boundSkillIds: boundIds })
-      toaster.create({ type: 'success', title: '技能绑定已保存' })
+      await updateAgent({ id: agent.id, disabledSkillIds: disabledIds })
+      onUpdated({ ...agent, disabledSkillIds: disabledIds })
+      toaster.create({ type: 'success', title: '技能配置已保存' })
     } catch {
       toaster.create({ type: 'error', title: '保存失败' })
     } finally {
@@ -331,7 +331,7 @@ function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Ag
         <Text fontSize="sm" fontWeight="medium">技能绑定</Text>
         {isDirty && (
           <Button size="sm" colorPalette="blue" loading={saving} onClick={save}>
-            保存技能绑定
+            保存技能配置
           </Button>
         )}
       </HStack>
@@ -343,7 +343,7 @@ function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a: Ag
           <HStack key={sk.id} px="3" py="2" borderWidth="1px" rounded="md">
             <input
               type="checkbox"
-              checked={boundIds.includes(sk.id)}
+              checked={!disabledIds.includes(sk.id)}
               onChange={(e) => toggle(sk.id, e.target.checked)}
               style={{ width: 16, height: 16, cursor: 'pointer' }}
             />
@@ -576,12 +576,12 @@ function AgentDetail({
           <Box p="4">
             <HStack gap="4" mb="4" flexWrap="wrap">
               <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
-                <Text fontSize="xs" color="gray.500">MCP Server</Text>
-                <Text fontWeight="semibold">{agent.enabledMcpServerIds.length} 个</Text>
+                <Text fontSize="xs" color="gray.500">禁用 MCP</Text>
+                <Text fontWeight="semibold">{agent.disabledMcpServerIds.length} 个</Text>
               </VStack>
               <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
-                <Text fontSize="xs" color="gray.500">绑定技能</Text>
-                <Text fontWeight="semibold">{agent.boundSkillIds.length} 个</Text>
+                <Text fontSize="xs" color="gray.500">禁用技能</Text>
+                <Text fontWeight="semibold">{agent.disabledSkillIds.length} 个</Text>
               </VStack>
               <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
                 <Text fontSize="xs" color="gray.500">状态</Text>

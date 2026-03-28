@@ -24,6 +24,7 @@ namespace MicroClaw.Tests.Agents;
 /// 验证 AgentRunner.BuildSystemPromptAsync — 通过 IAgentContextProvider 聚合上下文片段。
 /// System Prompt 由 AgentDnaContextProvider + SessionDnaContextProvider + SessionMemoryContextProvider 按 Order 顺序构成。
 /// </summary>
+[Collection("Config")]
 public sealed class AgentRunnerBuildPromptTests : IDisposable
 {
     private const string SessionId = "test-session-001";
@@ -39,6 +40,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
 
     public AgentRunnerBuildPromptTests()
     {
+        TestConfigFixture.EnsureInitialized();
         _sessionDna = new SessionDnaService(_tempDir.Path);
         _memory = new MemoryService(_tempDir.Path);
 
@@ -49,12 +51,10 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
 
         var skillService = new SkillService(_tempDir.Path);
         var skillStore = new SkillStore(dbFactory);
-        var skillOptions = Microsoft.Extensions.Options.Options.Create(new SkillOptions());
-        var skillToolFactory = new SkillToolFactory(skillStore, skillService, skillOptions);
+        var skillToolFactory = new SkillToolFactory(skillStore, skillService);
         var skillInvocationTool = new SkillInvocationTool(
             skillToolFactory,
             skillService,
-            new SkillOptions(),
             NullLoggerFactory.Instance.CreateLogger<SkillInvocationTool>(),
             subAgentRunner: null);
 
@@ -88,8 +88,8 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             Name: "Test Agent",
             Description: "",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow);
         _agentDna.InitializeAgent(_testAgent.Id);

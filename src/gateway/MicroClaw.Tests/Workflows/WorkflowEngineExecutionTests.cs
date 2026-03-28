@@ -26,6 +26,7 @@ namespace MicroClaw.Tests.Workflows;
 /// 代理传播逻辑（默认 main）、以及 DefaultProviderId 的行为。
 /// 不测试 Agent / Tool 节点的实际 LLM 调用（需完整 AgentRunner 上下文）。
 /// </summary>
+[Collection("Config")]
 public sealed class WorkflowEngineExecutionTests : IDisposable
 {
     private readonly DatabaseFixture _db = new();
@@ -36,6 +37,7 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
 
     public WorkflowEngineExecutionTests()
     {
+        TestConfigFixture.EnsureInitialized();
         IDbContextFactory<GatewayDbContext> dbFactory = _db.CreateFactory();
 
         _agentStore = new AgentStore(dbFactory);
@@ -49,12 +51,10 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
 
         var skillService = new SkillService(_tempDir.Path);
         var skillStore = new SkillStore(dbFactory);
-        var skillOptions = Microsoft.Extensions.Options.Options.Create(new SkillOptions());
-        var skillToolFactory = new SkillToolFactory(skillStore, skillService, skillOptions);
+        var skillToolFactory = new SkillToolFactory(skillStore, skillService);
         var skillInvocationTool = new SkillInvocationTool(
             skillToolFactory,
             skillService,
-            new SkillOptions(),
             NullLoggerFactory.Instance.CreateLogger<SkillInvocationTool>(),
             subAgentRunner: null);
 

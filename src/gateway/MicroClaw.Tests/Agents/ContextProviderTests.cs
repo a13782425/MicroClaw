@@ -35,8 +35,8 @@ public sealed class ContextProviderTests : IDisposable
             Name: "Provider Test Agent",
             Description: "",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow);
     }

@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts.Auth;
@@ -12,12 +11,12 @@ public static class AuthEndpoints
 {
 	public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
 	{
-		endpoints.MapPost("/auth/login", (LoginRequest request, IOptions<AuthOptions> authOptions) =>
+		endpoints.MapPost("/auth/login", (LoginRequest request) =>
 		{
 			if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
 				return Results.BadRequest(new { success = false, message = "用户名和密码不能为空", errorCode = "BAD_REQUEST" });
 
-			var opts = authOptions.Value;
+			var opts = MicroClawConfig.Get<AuthOptions>();
 
 			var usernameMatch = string.Equals(request.Username, opts.Username, StringComparison.OrdinalIgnoreCase);
 			var passwordMatch = request.Password == opts.Password;

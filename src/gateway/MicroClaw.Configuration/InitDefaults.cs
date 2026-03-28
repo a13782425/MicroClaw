@@ -1,11 +1,11 @@
-namespace MicroClaw.Commands;
+namespace MicroClaw.Configuration;
 
 /// <summary>
 /// 各配置文件的默认内容，用于 init 命令和 serve 自动初始化。
 /// </summary>
-internal static class InitDefaults
+public static class InitDefaults
 {
-    internal const string MicroclawYaml = """
+    public const string MicroclawYaml = """
         # MicroClaw 主配置文件
         # 通过 $imports 导入子配置文件，支持具体路径和通配符（如 ./config/*.yaml）
         # 规则：
@@ -16,7 +16,7 @@ internal static class InitDefaults
           - ./config/*.yaml
         """;
 
-    internal const string AuthYaml = """
+    public const string AuthYaml = """
         # 认证配置
         # 敏感字段建议通过环境变量覆盖，例如：
         #   DOTNET_auth__password=your-password
@@ -29,7 +29,7 @@ internal static class InitDefaults
           expires_hours: 8
         """;
 
-    internal const string ChannelsYaml = """
+    public const string ChannelsYaml = """
         # 功能开关：启用的 Provider 和 Channel
         # 支持的 providers: openai, claude
         # 支持的 channels: feishu, wecom, wechat
@@ -44,7 +44,7 @@ internal static class InitDefaults
             - wechat
         """;
 
-    internal const string LoggingYaml = """
+    public const string LoggingYaml = """
         # Serilog 日志配置
         # microsoft.extensions.ai 设为 debug 可查看 AI 请求/响应日志
 
@@ -70,7 +70,7 @@ internal static class InitDefaults
             - with_thread_id
         """;
 
-    internal const string ProvidersYaml = """
+    public const string ProvidersYaml = """
         # Model Provider 配置
         # 通过 WebUI 或 API 添加 Provider 后，配置将保存在此文件中
         # 请勿直接提交包含真实 API Key 的此文件
@@ -78,7 +78,7 @@ internal static class InitDefaults
         providers: []
         """;
 
-    internal const string SkillsYaml = """
+    public const string SkillsYaml = """
         # Skills 技能配置
         # 技能文件夹相对于工作目录（workspace/），或使用绝对路径
 
@@ -92,7 +92,7 @@ internal static class InitDefaults
           allow_command_injection: false
         """;
 
-    internal const string DotEnvExample = """
+    public const string DotEnvExample = """
         # MicroClaw 环境变量示例
         # 复制为 .env 并填入实际值，服务启动时会自动加载
 

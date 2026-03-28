@@ -23,14 +23,13 @@ public sealed class SkillInvocationTool
     public SkillInvocationTool(
         SkillToolFactory factory,
         SkillService skillService,
-        SkillOptions options,
         ILogger<SkillInvocationTool> logger,
         ISubAgentRunner? subAgentRunner = null,
         IAgentLookup? agentLookup = null)
     {
         _factory = factory;
         _skillService = skillService;
-        _options = options;
+        _options = MicroClawConfig.Get<SkillOptions>();
         _logger = logger;
         _subAgentRunner = subAgentRunner;
         _agentLookup = agentLookup;

@@ -70,8 +70,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.Name).HasColumnName("name");
             b.Property(e => e.Description).HasColumnName("description");
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
-            b.Property(e => e.BoundSkillIdsJson).HasColumnName("bound_skill_ids_json");
-            b.Property(e => e.EnabledMcpServerIdsJson).HasColumnName("enabled_mcp_server_ids_json");
+            b.Property(e => e.DisabledSkillIdsJson).HasColumnName("disabled_skill_ids_json");
+            b.Property(e => e.DisabledMcpServerIdsJson).HasColumnName("disabled_mcp_server_ids_json");
             b.Property(e => e.ToolGroupConfigsJson).HasColumnName("tool_group_configs_json");
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.IsDefault).HasColumnName("is_default");

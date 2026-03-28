@@ -46,8 +46,8 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
             Name: name,
             Description: "You are a helpful assistant.",
             IsEnabled: isEnabled,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow));
 

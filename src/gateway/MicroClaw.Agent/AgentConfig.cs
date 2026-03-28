@@ -3,15 +3,16 @@ using MicroClaw.Tools;
 namespace MicroClaw.Agent;
 
 /// <summary>
-/// Agent 配置数据模型。Agent 作为能力组合器，通过引用全局 MCP Server ID 列表来指定工具。
+/// Agent 配置数据模型。Agent 作为能力组合器，默认启用所有 MCP Server 和技能。
+/// 通过 DisabledSkillIds / DisabledMcpServerIds 排除不需要的资源（opt-out 模型）。
 /// </summary>
 public sealed record AgentConfig(
     string Id,
     string Name,
     string Description,
     bool IsEnabled,
-    IReadOnlyList<string> BoundSkillIds,
-    IReadOnlyList<string> EnabledMcpServerIds,
+    IReadOnlyList<string> DisabledSkillIds,
+    IReadOnlyList<string> DisabledMcpServerIds,
     IReadOnlyList<ToolGroupConfig> ToolGroupConfigs,
     DateTimeOffset CreatedAtUtc,
     bool IsDefault = false,

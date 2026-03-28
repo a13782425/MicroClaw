@@ -1,9 +1,9 @@
-namespace MicroClaw.Commands;
+namespace MicroClaw.Configuration;
 
 /// <summary>
 /// 共享初始化逻辑：解析工作目录、创建子目录、写入默认配置文件。
 /// </summary>
-internal static class HomeInitializer
+public static class HomeInitializer
 {
     private static readonly (string RelativePath, string Content)[] ConfigFiles =
     [
@@ -27,7 +27,7 @@ internal static class HomeInitializer
     /// <summary>
     /// 解析工作目录路径，优先级：MICROCLAW_HOME > configFile 同级目录 > ./.microclaw
     /// </summary>
-    internal static string ResolveHome(string? home, string? configFile)
+    public static string ResolveHome(string? home, string? configFile)
     {
         if (!string.IsNullOrWhiteSpace(home))
             return home;
@@ -45,7 +45,7 @@ internal static class HomeInitializer
     /// <param name="configFile">MICROCLAW_CONFIG_FILE 环境变量值（可为 null）</param>
     /// <param name="force">true 时覆盖已存在的配置文件</param>
     /// <param name="verbose">true 时向控制台输出 created/skipped 信息</param>
-    internal static void EnsureInitialized(
+    public static void EnsureInitialized(
         string? home,
         string? configFile,
         bool force = false,

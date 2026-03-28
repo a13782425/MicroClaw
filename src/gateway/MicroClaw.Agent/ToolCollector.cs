@@ -118,13 +118,13 @@ public sealed class ToolCollector(
 
         // ── MCP Server 分组 ─────────────────────────────────────────────────
         IReadOnlyList<McpServerConfig> allServers = mcpServerConfigStore.All;
-        HashSet<string>? enabledIds = agent is not null && agent.EnabledMcpServerIds.Count > 0
-            ? agent.EnabledMcpServerIds.ToHashSet()
+        HashSet<string>? disabledIds = agent is not null && agent.DisabledMcpServerIds.Count > 0
+            ? agent.DisabledMcpServerIds.ToHashSet()
             : null;
 
         foreach (McpServerConfig srv in allServers)
         {
-            bool isEnabled = srv.IsEnabled && (enabledIds is null || enabledIds.Contains(srv.Id));
+            bool isEnabled = srv.IsEnabled && (disabledIds is null || !disabledIds.Contains(srv.Id));
 
             // 按 ToolGroupConfig 的整体启用/禁用
             ToolGroupConfig? srvCfg = agent?.ToolGroupConfigs
@@ -178,12 +178,16 @@ public sealed class ToolCollector(
         return groups;
     }
 
-    /// <summary>返回未被整体禁用的 MCP Server 配置列表。</summary>
+    /// <summary>返回未被整体禁用的 MCP Server 配置列表（排除 Agent 级别禁用项）。</summary>
     private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
     {
-        IReadOnlyList<McpServerConfig> servers = agent.EnabledMcpServerIds.Count == 0
-            ? mcpServerConfigStore.AllEnabled
-            : mcpServerConfigStore.GetEnabledByIds(agent.EnabledMcpServerIds);
+        IReadOnlyList<McpServerConfig> servers = mcpServerConfigStore.AllEnabled;
+        // 排除 Agent 级别禁用的 MCP Server
+        if (agent.DisabledMcpServerIds.Count > 0)
+        {
+            HashSet<string> disabled = agent.DisabledMcpServerIds.ToHashSet();
+            servers = servers.Where(s => !disabled.Contains(s.Id)).ToList().AsReadOnly();
+        }
         if (agent.ToolGroupConfigs.Count == 0) return servers;
         return servers
             .Where(s =>

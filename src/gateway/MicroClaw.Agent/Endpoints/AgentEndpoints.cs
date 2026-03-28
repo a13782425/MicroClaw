@@ -43,8 +43,8 @@ public static class AgentEndpoints
                 Name: req.Name.Trim(),
                 Description: req.Description ?? string.Empty,
                 IsEnabled: req.IsEnabled,
-                BoundSkillIds: req.BoundSkillIds ?? [],
-                EnabledMcpServerIds: req.EnabledMcpServerIds ?? [],
+                DisabledSkillIds: req.DisabledSkillIds ?? [],
+                DisabledMcpServerIds: req.DisabledMcpServerIds ?? [],
                 ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow,
                 ContextWindowMessages: req.ContextWindowMessages,
@@ -77,8 +77,8 @@ public static class AgentEndpoints
                 Name = req.Name?.Trim() ?? existing.Name,
                 Description = req.Description ?? existing.Description,
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
-                BoundSkillIds = req.BoundSkillIds ?? existing.BoundSkillIds,
-                EnabledMcpServerIds = req.EnabledMcpServerIds ?? existing.EnabledMcpServerIds,
+                DisabledSkillIds = req.DisabledSkillIds ?? existing.DisabledSkillIds,
+                DisabledMcpServerIds = req.DisabledMcpServerIds ?? existing.DisabledMcpServerIds,
                 ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
                 ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
             };
@@ -121,7 +121,7 @@ public static class AgentEndpoints
             AgentConfig? agent = store.GetById(id);
             return agent is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
-                : Results.Ok(agent.EnabledMcpServerIds);
+                : Results.Ok(agent.DisabledMcpServerIds);
         })
         .WithTags("Agents");
 
@@ -141,7 +141,7 @@ public static class AgentEndpoints
                     errorCode = "MCP_SERVER_NOT_FOUND"
                 });
 
-            AgentConfig? result = store.UpdateEnabledMcpServerIds(id, mcpIds);
+            AgentConfig? result = store.UpdateDisabledMcpServerIds(id, mcpIds);
             return result is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
                 : Results.Ok(new { result.Id });
@@ -183,7 +183,7 @@ public static class AgentEndpoints
         endpoints.MapGet("/agents/{id}/skills", (string id, AgentStore store) =>
         {
             AgentConfig? agent = store.GetById(id);
-            return agent is null ? Results.NotFound() : Results.Ok(agent.BoundSkillIds);
+            return agent is null ? Results.NotFound() : Results.Ok(agent.DisabledSkillIds);
         })
         .WithTags("Agents");
 
@@ -204,7 +204,7 @@ public static class AgentEndpoints
                     errorCode = "SKILL_NOT_FOUND"
                 });
 
-            AgentConfig updated = existing with { BoundSkillIds = skillIds };
+            AgentConfig updated = existing with { DisabledSkillIds = skillIds };
             AgentConfig? result = store.Update(id, updated);
             return result is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
@@ -268,8 +268,8 @@ public static class AgentEndpoints
         a.Name,
         a.Description,
         a.IsEnabled,
-        a.BoundSkillIds,
-        a.EnabledMcpServerIds,
+        a.DisabledSkillIds,
+        a.DisabledMcpServerIds,
         a.ToolGroupConfigs,
         a.CreatedAtUtc,
         a.IsDefault,
@@ -284,8 +284,8 @@ public sealed record AgentCreateRequest(
     string Name,
     string? Description = null,
     bool IsEnabled = true,
-    IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<string>? EnabledMcpServerIds = null,
+    IReadOnlyList<string>? DisabledSkillIds = null,
+    IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
     bool ExposeAsA2A = false);
 
@@ -294,8 +294,8 @@ public sealed record AgentUpdateRequest(
     string? Name = null,
     string? Description = null,
     bool? IsEnabled = null,
-    IReadOnlyList<string>? BoundSkillIds = null,
-    IReadOnlyList<string>? EnabledMcpServerIds = null,
+    IReadOnlyList<string>? DisabledSkillIds = null,
+    IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
     bool? ExposeAsA2A = null);
 

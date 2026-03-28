@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
@@ -15,9 +15,9 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Tests.Agents;
 
 /// <summary>
-/// A2A 端点集成测试（Agent Card + JSON-RPC 路由层）。
-/// GET /a2a/agent/{id} — Agent Card（仅需 AgentStore，无需 AgentRunner）。
-/// POST 验证层测试（解析错误 / 方法未找到 / Agent 未暴露）。
+/// A2A 绔偣闆嗘垚娴嬭瘯锛圓gent Card + JSON-RPC 璺敱灞傦級銆?
+/// GET /a2a/agent/{id} 鈥?Agent Card锛堜粎闇€ AgentStore锛屾棤闇€ AgentRunner锛夈€?
+/// POST 楠岃瘉灞傛祴璇曪紙瑙ｆ瀽閿欒 / 鏂规硶鏈壘鍒?/ Agent 鏈毚闇诧級銆?
 /// </summary>
 public sealed class A2AEndpointsTests : IDisposable
 {
@@ -43,7 +43,7 @@ public sealed class A2AEndpointsTests : IDisposable
             .Configure(app =>
             {
                 app.UseRouting();
-                // 只挂载 A2A 的 GET 端点（POST 需要 AgentRunner，单独测试请求解析层）
+                // 鍙寕杞?A2A 鐨?GET 绔偣锛圥OST 闇€瑕?AgentRunner锛屽崟鐙祴璇曡姹傝В鏋愬眰锛?
                 app.UseEndpoints(e => e.MapGet("/a2a/agent/{agentId}", A2AGetHandler.Handle));
             });
 
@@ -58,7 +58,7 @@ public sealed class A2AEndpointsTests : IDisposable
         _db.Dispose();
     }
 
-    // ── Agent Card GET ─────────────────────────────────────────────────────────
+    // 鈹€鈹€ Agent Card GET 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     [Fact]
     public async Task GetAgentCard_ExposedAgent_ReturnsCard()
@@ -68,8 +68,8 @@ public sealed class A2AEndpointsTests : IDisposable
             Name: "MyBot",
             Description: "A helpful bot.",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             ExposeAsA2A: true));
@@ -94,8 +94,8 @@ public sealed class A2AEndpointsTests : IDisposable
             Name: "HiddenAgent",
             Description: "Not exposed.",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             ExposeAsA2A: false));
@@ -113,8 +113,8 @@ public sealed class A2AEndpointsTests : IDisposable
             Name: "DisabledAgent",
             Description: "Disabled.",
             IsEnabled: false,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             ExposeAsA2A: true));
@@ -140,8 +140,8 @@ public sealed class A2AEndpointsTests : IDisposable
             Name: "UrlBot",
             Description: "Bot with URL.",
             IsEnabled: true,
-            BoundSkillIds: [],
-            EnabledMcpServerIds: [],
+            DisabledSkillIds: [],
+            DisabledMcpServerIds: [],
             ToolGroupConfigs: [],
             CreatedAtUtc: DateTimeOffset.UtcNow,
             ExposeAsA2A: true));
@@ -154,10 +154,10 @@ public sealed class A2AEndpointsTests : IDisposable
     }
 }
 
-// ── 轻量 GET Handler（仅用于测试，避免注入复杂的 AgentRunner）─────────────────
+// 鈹€鈹€ 杞婚噺 GET Handler锛堜粎鐢ㄤ簬娴嬭瘯锛岄伩鍏嶆敞鍏ュ鏉傜殑 AgentRunner锛夆攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 /// <summary>
-/// 从 TestServer DI 中提取 AgentStore，复现 A2AEndpoints.MapA2AEndpoints GET 逻辑。
+/// 浠?TestServer DI 涓彁鍙?AgentStore锛屽鐜?A2AEndpoints.MapA2AEndpoints GET 閫昏緫銆?
 /// </summary>
 internal static class A2AGetHandler
 {
