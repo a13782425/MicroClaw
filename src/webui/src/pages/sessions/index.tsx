@@ -1,5 +1,5 @@
 import {
-  useEffect, useRef, useState, useCallback, useLayoutEffect,
+  useEffect, useRef, useState, useCallback, useLayoutEffect, useMemo,
 } from 'react'
 import {
   Box, Flex, Text, Button, IconButton, Input, Textarea, Badge,
@@ -7,7 +7,7 @@ import {
 } from '@chakra-ui/react'
 import {
   MessageCircle, Plus, Trash2, Send, Square, Paperclip, X,
-  ChevronUp,
+  ChevronUp, EyeOff,
 } from 'lucide-react'
 import {
   listProviders, listChannels, listAgents,
@@ -17,28 +17,12 @@ import {
   SYSTEM_SOURCES,
 } from '@/api/gateway'
 import { AppDialog } from '@/components/ui/app-dialog'
-import { useSessionStore, isDisplayMessage } from '@/store/sessionStore'
+import { useSessionStore, isDisplayMessage, buildSessionTree, isSubAgentSession } from '@/store/sessionStore'
 import { eventBus } from '@/services/eventBus'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import ChatMessage from '@/components/chat-message'
-
-// ─── 渠道类型标签 ─────────────────────────────────────────────────────────────
-const CHANNEL_LABELS: Record<string, string> = {
-  feishu: '飞书', wecom: '企微', wechat: '微信', web: 'Web',
-}
-
-function channelBadge(type: string) {
-  const colors: Record<string, string> = {
-    feishu: 'cyan', wecom: 'green', wechat: 'teal', web: 'gray',
-  }
-  if (type === 'web') return null
-  return (
-    <Badge size="sm" colorPalette={colors[type] ?? 'gray'} ml="1">
-      {CHANNEL_LABELS[type] ?? type}
-    </Badge>
-  )
-}
+import SessionTreeItem from './SessionTreeItem'
 
 // ─── 新建 Session 弹窗 ────────────────────────────────────────────────────────
 interface CreateDialogProps {
@@ -383,6 +367,8 @@ export default function SessionsPage() {
 
   const displayMessages = messages.filter(isDisplayMessage)
   const currentSession = store.currentSession()
+  const isReadOnly = currentSession ? isSubAgentSession(currentSession) : false
+  const sessionTree = useMemo(() => buildSessionTree(sessions), [sessions])
   const enabledProviders = providers
 
   return (
@@ -407,7 +393,7 @@ export default function SessionsPage() {
           </IconButton>
         </Flex>
 
-        {/* 会话列表 */}
+        {/* 会话列表（树形） */}
         <Box flex="1" overflowY="auto" py="1">
           {sessions.length === 0 && (
             <Flex align="center" justify="center" h="full" flexDir="column" gap="2" color="gray.400">
@@ -416,69 +402,17 @@ export default function SessionsPage() {
               <Button size="sm" onClick={() => setShowCreate(true)}>新建会话</Button>
             </Flex>
           )}
-          {sessions.map((session) => {
-            const isActive = session.id === store.currentSessionId
-            const isRunning = runningSessionIds.has(session.id)
-            return (
-              <Flex
-                key={session.id}
-                px="3" py="2.5"
-                align="center"
-                cursor="pointer"
-                bg={isActive ? 'blue.50' : undefined}
-                _dark={{ bg: isActive ? 'blue.900' : undefined }}
-                _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.700' } }}
-                onClick={() => handleSelect(session.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleSelect(session.id)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                className="group"
-                _focusVisible={{ outline: '2px solid', outlineColor: 'blue.400', outlineOffset: '-2px' }}
-              >
-                {/* 图标 */}
-                <Box color={isActive ? 'blue.500' : 'gray.400'} mr="2" flexShrink={0}>
-                  {isRunning && !isActive
-                    ? <Spinner size="xs" color="blue.400" />
-                    : <MessageCircle size={14} />}
-                </Box>
-
-                {/* 标题 + badges */}
-                <Box flex="1" minW="0">
-                  <Text
-                    fontSize="sm" fontWeight={isActive ? 'medium' : 'normal'}
-                    color={isActive ? 'blue.600' : undefined}
-                    _dark={{ color: isActive ? 'blue.300' : undefined }}
-                    truncate
-                  >
-                    {session.title}
-                  </Text>
-                  <Flex gap="1" mt="0.5">
-                    {channelBadge(session.channelType)}
-                    {session.agentId && (
-                      <Badge size="sm" colorPalette="orange">Agent</Badge>
-                    )}
-                  </Flex>
-                </Box>
-
-                {/* 删除按钮 */}
-                <IconButton
-                  size="xs" variant="ghost" colorPalette="red"
-                  aria-label="删除会话"
-                  opacity={isActive ? 1 : 0}
-                  _groupHover={{ opacity: 1 }}
-                  _groupFocusWithin={{ opacity: 1 }}
-                  onClick={(e) => { e.stopPropagation(); setDeleteSessionId(session.id) }}
-                >
-                  <Trash2 size={12} />
-                </IconButton>
-              </Flex>
-            )
-          })}
+          {sessionTree.map((node) => (
+            <SessionTreeItem
+              key={node.session.id}
+              node={node}
+              depth={0}
+              activeId={store.currentSessionId}
+              runningSessionIds={runningSessionIds}
+              onSelect={handleSelect}
+              onDelete={(id) => setDeleteSessionId(id)}
+            />
+          ))}
         </Box>
       </Box>
 
@@ -506,7 +440,7 @@ export default function SessionsPage() {
               <Select.Root
                 value={currentSession ? [currentSession.providerId] : []}
                 onValueChange={(v) => handleSwitchProvider(v.value[0] ?? '')}
-                disabled={chatting}
+                disabled={chatting || isReadOnly}
                 collection={createListCollection({
                   items: enabledProviders.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })),
                 })}
@@ -601,90 +535,101 @@ export default function SessionsPage() {
             </Box>
 
             {/* 输入区 */}
-            <Box borderTopWidth="1px" p="3" flexShrink={0}>
-              {/* 附件预览 */}
-              {pendingAttachments.length > 0 && (
-                <Flex gap="2" mb="2" flexWrap="wrap">
-                  {pendingAttachments.map((att, i) => (
-                    <Flex
-                      key={i} align="center" gap="1"
-                      px="2" py="1" borderRadius="md"
-                      bg="gray.100" _dark={{ bg: 'gray.700' }}
-                      fontSize="xs"
-                    >
-                      {att.mimeType.startsWith('image/') ? (
-                        <img
-                          src={`data:${att.mimeType};base64,${att.base64Data}`}
-                          alt={att.fileName}
-                          style={{ height: 32, borderRadius: 4 }}
-                        />
-                      ) : (
-                        <><Paperclip size={10} />{att.fileName}</>
-                      )}
-                      <IconButton
-                        size="2xs" variant="ghost" aria-label="移除附件"
-                        onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
-                      >
-                        <X size={10} />
-                      </IconButton>
-                    </Flex>
-                  ))}
-                </Flex>
-              )}
-
-              <Flex gap="2" align="flex-end">
-                {/* 附件按钮 */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,application/pdf,.txt,.md,.json,.csv"
-                  style={{ display: 'none' }}
-                  onChange={handleFileChange}
-                />
-                <IconButton
-                  size="sm" variant="ghost" aria-label="添加附件"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={chatting}
-                >
-                  <Paperclip size={16} />
-                </IconButton>
-
-                {/* 输入框 */}
-                <Textarea
-                  ref={textareaRef}
-                  flex="1"
-                  size="sm"
-                  minH="60px"
-                  maxH="200px"
-                  resize="none"
-                  placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
-                  disabled={chatting}
-                />
-
-                {/* 停止 / 发送按钮 */}
-                {chatting ? (
-                  <IconButton
-                    size="sm" colorPalette="red" aria-label="停止"
-                    onClick={stopChat}
-                  >
-                    <Square size={16} />
-                  </IconButton>
-                ) : (
-                  <IconButton
-                    size="sm" colorPalette="blue" aria-label="发送"
-                    disabled={!inputText.trim()}
-                    onClick={handleSend}
-                  >
-                    <Send size={16} />
-                  </IconButton>
-                )}
+            {isReadOnly ? (
+              <Flex
+                borderTopWidth="1px" px="4" py="3" flexShrink={0}
+                align="center" justify="center" gap="2"
+                color="gray.400" bg="gray.50" _dark={{ bg: 'gray.800' }}
+              >
+                <EyeOff size={14} />
+                <Text fontSize="sm">子代理会话，仅供查看</Text>
               </Flex>
-            </Box>
+            ) : (
+              <Box borderTopWidth="1px" p="3" flexShrink={0}>
+                {/* 附件预览 */}
+                {pendingAttachments.length > 0 && (
+                  <Flex gap="2" mb="2" flexWrap="wrap">
+                    {pendingAttachments.map((att, i) => (
+                      <Flex
+                        key={i} align="center" gap="1"
+                        px="2" py="1" borderRadius="md"
+                        bg="gray.100" _dark={{ bg: 'gray.700' }}
+                        fontSize="xs"
+                      >
+                        {att.mimeType.startsWith('image/') ? (
+                          <img
+                            src={`data:${att.mimeType};base64,${att.base64Data}`}
+                            alt={att.fileName}
+                            style={{ height: 32, borderRadius: 4 }}
+                          />
+                        ) : (
+                          <><Paperclip size={10} />{att.fileName}</>
+                        )}
+                        <IconButton
+                          size="2xs" variant="ghost" aria-label="移除附件"
+                          onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <X size={10} />
+                        </IconButton>
+                      </Flex>
+                    ))}
+                  </Flex>
+                )}
+
+                <Flex gap="2" align="flex-end">
+                  {/* 附件按钮 */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,application/pdf,.txt,.md,.json,.csv"
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                  />
+                  <IconButton
+                    size="sm" variant="ghost" aria-label="添加附件"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={chatting}
+                  >
+                    <Paperclip size={16} />
+                  </IconButton>
+
+                  {/* 输入框 */}
+                  <Textarea
+                    ref={textareaRef}
+                    flex="1"
+                    size="sm"
+                    minH="60px"
+                    maxH="200px"
+                    resize="none"
+                    placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    disabled={chatting}
+                  />
+
+                  {/* 停止 / 发送按钮 */}
+                  {chatting ? (
+                    <IconButton
+                      size="sm" colorPalette="red" aria-label="停止"
+                      onClick={stopChat}
+                    >
+                      <Square size={16} />
+                    </IconButton>
+                  ) : (
+                    <IconButton
+                      size="sm" colorPalette="blue" aria-label="发送"
+                      disabled={!inputText.trim()}
+                      onClick={handleSend}
+                    >
+                      <Send size={16} />
+                    </IconButton>
+                  )}
+                </Flex>
+              </Box>
+            )}
           </>
         )}
       </Flex>

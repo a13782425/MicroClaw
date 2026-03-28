@@ -142,6 +142,9 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
             : null;
         entity.ContextWindowMessages = incoming.ContextWindowMessages;
         entity.ExposeAsA2A = incoming.ExposeAsA2A;
+        entity.AllowedSubAgentIdsJson = incoming.AllowedSubAgentIds is not null
+            ? JsonSerializer.Serialize(incoming.AllowedSubAgentIds, JsonOpts)
+            : null;
 
         db.SaveChanges();
         return ToConfig(entity);
@@ -171,7 +174,8 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         TimeBase.FromMs(e.CreatedAtMs),
         e.IsDefault,
         e.ContextWindowMessages,
-        e.ExposeAsA2A);
+        e.ExposeAsA2A,
+        DeserializeNullableList<string>(e.AllowedSubAgentIdsJson));
 
     private static AgentConfigEntity ToEntity(AgentConfig c) => new()
     {
@@ -192,10 +196,24 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         IsDefault = c.IsDefault,
         ContextWindowMessages = c.ContextWindowMessages,
         ExposeAsA2A = c.ExposeAsA2A,
+        AllowedSubAgentIdsJson = c.AllowedSubAgentIds is not null
+            ? JsonSerializer.Serialize(c.AllowedSubAgentIds, JsonOpts)
+            : null,
     };
 
     private static IReadOnlyList<T> DeserializeList<T>(string? json)
     {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        return JsonSerializer.Deserialize<T[]>(json, JsonOpts) ?? [];
+    }
+
+    /// <summary>
+    /// 反序列化 nullable 列表：null JSON 返回 null（而非空列表）。
+    /// 用于区分“未设置”（null）与“明确为空”（[]）的语义。
+    /// </summary>
+    private static IReadOnlyList<T>? DeserializeNullableList<T>(string? json)
+    {
+        if (json is null) return null;
         if (string.IsNullOrWhiteSpace(json)) return [];
         return JsonSerializer.Deserialize<T[]>(json, JsonOpts) ?? [];
     }

@@ -241,7 +241,7 @@ public class ServeCommand : Command
 			};
 			foreach (string extra in skillOpts.AdditionalFolders)
 				roots.Add(ResolveFolder(extra, workspaceRoot));
-
+			
 			return new SkillService(workspaceRoot, roots);
 		});
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(

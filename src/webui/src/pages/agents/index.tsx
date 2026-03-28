@@ -18,6 +18,7 @@ import {
   type AgentConfig, type AgentCreateRequest, type ToolGroup,
   type ToolGroupConfig, type SkillConfig, type McpServerConfig,
   type AgentDnaFileInfo,
+  type SubAgentInfo, listSubAgents,
 } from '@/api/gateway'
 
 // ─────────────────── 创建弹窗 ─────────────────────────────────────────────────
@@ -444,14 +445,153 @@ function DnaTab({ agent }: { agent: AgentConfig }) {
   )
 }
 
+// ─────────────────── SubAgents Tab ───────────────────────────────────────────
+
+type SubAgentMode = 'all' | 'none' | 'select'
+
+function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConfig; allAgents: AgentConfig[]; onUpdated: (a: AgentConfig) => void }) {
+  const [mode, setMode] = useState<SubAgentMode>(
+    agent.allowedSubAgentIds === null ? 'all' : agent.allowedSubAgentIds.length === 0 ? 'none' : 'select',
+  )
+  const [selectedIds, setSelectedIds] = useState<string[]>(agent.allowedSubAgentIds ?? [])
+  const [available, setAvailable] = useState<SubAgentInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // 可选的子代理候选列表
+  const candidates = allAgents.filter((a) => a.id !== agent.id && a.isEnabled)
+
+  useEffect(() => {
+    setMode(agent.allowedSubAgentIds === null ? 'all' : agent.allowedSubAgentIds.length === 0 ? 'none' : 'select')
+    setSelectedIds(agent.allowedSubAgentIds ?? [])
+  }, [agent.id, agent.allowedSubAgentIds])
+
+  // 加载当前实际可调用的子代理
+  useEffect(() => {
+    setLoading(true)
+    listSubAgents(agent.id)
+      .then(setAvailable)
+      .catch(() => toaster.create({ type: 'error', title: '加载可用子代理失败' }))
+      .finally(() => setLoading(false))
+  }, [agent.id])
+
+  const isDirty = (() => {
+    const currentValue = agent.allowedSubAgentIds
+    if (mode === 'all') return currentValue !== null
+    if (mode === 'none') return currentValue === null || currentValue.length !== 0
+    // mode === 'select'
+    if (currentValue === null) return true
+    return JSON.stringify([...selectedIds].sort()) !== JSON.stringify([...currentValue].sort())
+  })()
+
+  const toggle = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => checked ? [...prev, id] : prev.filter((x) => x !== id))
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const allowedSubAgentIds: string[] | null =
+        mode === 'all' ? null : mode === 'none' ? [] : selectedIds
+      await updateAgent({
+        id: agent.id,
+        allowedSubAgentIds,
+        hasAllowedSubAgentIds: true,
+      })
+      onUpdated({ ...agent, allowedSubAgentIds })
+      toaster.create({ type: 'success', title: '子代理权限已保存' })
+    } catch {
+      toaster.create({ type: 'error', title: '保存失败' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Box p="3">
+      <HStack mb="3" justify="space-between">
+        <Text fontSize="sm" fontWeight="medium">子代理调用权限</Text>
+        {isDirty && (
+          <Button size="sm" colorPalette="blue" loading={saving} onClick={save}>保存</Button>
+        )}
+      </HStack>
+
+      <VStack gap="2" align="stretch" mb="4">
+        {(['all', 'none', 'select'] as const).map((m) => (
+          <HStack
+            key={m}
+            px="3" py="2" borderWidth="1px" rounded="md" cursor="pointer"
+            bg={mode === m ? 'blue.50' : undefined}
+            _dark={{ bg: mode === m ? 'blue.900' : undefined }}
+            onClick={() => setMode(m)}
+          >
+            <input type="radio" checked={mode === m} readOnly style={{ cursor: 'pointer' }} />
+            <Text fontSize="sm">
+              {m === 'all' ? '允许调用所有子代理（默认）' : m === 'none' ? '禁止调用任何子代理' : '仅允许调用指定子代理'}
+            </Text>
+          </HStack>
+        ))}
+      </VStack>
+
+      {mode === 'select' && (
+        <Box>
+          <Text fontSize="xs" color="gray.500" mb="2">选择允许调用的子代理：</Text>
+          {candidates.length === 0 ? (
+            <Text fontSize="sm" color="gray.400">暂无其他已启用代理</Text>
+          ) : (
+            <VStack gap="1" align="stretch">
+              {candidates.map((c) => (
+                <HStack key={c.id} px="3" py="2" borderWidth="1px" rounded="md">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(c.id)}
+                    onChange={(e) => toggle(c.id, e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <Box flex="1">
+                    <HStack gap="1">
+                      <Text fontSize="sm" fontWeight="medium">{c.name}</Text>
+                      {c.isDefault && <Badge size="xs" colorPalette="yellow">DEFAULT</Badge>}
+                    </HStack>
+                    {c.description && <Text fontSize="xs" color="gray.500">{c.description}</Text>}
+                  </Box>
+                </HStack>
+              ))}
+            </VStack>
+          )}
+        </Box>
+      )}
+
+      {loading ? (
+        <Box mt="4"><Spinner size="sm" /></Box>
+      ) : (
+        <Box mt="4">
+          <Text fontSize="xs" color="gray.500" mb="1">当前实际可调用的子代理 ({available.length} 个)</Text>
+          {available.length === 0 ? (
+            <Text fontSize="sm" color="gray.400">无可调用子代理</Text>
+          ) : (
+            <HStack gap="1" flexWrap="wrap">
+              {available.map((a) => (
+                <Badge key={a.id} size="sm" colorPalette="blue">{a.name}</Badge>
+              ))}
+            </HStack>
+          )}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 // ─────────────────── 右侧详情 ─────────────────────────────────────────────────
 
 function AgentDetail({
   agent,
+  allAgents,
   onUpdated,
   onDeleted,
 }: {
   agent: AgentConfig
+  allAgents: AgentConfig[]
   onUpdated: (a: AgentConfig) => void
   onDeleted: (id: string) => void
 }) {
@@ -567,6 +707,7 @@ function AgentDetail({
         <Tabs.List px="3">
           <Tabs.Trigger value="overview">概览</Tabs.Trigger>
           <Tabs.Trigger value="dna">🧬 DNA</Tabs.Trigger>
+          <Tabs.Trigger value="sub-agents">子代理</Tabs.Trigger>
           <Tabs.Trigger value="tools">工具</Tabs.Trigger>
           <Tabs.Trigger value="mcp">MCP</Tabs.Trigger>
           <Tabs.Trigger value="skills">技能</Tabs.Trigger>
@@ -616,6 +757,10 @@ function AgentDetail({
 
         <Tabs.Content value="tools" flex="1" overflowY="auto" p="0">
           <ToolsTab agent={agent} />
+        </Tabs.Content>
+
+        <Tabs.Content value="sub-agents" flex="1" overflowY="auto" p="0">
+          <SubAgentsTab agent={agent} allAgents={allAgents} onUpdated={onUpdated} />
         </Tabs.Content>
 
         <Tabs.Content value="dna" flex="1" overflowY="auto" p="0">
@@ -737,6 +882,7 @@ export default function AgentsPage() {
         <AgentDetail
           key={selected.id}
           agent={selected}
+          allAgents={agents}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
         />

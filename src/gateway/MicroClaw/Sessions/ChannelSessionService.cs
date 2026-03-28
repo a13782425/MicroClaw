@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using MicroClaw.Agent;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
@@ -14,6 +15,7 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public sealed class ChannelSessionService(
     SessionStore store,
+    AgentStore agentStore,
     IHubContext<GatewayHub> hubContext) : IChannelSessionService
 {
     /// <summary>同一会话 5 分钟内只推一次通知。</summary>
@@ -32,7 +34,8 @@ public sealed class ChannelSessionService(
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
 
-        SessionInfo created = store.Create(title, providerId, channelType, id: sessionId, channelId: channelId);
+        SessionInfo created = store.Create(title, providerId, channelType, id: sessionId, channelId: channelId,
+            agentId: agentStore.GetDefault()?.Id);
 
         // 通知前端新会话已创建（fire-and-forget）
         _ = hubContext.Clients.All.SendAsync("sessionCreated", new

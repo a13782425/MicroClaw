@@ -1,4 +1,5 @@
 using MicroClaw.Agent;
+using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -15,7 +16,7 @@ public sealed class SubAgentRunnerService(
     AgentStore agentStore,
     Lazy<AgentRunner> agentRunnerLazy) : ISubAgentRunner
 {
-    private const int MaxSubAgentDepth = 3;
+    private static readonly int MaxSubAgentDepth = MicroClawConfig.Get<AgentOptions>().SubAgentMaxDepth;
 
     private AgentRunner AgentRunner => agentRunnerLazy.Value;
 

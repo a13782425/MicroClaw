@@ -20,6 +20,7 @@ public static class MicroClawConfig
         [typeof(AuthOptions)] = "auth",
         [typeof(SkillOptions)] = "skills",
         [typeof(FileToolsOptions)] = "filesystem",
+        [typeof(AgentOptions)] = "agent",
     };
 
     /// <summary>

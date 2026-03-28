@@ -280,6 +280,7 @@ export type SessionInfo = {
   channelId: string
   createdAt: string
   agentId?: string | null
+  parentSessionId?: string | null
   approvalReason?: string | null
 }
 
@@ -509,6 +510,7 @@ export type AgentConfig = {
   disabledMcpServerIds: string[]
   createdAtUtc: string
   exposeAsA2A: boolean
+  allowedSubAgentIds: string[] | null
 }
 
 export type AgentCreateRequest = {
@@ -517,6 +519,7 @@ export type AgentCreateRequest = {
   isEnabled?: boolean
   disabledSkillIds?: string[]
   disabledMcpServerIds?: string[]
+  allowedSubAgentIds?: string[] | null
 }
 
 export type AgentUpdateRequest = {
@@ -527,6 +530,8 @@ export type AgentUpdateRequest = {
   disabledSkillIds?: string[]
   disabledMcpServerIds?: string[]
   exposeAsA2A?: boolean
+  allowedSubAgentIds?: string[] | null
+  hasAllowedSubAgentIds?: boolean
 }
 
 export type ToolItem = {
@@ -575,6 +580,17 @@ export async function updateAgent(req: AgentUpdateRequest): Promise<{ id: string
 
 export async function deleteAgent(id: string): Promise<void> {
   await request.post('/api/agents/delete', { id })
+}
+
+export type SubAgentInfo = {
+  id: string
+  name: string
+  description: string
+}
+
+export async function listSubAgents(agentId: string): Promise<SubAgentInfo[]> {
+  const { data } = await request.get<SubAgentInfo[]>(`/api/agents/${agentId}/sub-agents`)
+  return data
 }
 
 export async function listAgentTools(agentId: string): Promise<AgentToolsResponse> {

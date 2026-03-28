@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 namespace MicroClaw.Configuration;
 
 /// <summary>
@@ -12,6 +13,7 @@ public sealed class SkillOptions
     /// 并将输出替换进指令文本后再发送给 Claude。
     /// 仅在完全信任技能来源时开启；生产环境建议保持关闭。
     /// </summary>
+    [ConfigurationKeyName("allow_command_injection")]
     public bool AllowCommandInjection { get; set; } = false;
 
     /// <summary>
@@ -27,11 +29,13 @@ public sealed class SkillOptions
     /// 默认值 "skills" 对应 {workspaceRoot}/skills/。
     /// 新技能（通过 AI 创建）将写入此文件夹。
     /// </summary>
+    [ConfigurationKeyName("default_folder")]
     public string DefaultFolder { get; set; } = "skills";
 
     /// <summary>
     /// 附加技能文件夹路径列表（相对 workspaceRoot 或绝对路径）。
     /// 这些文件夹在扫描和查找时会一并考虑，但新技能不会写入这些文件夹。
     /// </summary>
+    [ConfigurationKeyName("additional_folders")]
     public List<string> AdditionalFolders { get; set; } = [];
 }

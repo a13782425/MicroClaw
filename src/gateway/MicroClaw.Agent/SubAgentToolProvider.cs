@@ -8,8 +8,8 @@ namespace MicroClaw.Agent;
 
 /// <summary>
 /// 子代理工具提供者。
-/// 为每个已启用的非默认 Agent 动态生成一个具名 <see cref="AIFunction"/>（名称由 Agent 显示名称规范化而来），
-/// 并附加 <c>write_agent_memory</c> 工具。
+/// 根据 <see cref="ToolCreationContext"/> 中的调用代理 ID、祖先链和 ACL 白名单，
+/// 为当前代理动态生成可调用的子代理工具函数，并附加 <c>write_agent_memory</c> 工具。
 /// </summary>
 public sealed class SubAgentToolProvider(
     AgentStore agentStore,
@@ -31,9 +31,26 @@ public sealed class SubAgentToolProvider(
 
         var tools = new List<AIFunction>();
 
-        // 为每个已启用的非默认子代理创建专属具名工具
-        foreach (AgentConfig subAgent in agentStore.All.Where(a => !a.IsDefault && a.IsEnabled))
+        // 构建排除集合：调用者自身 + 祖先链中的所有代理
+        var excludedIds = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(context.CallingAgentId))
+            excludedIds.Add(context.CallingAgentId);
+        if (context.AncestorAgentIds is { Count: > 0 })
+            foreach (string id in context.AncestorAgentIds)
+                excludedIds.Add(id);
+
+        // ACL 白名单：null = 全部可调用，非 null = 仅允许指定 ID
+        HashSet<string>? allowedIds = context.AllowedSubAgentIds is not null
+            ? new HashSet<string>(context.AllowedSubAgentIds, StringComparer.Ordinal)
+            : null;
+
+        foreach (AgentConfig subAgent in agentStore.All.Where(a => a.IsEnabled))
         {
+            // 排除自身和祖先链
+            if (excludedIds.Contains(subAgent.Id)) continue;
+
+            // ACL 白名单过滤
+            if (allowedIds is not null && !allowedIds.Contains(subAgent.Id)) continue;
             string toolName = SubAgentTools.SanitizeAgentName(subAgent.Name);
             string agentId = subAgent.Id;
             string agentName = subAgent.Name;

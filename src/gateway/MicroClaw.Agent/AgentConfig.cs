@@ -25,4 +25,9 @@ public sealed record AgentConfig(
     /// 是否通过 A2A（Agent-to-Agent）协议对外暴露此 Agent。
     /// 启用后将在 /a2a/agent/{id} 提供符合 A2A 规范的 JSON-RPC 端点。
     /// </summary>
-    bool ExposeAsA2A = false);
+    bool ExposeAsA2A = false,
+    /// <summary>
+    /// 允许调用的子代理 ID 白名单。
+    /// null = 允许调用所有子代理（默认）；空列表 = 禁止调用任何子代理；具体 ID 列表 = 仅允许调用指定子代理。
+    /// </summary>
+    IReadOnlyList<string>? AllowedSubAgentIds = null);

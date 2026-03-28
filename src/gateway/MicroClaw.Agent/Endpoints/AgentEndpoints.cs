@@ -48,7 +48,8 @@ public static class AgentEndpoints
                 ToolGroupConfigs: [],
                 CreatedAtUtc: DateTimeOffset.UtcNow,
                 ContextWindowMessages: req.ContextWindowMessages,
-                ExposeAsA2A: req.ExposeAsA2A);
+                ExposeAsA2A: req.ExposeAsA2A,
+                AllowedSubAgentIds: req.AllowedSubAgentIds);
 
             try
             {
@@ -81,6 +82,7 @@ public static class AgentEndpoints
                 DisabledMcpServerIds = req.DisabledMcpServerIds ?? existing.DisabledMcpServerIds,
                 ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
                 ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
+                AllowedSubAgentIds = req.HasAllowedSubAgentIds ? req.AllowedSubAgentIds : existing.AllowedSubAgentIds,
             };
 
             try
@@ -214,6 +216,24 @@ public static class AgentEndpoints
 
         // ── Agent DNA 文件管理（SOUL.md / MEMORY.md）──────────────────────────
 
+        // ── 子代理 ACL 查询 ──────────────────────────────────────────────────
+
+        endpoints.MapGet("/agents/{id}/sub-agents", (string id, AgentStore store) =>
+        {
+            AgentConfig? agent = store.GetById(id);
+            if (agent is null)
+                return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
+
+            // 根据 ACL 过滤可调用子代理列表（排除自身）
+            IEnumerable<AgentConfig> candidates = store.All.Where(a => a.IsEnabled && a.Id != id);
+            if (agent.AllowedSubAgentIds is not null)
+                candidates = candidates.Where(a => agent.AllowedSubAgentIds.Contains(a.Id));
+
+            var result = candidates.Select(a => new { a.Id, a.Name, a.Description }).ToList();
+            return Results.Ok(result);
+        })
+        .WithTags("Agents");
+
         endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, AgentDnaService agentDna) =>
         {
             if (store.GetById(id) is null)
@@ -275,6 +295,7 @@ public static class AgentEndpoints
         a.IsDefault,
         a.ContextWindowMessages,
         a.ExposeAsA2A,
+        a.AllowedSubAgentIds,
     };
 }
 
@@ -287,7 +308,8 @@ public sealed record AgentCreateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
-    bool ExposeAsA2A = false);
+    bool ExposeAsA2A = false,
+    IReadOnlyList<string>? AllowedSubAgentIds = null);
 
 public sealed record AgentUpdateRequest(
     string Id,
@@ -297,7 +319,14 @@ public sealed record AgentUpdateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
-    bool? ExposeAsA2A = null);
+    bool? ExposeAsA2A = null,
+    IReadOnlyList<string>? AllowedSubAgentIds = null,
+    /// <summary>
+    /// 显式标记是否传入了 AllowedSubAgentIds。
+    /// 用于区分“未传”（保留原值）和“传了 null”（清除限制）。
+    /// 前端传 true + AllowedSubAgentIds = null 表示“允许所有”；传 true + [] 表示“禁止所有”。
+    /// </summary>
+    bool HasAllowedSubAgentIds = false);
 
 public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);
 

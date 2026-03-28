@@ -1,4 +1,5 @@
 using FluentAssertions;
+using MicroClaw.Agent;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
@@ -27,7 +28,8 @@ public sealed class ChannelSessionServiceTests : IDisposable
         _hubContext.Clients.Returns(clients);
         clients.All.Returns(clientProxy);
 
-        _service = new ChannelSessionService(_sessionStore, _hubContext);
+        var agentStore = new AgentStore(_db.CreateFactory());
+        _service = new ChannelSessionService(_sessionStore, agentStore, _hubContext);
     }
 
     public void Dispose()

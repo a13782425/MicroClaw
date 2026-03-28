@@ -99,11 +99,30 @@ public sealed class AgentRunner(
 
         // 按 Agent 配置收集所有工具（builtin + channel + skill + MCP），统一过滤
         SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId) ? sessionReader.Get(sessionId) : null;
+
+        // 解析祖先链中的代理 ID（用于子代理工具排除循环调用）
+        var ancestorAgentIds = new List<string>();
+        if (sessionForTools?.ParentSessionId is not null)
+        {
+            string? cursor = sessionForTools.ParentSessionId;
+            while (cursor is not null)
+            {
+                SessionInfo? ancestor = sessionReader.Get(cursor);
+                if (ancestor is null) break;
+                if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
+                    ancestorAgentIds.Add(ancestor.AgentId);
+                cursor = ancestor.ParentSessionId;
+            }
+        }
+
         var toolContext = new ToolCreationContext(
             SessionId: sessionId,
             ChannelType: sessionForTools?.ChannelType,
             ChannelId: sessionForTools?.ChannelId,
-            DisabledSkillIds: agent.DisabledSkillIds);
+            DisabledSkillIds: agent.DisabledSkillIds,
+            CallingAgentId: agent.Id,
+            AllowedSubAgentIds: agent.AllowedSubAgentIds,
+            AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
         await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, toolContext, ct);
 
         _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools",

@@ -20,7 +20,7 @@ internal static class TestConfigFixture
         {
             MicroClawConfig.Reset();
             var config = new ConfigurationBuilder().Build();
-            MicroClawConfig.Initialize(config, home: null, configFile: null);
+            MicroClawConfig.Initialize(config);
         }
     }
 
@@ -35,7 +35,7 @@ internal static class TestConfigFixture
             var config = new ConfigurationBuilder()
                 .AddInMemoryCollection(values)
                 .Build();
-            MicroClawConfig.Initialize(config, home: null, configFile: null);
+            MicroClawConfig.Initialize(config);
         }
     }
 }
