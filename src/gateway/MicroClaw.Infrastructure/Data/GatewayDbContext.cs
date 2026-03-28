@@ -10,7 +10,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<AgentConfigEntity> Agents => Set<AgentConfigEntity>();
     public DbSet<CronJobEntity> CronJobs => Set<CronJobEntity>();
     public DbSet<CronJobRunLogEntity> CronJobRunLogs => Set<CronJobRunLogEntity>();
-    public DbSet<SkillConfigEntity> Skills => Set<SkillConfigEntity>();
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
     public DbSet<McpServerConfigEntity> McpServers => Set<McpServerConfigEntity>();
@@ -107,14 +106,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ErrorMessage).HasColumnName("error_message");
             b.Property(e => e.Source).HasColumnName("source").HasMaxLength(20);
             b.HasIndex(e => e.CronJobId).HasDatabaseName("ix_cron_job_run_logs_cron_job_id");
-        });
-
-        modelBuilder.Entity<SkillConfigEntity>(b =>
-        {
-            b.ToTable("skills");
-            b.HasKey(e => e.Id);
-            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
-            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
         });
 
         modelBuilder.Entity<UsageEntity>(b =>

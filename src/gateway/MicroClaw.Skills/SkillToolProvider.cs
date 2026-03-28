@@ -37,7 +37,7 @@ public sealed class SkillToolProvider(
     public Task<ToolProviderResult> CreateToolsAsync(ToolCreationContext context, CancellationToken ct = default)
     {
         // 全部技能减去排除列表（空排除列表 = 全部启用）
-        IReadOnlyList<string> allSkillIds = skillStore.All.Select(s => s.Id).ToList();
+        IReadOnlyList<string> allSkillIds = skillStore.All;
         IReadOnlyList<string> effectiveIds = context.DisabledSkillIds is { Count: > 0 }
             ? allSkillIds.Where(id => !context.DisabledSkillIds.Contains(id)).ToList()
             : allSkillIds;

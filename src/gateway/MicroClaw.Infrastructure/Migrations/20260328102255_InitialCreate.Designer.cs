@@ -10,8 +10,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MicroClaw.Infrastructure.Migrations
 {
     [DbContext(typeof(GatewayDbContext))]
-    [Migration("20260326033318_RemoveChannelProviderId")]
-    partial class RemoveChannelProviderId
+    [Migration("20260328102255_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,9 +26,8 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<string>("BoundSkillIdsJson")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("bound_skill_ids_json");
+                    b.Property<string>("AllowedSubAgentIdsJson")
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("ContextWindowMessages")
                         .HasColumnType("INTEGER")
@@ -43,9 +42,19 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("description");
 
-                    b.Property<string>("EnabledMcpServerIdsJson")
+                    b.Property<string>("DisabledMcpServerIdsJson")
                         .HasColumnType("TEXT")
-                        .HasColumnName("enabled_mcp_server_ids_json");
+                        .HasColumnName("disabled_mcp_server_ids_json");
+
+                    b.Property<string>("DisabledSkillIdsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("disabled_skill_ids_json");
+
+                    b.Property<bool>("ExposeAsA2A")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("expose_as_a2a");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("INTEGER")
@@ -472,26 +481,6 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("sessions", (string)null);
                 });
 
-            modelBuilder.Entity("MicroClaw.Infrastructure.Data.SkillConfigEntity", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<long>("CreatedAtMs")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_ms");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("is_enabled");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("skills", (string)null);
-                });
-
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.UsageEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -570,6 +559,58 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasDatabaseName("ix_usages_session_provider_source_day");
 
                     b.ToTable("usages", (string)null);
+                });
+
+            modelBuilder.Entity("MicroClaw.Infrastructure.Data.WorkflowConfigEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_ms");
+
+                    b.Property<string>("DefaultProviderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("default_provider_id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EdgesJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("edges_json");
+
+                    b.Property<string>("EntryNodeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entry_node_id");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NodesJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("nodes_json");
+
+                    b.Property<long>("UpdatedAtMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_ms");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("workflows", (string)null);
                 });
 #pragma warning restore 612, 618
         }

@@ -478,22 +478,6 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("sessions", (string)null);
                 });
 
-            modelBuilder.Entity("MicroClaw.Infrastructure.Data.SkillConfigEntity", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<long>("CreatedAtMs")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("created_at_ms");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("skills", (string)null);
-                });
-
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.UsageEntity", b =>
                 {
                     b.Property<int>("Id")

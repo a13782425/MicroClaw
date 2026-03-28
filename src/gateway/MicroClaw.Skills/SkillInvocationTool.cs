@@ -65,10 +65,10 @@ public sealed class SkillInvocationTool
         if (resolved is null)
             return new { success = false, error = $"技能 '{skillName}' 未找到或未启用。" };
 
-        var (config, manifest) = resolved.Value;
+        var (skillId, manifest) = resolved.Value;
 
         // ── on-invoke hooks ────────────────────────────────────────────────
-        HookExecutionResult hookResult = await ExecuteHooksAsync(manifest.ParsedHooks.OnInvoke, config!.Id, "on-invoke");
+        HookExecutionResult hookResult = await ExecuteHooksAsync(manifest.ParsedHooks.OnInvoke, skillId, "on-invoke");
         if (!hookResult.Success)
             return new { success = false, error = hookResult.Error };
 
@@ -77,17 +77,17 @@ public sealed class SkillInvocationTool
         {
             if (string.Equals(manifest.Context, "fork", StringComparison.OrdinalIgnoreCase))
             {
-                result = await ForkInvokeAsync(config!.Id, manifest, sessionId, arguments, ct);
+                result = await ForkInvokeAsync(skillId, manifest, sessionId, arguments, ct);
             }
             else
             {
-                result = InlineInvoke(config!.Id, manifest, sessionId, arguments);
+                result = InlineInvoke(skillId, manifest, sessionId, arguments);
             }
         }
         finally
         {
             // ── on-complete hooks（fire-and-forget，不阻塞返回）─────────────
-            _ = ExecuteHooksAsync(manifest.ParsedHooks.OnComplete, config!.Id, "on-complete");
+            _ = ExecuteHooksAsync(manifest.ParsedHooks.OnComplete, skillId, "on-complete");
         }
 
         return result;

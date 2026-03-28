@@ -195,9 +195,9 @@ public static class AgentEndpoints
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 0-B-6: 批量校验 SkillId 是否存在于数据库
+            // 0-B-6: 批量校验 SkillId 是否存在于文件系统
             IReadOnlyList<string> skillIds = req.SkillIds ?? [];
-            List<string> invalidIds = skillIds.Where(sid => skillStore.GetById(sid) is null).ToList();
+            List<string> invalidIds = skillIds.Where(sid => !skillStore.Exists(sid)).ToList();
             if (invalidIds.Count > 0)
                 return Results.BadRequest(new
                 {

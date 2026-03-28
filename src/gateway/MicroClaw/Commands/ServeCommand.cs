@@ -75,7 +75,6 @@ public class ServeCommand : Command
 		MigrateDatabase(app);
 		SeedDefaultAgent(app);
 		EnsureWebChannel(app);
-		ScanSkills(app);
 		ConfigureMiddleware(app);
 		MapEndpoints(app);
 
@@ -225,7 +224,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IDevMetricsService, DevMetricsService>();
 
 		// Skills 服务
-		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillService>(_ =>
 		{
 			var skillOpts = MicroClawConfig.Get<SkillOptions>();
@@ -245,6 +243,8 @@ public class ServeCommand : Command
 			
 			return new SkillService(workspaceRoot, roots);
 		});
+		builder.Services.AddSingleton<SkillStore>(sp => new SkillStore(
+			sp.GetRequiredService<SkillService>()));
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
 			sp.GetRequiredService<SkillStore>(),
 			sp.GetRequiredService<SkillService>()));
@@ -357,33 +357,6 @@ public class ServeCommand : Command
 		using var scope = app.Services.CreateScope();
 		var channelStore = scope.ServiceProvider.GetRequiredService<ChannelConfigStore>();
 		channelStore.EnsureWebChannel();
-	}
-
-	/// <summary>启动时扫描技能文件夹，自动将新发现的技能注册到数据库（幂等）。</summary>
-	private static void ScanSkills(WebApplication app)
-	{
-		using var scope = app.Services.CreateScope();
-		var skillStore = scope.ServiceProvider.GetRequiredService<SkillStore>();
-		var skillService = scope.ServiceProvider.GetRequiredService<SkillService>();
-
-		foreach (string root in skillService.SkillRoots)
-		{
-			if (!Directory.Exists(root)) continue;
-
-			foreach (string dir in Directory.GetDirectories(root))
-			{
-				string skillMdPath = Path.Combine(dir, "SKILL.md");
-				if (!File.Exists(skillMdPath)) continue;
-
-				string dirName = Path.GetFileName(dir);
-				if (skillStore.Exists(dirName)) continue;
-
-				SkillConfig config = new(
-					Id: dirName,
-					CreatedAtUtc: DateTimeOffset.UtcNow);
-				skillStore.Add(config);
-			}
-		}
 	}
 
 	/// <summary>配置中间件管道：请求日志、认证授权、Swagger UI、默认文件、Brotli 预压缩及静态文件服务。</summary>

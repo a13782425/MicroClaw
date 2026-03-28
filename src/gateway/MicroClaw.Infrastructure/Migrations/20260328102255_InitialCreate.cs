@@ -18,12 +18,14 @@ namespace MicroClaw.Infrastructure.Migrations
                     name = table.Column<string>(type: "TEXT", nullable: false),
                     description = table.Column<string>(type: "TEXT", nullable: false),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    bound_skill_ids_json = table.Column<string>(type: "TEXT", nullable: true),
-                    enabled_mcp_server_ids_json = table.Column<string>(type: "TEXT", nullable: true),
+                    disabled_skill_ids_json = table.Column<string>(type: "TEXT", nullable: true),
+                    disabled_mcp_server_ids_json = table.Column<string>(type: "TEXT", nullable: true),
                     tool_group_configs_json = table.Column<string>(type: "TEXT", nullable: true),
                     created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
                     is_default = table.Column<bool>(type: "INTEGER", nullable: false),
-                    context_window_messages = table.Column<int>(type: "INTEGER", nullable: true)
+                    context_window_messages = table.Column<int>(type: "INTEGER", nullable: true),
+                    expose_as_a2a = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: false),
+                    AllowedSubAgentIdsJson = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -58,7 +60,6 @@ namespace MicroClaw.Infrastructure.Migrations
                     id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     display_name = table.Column<string>(type: "TEXT", nullable: false),
                     channel_type = table.Column<string>(type: "TEXT", nullable: false),
-                    provider_id = table.Column<string>(type: "TEXT", nullable: false),
                     is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
                     settings_json = table.Column<string>(type: "TEXT", nullable: true)
                 },
@@ -182,19 +183,6 @@ namespace MicroClaw.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "skills",
-                columns: table => new
-                {
-                    id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_skills", x => x.id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "usages",
                 columns: table => new
                 {
@@ -218,6 +206,26 @@ namespace MicroClaw.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_usages", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "workflows",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    name = table.Column<string>(type: "TEXT", nullable: false),
+                    description = table.Column<string>(type: "TEXT", nullable: false),
+                    is_enabled = table.Column<bool>(type: "INTEGER", nullable: false),
+                    nodes_json = table.Column<string>(type: "TEXT", nullable: true),
+                    edges_json = table.Column<string>(type: "TEXT", nullable: true),
+                    entry_node_id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
+                    default_provider_id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
+                    created_at_ms = table.Column<long>(type: "INTEGER", nullable: false),
+                    updated_at_ms = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_workflows", x => x.id);
                 });
 
             migrationBuilder.CreateIndex(
@@ -279,10 +287,10 @@ namespace MicroClaw.Infrastructure.Migrations
                 name: "sessions");
 
             migrationBuilder.DropTable(
-                name: "skills");
+                name: "usages");
 
             migrationBuilder.DropTable(
-                name: "usages");
+                name: "workflows");
         }
     }
 }

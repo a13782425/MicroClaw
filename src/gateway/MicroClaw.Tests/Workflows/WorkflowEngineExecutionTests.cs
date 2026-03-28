@@ -50,7 +50,7 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
         var agentDna = new AgentDnaService(agentsDir);
 
         var skillService = new SkillService(_tempDir.Path);
-        var skillStore = new SkillStore(dbFactory);
+        var skillStore = new SkillStore(skillService);
         var skillToolFactory = new SkillToolFactory(skillStore, skillService);
         var skillInvocationTool = new SkillInvocationTool(
             skillToolFactory,

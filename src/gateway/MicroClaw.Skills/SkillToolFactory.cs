@@ -24,7 +24,7 @@ public sealed class SkillToolFactory(
         string? sessionId = null)
     {
         // 全部技能减去排除列表（空排除列表 = 全部启用，opt-out 模型）
-        IReadOnlyList<string> allIds = skillStore.All.Select(s => s.Id).ToList();
+        IReadOnlyList<string> allIds = skillStore.All;
         IReadOnlyList<string> effectiveIds = disabledSkillIds.Count > 0
             ? allIds.Where(id => !disabledSkillIds.Contains(id)).ToList()
             : allIds;
@@ -37,8 +37,7 @@ public sealed class SkillToolFactory(
 
         foreach (string id in effectiveIds)
         {
-            SkillConfig? skill = skillStore.GetById(id);
-            if (skill is null) continue;
+            if (!skillStore.Exists(id)) continue;
 
             SkillManifest manifest = skillService.ParseManifest(id);
             if (manifest.DisableModelInvocation) continue;
@@ -113,8 +112,8 @@ public sealed class SkillToolFactory(
         var resolved = ResolveSkill(boundSkillIds, skillName);
         if (resolved is null) return null;
 
-        var (config, manifest) = resolved.Value;
-        return BuildSkillInstructionsFromManifest(config!.Id, manifest, sessionId, arguments);
+        var (skillId, manifest) = resolved.Value;
+        return BuildSkillInstructionsFromManifest(skillId, manifest, sessionId, arguments);
     }
 
     /// <summary>
@@ -143,21 +142,20 @@ public sealed class SkillToolFactory(
     /// <summary>
     /// 返回指定技能的 manifest，供 SkillInvocationTool 读取 context/agent 等元数据。
     /// </summary>
-    public (SkillConfig? Config, SkillManifest Manifest)? ResolveSkill(
+    public (string SkillId, SkillManifest Manifest)? ResolveSkill(
         IReadOnlyList<string> boundSkillIds,
         string skillName)
     {
         foreach (string id in boundSkillIds)
         {
-            SkillConfig? skill = skillStore.GetById(id);
-            if (skill is null) continue;
+            if (!skillStore.Exists(id)) continue;
 
             SkillManifest manifest = skillService.ParseManifest(id);
             string resolvedName = !string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Name : id;
             if (!string.Equals(resolvedName, skillName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            return (skill, manifest);
+            return (id, manifest);
         }
 
         return null;

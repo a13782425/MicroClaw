@@ -1,16 +1,13 @@
-using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
 using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Skills;
 
 /// <summary>
-/// Skill 技能管控元数据的 CRUD 存储，基于 EF Core。
-/// name/description 等运行时配置不存储于数据库，统一从 SKILL.md frontmatter 实时读取。
+/// Skill 技能存储 — 纯文件系统扫描，不再依赖数据库。
+/// 通过扫描 <see cref="SkillService.SkillRoots"/> 下含 SKILL.md 的目录来发现技能。
 /// Id = 目录名 slug（小写字母+数字+连字符，max 64）。
 /// </summary>
-public sealed partial class SkillStore(IDbContextFactory<GatewayDbContext> factory)
+public sealed partial class SkillStore(SkillService skillService)
 {
     /// <summary>合法 slug 正则：小写字母开头，允许小写字母、数字、连字符，1~64 字符。</summary>
     [GeneratedRegex(@"^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$")]
@@ -19,57 +16,26 @@ public sealed partial class SkillStore(IDbContextFactory<GatewayDbContext> facto
     public static bool IsValidSlug(string slug) =>
         !string.IsNullOrWhiteSpace(slug) && slug.Length <= 64 && SlugPattern().IsMatch(slug);
 
-    public IReadOnlyList<SkillConfig> All
+    /// <summary>扫描所有技能文件夹，返回含 SKILL.md 的目录列表。</summary>
+    public IReadOnlyList<string> All
     {
         get
         {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.Skills.Select(ToConfig).ToList()
-                .OrderBy(s => s.CreatedAtUtc).ToList().AsReadOnly();
+            var ids = new List<string>();
+            foreach (string root in skillService.SkillRoots)
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (string dir in Directory.GetDirectories(root))
+                {
+                    string skillMdPath = Path.Combine(dir, "SKILL.md");
+                    if (!File.Exists(skillMdPath)) continue;
+                    ids.Add(Path.GetFileName(dir));
+                }
+            }
+            return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList().AsReadOnly();
         }
     }
 
-    public SkillConfig? GetById(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SkillConfigEntity? entity = db.Skills.Find(id);
-        return entity is null ? null : ToConfig(entity);
-    }
-
-    public SkillConfig Add(SkillConfig config)
-    {
-        SkillConfigEntity entity = ToEntity(config);
-        using GatewayDbContext db = factory.CreateDbContext();
-        db.Skills.Add(entity);
-        db.SaveChanges();
-        return ToConfig(entity);
-    }
-
-    /// <summary>判断指定 ID 的技能是否已存在。</summary>
-    public bool Exists(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        return db.Skills.Any(s => s.Id == id);
-    }
-
-    public bool Delete(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SkillConfigEntity? entity = db.Skills.Find(id);
-        if (entity is null) return false;
-
-        db.Skills.Remove(entity);
-        db.SaveChanges();
-        return true;
-    }
-
-    private static SkillConfig ToConfig(SkillConfigEntity e) => new(
-        e.Id,
-        TimeBase.FromMs(e.CreatedAtMs));
-
-    private static SkillConfigEntity ToEntity(SkillConfig c) => new()
-    {
-        Id = c.Id,
-        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
-    };
+    /// <summary>判断指定 ID 的技能是否存在（磁盘上有对应目录和 SKILL.md）。</summary>
+    public bool Exists(string id) => All.Contains(id, StringComparer.OrdinalIgnoreCase);
 }
