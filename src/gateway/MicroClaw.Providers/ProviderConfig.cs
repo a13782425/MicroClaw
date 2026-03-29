@@ -28,6 +28,7 @@ public sealed record ProviderCapabilities
     // 特殊能力
     public bool SupportsFunctionCalling { get; init; }
     public bool SupportsResponsesApi { get; init; }
+    public bool SupportsEmbedding { get; init; }
 
     // 价格（$/1M tokens）
     public decimal? InputPricePerMToken { get; init; }

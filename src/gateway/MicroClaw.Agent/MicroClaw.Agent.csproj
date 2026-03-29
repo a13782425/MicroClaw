@@ -26,6 +26,8 @@
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
     <ProjectReference Include="..\MicroClaw.Skills\MicroClaw.Skills.csproj" />
     <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
+    <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
+    <ProjectReference Include="..\MicroClaw.Emotion\MicroClaw.Emotion.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
 using MicroClaw.Agent;
-using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -17,9 +16,10 @@ namespace MicroClaw.Sessions;
 public sealed class SubAgentRunnerService(
     SessionStore sessionStore,
     AgentStore agentStore,
-    Lazy<AgentRunner> agentRunnerLazy) : ISubAgentRunner
+    Lazy<AgentRunner> agentRunnerLazy,
+    int maxSubAgentDepth = 3) : ISubAgentRunner
 {
-    private static readonly int MaxSubAgentDepth = MicroClawConfig.Get<AgentOptions>().SubAgentMaxDepth;
+    private readonly int _maxSubAgentDepth = maxSubAgentDepth;
 
     private AgentRunner AgentRunner => agentRunnerLazy.Value;
 
@@ -49,9 +49,9 @@ public sealed class SubAgentRunnerService(
             {
                 // 该祖先本身也是子代理会话，计入深度
                 depth++;
-                if (depth >= MaxSubAgentDepth)
+                if (depth >= _maxSubAgentDepth)
                     throw new InvalidOperationException(
-                        $"子代理调用深度已达上限（{MaxSubAgentDepth}），禁止继续派生子代理。");
+                        $"子代理调用深度已达上限（{_maxSubAgentDepth}），禁止继续派生子代理。");
             }
 
             if (ancestor.AgentId == agentId)

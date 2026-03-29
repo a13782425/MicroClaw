@@ -4,6 +4,7 @@ using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Agent.Sessions;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.WeChat;
@@ -22,6 +23,8 @@ using MicroClaw.Jobs;
 using MicroClaw.Providers;
 using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
+using MicroClaw.Emotion;
+using MicroClaw.RAG;
 using MicroClaw.Services;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -186,15 +189,37 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
 		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
+		// RAG 服务
+		builder.Services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
+		builder.Services.AddSingleton<ProviderEmbeddingFactory>();
+		builder.Services.AddSingleton<RagDbContextFactory>(_ => new RagDbContextFactory(workspaceRoot));
+		builder.Services.AddSingleton<IEmbeddingService>(sp =>
+		{
+			var configStore = sp.GetRequiredService<ProviderConfigStore>();
+			var embeddingFactory = sp.GetRequiredService<ProviderEmbeddingFactory>();
+			var config = configStore.All.FirstOrDefault(p => p.IsEnabled && p.Capabilities.SupportsEmbedding);
+			if (config is null) return new NullEmbeddingService();
+			return new EmbeddingService(embeddingFactory.Create(config));
+		});
+		builder.Services.AddSingleton<HybridSearchService>();
+		builder.Services.AddSingleton<IRagService, RagService>();
+		builder.Services.AddSingleton<ISessionMessageIndexer, SessionMessageIndexer>();
+		// 情绪系统服务
+		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
+		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
+		builder.Services.AddSingleton<IEmotionRuleEngine>(_ => new EmotionRuleEngine());
+		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ => new EmotionBehaviorMapper());
 		// Context Providers（按 Order 聚合 System Prompt）
 		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();
+		builder.Services.AddSingleton<IAgentContextProvider, RagContextProvider>(); // Order 15：语义检索层
 		builder.Services.AddSingleton<IAgentContextProvider, SessionDnaContextProvider>();
 		builder.Services.AddSingleton<IAgentContextProvider, SessionMemoryContextProvider>();
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
 			sp.GetRequiredService<SessionStore>(),
 			sp.GetRequiredService<AgentStore>(),
-			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>())));
+			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>()),
+			MicroClawConfig.Get<AgentOptions>().SubAgentMaxDepth));
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		// AIContent→StreamItem 转换管道（Handler + Pipeline）
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.TextContentHandler>();

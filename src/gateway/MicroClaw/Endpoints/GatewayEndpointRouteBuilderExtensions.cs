@@ -32,6 +32,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapMcpEndpoints();
 		protectedApi.MapToolsEndpoints();
 		protectedApi.MapWorkflowEndpoints();
+		protectedApi.MapRagEndpoints();
 
 		return endpoints;
 	}

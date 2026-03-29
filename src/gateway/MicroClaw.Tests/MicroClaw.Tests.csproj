@@ -16,7 +16,7 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="FluentAssertions" Version="8.3.0" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0-preview.2.25164.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +28,8 @@
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
     <ProjectReference Include="..\MicroClaw.Agent\MicroClaw.Agent.csproj" />
+    <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
+    <ProjectReference Include="..\MicroClaw.Emotion\MicroClaw.Emotion.csproj" />
   </ItemGroup>
 
 </Project>

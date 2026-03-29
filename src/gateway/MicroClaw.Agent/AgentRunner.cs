@@ -8,6 +8,7 @@ using MicroClaw.Agent.Middleware;
 using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
 using MicroClaw.Agent.Restorers;
+using MicroClaw.Emotion;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -41,13 +42,19 @@ public sealed class AgentRunner(
     ToolCollector toolCollector,
     IDevMetricsService devMetrics,
     AIContentPipeline contentPipeline,
-    IEnumerable<IChatContentRestorer> chatContentRestorers) : IAgentMessageHandler
+    IEnumerable<IChatContentRestorer> chatContentRestorers,
+    IEmotionStore? emotionStore = null,
+    IEmotionRuleEngine? emotionRuleEngine = null,
+    IEmotionBehaviorMapper? emotionBehaviorMapper = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
     private readonly IReadOnlyList<IChatContentRestorer> _restorers =
         chatContentRestorers.ToList().AsReadOnly();
+    private readonly IEmotionStore? _emotionStore = emotionStore;
+    private readonly IEmotionRuleEngine? _emotionRuleEngine = emotionRuleEngine;
+    private readonly IEmotionBehaviorMapper? _emotionBehaviorMapper = emotionBehaviorMapper;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -95,7 +102,16 @@ public sealed class AgentRunner(
         IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
 
         SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
-        List<ChatMessage> messages = await BuildChatMessagesAsync(agent, validatedHistory, sessionId, skillCtx.CatalogFragment, ct);
+
+        // ── 情绪系统：执行前读取状态，映射行为模式 ────────────────────────────
+        EmotionState emotionState = _emotionStore is not null
+            ? await _emotionStore.GetCurrentAsync(agent.Id, ct)
+            : EmotionState.Default;
+        BehaviorProfile? behaviorProfile = _emotionBehaviorMapper?.GetProfile(emotionState);
+
+        List<ChatMessage> messages = await BuildChatMessagesAsync(
+            agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
+            behaviorSuffix: behaviorProfile?.SystemPromptSuffix, ct);
 
         // 按 Agent 配置收集所有工具（builtin + channel + skill + MCP），统一过滤
         SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId) ? sessionReader.Get(sessionId) : null;
@@ -130,7 +146,10 @@ public sealed class AgentRunner(
 
         // ── AgentFactory：创建 ChatClientAgent + 事件 Channel ──────────────
 
-        ChatOptions chatOptions = BuildChatOptions(toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride);
+        ChatOptions chatOptions = BuildChatOptions(
+            toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
+            temperatureOverride: behaviorProfile?.Temperature,
+            topPOverride: behaviorProfile?.TopP);
         IChatClient rawClient = clientFactory.Create(provider);
         var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(rawClient, agent.Name, chatOptions, loggerFactory, devMetrics: devMetrics);
 
@@ -207,6 +226,18 @@ public sealed class AgentRunner(
                 usageTracker, _logger, CancellationToken.None);
             if (!string.IsNullOrWhiteSpace(sessionId))
                 await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+
+            // ── 情绪系统：执行后更新情绪状态 ─────────────────────────────────
+            if (_emotionStore is not null && _emotionRuleEngine is not null)
+            {
+                EmotionEventType emotionEvent = succeeded
+                    ? EmotionEventType.TaskCompleted
+                    : EmotionEventType.TaskFailed;
+                EmotionState newState = _emotionRuleEngine.Evaluate(emotionState, emotionEvent);
+                await _emotionStore.SaveAsync(agent.Id, newState, CancellationToken.None);
+                _logger.LogDebug("情绪更新：AgentId={AgentId} 事件={Event} 模式={Mode}",
+                    agent.Id, emotionEvent, behaviorProfile?.Mode);
+            }
         }
     }
 
@@ -258,9 +289,14 @@ public sealed class AgentRunner(
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
-    private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, CancellationToken ct = default)
+    private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, string? behaviorSuffix = null, CancellationToken ct = default)
     {
-        string systemPrompt = await BuildSystemPromptAsync(agent, sessionId, skillCatalogFragment, ct);
+        // 提取最后一条用户消息，供 IUserAwareContextProvider（如 RagContextProvider）进行语义检索
+        string? latestUserMessage = history
+            .LastOrDefault(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
+            ?.Content;
+
+        string systemPrompt = await BuildSystemPromptAsync(agent, sessionId, skillCatalogFragment, latestUserMessage, behaviorSuffix, ct);
         if (!string.IsNullOrEmpty(systemPrompt))
         {
             int promptBytes = System.Text.Encoding.UTF8.GetByteCount(systemPrompt);
@@ -364,20 +400,38 @@ public sealed class AgentRunner(
     /// 构建 System Prompt：按 <see cref="IAgentContextProvider.Order"/> 顺序聚合所有 Provider 的上下文片段，
     /// 末尾追加 Skill Context。
     /// </summary>
-    internal async ValueTask<string> BuildSystemPromptAsync(AgentConfig agent, string? sessionId, string? skillContext = null, CancellationToken ct = default)
+    /// <param name="agent">当前执行的 Agent 配置。</param>
+    /// <param name="sessionId">当前会话 ID。</param>
+    /// <param name="skillContext">技能目录片段（始终排最后）。</param>
+    /// <param name="userMessage">当前用户消息文本，供 <see cref="IUserAwareContextProvider"/> 进行语义检索。</param>
+    /// <param name="ct">取消令牌。</param>
+    internal async ValueTask<string> BuildSystemPromptAsync(
+        AgentConfig agent,
+        string? sessionId,
+        string? skillContext = null,
+        string? userMessage = null,
+        string? behaviorSuffix = null,
+        CancellationToken ct = default)
     {
-        var parts = new List<string>(_contextProviders.Count + 1);
+        var parts = new List<string>(_contextProviders.Count + 2);
 
         foreach (IAgentContextProvider provider in _contextProviders)
         {
-            string? fragment = await provider.BuildContextAsync(agent, sessionId, ct);
+            string? fragment = provider is IUserAwareContextProvider userAware
+                ? await userAware.BuildContextAsync(agent, sessionId, userMessage, ct)
+                : await provider.BuildContextAsync(agent, sessionId, ct);
+
             if (!string.IsNullOrWhiteSpace(fragment))
                 parts.Add(fragment);
         }
 
-        // Skill Context 始终排在最后
+        // Skill Context 始终排在最后（行为后缀除外）
         if (!string.IsNullOrWhiteSpace(skillContext))
             parts.Add(skillContext);
+
+        // 行为模式后缀（由情绪系统注入）— 排在最末尾
+        if (!string.IsNullOrWhiteSpace(behaviorSuffix))
+            parts.Add(behaviorSuffix);
 
         return string.Join("\n\n", parts);
     }
@@ -438,12 +492,16 @@ public sealed class AgentRunner(
         IReadOnlyList<AITool> tools,
         ProviderConfig provider,
         string? modelOverride = null,
-        string? effortOverride = null)
+        string? effortOverride = null,
+        float? temperatureOverride = null,
+        float? topPOverride = null)
     {
         var options = new ChatOptions
         {
             ModelId = modelOverride ?? provider.ModelName,
             MaxOutputTokens = provider.MaxOutputTokens,
+            Temperature = temperatureOverride,
+            TopP = topPOverride,
         };
         if (!string.IsNullOrWhiteSpace(effortOverride))
             options.AdditionalProperties ??= new() { ["thinking_effort"] = effortOverride };

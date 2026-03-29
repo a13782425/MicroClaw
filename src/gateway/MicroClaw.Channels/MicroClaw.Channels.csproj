@@ -10,7 +10,7 @@
     <PackageReference Include="FeishuNetSdk" Version="*" />
     <PackageReference Include="FeishuNetSdk.WebSocket" Version="*" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
     <PackageReference Include="System.Threading.RateLimiting" Version="*" />
   </ItemGroup>
 

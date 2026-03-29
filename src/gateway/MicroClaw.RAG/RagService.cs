@@ -1,0 +1,280 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+
+namespace MicroClaw.RAG;
+
+/// <summary>
+/// <see cref="IRagService"/> 完整实现。
+/// <list type="bullet">
+///   <item><see cref="IngestAsync"/>：文本 → 分块 → 批量嵌入 → 存入目标知识库 DB。</item>
+///   <item><see cref="QueryAsync"/>：混合检索；Session 作用域合并 Global + Session 双库结果。</item>
+/// </list>
+/// </summary>
+public sealed class RagService : IRagService
+{
+    private readonly IEmbeddingService _embedding;
+    private readonly RagDbContextFactory _dbFactory;
+    private readonly HybridSearchService _hybridSearch;
+
+    public RagService(
+        IEmbeddingService embedding,
+        RagDbContextFactory dbFactory,
+        HybridSearchService hybridSearch)
+    {
+        _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
+        _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+        _hybridSearch = hybridSearch ?? throw new ArgumentNullException(nameof(hybridSearch));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// 自动选择分块策略：内容以 <c>#</c> 开头视为 Markdown，使用标题感知分块；
+    /// 否则使用固定长度滑动窗口分块。
+    /// 每次调用生成独立的 <c>sourceId</c>（GUID）。
+    /// </remarks>
+    public async Task IngestAsync(string source, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+
+        // 选择分块策略：Markdown 标题感知 vs 滑动窗口
+        var trimmed = source.TrimStart();
+        var chunks = trimmed.StartsWith('#')
+            ? TextChunker.ChunkMarkdown(source)
+            : TextChunker.ChunkByTokens(source);
+
+        if (chunks.Count == 0) return;
+
+        // 批量生成嵌入向量
+        var vectors = await _embedding
+            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+            .ConfigureAwait(false);
+
+        var sourceId = Guid.NewGuid().ToString("N");
+        var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var entities = chunks.Select((chunk, i) => new VectorChunkEntity
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            SourceId = sourceId,
+            Content = chunk.Content,
+            VectorBlob = VectorHelper.ToBytes(vectors[i].Span),
+            MetadataJson = JsonSerializer.Serialize(
+                new { chunkIndex = chunk.Index, tokenCount = chunk.TokenCount }),
+            CreatedAtMs = createdAtMs,
+        }).ToList();
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        db.VectorChunks.AddRange(entities);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// <list type="bullet">
+    ///   <item><see cref="RagScope.Global"/>：仅检索全局知识库。</item>
+    ///   <item><see cref="RagScope.Session"/>（含 sessionId）：并行检索全局 + 会话知识库，去重合并。</item>
+    /// </list>
+    /// 按融合分数降序取前 Top-10 条，以 <c>"\n---\n"</c> 拼接返回；无结果时返回空字符串。
+    /// </remarks>
+    public async Task<string> QueryAsync(string query, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
+        var options = new HybridSearchOptions();
+
+        // 始终检索全局库
+        var globalTask = _hybridSearch.SearchAsync(query, RagScope.Global, null, options, ct);
+
+        // Session 作用域：额外并行检索会话库
+        Task<IReadOnlyList<HybridSearchResult>>? sessionTask = null;
+        if (scope == RagScope.Session && sessionId is not null)
+            sessionTask = _hybridSearch.SearchAsync(query, RagScope.Session, sessionId, options, ct);
+
+        var allResults = new List<HybridSearchResult>();
+
+        if (sessionTask is not null)
+        {
+            await Task.WhenAll(globalTask, sessionTask).ConfigureAwait(false);
+            allResults.AddRange(globalTask.Result);
+            allResults.AddRange(sessionTask.Result);
+        }
+        else
+        {
+            allResults.AddRange(await globalTask.ConfigureAwait(false));
+        }
+
+        if (allResults.Count == 0) return string.Empty;
+
+        // 去重（同 Id 取最高融合分）→ 降序排列 → 取前 TopK
+        var merged = allResults
+            .GroupBy(r => r.Record.Id)
+            .Select(g => g.MaxBy(r => r.FusedScore)!)
+            .OrderByDescending(r => r.FusedScore)
+            .Take(options.TopK)
+            .Select(r => r.Record.Content)
+            .ToList();
+
+        return string.Join("\n---\n", merged);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// 与 <see cref="IngestAsync(string, RagScope, string?, CancellationToken)"/> 相同，
+    /// 但使用调用方提供的固定 <paramref name="sourceId"/>，支持增量索引去重场景。
+    /// </remarks>
+    public async Task IngestAsync(string source, string sourceId, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceId);
+
+        // 幂等检测：若 DB 中已存在该 sourceId 的分块则跳过
+        using var existCheck = _dbFactory.Create(scope, sessionId);
+        if (await existCheck.VectorChunks.AsNoTracking().AnyAsync(e => e.SourceId == sourceId, ct).ConfigureAwait(false))
+            return;
+
+        var trimmed = source.TrimStart();
+        var chunks = trimmed.StartsWith('#')
+            ? TextChunker.ChunkMarkdown(source)
+            : TextChunker.ChunkByTokens(source);
+
+        if (chunks.Count == 0) return;
+
+        var vectors = await _embedding
+            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+            .ConfigureAwait(false);
+
+        var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var entities = chunks.Select((chunk, i) => new VectorChunkEntity
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            SourceId = sourceId,
+            Content = chunk.Content,
+            VectorBlob = VectorHelper.ToBytes(vectors[i].Span),
+            MetadataJson = JsonSerializer.Serialize(
+                new { chunkIndex = chunk.Index, tokenCount = chunk.TokenCount }),
+            CreatedAtMs = createdAtMs,
+        }).ToList();
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        db.VectorChunks.AddRange(entities);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlySet<string>> GetIndexedSourceIdsAsync(RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        using var db = _dbFactory.Create(scope, sessionId);
+        var ids = await db.VectorChunks
+            .AsNoTracking()
+            .Select(e => e.SourceId)
+            .Distinct()
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return ids.ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> IngestDocumentAsync(string source, string fileName, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+
+        var sourceId = $"doc:{fileName}";
+
+        // 若同名文档已存在则先删除旧分块（增量重索引）
+        await DeleteBySourceIdAsync(sourceId, scope, sessionId, ct).ConfigureAwait(false);
+
+        var trimmed = source.TrimStart();
+        var chunks = trimmed.StartsWith('#')
+            ? TextChunker.ChunkMarkdown(source)
+            : TextChunker.ChunkByTokens(source);
+
+        if (chunks.Count == 0) return sourceId;
+
+        var vectors = await _embedding
+            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+            .ConfigureAwait(false);
+
+        var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var entities = chunks.Select((chunk, i) => new VectorChunkEntity
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            SourceId = sourceId,
+            Content = chunk.Content,
+            VectorBlob = VectorHelper.ToBytes(vectors[i].Span),
+            MetadataJson = JsonSerializer.Serialize(
+                new { chunkIndex = chunk.Index, tokenCount = chunk.TokenCount, filename = fileName }),
+            CreatedAtMs = createdAtMs,
+        }).ToList();
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        db.VectorChunks.AddRange(entities);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        return sourceId;
+    }
+
+    /// <inheritdoc/>
+    public async Task DeleteBySourceIdAsync(string sourceId, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceId);
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        var existing = await db.VectorChunks
+            .Where(e => e.SourceId == sourceId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (existing.Count > 0)
+        {
+            db.VectorChunks.RemoveRange(existing);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<RagDocumentInfo>> ListDocumentsAsync(RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        using var db = _dbFactory.Create(scope, sessionId);
+
+        // 仅返回 doc: 前缀的 SourceId（文档上传），排除 msg: 等其他来源
+        var chunks = await db.VectorChunks
+            .AsNoTracking()
+            .Where(e => e.SourceId.StartsWith("doc:"))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var docs = chunks
+            .GroupBy(e => e.SourceId)
+            .Select(g =>
+            {
+                var first = g.OrderBy(e => e.CreatedAtMs).First();
+                // 从 MetadataJson 读取 filename 字段，降级时从 SourceId 解析
+                string fileName = TryParseFileName(first.MetadataJson) ?? g.Key["doc:".Length..];
+                return new RagDocumentInfo(
+                    SourceId: g.Key,
+                    FileName: fileName,
+                    ChunkCount: g.Count(),
+                    IndexedAtMs: first.CreatedAtMs);
+            })
+            .OrderBy(d => d.FileName)
+            .ToList();
+
+        return docs;
+    }
+
+    private static string? TryParseFileName(string? metadataJson)
+    {
+        if (string.IsNullOrWhiteSpace(metadataJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            if (doc.RootElement.TryGetProperty("filename", out var prop))
+                return prop.GetString();
+        }
+        catch (JsonException) { }
+        return null;
+    }
+}
