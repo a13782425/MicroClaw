@@ -36,6 +36,12 @@ public sealed record ProviderCapabilities
     public decimal? CacheInputPricePerMToken { get; init; }
     public decimal? CacheOutputPricePerMToken { get; init; }
 
+    // 路由评分（用于路由策略选择）
+    /// <summary>质量评分（0-100）。用于 <see cref="ProviderRoutingStrategy.QualityFirst"/> 策略。默认 50。</summary>
+    public int QualityScore { get; init; } = 50;
+    /// <summary>延迟层级。用于 <see cref="ProviderRoutingStrategy.LatencyFirst"/> 策略。默认 Medium。</summary>
+    public LatencyTier LatencyTier { get; init; } = LatencyTier.Medium;
+
     // 备注
     public string? Notes { get; init; }
 }

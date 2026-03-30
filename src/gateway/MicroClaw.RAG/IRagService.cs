@@ -42,4 +42,11 @@ public interface IRagService
     /// 列出知识库中所有以 <c>doc:</c> 前缀标识的文档，按 SourceId 聚合。
     /// </summary>
     Task<IReadOnlyList<RagDocumentInfo>> ListDocumentsAsync(RagScope scope, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 获取 RAG 检索聚合统计数据。
+    /// </summary>
+    /// <param name="scope">过滤作用域（null 表示全部）。</param>
+    /// <param name="ct">取消令牌。</param>
+    Task<RagQueryStats> GetQueryStatsAsync(RagScope? scope, CancellationToken ct = default);
 }

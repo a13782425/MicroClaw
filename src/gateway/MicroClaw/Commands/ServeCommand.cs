@@ -24,6 +24,7 @@ using MicroClaw.Providers;
 using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Emotion;
+using MicroClaw.Safety;
 using MicroClaw.RAG;
 using MicroClaw.Services;
 using MicroClaw.Sessions;
@@ -198,17 +199,43 @@ public class ServeCommand : Command
 			var configStore = sp.GetRequiredService<ProviderConfigStore>();
 			var embeddingFactory = sp.GetRequiredService<ProviderEmbeddingFactory>();
 			var config = configStore.All.FirstOrDefault(p => p.IsEnabled && p.Capabilities.SupportsEmbedding);
-			if (config is null) return new NullEmbeddingService();
+			if (config is null)
+			{
+				Log.Warning("未配置支持 Embedding 的 Provider，RAG 将降级为纯关键词检索");
+				return new NullEmbeddingService();
+			}
 			return new EmbeddingService(embeddingFactory.Create(config));
 		});
 		builder.Services.AddSingleton<HybridSearchService>();
-		builder.Services.AddSingleton<IRagService, RagService>();
+		builder.Services.AddSingleton<RagStatsDbContextFactory>(_ => new RagStatsDbContextFactory(workspaceRoot));
+		builder.Services.AddSingleton<IRagService>(sp => new RagService(
+			sp.GetRequiredService<IEmbeddingService>(),
+			sp.GetRequiredService<RagDbContextFactory>(),
+			sp.GetRequiredService<HybridSearchService>(),
+			sp.GetRequiredService<RagStatsDbContextFactory>()));
 		builder.Services.AddSingleton<ISessionMessageIndexer, SessionMessageIndexer>();
 		// 情绪系统服务
 		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
 		builder.Services.AddSingleton<IEmotionRuleEngine>(_ => new EmotionRuleEngine());
 		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ => new EmotionBehaviorMapper());
+		// 安全/痛觉系统服务
+		builder.Services.AddSingleton<SafetyDbContextFactory>(_ => new SafetyDbContextFactory(workspaceRoot));
+		builder.Services.AddSingleton<IPainMemoryStore, PainMemoryStore>();
+		builder.Services.AddSingleton<IToolRiskRegistry>(_ => new DefaultToolRiskRegistry());
+		// 白名单/灰名单配置：从 YAML safety 节读取（字段不存在则返回空列表，等同于不配置）
+		builder.Services.AddSingleton<IToolListConfig>(sp =>
+		{
+			var config = sp.GetRequiredService<IConfiguration>();
+			List<string> whitelist = config.GetSection("safety:tool-whitelist").Get<List<string>>() ?? [];
+			List<string> graylist  = config.GetSection("safety:tool-graylist").Get<List<string>>() ?? [];
+			return new ToolListConfig(whitelist, graylist);
+		});
+		builder.Services.AddSingleton<IToolRiskInterceptor, ListBasedToolRiskInterceptor>();
+		// Provider 路由器
+		builder.Services.AddSingleton<IProviderRouter, ProviderRouter>();
+		// 痛觉-情绪联动服务（依赖 IEmotionStore + IEmotionRuleEngine，需在两者之后注册）
+		builder.Services.AddSingleton<IPainEmotionLinker, PainEmotionLinker>();
 		// Context Providers（按 Order 聚合 System Prompt）
 		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();
 		builder.Services.AddSingleton<IAgentContextProvider, RagContextProvider>(); // Order 15：语义检索层
@@ -283,6 +310,11 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.AgentStoreAgentLookup>();
 		builder.Services.AddSingleton<McpServerConfigStore>();
 
+		// D-6: MCP 动态工具注册——运行时注册表，启动时从 DB 同步，API 变更后即时生效，无需重启
+		builder.Services.AddSingleton<McpServerRegistry>();
+		builder.Services.AddSingleton<IMcpServerRegistry>(sp => sp.GetRequiredService<McpServerRegistry>());
+		builder.Services.AddHostedService(sp => sp.GetRequiredService<McpServerRegistry>());
+
 		// 工具提供者（实现 IToolProvider，ToolCollector 自动发现，无需手动硬编码）
 		builder.Services.AddSingleton<IToolProvider, FetchToolProvider>();
 		builder.Services.AddSingleton<IToolProvider, ShellToolProvider>();
@@ -336,6 +368,8 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService<FeishuDocSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
 		builder.Services.AddHostedService<MemorySummarizationJob>();
+		// D-2: 做梦模式——每日凌晨 3 点，跨会话归因/摘要，将认知整理结果写回 Agent MEMORY.md
+		builder.Services.AddHostedService<DreamingJob>();
 
 		builder.Services.AddSingleton<IChannel, WeComChannel>();
 		builder.Services.AddSingleton<IChannel, WeChatChannel>();

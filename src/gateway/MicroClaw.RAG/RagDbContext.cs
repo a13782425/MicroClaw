@@ -22,6 +22,7 @@ public sealed class RagDbContext(DbContextOptions<RagDbContext> options) : DbCon
             b.Property(e => e.VectorBlob).HasColumnName("vector_blob");
             b.Property(e => e.MetadataJson).HasColumnName("metadata_json").IsRequired(false);
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.Property(e => e.LastAccessedAtMs).HasColumnName("last_accessed_at_ms").IsRequired(false);
             b.HasIndex(e => e.SourceId).HasDatabaseName("ix_vector_chunks_source_id");
         });
     }

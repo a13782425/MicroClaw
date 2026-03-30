@@ -48,6 +48,9 @@ export type ProviderCapabilities = {
   cacheInputPricePerMToken: number | null
   cacheOutputPricePerMToken: number | null
   notes: string | null
+  // 路由策略权重
+  qualityScore: number
+  latencyTier: string
 }
 
 export type ProviderConfig = {
@@ -512,6 +515,8 @@ export type AgentConfig = {
   createdAtUtc: string
   exposeAsA2A: boolean
   allowedSubAgentIds: string[] | null
+  routingStrategy: string
+  monthlyBudgetUsd: number | null
 }
 
 export type AgentCreateRequest = {
@@ -533,6 +538,9 @@ export type AgentUpdateRequest = {
   exposeAsA2A?: boolean
   allowedSubAgentIds?: string[] | null
   hasAllowedSubAgentIds?: boolean
+  routingStrategy?: string
+  monthlyBudgetUsd?: number | null
+  hasMonthlyBudgetUsd?: boolean
 }
 
 export type ToolItem = {
@@ -817,16 +825,42 @@ export type UsageSummary = {
   totalCostUsd: number
 }
 
+export type AgentUsage = {
+  agentId: string
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+}
+
+export type SessionUsage = {
+  sessionId: string
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+}
+
 export type UsageQueryResult = {
   daily: DailyUsage[]
   byProvider: ProviderUsage[]
   bySource: SourceUsage[]
   dailyByProvider: DailyProviderUsage[]
   summary: UsageSummary
+  byAgent: AgentUsage[]
+  bySession: SessionUsage[]
 }
 
-export async function fetchUsageStats(startDate: string, endDate: string): Promise<UsageQueryResult> {
-  const { data } = await request.post<UsageQueryResult>('/api/usage/query', { startDate, endDate })
+export async function fetchUsageStats(
+  startDate: string,
+  endDate: string,
+  agentId?: string,
+  sessionId?: string
+): Promise<UsageQueryResult> {
+  const { data } = await request.post<UsageQueryResult>('/api/usage/query', {
+    startDate,
+    endDate,
+    agentId: agentId || undefined,
+    sessionId: sessionId || undefined,
+  })
   return data
 }
 
@@ -1057,4 +1091,146 @@ export async function updateAgentConfig(req: AgentConfigSection): Promise<void> 
 
 export async function updateSkillsConfig(req: SkillsConfigSection): Promise<void> {
   await request.post('/api/config/skills', req)
+}
+
+// ─── Emotion ──────────────────────────────────────────────────────────────────
+
+export type EmotionStateDto = {
+  alertness: number
+  mood: number
+  curiosity: number
+  confidence: number
+}
+
+export type EmotionSnapshotDto = {
+  alertness: number
+  mood: number
+  curiosity: number
+  confidence: number
+  recordedAtMs: number
+}
+
+export type EmotionHistoryRequest = {
+  from: number
+  to: number
+}
+
+export async function getAgentEmotionCurrent(agentId: string): Promise<EmotionStateDto> {
+  const { data } = await request.get<EmotionStateDto>(`/api/agents/${agentId}/emotion/current`)
+  return data
+}
+
+export async function getAgentEmotionHistory(
+  agentId: string,
+  req: EmotionHistoryRequest,
+): Promise<EmotionSnapshotDto[]> {
+  const { data } = await request.post<EmotionSnapshotDto[]>(
+    `/api/agents/${agentId}/emotion/history`,
+    req,
+  )
+  return data
+}
+
+// ─── RAG Documents ────────────────────────────────────────────────────────────
+
+export type RagDocumentInfo = {
+  sourceId: string
+  fileName: string
+  chunkCount: number
+  indexedAtMs: number
+}
+
+export type UploadRagDocumentResult = {
+  success: boolean
+  sourceId: string
+  fileName: string
+  chunkCount: number
+}
+
+export async function listRagGlobalDocuments(): Promise<RagDocumentInfo[]> {
+  const { data } = await request.get<RagDocumentInfo[]>('/api/rag/global/documents')
+  return data
+}
+
+export async function uploadRagGlobalDocument(file: File): Promise<UploadRagDocumentResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await request.post<UploadRagDocumentResult>(
+    '/api/rag/global/documents/upload',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return data
+}
+
+export async function deleteRagGlobalDocument(sourceId: string): Promise<void> {
+  await request.post('/api/rag/global/documents/delete', { sourceId })
+}
+
+export async function reindexRagGlobalDocument(sourceId: string): Promise<{ success: boolean; chunkCount: number }> {
+  const { data } = await request.post<{ success: boolean; chunkCount: number }>(
+    '/api/rag/global/documents/reindex',
+    { sourceId },
+  )
+  return data
+}
+
+// ─── Pain Memories ────────────────────────────────────────────────────────────
+
+export type PainMemoryDto = {
+  id: string
+  agentId: string
+  triggerDescription: string
+  consequenceDescription: string
+  avoidanceStrategy: string
+  severity: string
+  severityLevel: number
+  occurrenceCount: number
+  lastOccurredAtMs: number
+  createdAtMs: number
+}
+
+export async function listAgentPainMemories(agentId: string): Promise<PainMemoryDto[]> {
+  const { data } = await request.get<PainMemoryDto[]>(`/api/agents/${agentId}/pain-memories`)
+  return data
+}
+
+export async function deleteAgentPainMemory(agentId: string, memoryId: string): Promise<void> {
+  await request.delete(`/api/agents/${agentId}/pain-memories/${memoryId}`)
+}
+
+// ─── Session RAG ──────────────────────────────────────────────────────────────
+
+export type SessionRagStatus = {
+  sessionId: string
+  indexedMessageCount: number
+  lastIndexedAtMs: number | null
+}
+
+export async function getSessionRagStatus(sessionId: string): Promise<SessionRagStatus> {
+  const { data } = await request.get<SessionRagStatus>(`/api/sessions/${sessionId}/rag/status`)
+  return data
+}
+
+export async function reindexSessionRag(sessionId: string): Promise<SessionRagStatus> {
+  const { data } = await request.post<SessionRagStatus>(`/api/sessions/${sessionId}/rag/reindex`)
+  return data
+}
+
+// ─── RAG 检索统计 ────────────────────────────────────────────────────────────
+
+export type RagQueryStats = {
+  scope: string
+  totalQueries: number
+  hitQueries: number
+  hitRate: number
+  avgElapsedMs: number
+  avgRecallCount: number
+  last24hQueries: number
+}
+
+export async function getRagQueryStats(scope?: 'Global' | 'Session'): Promise<RagQueryStats> {
+  const params = scope ? { scope } : {}
+  const { data } = await request.get<RagQueryStats>('/api/rag/stats', { params })
+  return data
 }

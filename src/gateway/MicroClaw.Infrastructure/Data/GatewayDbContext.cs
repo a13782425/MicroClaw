@@ -76,6 +76,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.IsDefault).HasColumnName("is_default");
             b.Property(e => e.ContextWindowMessages).HasColumnName("context_window_messages");
             b.Property(e => e.ExposeAsA2A).HasColumnName("expose_as_a2a").HasDefaultValue(false);
+            b.Property(e => e.RoutingStrategy).HasColumnName("routing_strategy").HasMaxLength(32);
+            b.Property(e => e.MonthlyBudgetUsd).HasColumnName("monthly_budget_usd").IsRequired(false);
         });
 
         modelBuilder.Entity<CronJobEntity>(b =>
@@ -113,6 +115,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.ToTable("usages");
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).HasColumnName("id");
+            b.Property(e => e.AgentId).HasColumnName("agent_id").HasMaxLength(64).IsRequired(false);
             b.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64).IsRequired(false);
             b.Property(e => e.ProviderId).HasColumnName("provider_id").HasMaxLength(64);
             b.Property(e => e.ProviderName).HasColumnName("provider_name");
@@ -127,8 +130,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.CacheOutputCostUsd).HasColumnName("cache_output_cost_usd");
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.Property(e => e.UpdatedAtMs).HasColumnName("updated_at_ms");
-            b.HasIndex(e => new { e.SessionId, e.ProviderId, e.Source, e.DayNumber })
-                .HasDatabaseName("ix_usages_session_provider_source_day")
+            b.HasIndex(e => new { e.AgentId, e.SessionId, e.ProviderId, e.Source, e.DayNumber })
+                .HasDatabaseName("ix_usages_agent_session_provider_source_day")
                 .IsUnique();
         });
 

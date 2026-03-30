@@ -1,3 +1,4 @@
+using MicroClaw.Providers;
 using MicroClaw.Tools;
 
 namespace MicroClaw.Agent;
@@ -30,4 +31,13 @@ public sealed record AgentConfig(
     /// 允许调用的子代理 ID 白名单。
     /// null = 允许调用所有子代理（默认）；空列表 = 禁止调用任何子代理；具体 ID 列表 = 仅允许调用指定子代理。
     /// </summary>
-    IReadOnlyList<string>? AllowedSubAgentIds = null);
+    IReadOnlyList<string>? AllowedSubAgentIds = null,
+    /// <summary>
+    /// Provider 路由策略：当 Session 未绑定具体 Provider 时，按此策略从已启用的 Provider 中自动选择。
+    /// 默认为 <see cref="ProviderRoutingStrategy.Default"/>（使用标记为默认的 Provider）。
+    /// </summary>
+    ProviderRoutingStrategy RoutingStrategy = ProviderRoutingStrategy.Default,
+    /// <summary>
+    /// 月度预算上限（USD）。null 表示不限制。当当月累计费用达到预算 80%/100% 时记录告警日志。
+    /// </summary>
+    decimal? MonthlyBudgetUsd = null);

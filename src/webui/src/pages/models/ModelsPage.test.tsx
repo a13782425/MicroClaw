@@ -46,6 +46,8 @@ const mockProviders: ProviderConfig[] = [
       cacheInputPricePerMToken: null,
       cacheOutputPricePerMToken: null,
       notes: null,
+      qualityScore: 80,
+      latencyTier: 'Medium',
     },
   },
   {
@@ -75,6 +77,8 @@ const mockProviders: ProviderConfig[] = [
       cacheInputPricePerMToken: null,
       cacheOutputPricePerMToken: null,
       notes: null,
+      qualityScore: 50,
+      latencyTier: 'High',
     },
   },
 ]

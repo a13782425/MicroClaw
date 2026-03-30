@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  Box, Text, Button, HStack, SimpleGrid, Card, Spinner, Table,
+  Box, Text, Button, HStack, SimpleGrid, Card, Spinner, Table, Progress,
 } from '@chakra-ui/react'
 import { Chart, useChart } from '@chakra-ui/charts'
 import { RefreshCw, TrendingUp, TrendingDown, Coins, DollarSign } from 'lucide-react'
@@ -9,7 +9,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   type PieSectorShapeProps,
 } from 'recharts'
-import { fetchUsageStats, type UsageQueryResult, type DailyProviderUsage } from '@/api/gateway'
+import { fetchUsageStats, listAgents, type UsageQueryResult, type DailyProviderUsage, type AgentConfig } from '@/api/gateway'
 import { DateInput } from '@/components/ui/date-input'
 import { toaster } from '@/components/ui/toaster'
 
@@ -399,6 +399,75 @@ function SourceBarChart({ data }: { data: UsageQueryResult['bySource'] }) {
   )
 }
 
+// ─── 按 Agent 分组 + 预算进度条 ──────────────────────────────────────────────
+
+function AgentUsageTable({
+  data,
+  agents,
+}: {
+  data: UsageQueryResult['byAgent']
+  agents: AgentConfig[]
+}) {
+  const agentMap = useMemo(() => {
+    const m = new Map<string, AgentConfig>()
+    agents.forEach((a) => m.set(a.id, a))
+    return m
+  }, [agents])
+
+  if (data.length === 0) {
+    return <Box py="4" color="gray.400" textAlign="center">暂无按 Agent 分组的数据（需重新查询启用 agentId 追踪后的数据）</Box>
+  }
+
+  return (
+    <Table.ScrollArea>
+      <Table.Root size="sm">
+        <Table.Header>
+          <Table.Row>
+            <Table.ColumnHeader>Agent</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">输入 Token</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">输出 Token</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">费用 (USD)</Table.ColumnHeader>
+            <Table.ColumnHeader>月度预算进度</Table.ColumnHeader>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {data.map((row) => {
+            const agent = agentMap.get(row.agentId)
+            const agentName = (agent?.name ?? row.agentId) || '（未关联）'
+            const budget = agent?.monthlyBudgetUsd
+            const pct = budget && budget > 0 ? Math.min((row.estimatedCostUsd / budget) * 100, 100) : null
+            const budgetColor = pct === null ? 'gray' : pct >= 100 ? 'red' : pct >= 80 ? 'orange' : 'green'
+
+            return (
+              <Table.Row key={row.agentId || 'unknown'}>
+                <Table.Cell fontWeight="medium">{agentName}</Table.Cell>
+                <Table.Cell textAlign="right">{fmtTokens(row.inputTokens)}</Table.Cell>
+                <Table.Cell textAlign="right">{fmtTokens(row.outputTokens)}</Table.Cell>
+                <Table.Cell textAlign="right">${row.estimatedCostUsd.toFixed(4)}</Table.Cell>
+                <Table.Cell minW="160px">
+                  {pct !== null ? (
+                    <Box>
+                      <HStack mb="1" justify="space-between">
+                        <Text fontSize="xs" color="gray.500">${row.estimatedCostUsd.toFixed(4)} / ${budget!.toFixed(2)}</Text>
+                        <Text fontSize="xs" color={`${budgetColor}.500`} fontWeight="medium">{pct.toFixed(1)}%</Text>
+                      </HStack>
+                      <Progress.Root value={pct} colorPalette={budgetColor} size="sm">
+                        <Progress.Track><Progress.Range /></Progress.Track>
+                      </Progress.Root>
+                    </Box>
+                  ) : (
+                    <Text fontSize="xs" color="gray.400">未设置预算</Text>
+                  )}
+                </Table.Cell>
+              </Table.Row>
+            )
+          })}
+        </Table.Body>
+      </Table.Root>
+    </Table.ScrollArea>
+  )
+}
+
 // ─── 主页面 ────────────────────────────────────────────────────────────────────
 
 export default function UsagePage() {
@@ -406,13 +475,18 @@ export default function UsagePage() {
   const [startDate, setStartDate] = useState(defaultRange.startDate)
   const [endDate, setEndDate] = useState(defaultRange.endDate)
   const [data, setData] = useState<UsageQueryResult | null>(null)
+  const [agents, setAgents] = useState<AgentConfig[]>([])
   const [loading, setLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetchUsageStats(startDate, endDate)
+      const [res, agentList] = await Promise.all([
+        fetchUsageStats(startDate, endDate),
+        listAgents(),
+      ])
       setData(res)
+      setAgents(agentList)
     } catch {
       toaster.create({ type: 'error', title: '加载用量统计失败' })
     } finally {
@@ -493,6 +567,12 @@ export default function UsagePage() {
               </Box>
             </SimpleGrid>
           )}
+
+          {/* 按 Agent 分组 + 月度预算进度条 */}
+          <Box p="4" borderWidth="1px" rounded="md" mb="6">
+            <Text fontWeight="medium" mb="3" fontSize="sm">按 Agent 分组（含月度预算进度）</Text>
+            <AgentUsageTable data={data.byAgent ?? []} agents={agents} />
+          </Box>
 
           {data.daily.length === 0 && data.byProvider.length === 0 && data.bySource.length === 0 && (
             <Box py="8" textAlign="center" color="gray.400">该时间段内无用量数据</Box>

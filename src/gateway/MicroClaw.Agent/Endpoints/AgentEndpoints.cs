@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Providers;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
@@ -83,6 +84,12 @@ public static class AgentEndpoints
                 ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
                 ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
                 AllowedSubAgentIds = req.HasAllowedSubAgentIds ? req.AllowedSubAgentIds : existing.AllowedSubAgentIds,
+                RoutingStrategy = req.RoutingStrategy is not null
+                    ? (Enum.TryParse<ProviderRoutingStrategy>(req.RoutingStrategy, ignoreCase: true, out ProviderRoutingStrategy parsedStrategy)
+                        ? parsedStrategy
+                        : existing.RoutingStrategy)
+                    : existing.RoutingStrategy,
+                MonthlyBudgetUsd = req.HasMonthlyBudgetUsd ? req.MonthlyBudgetUsd : existing.MonthlyBudgetUsd,
             };
 
             try
@@ -296,6 +303,8 @@ public static class AgentEndpoints
         a.ContextWindowMessages,
         a.ExposeAsA2A,
         a.AllowedSubAgentIds,
+        RoutingStrategy = a.RoutingStrategy.ToString(),
+        a.MonthlyBudgetUsd,
     };
 }
 
@@ -309,7 +318,8 @@ public sealed record AgentCreateRequest(
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
     bool ExposeAsA2A = false,
-    IReadOnlyList<string>? AllowedSubAgentIds = null);
+    IReadOnlyList<string>? AllowedSubAgentIds = null,
+    decimal? MonthlyBudgetUsd = null);
 
 public sealed record AgentUpdateRequest(
     string Id,
@@ -326,7 +336,16 @@ public sealed record AgentUpdateRequest(
     /// 用于区分“未传”（保留原值）和“传了 null”（清除限制）。
     /// 前端传 true + AllowedSubAgentIds = null 表示“允许所有”；传 true + [] 表示“禁止所有”。
     /// </summary>
-    bool HasAllowedSubAgentIds = false);
+    bool HasAllowedSubAgentIds = false,
+    /// <summary>
+    /// Provider 路由策略（Default/QualityFirst/CostFirst/LatencyFirst）。
+    /// null 表示不修改，保留原有策略。
+    /// </summary>
+    string? RoutingStrategy = null,
+    /// <summary>月度预算上限（USD）。null 表示不修改，保留原有属性。</summary>
+    decimal? MonthlyBudgetUsd = null,
+    /// <summary>是否明确传入 MonthlyBudgetUsd（用于区分 null=未传 vs null=清除预算）。</summary>
+    bool HasMonthlyBudgetUsd = false);
 
 public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);
 

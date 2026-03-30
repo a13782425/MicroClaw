@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Tools.Endpoints;
@@ -25,8 +26,9 @@ public static class McpEndpoints
         })
         .WithTags("MCP");
 
-        endpoints.MapPost("/mcp-servers", (McpServerCreateRequest req, McpServerConfigStore store) =>
+        endpoints.MapPost("/mcp-servers", (McpServerCreateRequest req, McpServerConfigStore store, IServiceProvider sp) =>
         {
+            IMcpServerRegistry? registry = sp.GetService<IMcpServerRegistry>();
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
 
@@ -48,12 +50,14 @@ public static class McpEndpoints
                 CreatedAtUtc: DateTimeOffset.UtcNow);
 
             McpServerConfig created = store.Add(config);
+            registry?.Register(created);  // 通知运行时注册表，无需重启即可生效
             return Results.Ok(new { created.Id });
         })
         .WithTags("MCP");
 
-        endpoints.MapPost("/mcp-servers/update", (McpServerUpdateRequest req, McpServerConfigStore store) =>
+        endpoints.MapPost("/mcp-servers/update", (McpServerUpdateRequest req, McpServerConfigStore store, IServiceProvider sp) =>
         {
+            IMcpServerRegistry? registry = sp.GetService<IMcpServerRegistry>();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
@@ -78,18 +82,21 @@ public static class McpEndpoints
             };
 
             McpServerConfig? result = store.Update(req.Id, updated);
+            if (result is not null) registry?.Register(result);  // 同步运行时注册表
             return result is null ? Results.NotFound() : Results.Ok(new { result.Id });
         })
         .WithTags("MCP");
 
-        endpoints.MapPost("/mcp-servers/delete", (McpServerDeleteRequest req, McpServerConfigStore store) =>
+        endpoints.MapPost("/mcp-servers/delete", (McpServerDeleteRequest req, McpServerConfigStore store, IServiceProvider sp) =>
         {
+            IMcpServerRegistry? registry = sp.GetService<IMcpServerRegistry>();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
             if (!store.Delete(req.Id))
                 return Results.NotFound(new { success = false, message = $"MCP server '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
+            registry?.Unregister(req.Id);  // 从运行时注册表移除，无需重启即生效
             return Results.Ok();
         })
         .WithTags("MCP");

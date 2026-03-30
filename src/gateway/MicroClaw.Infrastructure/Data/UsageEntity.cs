@@ -14,6 +14,9 @@ public sealed class UsageEntity
     public string ProviderId { get; set; } = string.Empty;
     public string ProviderName { get; set; } = string.Empty;
 
+    /// <summary>产生该用量的 Agent ID（空表示非 Agent 来源，如纯 cron）。</summary>
+    public string? AgentId { get; set; }
+
     /// <summary>调用来源：chat / cron / channel / subagent</summary>
     public string Source { get; set; } = string.Empty;
 

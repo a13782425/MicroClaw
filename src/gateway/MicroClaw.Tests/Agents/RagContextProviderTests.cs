@@ -3,6 +3,8 @@ using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.RAG;
 using MicroClaw.Tools;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.Agents;
@@ -13,6 +15,7 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class RagContextProviderTests
 {
+    private static readonly ILogger<RagContextProvider> NullLog = NullLogger<RagContextProvider>.Instance;
     private static readonly AgentConfig TestAgent = new(
         Id: "agent-rag-test",
         Name: "RAG Test Agent",
@@ -28,7 +31,7 @@ public sealed class RagContextProviderTests
     [Fact]
     public void Ctor_NullRagService_Throws()
     {
-        var act = () => new RagContextProvider(null!);
+        var act = () => new RagContextProvider(null!, NullLog);
         act.Should().Throw<ArgumentNullException>().WithParameterName("ragService");
     }
 
@@ -37,7 +40,7 @@ public sealed class RagContextProviderTests
     [Fact]
     public void Order_Is15()
     {
-        var sut = new RagContextProvider(Substitute.For<IRagService>());
+        var sut = new RagContextProvider(Substitute.For<IRagService>(), NullLog);
         sut.Order.Should().Be(15);
     }
 
@@ -47,7 +50,7 @@ public sealed class RagContextProviderTests
     public async Task BuildContextAsync_BaseInterface_NoUserMessage_ReturnsNull()
     {
         // 调用基础接口签名（无 userMessage）时应跳过检索
-        IAgentContextProvider sut = new RagContextProvider(Substitute.For<IRagService>());
+        IAgentContextProvider sut = new RagContextProvider(Substitute.For<IRagService>(), NullLog);
         string? result = await sut.BuildContextAsync(TestAgent, sessionId: null);
         result.Should().BeNull();
     }
@@ -57,7 +60,7 @@ public sealed class RagContextProviderTests
     [Fact]
     public async Task BuildContextAsync_NullUserMessage_ReturnsNull()
     {
-        IUserAwareContextProvider sut = new RagContextProvider(Substitute.For<IRagService>());
+        IUserAwareContextProvider sut = new RagContextProvider(Substitute.For<IRagService>(), NullLog);
         string? result = await sut.BuildContextAsync(TestAgent, sessionId: null, userMessage: null);
         result.Should().BeNull();
     }
@@ -65,7 +68,7 @@ public sealed class RagContextProviderTests
     [Fact]
     public async Task BuildContextAsync_WhitespaceUserMessage_ReturnsNull()
     {
-        IUserAwareContextProvider sut = new RagContextProvider(Substitute.For<IRagService>());
+        IUserAwareContextProvider sut = new RagContextProvider(Substitute.For<IRagService>(), NullLog);
         string? result = await sut.BuildContextAsync(TestAgent, sessionId: null, userMessage: "   ");
         result.Should().BeNull();
     }
@@ -77,7 +80,7 @@ public sealed class RagContextProviderTests
         ragService.QueryAsync(Arg.Any<string>(), Arg.Any<RagScope>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(string.Empty));
 
-        IUserAwareContextProvider sut = new RagContextProvider(ragService);
+        IUserAwareContextProvider sut = new RagContextProvider(ragService, NullLog);
         string? result = await sut.BuildContextAsync(TestAgent, sessionId: null, userMessage: "some query");
 
         result.Should().BeNull();
@@ -91,7 +94,7 @@ public sealed class RagContextProviderTests
         ragService.QueryAsync(Arg.Any<string>(), Arg.Any<RagScope>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(ragContent));
 
-        IUserAwareContextProvider sut = new RagContextProvider(ragService);
+        IUserAwareContextProvider sut = new RagContextProvider(ragService, NullLog);
         string? result = await sut.BuildContextAsync(TestAgent, sessionId: null, userMessage: "what is AI?");
 
         result.Should().NotBeNull();
@@ -107,7 +110,7 @@ public sealed class RagContextProviderTests
         ragService.QueryAsync(Arg.Any<string>(), Arg.Any<RagScope>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult("some result"));
 
-        IUserAwareContextProvider sut = new RagContextProvider(ragService);
+        IUserAwareContextProvider sut = new RagContextProvider(ragService, NullLog);
         await sut.BuildContextAsync(TestAgent, sessionId: null, userMessage: userMessage);
 
         await ragService.Received(1).QueryAsync(
@@ -121,7 +124,7 @@ public sealed class RagContextProviderTests
         ragService.QueryAsync(Arg.Any<string>(), Arg.Any<RagScope>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult("result"));
 
-        IUserAwareContextProvider sut = new RagContextProvider(ragService);
+        IUserAwareContextProvider sut = new RagContextProvider(ragService, NullLog);
         await sut.BuildContextAsync(TestAgent, sessionId: "sess-001", userMessage: "query");
 
         // 始终使用 Session 作用域（内部自动合并 Global + Session 双库）
@@ -137,7 +140,7 @@ public sealed class RagContextProviderTests
         ragService.QueryAsync(Arg.Any<string>(), Arg.Any<RagScope>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult("result"));
 
-        IUserAwareContextProvider sut = new RagContextProvider(ragService);
+        IUserAwareContextProvider sut = new RagContextProvider(ragService, NullLog);
         await sut.BuildContextAsync(TestAgent, sessionId: sessionId, userMessage: "query");
 
         await ragService.Received(1).QueryAsync(
@@ -147,7 +150,7 @@ public sealed class RagContextProviderTests
     [Fact]
     public async Task BuildContextAsync_ImplementsIAgentContextProvider()
     {
-        var provider = new RagContextProvider(Substitute.For<IRagService>());
+        var provider = new RagContextProvider(Substitute.For<IRagService>(), NullLog);
         provider.Should().BeAssignableTo<IAgentContextProvider>();
         provider.Should().BeAssignableTo<IUserAwareContextProvider>();
     }

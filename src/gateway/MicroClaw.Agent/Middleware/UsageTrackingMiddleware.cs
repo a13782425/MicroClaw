@@ -22,6 +22,8 @@ public static class UsageTrackingMiddleware
         string source,
         IUsageTracker tracker,
         Microsoft.Extensions.Logging.ILogger logger,
+        string? agentId = null,
+        decimal? monthlyBudgetUsd = null,
         CancellationToken ct = default)
     {
         if (capture.LastUsage is null) return;
@@ -45,7 +47,8 @@ public static class UsageTrackingMiddleware
             await tracker.TrackAsync(
                 sessionId, provider.Id, provider.DisplayName, source,
                 inputTokens, outputTokens, cachedInputTokens,
-                inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m, ct);
+                inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
+                agentId: agentId, monthlyBudgetUsd: monthlyBudgetUsd, ct: ct);
         }
         catch (Exception ex)
         {

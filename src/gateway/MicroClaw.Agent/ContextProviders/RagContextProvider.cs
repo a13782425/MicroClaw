@@ -1,5 +1,6 @@
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.RAG;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent.ContextProviders;
 
@@ -19,10 +20,12 @@ namespace MicroClaw.Agent.ContextProviders;
 public sealed class RagContextProvider : IUserAwareContextProvider
 {
     private readonly IRagService _ragService;
+    private readonly ILogger<RagContextProvider> _logger;
 
-    public RagContextProvider(IRagService ragService)
+    public RagContextProvider(IRagService ragService, ILogger<RagContextProvider> logger)
     {
         _ragService = ragService ?? throw new ArgumentNullException(nameof(ragService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc/>
@@ -49,14 +52,24 @@ public sealed class RagContextProvider : IUserAwareContextProvider
         if (string.IsNullOrWhiteSpace(userMessage))
             return null;
 
-        // Session 作用域：会自动并行检索全局库 + 会话库并合并去重
-        string content = await _ragService
-            .QueryAsync(userMessage, RagScope.Session, sessionId, ct)
-            .ConfigureAwait(false);
+        try
+        {
+            // 确定检索作用域：有 sessionId 时使用 Session（合并全局+会话），否则仅检索全局
+            RagScope scope = string.IsNullOrWhiteSpace(sessionId) ? RagScope.Global : RagScope.Session;
 
-        if (string.IsNullOrWhiteSpace(content))
+            string content = await _ragService
+                .QueryAsync(userMessage, scope, sessionId, ct)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(content))
+                return null;
+
+            return $"## RAG 相关知识\n\n{content}";
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "RAG 上下文检索失败，跳过 RAG 注入 (session={SessionId})", sessionId);
             return null;
-
-        return $"## RAG 相关知识\n\n{content}";
+        }
     }
 }

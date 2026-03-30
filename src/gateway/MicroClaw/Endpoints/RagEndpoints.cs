@@ -1,4 +1,8 @@
+using MicroClaw.Agent.Sessions;
+using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.RAG;
+using MicroClaw.Sessions;
+using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Endpoints;
 
@@ -131,9 +135,117 @@ public static class RagEndpoints
             })
             .WithTags("RAG");
 
+        // GET /api/sessions/{sessionId}/rag/status — 查询会话 RAG 索引状态
+        endpoints.MapGet("/sessions/{sessionId}/rag/status",
+            async (string sessionId, RagDbContextFactory dbFactory, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(sessionId))
+                    return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                try
+                {
+                    using var db = dbFactory.Create(RagScope.Session, sessionId);
+                    var msgChunks = await db.VectorChunks.AsNoTracking()
+                        .Where(e => e.SourceId.StartsWith("msg:"))
+                        .Select(e => new { e.SourceId, e.CreatedAtMs })
+                        .ToListAsync(ct);
+
+                    int indexedMessageCount = msgChunks.Select(e => e.SourceId).Distinct().Count();
+                    long? lastIndexedAtMs = msgChunks.Count > 0
+                        ? msgChunks.Max(e => e.CreatedAtMs)
+                        : null;
+
+                    return Results.Ok(new SessionRagStatusDto(sessionId, indexedMessageCount, lastIndexedAtMs));
+                }
+                catch
+                {
+                    // 会话 RAG DB 可能尚未创建（无对话历史），视为空状态
+                    return Results.Ok(new SessionRagStatusDto(sessionId, 0, null));
+                }
+            })
+            .WithTags("RAG");
+
+        // POST /api/sessions/{sessionId}/rag/reindex — 强制全量重新索引会话消息
+        endpoints.MapPost("/sessions/{sessionId}/rag/reindex",
+            async (string sessionId, SessionStore sessionStore, IRagService ragService,
+                   ISessionMessageIndexer messageIndexer, RagDbContextFactory dbFactory,
+                   CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(sessionId))
+                    return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                SessionInfo? session = sessionStore.Get(sessionId);
+                if (session is null)
+                    return Results.NotFound(new { success = false, message = $"会话 '{sessionId}' 不存在。", errorCode = "NOT_FOUND" });
+
+                // 步骤 1：收集所有 msg: 前缀 sourceId
+                List<string> msgSourceIds;
+                try
+                {
+                    using var db = dbFactory.Create(RagScope.Session, sessionId);
+                    msgSourceIds = await db.VectorChunks.AsNoTracking()
+                        .Where(e => e.SourceId.StartsWith("msg:"))
+                        .Select(e => e.SourceId)
+                        .Distinct()
+                        .ToListAsync(ct);
+                }
+                catch
+                {
+                    msgSourceIds = [];
+                }
+
+                // 步骤 2：删除所有旧分块
+                foreach (var sourceId in msgSourceIds)
+                    await ragService.DeleteBySourceIdAsync(sourceId, RagScope.Session, sessionId, ct);
+
+                // 步骤 3：获取全部消息并重新索引
+                IReadOnlyList<SessionMessage> messages = sessionStore.GetMessages(sessionId);
+                await messageIndexer.IndexNewMessagesAsync(sessionId, messages, ct);
+
+                // 步骤 4：返回更新后的状态
+                try
+                {
+                    using var db = dbFactory.Create(RagScope.Session, sessionId);
+                    var msgChunks = await db.VectorChunks.AsNoTracking()
+                        .Where(e => e.SourceId.StartsWith("msg:"))
+                        .Select(e => new { e.SourceId, e.CreatedAtMs })
+                        .ToListAsync(ct);
+
+                    int indexedMessageCount = msgChunks.Select(e => e.SourceId).Distinct().Count();
+                    long? lastIndexedAtMs = msgChunks.Count > 0
+                        ? msgChunks.Max(e => e.CreatedAtMs)
+                        : null;
+
+                    return Results.Ok(new SessionRagStatusDto(sessionId, indexedMessageCount, lastIndexedAtMs));
+                }
+                catch
+                {
+                    return Results.Ok(new SessionRagStatusDto(sessionId, 0, null));
+                }
+            })
+            .WithTags("RAG");
+
+        // GET /api/rag/stats — 查询 RAG 检索聚合统计
+        endpoints.MapGet("/rag/stats",
+            async (IRagService ragService, string? scope, CancellationToken ct) =>
+            {
+                RagScope? ragScope = null;
+                if (!string.IsNullOrWhiteSpace(scope))
+                {
+                    if (!Enum.TryParse<RagScope>(scope, ignoreCase: true, out var parsed))
+                        return Results.BadRequest(new { success = false, message = "scope 参数无效，可选值：Global、Session。", errorCode = "BAD_REQUEST" });
+                    ragScope = parsed;
+                }
+
+                var stats = await ragService.GetQueryStatsAsync(ragScope, ct);
+                return Results.Ok(stats);
+            })
+            .WithTags("RAG");
+
         return endpoints;
     }
 
     private sealed record DeleteDocumentRequest(string SourceId);
     private sealed record ReindexDocumentRequest(string SourceId);
+    internal sealed record SessionRagStatusDto(string SessionId, int IndexedMessageCount, long? LastIndexedAtMs);
 }

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MicroClaw.RAG;
 
 /// <summary>
-/// 混合检索服务 — 语义检索 + 关键词检索，加权融合排序。
+/// 混合检索服务 — 语义检索 + 关键词检索，加权融合排序，可选时间衰减。
 /// </summary>
 public sealed class HybridSearchService
 {
@@ -27,15 +27,23 @@ public sealed class HybridSearchService
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         options ??= new HybridSearchOptions();
 
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         // 两路并行检索
         var semanticTask = SemanticSearchAsync(query, scope, sessionId, options, ct);
         var keywordTask = KeywordSearchAsync(query, scope, sessionId, options, ct);
         await Task.WhenAll(semanticTask, keywordTask).ConfigureAwait(false);
 
-        var semanticResults = semanticTask.Result;
-        var keywordResults = keywordTask.Result;
+        var results = Fuse(semanticTask.Result, keywordTask.Result, options, nowMs);
 
-        return Fuse(semanticResults, keywordResults, options);
+        // 异步更新命中分块的最近访问时间（fire-and-forget，不阻塞检索响应）
+        if (results.Count > 0)
+        {
+            var ids = results.Select(r => r.Record.Id).ToList();
+            _ = UpdateLastAccessedAsync(scope, sessionId, ids, nowMs);
+        }
+
+        return results;
     }
 
     /// <summary>语义检索：query → 向量化 → 余弦相似度 Top-K。</summary>
@@ -98,11 +106,12 @@ public sealed class HybridSearchService
         return dict;
     }
 
-    /// <summary>加权融合两路结果，去重后按融合分数降序返回 TopK。</summary>
+    /// <summary>加权融合两路结果，去重后按融合分数降序返回 TopK。支持可选时间衰减。</summary>
     internal static IReadOnlyList<HybridSearchResult> Fuse(
         Dictionary<string, (VectorChunkEntity Entity, float Score)> semantic,
         Dictionary<string, (VectorChunkEntity Entity, float Score)> keyword,
-        HybridSearchOptions options)
+        HybridSearchOptions options,
+        long nowMs = 0)
     {
         var allIds = new HashSet<string>(semantic.Keys);
         allIds.UnionWith(keyword.Keys);
@@ -118,12 +127,55 @@ public sealed class HybridSearchService
             float keywordScore = kw.Score;
             float fusedScore = semanticScore * options.SemanticWeight + keywordScore * options.KeywordWeight;
 
-            fused.Add(new HybridSearchResult(entity, semanticScore, keywordScore, fusedScore));
+            float decayFactor = 1f;
+            if (options.EnableDecay && nowMs > 0 && options.DecayHalfLifeDays > 0)
+                decayFactor = CalculateDecayFactor(entity.LastAccessedAtMs, entity.CreatedAtMs, nowMs, options.DecayHalfLifeDays);
+
+            fused.Add(new HybridSearchResult(entity, semanticScore, keywordScore, fusedScore * decayFactor, decayFactor));
         }
 
         fused.Sort((a, b) => b.FusedScore.CompareTo(a.FusedScore));
 
         return fused.Count <= options.TopK ? fused : fused.GetRange(0, options.TopK);
+    }
+
+    /// <summary>
+    /// 计算时间衰减因子：指数半衰期衰减 2^(-age/halfLife)。
+    /// 使用 LastAccessedAtMs（若有）或 CreatedAtMs 作为参考时间。
+    /// </summary>
+    /// <returns>衰减因子，范围 (0, 1]，从未衰减时为 1.0。</returns>
+    internal static float CalculateDecayFactor(long? lastAccessedAtMs, long createdAtMs, long nowMs, float halfLifeDays)
+    {
+        long referenceMs = lastAccessedAtMs ?? createdAtMs;
+        long ageMs = nowMs - referenceMs;
+        if (ageMs <= 0) return 1f;
+
+        double ageInDays = ageMs / (1000.0 * 60 * 60 * 24);
+        return (float)Math.Pow(2.0, -ageInDays / halfLifeDays);
+    }
+
+    /// <summary>
+    /// 异步更新命中分块的最近访问时间（fire-and-forget，不阻塞检索响应）。
+    /// </summary>
+    private async Task UpdateLastAccessedAsync(RagScope scope, string? sessionId, List<string> ids, long nowMs)
+    {
+        try
+        {
+            using var db = _dbFactory.Create(scope, sessionId);
+            var chunks = await db.VectorChunks
+                .Where(e => ids.Contains(e.Id))
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            foreach (var chunk in chunks)
+                chunk.LastAccessedAtMs = nowMs;
+
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // 访问时间更新失败不影响主链路，静默忽略
+        }
     }
 
     /// <summary>简单分词：按空白/标点分割，转小写，去重，过滤单字符。</summary>

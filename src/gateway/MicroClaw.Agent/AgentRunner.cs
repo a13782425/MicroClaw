@@ -15,6 +15,7 @@ using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
+using MicroClaw.Safety;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.Agents.AI;
@@ -45,7 +46,10 @@ public sealed class AgentRunner(
     IEnumerable<IChatContentRestorer> chatContentRestorers,
     IEmotionStore? emotionStore = null,
     IEmotionRuleEngine? emotionRuleEngine = null,
-    IEmotionBehaviorMapper? emotionBehaviorMapper = null) : IAgentMessageHandler
+    IEmotionBehaviorMapper? emotionBehaviorMapper = null,
+    IToolRiskRegistry? toolRiskRegistry = null,
+    IToolRiskInterceptor? toolRiskInterceptor = null,
+    IProviderRouter? providerRouter = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
@@ -55,6 +59,9 @@ public sealed class AgentRunner(
     private readonly IEmotionStore? _emotionStore = emotionStore;
     private readonly IEmotionRuleEngine? _emotionRuleEngine = emotionRuleEngine;
     private readonly IEmotionBehaviorMapper? _emotionBehaviorMapper = emotionBehaviorMapper;
+    private readonly IToolRiskRegistry? _toolRiskRegistry = toolRiskRegistry;
+    private readonly IToolRiskInterceptor? _toolRiskInterceptor = toolRiskInterceptor;
+    private readonly IProviderRouter? _providerRouter = providerRouter;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -75,14 +82,31 @@ public sealed class AgentRunner(
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled default agent found.");
 
-        // 从 session 获取 providerId；若 session 未绑定模型，回退到默认 Provider
+        // 从 session 获取 providerId；若 session 未绑定模型，按 Agent 路由策略选择
         SessionInfo? session = sessionReader.Get(sessionId);
         string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
             ? session.ProviderId
-            : providerStore.GetDefault()?.Id ?? string.Empty;
+            : ResolveProviderByStrategy(agent.RoutingStrategy);
 
         await foreach (StreamItem item in StreamReActAsync(agent, providerId, history, sessionId, ct, source: "channel"))
             yield return item;
+    }
+
+    // ── Provider 路由策略辅助 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// 当 Session 未显式绑定 Provider 时，按 Agent 路由策略从已启用 Provider 中自动选择。
+    /// 降级链：<see cref="IProviderRouter"/> → <see cref="ProviderConfigStore.GetDefault"/> → 空字符串。
+    /// </summary>
+    private string ResolveProviderByStrategy(ProviderRoutingStrategy strategy)
+    {
+        if (_providerRouter is not null)
+        {
+            ProviderConfig? routed = _providerRouter.Route(providerStore.All, strategy);
+            if (routed is not null)
+                return routed.Id;
+        }
+        return providerStore.GetDefault()?.Id ?? string.Empty;
     }
 
     // ── 流式 ReAct 循环（AF ChatClientAgent + FunctionInvokingChatClient + Channel 事件桥接）──
@@ -95,150 +119,315 @@ public sealed class AgentRunner(
         [EnumeratorCancellation] CancellationToken ct = default,
         string source = "chat")
     {
-        ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == providerId);
-        if (provider is null || !provider.IsEnabled)
-            throw new InvalidOperationException($"Provider '{providerId}' not found or disabled.");
-
-        IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
-
-        SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
-
-        // ── 情绪系统：执行前读取状态，映射行为模式 ────────────────────────────
-        EmotionState emotionState = _emotionStore is not null
-            ? await _emotionStore.GetCurrentAsync(agent.Id, ct)
-            : EmotionState.Default;
-        BehaviorProfile? behaviorProfile = _emotionBehaviorMapper?.GetProfile(emotionState);
-
-        List<ChatMessage> messages = await BuildChatMessagesAsync(
-            agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
-            behaviorSuffix: behaviorProfile?.SystemPromptSuffix, ct);
-
-        // 按 Agent 配置收集所有工具（builtin + channel + skill + MCP），统一过滤
-        SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId) ? sessionReader.Get(sessionId) : null;
-
-        // 解析祖先链中的代理 ID（用于子代理工具排除循环调用）
-        var ancestorAgentIds = new List<string>();
-        if (sessionForTools?.ParentSessionId is not null)
-        {
-            string? cursor = sessionForTools.ParentSessionId;
-            while (cursor is not null)
-            {
-                SessionInfo? ancestor = sessionReader.Get(cursor);
-                if (ancestor is null) break;
-                if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
-                    ancestorAgentIds.Add(ancestor.AgentId);
-                cursor = ancestor.ParentSessionId;
-            }
-        }
-
-        var toolContext = new ToolCreationContext(
-            SessionId: sessionId,
-            ChannelType: sessionForTools?.ChannelType,
-            ChannelId: sessionForTools?.ChannelId,
-            DisabledSkillIds: agent.DisabledSkillIds,
-            CallingAgentId: agent.Id,
-            AllowedSubAgentIds: agent.AllowedSubAgentIds,
-            AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
-        await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, toolContext, ct);
-
-        _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools",
-            agent.Id, toolResult.AllTools.Count);
-
-        // ── AgentFactory：创建 ChatClientAgent + 事件 Channel ──────────────
-
-        ChatOptions chatOptions = BuildChatOptions(
-            toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
-            temperatureOverride: behaviorProfile?.Temperature,
-            topPOverride: behaviorProfile?.TopP);
-        IChatClient rawClient = clientFactory.Create(provider);
-        var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(rawClient, agent.Name, chatOptions, loggerFactory, devMetrics: devMetrics);
-
-        // ── 并发流合并：token 流（RunStreamingAsync）+ 工具事件（Channel）──
-
-        if (!string.IsNullOrWhiteSpace(sessionId))
-            await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
-
-        // ── AF AgentSession：将 MicroClaw Session 元数据注入 StateBag 供中间件访问 ──
-        AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
-        if (!string.IsNullOrWhiteSpace(sessionId))
-        {
-            SessionInfo? sessionInfo = sessionReader.Get(sessionId);
-            if (sessionInfo is not null)
-                AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
-        }
-        // else
-        // {
-        //     afSession = await chatAgent.CreateSessionAsync(ct);
-        // }
-
-        bool succeeded = false;
-        UsageCapture usageCapture = new();
-        Task? runTask = null;
-        var runSw = System.Diagnostics.Stopwatch.StartNew();
-        UsageContentHandler.BindCapture(usageCapture);
+        // ── 薄迭代器：delegating to non-iterator ExecuteStreamingCoreAsync ──────────
+        // C# 规则：yield return 不能置于 try-catch 块中，因此将含回退逻辑的非迭代器方法
+        // 通过 Channel 与迭代器解耦，迭代器只负责从 Channel 读取并 yield。
+        var outputChannel = System.Threading.Channels.Channel.CreateUnbounded<StreamItem>();
+        Task execution = ExecuteStreamingCoreAsync(agent, providerId, history, sessionId, ct, source, outputChannel);
 
         try
         {
-            // 后台任务：运行 AF agent，通过 AIContentPipeline 将内容转换为 StreamItem 写入 eventChannel
-            runTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await foreach (AgentResponseUpdate update in chatAgent.RunStreamingAsync(messages, session: afSession, runOptions, ct))
-                    {
-                        // 从 AgentResponseUpdate 提取 MessageId，供 FunctionInvoker 共享
-                        if (!string.IsNullOrEmpty(update.MessageId))
-                            tracker.Current = update.MessageId;
-
-                        foreach (StreamItem item in contentPipeline.Process(update.Contents))
-                        {
-                            item.MessageId ??= tracker.Current;
-                            await eventChannel.Writer.WriteAsync(item, ct);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // SSE 客户端断开或外部取消——静默结束
-                }
-                finally
-                {
-                    // 触发 ReadAllAsync 正常完成
-                    eventChannel.Writer.TryComplete();
-                }
-            }, CancellationToken.None); // 不传 ct：让 finally 总能执行
-
-            // 主流：从合并 Channel 中读取所有事件（token + 工具事件）
-            await foreach (StreamItem item in eventChannel.Reader.ReadAllAsync(ct))
+            await foreach (StreamItem item in outputChannel.Reader.ReadAllAsync(ct))
                 yield return item;
-
-            // 等待后台任务完成（任何异常在此重新抛出）
-            await runTask;
-            succeeded = true;
         }
         finally
         {
-            runSw.Stop();
-            devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
-            UsageContentHandler.UnbindCapture();
-            await UsageTrackingMiddleware.TrackAsync(
-                usageCapture, sessionId, provider, source,
-                usageTracker, _logger, CancellationToken.None);
-            if (!string.IsNullOrWhiteSpace(sessionId))
-                await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+            // 确保后台任务的任何异常被观察到（Channel 已 drain，不会重复 yield）
+            try { await execution; }
+            catch (OperationCanceledException) { /* 取消时静默 */ }
+            catch { /* 异常已通过 Channel 传播给调用方，此处忽略重复抛出 */ }
+        }
+    }
 
-            // ── 情绪系统：执行后更新情绪状态 ─────────────────────────────────
-            if (_emotionStore is not null && _emotionRuleEngine is not null)
+    // ── 核心执行逻辑（非迭代器，可自由使用 try-catch）──────────────────────────
+
+    /// <summary>
+    /// 使用 Provider 回退链执行流式推理。失败且尚未产生任何输出时自动切换到下一个 Provider。
+    /// 始终通过 <paramref name="output"/> Channel 完成（正常或带异常），供迭代器包装层读取。
+    /// </summary>
+    private async Task ExecuteStreamingCoreAsync(
+        AgentConfig agent,
+        string primaryProviderId,
+        IReadOnlyList<SessionMessage> history,
+        string? sessionId,
+        CancellationToken ct,
+        string source,
+        System.Threading.Channels.Channel<StreamItem> output)
+    {
+        IReadOnlyList<ProviderConfig> chain = BuildFallbackChain(primaryProviderId, agent.RoutingStrategy);
+
+        if (chain.Count == 0)
+        {
+            output.Writer.TryComplete(
+                new InvalidOperationException($"Provider '{primaryProviderId}' not found or disabled."));
+            return;
+        }
+
+        Exception? lastException = null;
+
+        try
+        {
+        for (int attempt = 0; attempt < chain.Count; attempt++)
+        {
+            ProviderConfig provider = chain[attempt];
+            bool isLastAttempt = attempt == chain.Count - 1;
+            bool anyItemWritten = false;
+
+            if (ct.IsCancellationRequested)
             {
-                EmotionEventType emotionEvent = succeeded
-                    ? EmotionEventType.TaskCompleted
-                    : EmotionEventType.TaskFailed;
-                EmotionState newState = _emotionRuleEngine.Evaluate(emotionState, emotionEvent);
-                await _emotionStore.SaveAsync(agent.Id, newState, CancellationToken.None);
-                _logger.LogDebug("情绪更新：AgentId={AgentId} 事件={Event} 模式={Mode}",
-                    agent.Id, emotionEvent, behaviorProfile?.Mode);
+                output.Writer.TryComplete();
+                return;
+            }
+
+            if (attempt > 0)
+            {
+                _logger.LogWarning(
+                    "Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})",
+                    chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
+            }
+
+            // 情绪状态（在 finally 中需要访问，故在 try 外声明）
+            EmotionState emotionState = EmotionState.Default;
+            BehaviorProfile? behaviorProfile = null;
+            bool succeeded = false;
+            Exception? streamingException = null;
+
+            try
+            {
+                // ── 阶段 1：Setup ────────────────────────────────────────────
+                IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
+                SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
+
+                // 情绪：执行前读取状态，映射行为模式
+                if (_emotionStore is not null)
+                    emotionState = await _emotionStore.GetCurrentAsync(agent.Id, ct);
+                behaviorProfile = _emotionBehaviorMapper?.GetProfile(emotionState);
+
+                List<ChatMessage> messages = await BuildChatMessagesAsync(
+                    agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
+                    behaviorSuffix: behaviorProfile?.SystemPromptSuffix, ct);
+
+                // 工具收集
+                SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
+                    ? sessionReader.Get(sessionId) : null;
+
+                var ancestorAgentIds = new List<string>();
+                if (sessionForTools?.ParentSessionId is not null)
+                {
+                    string? cursor = sessionForTools.ParentSessionId;
+                    while (cursor is not null)
+                    {
+                        SessionInfo? ancestor = sessionReader.Get(cursor);
+                        if (ancestor is null) break;
+                        if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
+                            ancestorAgentIds.Add(ancestor.AgentId);
+                        cursor = ancestor.ParentSessionId;
+                    }
+                }
+
+                var toolContext = new ToolCreationContext(
+                    SessionId: sessionId,
+                    ChannelType: sessionForTools?.ChannelType,
+                    ChannelId: sessionForTools?.ChannelId,
+                    DisabledSkillIds: agent.DisabledSkillIds,
+                    CallingAgentId: agent.Id,
+                    AllowedSubAgentIds: agent.AllowedSubAgentIds,
+                    AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
+                await using ToolCollectionResult toolResult =
+                    await toolCollector.CollectToolsAsync(agent, toolContext, ct);
+
+                _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}",
+                    agent.Id, toolResult.AllTools.Count, provider.Id);
+
+                // AgentFactory：创建 ChatClientAgent + 事件 Channel
+                ChatOptions chatOptions = BuildChatOptions(
+                    toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
+                    temperatureOverride: behaviorProfile?.Temperature,
+                    topPOverride: behaviorProfile?.TopP);
+                IChatClient rawClient = clientFactory.Create(provider);
+                var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
+                    rawClient, agent.Name, chatOptions, loggerFactory,
+                    devMetrics: devMetrics,
+                    riskRegistry: _toolRiskRegistry,
+                    riskInterceptor: _toolRiskInterceptor);
+
+                if (!string.IsNullOrWhiteSpace(sessionId))
+                    await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
+
+                // AF AgentSession：将 MicroClaw Session 元数据注入 StateBag
+                AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
+                if (!string.IsNullOrWhiteSpace(sessionId))
+                {
+                    SessionInfo? sessionInfo = sessionReader.Get(sessionId);
+                    if (sessionInfo is not null)
+                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
+                }
+
+                UsageCapture usageCapture = new();
+                Task? runTask = null;
+                var runSw = System.Diagnostics.Stopwatch.StartNew();
+                UsageContentHandler.BindCapture(usageCapture);
+
+                // ── 阶段 2：Streaming（内层 try-finally 负责清理）────────────
+                try
+                {
+                    // 后台任务：运行 AF agent，通过 AIContentPipeline 将内容写入内部 eventChannel
+                    runTask = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await foreach (AgentResponseUpdate update in chatAgent.RunStreamingAsync(
+                                               messages, session: afSession, runOptions, ct))
+                            {
+                                if (!string.IsNullOrEmpty(update.MessageId))
+                                    tracker.Current = update.MessageId;
+
+                                foreach (StreamItem item in contentPipeline.Process(update.Contents))
+                                {
+                                    item.MessageId ??= tracker.Current;
+                                    await eventChannel.Writer.WriteAsync(item, ct);
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // SSE 客户端断开或外部取消——静默结束
+                        }
+                        finally
+                        {
+                            eventChannel.Writer.TryComplete();
+                        }
+                    }, CancellationToken.None);
+
+                    // 主流：读取内部 eventChannel，转发到外层 output channel
+                    await foreach (StreamItem item in eventChannel.Reader.ReadAllAsync(ct))
+                    {
+                        anyItemWritten = true;
+                        await output.Writer.WriteAsync(item, ct);
+                    }
+
+                    await runTask; // 等待后台任务；异常在此抛出
+                    succeeded = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // 取消直接向上传播，由外层的 OperationCanceledException catch 处理
+                }
+                catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
+                {
+                    // 流式执行失败，且尚未向输出写入任何内容 → 可安全回退
+                    streamingException = ex;
+                }
+                finally
+                {
+                    runSw.Stop();
+                    devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
+                    UsageContentHandler.UnbindCapture();
+                    await UsageTrackingMiddleware.TrackAsync(
+                        usageCapture, sessionId, provider, source,
+                        usageTracker, _logger,
+                        agentId: agent.Id,
+                        monthlyBudgetUsd: agent.MonthlyBudgetUsd,
+                        ct: CancellationToken.None);
+                    if (!string.IsNullOrWhiteSpace(sessionId))
+                        await agentStatusNotifier.NotifyAsync(
+                            sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+
+                    // 情绪：执行后更新情绪状态
+                    if (_emotionStore is not null && _emotionRuleEngine is not null)
+                    {
+                        EmotionEventType emotionEvent = succeeded
+                            ? EmotionEventType.TaskCompleted
+                            : EmotionEventType.TaskFailed;
+                        EmotionState newState = _emotionRuleEngine.Evaluate(emotionState, emotionEvent);
+                        await _emotionStore.SaveAsync(agent.Id, newState, CancellationToken.None);
+                        _logger.LogDebug("情绪更新：AgentId={AgentId} 事件={Event} 模式={Mode}",
+                            agent.Id, emotionEvent, behaviorProfile?.Mode);
+                    }
+                }
+
+                // streamingException 被内层 catch 捕获 → 尝试下一个 Provider
+                if (streamingException is not null)
+                {
+                    lastException = streamingException;
+                    _logger.LogWarning(streamingException,
+                        "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback",
+                        provider.Id, attempt + 1, chain.Count);
+                    continue;
+                }
+
+                // 成功！完成输出 Channel
+                output.Writer.TryComplete();
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                output.Writer.TryComplete();
+                return;
+            }
+            catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
+            {
+                // Setup 阶段失败（Provider 尚未产生输出）→ 尝试下一个
+                lastException = ex;
+                _logger.LogWarning(ex,
+                    "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback",
+                    provider.Id, attempt + 1, chain.Count);
+                // 继续循环
             }
         }
+
+        // 所有 Provider 均已耗尽
+        output.Writer.TryComplete(
+            lastException ?? new InvalidOperationException("All providers in fallback chain failed."));
+
+        } // end try
+        catch (Exception ex)
+        {
+            // 安全网：确保 output Channel 在任何未预料的异常路径下都被正确关闭，
+            // 避免消费端 ReadAllAsync() 无限挂起。
+            _logger.LogError(ex, "ExecuteStreamingCoreAsync 发生未处理异常，关闭 output Channel");
+            output.Writer.TryComplete(ex);
+        }
+    }
+
+    // ── Provider 回退链构建 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// 构建 Provider 回退链：将指定 <paramref name="primaryProviderId"/> 排在链首，
+    /// 其余按路由策略排序的已启用 Provider 依次跟随。
+    /// 若未注册 <see cref="IProviderRouter"/>，则仅返回主 Provider（无回退）。
+    /// </summary>
+    private IReadOnlyList<ProviderConfig> BuildFallbackChain(
+        string primaryProviderId,
+        ProviderRoutingStrategy strategy)
+    {
+        IReadOnlyList<ProviderConfig> allProviders = providerStore.All;
+
+        if (_providerRouter is null)
+        {
+            // 无路由器：仅使用主 Provider，不提供回退
+            ProviderConfig? primary = allProviders.FirstOrDefault(
+                p => p.Id == primaryProviderId && p.IsEnabled);
+            return primary is not null ? [primary] : [];
+        }
+
+        IReadOnlyList<ProviderConfig> orderedChain = _providerRouter.GetFallbackChain(allProviders, strategy);
+
+        // 将 primaryProviderId 移至链首（优先使用 Session/Agent 指定的 Provider）
+        ProviderConfig? primaryInChain = orderedChain.FirstOrDefault(p => p.Id == primaryProviderId);
+        if (primaryInChain is null || string.IsNullOrWhiteSpace(primaryProviderId))
+        {
+            // 主 Provider 未找到或未指定，直接使用策略顺序
+            return orderedChain;
+        }
+
+        var result = new List<ProviderConfig>(orderedChain.Count) { primaryInChain };
+        foreach (ProviderConfig p in orderedChain)
+        {
+            if (p.Id != primaryProviderId)
+                result.Add(p);
+        }
+        return result.AsReadOnly();
     }
 
     /// <summary>

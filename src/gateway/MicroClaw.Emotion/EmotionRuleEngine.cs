@@ -50,6 +50,15 @@ public sealed class EmotionRuleEngine : IEmotionRuleEngine
         new(EmotionEventType.TaskFailed,
             new EmotionDelta(Alertness: +10, Mood: -8, Confidence: -8),
             "任务失败，高度警觉，心情与信心双降"),
+
+        // ── 痛觉联动层 ──
+        new(EmotionEventType.PainOccurredHigh,
+            new EmotionDelta(Alertness: +22, Mood: -5, Confidence: -18),
+            "高严重度痛觉触发，警觉度大幅提升、信心下降，切换谨慎模式"),
+
+        new(EmotionEventType.PainOccurredCritical,
+            new EmotionDelta(Alertness: +32, Mood: -10, Confidence: -28),
+            "极高严重度痛觉触发，警觉度强烈提升、信心骤降，强制谨慎模式"),
     ];
 
     private readonly IReadOnlyList<EmotionRule> _rules;

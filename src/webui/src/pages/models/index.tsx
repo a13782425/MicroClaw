@@ -25,6 +25,23 @@ const PROTOCOL_OPTIONS = [
 ]
 const protocolCollection = createListCollection({ items: PROTOCOL_OPTIONS })
 
+const LATENCY_TIER_OPTIONS = [
+  { value: 'Low', label: '低延迟（本地/轻量云端）' },
+  { value: 'Medium', label: '中等延迟（标准云端）' },
+  { value: 'High', label: '高延迟（大上下文/推理型）' },
+]
+const latencyTierCollection = createListCollection({ items: LATENCY_TIER_OPTIONS })
+
+function latencyTierLabel(tier: string): string {
+  return LATENCY_TIER_OPTIONS.find((o) => o.value === tier)?.label.split('（')[0] ?? tier
+}
+
+function latencyTierColor(tier: string): string {
+  if (tier === 'Low') return 'green'
+  if (tier === 'High') return 'orange'
+  return 'blue'
+}
+
 // ─── 模态 & 能力选项 ──────────────────────────────────────────────────────────
 const INPUT_MODALITIES = [
   { key: 'inputImage', label: '图片' },
@@ -63,6 +80,8 @@ function defaultForm() {
     cacheInputPricePerMToken: '',
     cacheOutputPricePerMToken: '',
     notes: '',
+    qualityScore: 50,
+    latencyTier: 'Medium',
   }
 }
 
@@ -98,6 +117,8 @@ function buildCapabilities(form: FormState): Partial<ProviderCapabilities> {
     cacheInputPricePerMToken: parseFloat(form.cacheInputPricePerMToken) || null,
     cacheOutputPricePerMToken: parseFloat(form.cacheOutputPricePerMToken) || null,
     notes: form.notes || null,
+    qualityScore: form.qualityScore,
+    latencyTier: form.latencyTier,
   }
 }
 
@@ -139,6 +160,8 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           cacheInputPricePerMToken: caps?.cacheInputPricePerMToken?.toString() ?? '',
           cacheOutputPricePerMToken: caps?.cacheOutputPricePerMToken?.toString() ?? '',
           notes: caps?.notes ?? '',
+          qualityScore: caps?.qualityScore ?? 50,
+          latencyTier: caps?.latencyTier ?? 'Medium',
         })
       } else {
         setForm(defaultForm())
@@ -387,6 +410,57 @@ function ProviderDialog({ open, editing, onClose, onSaved }: ProviderDialogProps
           </Box>
         </Collapsible.Content>
       </Collapsible.Root>
+      {/* ─── 路由策略权重 ────────────────────────────────── */}
+      <Collapsible.Root>
+        <Collapsible.Trigger asChild>
+          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
+            <Text fontSize="sm" fontWeight="medium">路由策略权重</Text>
+            <ChevronDown size={14} />
+          </Button>
+        </Collapsible.Trigger>
+        <Collapsible.Content>
+          <Box borderWidth="1px" rounded="md" p="3" mb="3">
+            <Text fontSize="xs" color="gray.500" mb="3">
+              配置此 Provider 在自动路由时的优先权重。Agent 选择"质量优先"策略时按质量分排序；选择"延迟优先"策略时按延迟层级排序。
+            </Text>
+            <SimpleGrid columns={2} gap="3">
+              <Box>
+                <Text fontSize="xs" mb="1">质量评分（0-100）</Text>
+                <Input
+                  size="sm"
+                  type="number"
+                  min={0} max={100}
+                  value={form.qualityScore}
+                  onChange={(e) => set('qualityScore', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                  placeholder="50"
+                />
+                <Text fontSize="xs" color="gray.400" mt="1">值越高"质量优先"时越优先</Text>
+              </Box>
+              <Box>
+                <Text fontSize="xs" mb="1">延迟层级</Text>
+                <Select.Root
+                  value={[form.latencyTier]}
+                  onValueChange={(v) => set('latencyTier', v.value[0])}
+                  collection={latencyTierCollection}
+                  size="sm"
+                >
+                  <Select.Trigger><Select.ValueText /></Select.Trigger>
+                  <Portal>
+                    <Select.Positioner>
+                      <Select.Content>
+                        {LATENCY_TIER_OPTIONS.map((o) => (
+                          <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Positioner>
+                  </Portal>
+                </Select.Root>
+                <Text fontSize="xs" color="gray.400" mt="1">值越低"延迟优先"时越优先</Text>
+              </Box>
+            </SimpleGrid>
+          </Box>
+        </Collapsible.Content>
+      </Collapsible.Root>
     </AppDialog>
   )
 }
@@ -507,6 +581,15 @@ export default function ModelsPage() {
                       ${p.capabilities.inputPricePerMToken ?? '?'}/{p.capabilities.outputPricePerMToken ?? '?'}/M
                     </Badge>
                   )}
+                </Flex>
+
+                {/* 路由权重信息 */}
+                <Flex gap="2" mb="3" align="center">
+                  <Text fontSize="xs" color="gray.400">路由:</Text>
+                  <Badge size="sm" colorPalette="violet" variant="subtle">质量 {p.capabilities?.qualityScore ?? 50}</Badge>
+                  <Badge size="sm" colorPalette={latencyTierColor(p.capabilities?.latencyTier ?? 'Medium')} variant="subtle">
+                    {latencyTierLabel(p.capabilities?.latencyTier ?? 'Medium')}延迟
+                  </Badge>
                 </Flex>
 
                 <Flex align="center" justify="space-between">

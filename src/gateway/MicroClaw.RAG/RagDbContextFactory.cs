@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.RAG;
@@ -13,6 +15,7 @@ namespace MicroClaw.RAG;
 public sealed class RagDbContextFactory
 {
     private readonly string _workspaceRoot;
+    private readonly ConcurrentDictionary<string, bool> _initialized = new(StringComparer.OrdinalIgnoreCase);
 
     public RagDbContextFactory(string workspaceRoot)
     {
@@ -42,7 +45,15 @@ public sealed class RagDbContextFactory
             .Options;
 
         var context = new RagDbContext(options);
-        context.Database.EnsureCreated();
+
+        // 仅在进程生命周期内首次访问某 DB 路径时执行 schema 初始化，
+        // 避免每次查询重复调用 EnsureCreated + ALTER TABLE 导致 SQLite 并发异常。
+        if (_initialized.TryAdd(dbPath, true))
+        {
+            context.Database.EnsureCreated();
+            EvolveSchema(context);
+        }
+
         return context;
     }
 
@@ -65,5 +76,22 @@ public sealed class RagDbContextFactory
             throw new ArgumentException("Session 作用域必须提供 sessionId", nameof(sessionId));
 
         return Path.Combine(_workspaceRoot, "sessions", sessionId, "rag.db");
+    }
+
+    /// <summary>
+    /// 对已存在数据库执行增量列迁移。
+    /// SQLite 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，通过捕获异常容错。
+    /// </summary>
+    private static void EvolveSchema(RagDbContext context)
+    {
+        try
+        {
+            context.Database.ExecuteSqlRaw(
+                "ALTER TABLE vector_chunks ADD COLUMN last_accessed_at_ms INTEGER NULL");
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+        {
+            // 列已存在，忽略
+        }
     }
 }

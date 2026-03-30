@@ -7,4 +7,5 @@ public sealed record HybridSearchResult(
     VectorChunkEntity Record,
     float SemanticScore,
     float KeywordScore,
-    float FusedScore);
+    float FusedScore,
+    float DecayFactor = 1f);

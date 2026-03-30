@@ -33,6 +33,8 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapToolsEndpoints();
 		protectedApi.MapWorkflowEndpoints();
 		protectedApi.MapRagEndpoints();
+		protectedApi.MapEmotionEndpoints();
+		protectedApi.MapPainMemoryEndpoints();
 
 		return endpoints;
 	}

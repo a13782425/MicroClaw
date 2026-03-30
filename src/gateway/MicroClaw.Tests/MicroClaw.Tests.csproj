@@ -30,6 +30,7 @@
     <ProjectReference Include="..\MicroClaw.Agent\MicroClaw.Agent.csproj" />
     <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
     <ProjectReference Include="..\MicroClaw.Emotion\MicroClaw.Emotion.csproj" />
+    <ProjectReference Include="..\MicroClaw.Safety\MicroClaw.Safety.csproj" />
   </ItemGroup>
 
 </Project>

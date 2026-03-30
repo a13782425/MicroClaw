@@ -14,7 +14,7 @@ namespace MicroClaw.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.3");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
 
             modelBuilder.Entity("MicroClaw.Infrastructure.Data.AgentConfigEntity", b =>
                 {
@@ -61,10 +61,19 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_enabled");
 
+                    b.Property<decimal?>("MonthlyBudgetUsd")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monthly_budget_usd");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
+
+                    b.Property<string>("RoutingStrategy")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("routing_strategy");
 
                     b.Property<string>("ToolGroupConfigsJson")
                         .HasColumnType("TEXT")
@@ -485,6 +494,11 @@ namespace MicroClaw.Infrastructure.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("id");
 
+                    b.Property<string>("AgentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_id");
+
                     b.Property<decimal>("CacheInputCostUsd")
                         .HasColumnType("TEXT")
                         .HasColumnName("cache_input_cost_usd");
@@ -551,9 +565,9 @@ namespace MicroClaw.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SessionId", "ProviderId", "Source", "DayNumber")
+                    b.HasIndex("AgentId", "SessionId", "ProviderId", "Source", "DayNumber")
                         .IsUnique()
-                        .HasDatabaseName("ix_usages_session_provider_source_day");
+                        .HasDatabaseName("ix_usages_agent_session_provider_source_day");
 
                     b.ToTable("usages", (string)null);
                 });

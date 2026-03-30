@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Providers;
 using MicroClaw.Tools;
 using Microsoft.EntityFrameworkCore;
 
@@ -145,6 +146,10 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         entity.AllowedSubAgentIdsJson = incoming.AllowedSubAgentIds is not null
             ? JsonSerializer.Serialize(incoming.AllowedSubAgentIds, JsonOpts)
             : null;
+        entity.RoutingStrategy = incoming.RoutingStrategy == ProviderRoutingStrategy.Default
+            ? null
+            : incoming.RoutingStrategy.ToString();
+        entity.MonthlyBudgetUsd = incoming.MonthlyBudgetUsd;
 
         db.SaveChanges();
         return ToConfig(entity);
@@ -175,7 +180,9 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         e.IsDefault,
         e.ContextWindowMessages,
         e.ExposeAsA2A,
-        DeserializeNullableList<string>(e.AllowedSubAgentIdsJson));
+        DeserializeNullableList<string>(e.AllowedSubAgentIdsJson),
+        ParseRoutingStrategy(e.RoutingStrategy),
+        e.MonthlyBudgetUsd);
 
     private static AgentConfigEntity ToEntity(AgentConfig c) => new()
     {
@@ -199,6 +206,10 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         AllowedSubAgentIdsJson = c.AllowedSubAgentIds is not null
             ? JsonSerializer.Serialize(c.AllowedSubAgentIds, JsonOpts)
             : null,
+        RoutingStrategy = c.RoutingStrategy == ProviderRoutingStrategy.Default
+            ? null
+            : c.RoutingStrategy.ToString(),
+        MonthlyBudgetUsd = c.MonthlyBudgetUsd,
     };
 
     private static IReadOnlyList<T> DeserializeList<T>(string? json)
@@ -217,4 +228,9 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         if (string.IsNullOrWhiteSpace(json)) return [];
         return JsonSerializer.Deserialize<T[]>(json, JsonOpts) ?? [];
     }
+
+    private static ProviderRoutingStrategy ParseRoutingStrategy(string? value) =>
+        Enum.TryParse<ProviderRoutingStrategy>(value, ignoreCase: true, out ProviderRoutingStrategy result)
+            ? result
+            : ProviderRoutingStrategy.Default;
 }

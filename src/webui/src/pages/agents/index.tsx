@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Box, Flex, Text, Badge, Button, HStack, VStack, Spinner,
   Input, Textarea, Tabs, For, Em, Switch, createListCollection,
-  Select,
+  Select, Portal,
 } from '@chakra-ui/react'
 import { Plus, Trash2, Bot } from 'lucide-react'
 import {
@@ -15,11 +15,32 @@ import {
   listAgentTools, updateAgentToolSettings,
   listAgentDna, updateAgentDna,
   listSkills, listMcpServers,
+  getAgentEmotionCurrent, getAgentEmotionHistory,
+  listAgentPainMemories, deleteAgentPainMemory,
   type AgentConfig, type AgentCreateRequest, type ToolGroup,
   type ToolGroupConfig, type SkillConfig, type McpServerConfig,
   type AgentDnaFileInfo,
   type SubAgentInfo, listSubAgents,
+  type EmotionStateDto, type EmotionSnapshotDto,
+  type PainMemoryDto,
 } from '@/api/gateway'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
+
+// ─────────────────── 路由策略选项 ─────────────────────────────────────────────
+
+const ROUTING_STRATEGY_OPTIONS = [
+  { value: 'Default', label: '默认（使用默认 Provider）' },
+  { value: 'QualityFirst', label: '质量优先' },
+  { value: 'CostFirst', label: '成本优先' },
+  { value: 'LatencyFirst', label: '延迟优先' },
+]
+const routingStrategyCollection = createListCollection({ items: ROUTING_STRATEGY_OPTIONS })
+
+function routingStrategyLabel(strategy: string): string {
+  return ROUTING_STRATEGY_OPTIONS.find((o) => o.value === strategy)?.label ?? strategy
+}
 
 // ─────────────────── 创建弹窗 ─────────────────────────────────────────────────
 
@@ -582,6 +603,304 @@ function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConfig; all
   )
 }
 
+// ─────────────────── Emotion Tab ─────────────────────────────────────────────
+
+const DIMENSION_COLORS = {
+  alertness: '#3182ce',
+  mood: '#38a169',
+  curiosity: '#d69e2e',
+  confidence: '#e53e3e',
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  alertness: '警觉度',
+  mood: '心情',
+  curiosity: '好奇心',
+  confidence: '信心',
+}
+
+type ChartPoint = {
+  time: string
+  alertness: number
+  mood: number
+  curiosity: number
+  confidence: number
+}
+
+function toISODateLocal(ms: number): string {
+  const d = new Date(ms)
+  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+// ─────────────────── 安全记忆 Tab ────────────────────────────────────────────
+
+const SEVERITY_COLORS: Record<string, string> = {
+  Low: 'gray',
+  Medium: 'yellow',
+  High: 'orange',
+  Critical: 'red',
+}
+
+const SEVERITY_LABELS: Record<string, string> = {
+  Low: '低',
+  Medium: '中',
+  High: '高',
+  Critical: '严重',
+}
+
+function SafetyMemoryTab({ agent }: { agent: AgentConfig }) {
+  const [memories, setMemories] = useState<PainMemoryDto[]>([])
+  const [loading, setLoading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await listAgentPainMemories(agent.id)
+      setMemories(data)
+    } catch {
+      // 无数据时静默忽略
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [agent.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteClick = (memoryId: string) => {
+    setPendingDeleteId(memoryId)
+    setConfirmOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!pendingDeleteId) return
+    setDeletingId(pendingDeleteId)
+    try {
+      await deleteAgentPainMemory(agent.id, pendingDeleteId)
+      setMemories((prev) => prev.filter((m) => m.id !== pendingDeleteId))
+      toaster.create({ title: '已删除痛觉记忆', type: 'success' })
+    } catch {
+      toaster.create({ title: '删除失败', type: 'error' })
+    } finally {
+      setDeletingId(null)
+      setPendingDeleteId(null)
+      setConfirmOpen(false)
+    }
+  }
+
+  return (
+    <Box p="3">
+      <HStack mb="3" justify="space-between">
+        <Text fontSize="sm" fontWeight="medium">安全记忆</Text>
+        <Button size="xs" variant="outline" onClick={load} loading={loading}>刷新</Button>
+      </HStack>
+
+      {loading && <Spinner size="sm" />}
+
+      {!loading && memories.length === 0 && (
+        <Box py="8" textAlign="center">
+          <Text fontSize="sm" color="gray.400">暂无痛觉记忆记录</Text>
+          <Text fontSize="xs" color="gray.400" mt="1">当 Agent 执行操作失败且被记录痛觉时，将在此处显示</Text>
+        </Box>
+      )}
+
+      {memories.map((m) => (
+        <Box
+          key={m.id}
+          mb="3"
+          p="3"
+          borderWidth="1px"
+          rounded="md"
+          bg="gray.50"
+          _dark={{ bg: 'gray.800' }}
+        >
+          <HStack justify="space-between" mb="2" flexWrap="wrap" gap="2">
+            <HStack gap="2">
+              <Badge colorPalette={SEVERITY_COLORS[m.severity] ?? 'gray'} size="sm">
+                {SEVERITY_LABELS[m.severity] ?? m.severity}
+              </Badge>
+              <Badge variant="outline" size="sm">第 {m.occurrenceCount} 次</Badge>
+            </HStack>
+            <Button
+              size="xs"
+              variant="ghost"
+              colorPalette="red"
+              loading={deletingId === m.id}
+              onClick={() => handleDeleteClick(m.id)}
+            >
+              <Trash2 size={12} />
+            </Button>
+          </HStack>
+
+          <VStack align="start" gap="1">
+            <Box>
+              <Text fontSize="xs" color="gray.500">触发点</Text>
+              <Text fontSize="sm">{m.triggerDescription}</Text>
+            </Box>
+            <Box>
+              <Text fontSize="xs" color="gray.500">后果</Text>
+              <Text fontSize="sm">{m.consequenceDescription}</Text>
+            </Box>
+            <Box>
+              <Text fontSize="xs" color="gray.500">规避策略</Text>
+              <Text fontSize="sm" color="blue.600" _dark={{ color: 'blue.300' }}>{m.avoidanceStrategy}</Text>
+            </Box>
+            <Text fontSize="xs" color="gray.400" mt="1">
+              最近发生：{new Date(m.lastOccurredAtMs).toLocaleString('zh-CN')}
+            </Text>
+          </VStack>
+        </Box>
+      ))}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setPendingDeleteId(null) }}
+        onConfirm={handleDeleteConfirm}
+        title="删除痛觉记忆"
+        description="确认删除该条痛觉记忆？删除后无法恢复。"
+        confirmText="删除"
+        loading={deletingId !== null}
+      />
+    </Box>
+  )
+}
+
+// ─────────────────── 情绪 Tab ─────────────────────────────────────────────────
+
+function EmotionTab({ agent }: { agent: AgentConfig }) {
+  const [current, setCurrent] = useState<EmotionStateDto | null>(null)
+  const [history, setHistory] = useState<ChartPoint[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // 默认查询最近 7 天
+  const [days, setDays] = useState(7)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [cur] = await Promise.all([
+        getAgentEmotionCurrent(agent.id),
+      ])
+      setCurrent(cur)
+
+      const now = Date.now()
+      const from = now - days * 24 * 60 * 60 * 1000
+      const snaps: EmotionSnapshotDto[] = await getAgentEmotionHistory(agent.id, { from, to: now })
+      const points: ChartPoint[] = snaps.map((s) => ({
+        time: toISODateLocal(s.recordedAtMs),
+        alertness: s.alertness,
+        mood: s.mood,
+        curiosity: s.curiosity,
+        confidence: s.confidence,
+      }))
+      setHistory(points)
+    } catch {
+      // 无情绪数据时静默忽略（如从未运行过）
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [agent.id, days]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dimensionBadge = (label: string, value: number, color: string) => (
+    <VStack
+      key={label}
+      gap="0"
+      align="center"
+      bg="gray.50"
+      _dark={{ bg: 'gray.800' }}
+      p="3"
+      rounded="md"
+      minW="90px"
+    >
+      <Text fontSize="xs" color="gray.500">{label}</Text>
+      <Text fontWeight="bold" fontSize="xl" color={color}>{value}</Text>
+      <Box w="100%" bg="gray.200" _dark={{ bg: 'gray.700' }} rounded="full" h="2" mt="1">
+        <Box
+          bg={color}
+          h="2"
+          rounded="full"
+          style={{ width: `${value}%` }}
+        />
+      </Box>
+    </VStack>
+  )
+
+  return (
+    <Box p="3">
+      {/* 工具栏 */}
+      <HStack mb="3" justify="space-between">
+        <Text fontSize="sm" fontWeight="medium">情绪状态</Text>
+        <HStack>
+          {([7, 14, 30] as const).map((d) => (
+            <Button
+              key={d}
+              size="xs"
+              variant={days === d ? 'solid' : 'outline'}
+              colorPalette="blue"
+              onClick={() => setDays(d)}
+            >
+              {d}天
+            </Button>
+          ))}
+          <Button size="xs" variant="outline" onClick={load} loading={loading}>刷新</Button>
+        </HStack>
+      </HStack>
+
+      {/* 当前情绪四维卡片 */}
+      {current && (
+        <HStack gap="2" mb="4" flexWrap="wrap">
+          {dimensionBadge('警觉度', current.alertness, DIMENSION_COLORS.alertness)}
+          {dimensionBadge('心情', current.mood, DIMENSION_COLORS.mood)}
+          {dimensionBadge('好奇心', current.curiosity, DIMENSION_COLORS.curiosity)}
+          {dimensionBadge('信心', current.confidence, DIMENSION_COLORS.confidence)}
+        </HStack>
+      )}
+
+      {!current && !loading && (
+        <Box mb="4">
+          <Text fontSize="sm" color="gray.400">暂无情绪数据（Agent 尚未运行）</Text>
+        </Box>
+      )}
+
+      {loading && <Box mb="4"><Spinner size="sm" /></Box>}
+
+      {/* 历史折线图 */}
+      <Box borderWidth="1px" rounded="md" p="3">
+        <Text fontSize="xs" color="gray.500" mb="2">过去 {days} 天情绪曲线</Text>
+        {history.length === 0 && !loading ? (
+          <Text fontSize="sm" color="gray.400">暂无历史数据</Text>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={history} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+              <Tooltip
+                formatter={(value, name) => [value, DIMENSION_LABELS[String(name)] ?? name]}
+              />
+              <Legend formatter={(name) => DIMENSION_LABELS[name] ?? name} />
+              {Object.entries(DIMENSION_COLORS).map(([key, color]) => (
+                <Line
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  stroke={color}
+                  dot={false}
+                  strokeWidth={2}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
 // ─────────────────── 右侧详情 ─────────────────────────────────────────────────
 
 function AgentDetail({
@@ -622,6 +941,42 @@ function AgentDetail({
       toaster.create({ type: 'error', title: 'A2A 切换失败' })
     } finally {
       setTogglingA2A(false)
+    }
+  }
+
+  const [savingRouting, setSavingRouting] = useState(false)
+  const handleRoutingStrategyChange = async (strategy: string) => {
+    setSavingRouting(true)
+    try {
+      await updateAgent({ id: agent.id, routingStrategy: strategy })
+      onUpdated({ ...agent, routingStrategy: strategy })
+      toaster.create({ type: 'success', title: '路由策略已更新' })
+    } catch {
+      toaster.create({ type: 'error', title: '路由策略更新失败' })
+    } finally {
+      setSavingRouting(false)
+    }
+  }
+
+  const [budgetInput, setBudgetInput] = useState(
+    agent.monthlyBudgetUsd != null ? String(agent.monthlyBudgetUsd) : ''
+  )
+  const [savingBudget, setSavingBudget] = useState(false)
+  const handleBudgetSave = async () => {
+    const parsed = budgetInput.trim() === '' ? null : parseFloat(budgetInput)
+    if (budgetInput.trim() !== '' && (isNaN(parsed!) || parsed! < 0)) {
+      toaster.create({ type: 'error', title: '预算须为非负数字或留空（不限制）' })
+      return
+    }
+    setSavingBudget(true)
+    try {
+      await updateAgent({ id: agent.id, monthlyBudgetUsd: parsed, hasMonthlyBudgetUsd: true })
+      onUpdated({ ...agent, monthlyBudgetUsd: parsed })
+      toaster.create({ type: 'success', title: parsed == null ? '月度预算已清除' : '月度预算已更新' })
+    } catch {
+      toaster.create({ type: 'error', title: '月度预算更新失败' })
+    } finally {
+      setSavingBudget(false)
     }
   }
 
@@ -711,6 +1066,8 @@ function AgentDetail({
           <Tabs.Trigger value="tools">工具</Tabs.Trigger>
           <Tabs.Trigger value="mcp">MCP</Tabs.Trigger>
           <Tabs.Trigger value="skills">技能</Tabs.Trigger>
+          <Tabs.Trigger value="emotion">🧠 情绪</Tabs.Trigger>
+          <Tabs.Trigger value="safety">🔴 安全记忆</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="overview" flex="1" overflowY="auto">
@@ -737,6 +1094,53 @@ function AgentDetail({
                 ? <Text fontSize="sm" whiteSpace="pre-wrap">{agent.description}</Text>
                 : <Text fontSize="sm" color="gray.400">（未设置）</Text>
               }
+            </Box>
+
+            {/* 路由策略配置 */}
+            <Box mt="4">
+              <Text fontSize="xs" color="gray.500" mb="1">Provider 路由策略</Text>
+              <Text fontSize="xs" color="gray.400" mb="2">当会话未绑定具体 Provider 时，按此策略从已启用的 Provider 中自动选择。</Text>
+              <Select.Root
+                value={[agent.routingStrategy ?? 'Default']}
+                onValueChange={(v) => handleRoutingStrategyChange(v.value[0])}
+                collection={routingStrategyCollection}
+                size="sm"
+                disabled={savingRouting}
+              >
+                <Select.Trigger maxW="260px">
+                  <Select.ValueText placeholder="选择路由策略" />
+                </Select.Trigger>
+                <Portal>
+                  <Select.Positioner>
+                    <Select.Content>
+                      {ROUTING_STRATEGY_OPTIONS.map((o) => (
+                        <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Positioner>
+                </Portal>
+              </Select.Root>
+              {savingRouting && <Text fontSize="xs" color="gray.400" mt="1">保存中…</Text>}
+            </Box>
+            {/* 月度预算配置 */}
+            <Box mt="4">
+              <Text fontSize="xs" color="gray.500" mb="1">月度预算上限（USD）</Text>
+              <Text fontSize="xs" color="gray.400" mb="2">超过 80% 记录预警日志，超过 100% 记录超限日志。留空表示不限制。</Text>
+              <HStack>
+                <Input
+                  size="sm"
+                  maxW="160px"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="不限制"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                />
+                <Button size="sm" colorPalette="blue" loading={savingBudget} onClick={handleBudgetSave}>
+                  保存
+                </Button>
+              </HStack>
             </Box>
             {agent.exposeAsA2A && (
               <Box mt="4">
@@ -773,6 +1177,14 @@ function AgentDetail({
 
         <Tabs.Content value="skills" flex="1" overflowY="auto" p="0">
           <SkillsTab agent={agent} onUpdated={onUpdated} />
+        </Tabs.Content>
+
+        <Tabs.Content value="emotion" flex="1" overflowY="auto" p="0">
+          <EmotionTab agent={agent} />
+        </Tabs.Content>
+
+        <Tabs.Content value="safety" flex="1" overflowY="auto" p="0">
+          <SafetyMemoryTab agent={agent} />
         </Tabs.Content>
       </Tabs.Root>
     </Flex>

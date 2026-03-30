@@ -20,6 +20,9 @@ public sealed class VectorChunkEntity
     /// <summary>扩展元数据 JSON（文件名、分块索引、标题层级等）。</summary>
     public string? MetadataJson { get; set; }
 
-    /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
+    /// <summary>创建时间：Unix 毫秒时间戳。</summary>
     public long CreatedAtMs { get; set; }
+
+    /// <summary>最近一次被检索命中的时间：Unix 毫秒时间戳。null 表示从未被访问过。</summary>
+    public long? LastAccessedAtMs { get; set; }
 }

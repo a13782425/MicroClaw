@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace MicroClaw.RAG;
 /// <list type="bullet">
 ///   <item><see cref="IngestAsync"/>：文本 → 分块 → 批量嵌入 → 存入目标知识库 DB。</item>
 ///   <item><see cref="QueryAsync"/>：混合检索；Session 作用域合并 Global + Session 双库结果。</item>
+///   <item>每次 <see cref="QueryAsync"/> 异步记录检索统计（fire-and-forget，不影响主链路延迟）。</item>
 /// </list>
 /// </summary>
 public sealed class RagService : IRagService
@@ -15,15 +17,18 @@ public sealed class RagService : IRagService
     private readonly IEmbeddingService _embedding;
     private readonly RagDbContextFactory _dbFactory;
     private readonly HybridSearchService _hybridSearch;
+    private readonly RagStatsDbContextFactory? _statsFactory;
 
     public RagService(
         IEmbeddingService embedding,
         RagDbContextFactory dbFactory,
-        HybridSearchService hybridSearch)
+        HybridSearchService hybridSearch,
+        RagStatsDbContextFactory? statsFactory = null)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _hybridSearch = hybridSearch ?? throw new ArgumentNullException(nameof(hybridSearch));
+        _statsFactory = statsFactory;
     }
 
     /// <inheritdoc/>
@@ -81,6 +86,7 @@ public sealed class RagService : IRagService
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
 
         var options = new HybridSearchOptions();
+        var sw = Stopwatch.StartNew();
 
         // 始终检索全局库
         var globalTask = _hybridSearch.SearchAsync(query, RagScope.Global, null, options, ct);
@@ -103,7 +109,13 @@ public sealed class RagService : IRagService
             allResults.AddRange(await globalTask.ConfigureAwait(false));
         }
 
-        if (allResults.Count == 0) return string.Empty;
+        sw.Stop();
+
+        if (allResults.Count == 0)
+        {
+            RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, 0);
+            return string.Empty;
+        }
 
         // 去重（同 Id 取最高融合分）→ 降序排列 → 取前 TopK
         var merged = allResults
@@ -111,10 +123,37 @@ public sealed class RagService : IRagService
             .Select(g => g.MaxBy(r => r.FusedScore)!)
             .OrderByDescending(r => r.FusedScore)
             .Take(options.TopK)
-            .Select(r => r.Record.Content)
             .ToList();
 
-        return string.Join("\n---\n", merged);
+        RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, merged.Count);
+
+        return string.Join("\n---\n", merged.Select(r => r.Record.Content));
+    }
+
+    private void RecordStatFireAndForget(RagScope scope, long elapsedMs, int recallCount)
+    {
+        if (_statsFactory is null) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var db = _statsFactory.Create();
+                db.SearchStats.Add(new RagSearchStatEntity
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Scope = scope.ToString(),
+                    ElapsedMs = elapsedMs,
+                    RecallCount = recallCount,
+                    RecordedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                });
+                await db.SaveChangesAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // 统计失败不影响主链路
+            }
+        });
     }
 
     /// <inheritdoc/>
@@ -263,6 +302,42 @@ public sealed class RagService : IRagService
             .ToList();
 
         return docs;
+    }
+
+    /// <inheritdoc/>
+    public async Task<RagQueryStats> GetQueryStatsAsync(RagScope? scope, CancellationToken ct = default)
+    {
+        if (_statsFactory is null)
+            return new RagQueryStats(scope?.ToString() ?? "All", 0, 0, 0, 0, 0, 0);
+
+        using var db = _statsFactory.Create();
+
+        IQueryable<RagSearchStatEntity> query = db.SearchStats.AsNoTracking();
+        if (scope.HasValue)
+            query = query.Where(e => e.Scope == scope.Value.ToString());
+
+        var stats = await query.ToListAsync(ct).ConfigureAwait(false);
+
+        if (stats.Count == 0)
+            return new RagQueryStats(scope?.ToString() ?? "All", 0, 0, 0, 0, 0, 0);
+
+        long total = stats.Count;
+        long hits = stats.Count(e => e.RecallCount > 0);
+        double hitRate = (double)hits / total;
+        double avgElapsed = stats.Average(e => e.ElapsedMs);
+        double avgRecall = stats.Average(e => e.RecallCount);
+
+        long cutoff24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
+        long last24h = stats.Count(e => e.RecordedAtMs >= cutoff24h);
+
+        return new RagQueryStats(
+            Scope: scope?.ToString() ?? "All",
+            TotalQueries: total,
+            HitQueries: hits,
+            HitRate: hitRate,
+            AvgElapsedMs: Math.Round(avgElapsed, 1),
+            AvgRecallCount: Math.Round(avgRecall, 2),
+            Last24hQueries: last24h);
     }
 
     private static string? TryParseFileName(string? metadataJson)

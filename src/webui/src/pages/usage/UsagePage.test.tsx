@@ -81,6 +81,12 @@ const mockResult: UsageQueryResult = {
     { date: '2024-01-01', providerId: 'p1', providerName: 'GPT-4o', estimatedCostUsd: 0.3 },
     { date: '2024-01-02', providerId: 'p1', providerName: 'GPT-4o', estimatedCostUsd: 0.7 },
   ],
+  byAgent: [
+    { agentId: 'a1', inputTokens: 900000, outputTokens: 450000, estimatedCostUsd: 2.0 },
+  ],
+  bySession: [
+    { sessionId: 's1', inputTokens: 500000, outputTokens: 250000, estimatedCostUsd: 1.5 },
+  ],
 }
 
 const wrap = (ui: React.ReactElement) =>

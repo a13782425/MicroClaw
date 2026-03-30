@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Safety;
 using MicroClaw.Skills;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -34,6 +35,8 @@ internal static class AgentFactory
     /// <param name="loggerFactory"><see cref="ILoggerFactory"/>。</param>
     /// <param name="maxIterations">最大工具调用轮次（默认 10）。</param>
     /// <param name="devMetrics">可选的开发指标服务，非 null 时在每次工具调用后记录耗时。</param>
+    /// <param name="riskRegistry">可选的工具风险注册表，用于查询工具调用前的风险等级。</param>
+    /// <param name="riskInterceptor">可选的风险拦截器，在工具执行前执行前置风险检查。</param>
     /// <returns>(<see cref="ChatClientAgent"/>, <see cref="Channel{StreamItem}"/> eventChannel, <see cref="ChatClientAgentRunOptions"/> runOptions, <see cref="MessageIdTracker"/> tracker)</returns>
     public static (ChatClientAgent Agent, Channel<StreamItem> EventChannel, ChatClientAgentRunOptions RunOptions, MessageIdTracker Tracker) Create(
         IChatClient baseClient,
@@ -41,7 +44,9 @@ internal static class AgentFactory
         ChatOptions chatOptions,
         ILoggerFactory loggerFactory,
         int maxIterations = 10,
-        IDevMetricsService? devMetrics = null)
+        IDevMetricsService? devMetrics = null,
+        IToolRiskRegistry? riskRegistry = null,
+        IToolRiskInterceptor? riskInterceptor = null)
     {
         Channel<StreamItem> eventChannel = Channel.CreateUnbounded<StreamItem>(
             new UnboundedChannelOptions { SingleReader = true });
@@ -53,7 +58,7 @@ internal static class AgentFactory
         {
             MaximumIterationsPerRequest = maxIterations,
             AllowConcurrentInvocation = true,
-            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, tracker, devMetrics)
+            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, tracker, devMetrics, riskRegistry, riskInterceptor)
         };
 
         // UseProvidedChatClientAsIs = true：让我们自己的 FunctionInvokingChatClient 负责工具循环
@@ -81,11 +86,13 @@ internal static class AgentFactory
 
     // ── 私有辅助 ───────────────────────────────────────────────────────────
 
-    /// <summary>构建 FunctionInvoker 委托：拦截工具调用并向事件 Channel 写入事件，可选上报开发指标。</summary>
+    /// <summary>构建 FunctionInvoker 委托：拦截工具调用并向事件 Channel 写入事件，可选上报开发指标，可选风险前置拦截。</summary>
     private static Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(
         ChannelWriter<StreamItem> eventWriter,
         MessageIdTracker tracker,
-        IDevMetricsService? devMetrics)
+        IDevMetricsService? devMetrics,
+        IToolRiskRegistry? riskRegistry,
+        IToolRiskInterceptor? riskInterceptor)
     {
         return async (FunctionInvocationContext ctx, CancellationToken ct) =>
         {
@@ -101,6 +108,20 @@ internal static class AgentFactory
 
             // ② 设置 AsyncLocal 桥接，让子代理运行器可以向父 SSE 流写入进度事件
             SubAgentEventBridge.Current = eventWriter;
+
+            // ③ 风险前置拦截（仅当注册表和拦截器均配置时生效）
+            if (riskRegistry is not null && riskInterceptor is not null)
+            {
+                RiskLevel riskLevel = riskRegistry.GetRiskLevel(ctx.Function.Name);
+                ToolInterceptResult interceptResult = await riskInterceptor.InterceptAsync(ctx.Function.Name, riskLevel, args, ct);
+                if (!interceptResult.IsAllowed)
+                {
+                    string blockMsg = interceptResult.BlockReason ?? "工具调用被风险拦截器阻止";
+                    await eventWriter.WriteAsync(
+                        new ToolResultItem(callId, ctx.Function.Name, $"[BLOCKED] {blockMsg}", false, 0) { MessageId = messageId, Visibility = visibility }, ct);
+                    return $"[BLOCKED] {blockMsg}";
+                }
+            }
 
             var sw = Stopwatch.StartNew();
             bool success = true;
@@ -126,10 +147,10 @@ internal static class AgentFactory
                 _ => JsonSerializer.Serialize(result, JsonOpts)
             };
 
-            // ② 上报工具执行指标（可选，Development 调试用）
+            // ④ 上报工具执行指标（可选，Development 调试用）
             devMetrics?.RecordToolExecution(ctx.Function.Name, sw.ElapsedMilliseconds, success);
 
-            // ③ 发出工具结果事件（执行后）
+            // ⑤ 发出工具结果事件（执行后）
             await eventWriter.WriteAsync(
                 new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds) { MessageId = messageId, Visibility = visibility }, ct);
 

@@ -9,10 +9,15 @@ namespace MicroClaw.Agent;
 /// 替代 AgentRunner 中散落的 CollectBuiltinTools / FilterMcpTools / GetEnabledMcpServers 和
 /// ToolsEndpoints / AgentEndpoints 中的重复遍历逻辑。
 /// </summary>
+/// <remarks>
+/// <paramref name="mcpServerRegistry"/> 可选 — 提供时优先从进程内注册表查询 MCP Server 列表（零 DB 开销），
+/// 未提供时回退到 <paramref name="mcpServerConfigStore"/>（旧行为，向后兼容）。
+/// </remarks>
 public sealed class ToolCollector(
     IEnumerable<IToolProvider> providers,
     McpServerConfigStore mcpServerConfigStore,
-    ILoggerFactory loggerFactory)
+    ILoggerFactory loggerFactory,
+    IMcpServerRegistry? mcpServerRegistry = null)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<ToolCollector>();
 
@@ -117,7 +122,10 @@ public sealed class ToolCollector(
         }
 
         // ── MCP Server 分组 ─────────────────────────────────────────────────
-        IReadOnlyList<McpServerConfig> allServers = mcpServerConfigStore.All;
+        // 优先从注册表获取全量列表，回退到 Store
+        IReadOnlyList<McpServerConfig> allServers = mcpServerRegistry is not null
+            ? mcpServerRegistry.GetAll()
+            : mcpServerConfigStore.All;
         HashSet<string>? disabledIds = agent is not null && agent.DisabledMcpServerIds.Count > 0
             ? agent.DisabledMcpServerIds.ToHashSet()
             : null;
@@ -181,7 +189,10 @@ public sealed class ToolCollector(
     /// <summary>返回未被整体禁用的 MCP Server 配置列表（排除 Agent 级别禁用项）。</summary>
     private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
     {
-        IReadOnlyList<McpServerConfig> servers = mcpServerConfigStore.AllEnabled;
+        // 优先从进程内注册表查询（不走 DB），回退到 Store（旧行为）
+        IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null
+            ? mcpServerRegistry.GetAllEnabled()
+            : mcpServerConfigStore.AllEnabled;
         // 排除 Agent 级别禁用的 MCP Server
         if (agent.DisabledMcpServerIds.Count > 0)
         {

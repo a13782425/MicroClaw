@@ -27,8 +27,16 @@ public static class UsageEndpoints
 
                 await using GatewayDbContext db = await dbFactory.CreateDbContextAsync(ct);
 
-                List<UsageEntity> records = await db.Usages
-                    .Where(u => u.DayNumber >= startDay && u.DayNumber <= endDay)
+                IQueryable<UsageEntity> query = db.Usages
+                    .Where(u => u.DayNumber >= startDay && u.DayNumber <= endDay);
+
+                // 可选过滤：按 Agent 或 Session 缩窄范围
+                if (!string.IsNullOrWhiteSpace(req.AgentId))
+                    query = query.Where(u => u.AgentId == req.AgentId);
+                if (!string.IsNullOrWhiteSpace(req.SessionId))
+                    query = query.Where(u => u.SessionId == req.SessionId);
+
+                List<UsageEntity> records = await query
                     .OrderBy(u => u.DayNumber)
                     .ToListAsync(ct);
 
@@ -86,13 +94,37 @@ public static class UsageEndpoints
                     .OrderBy(d => d.Date)
                     .ToList();
 
+                // 按 Agent 聚合
+                var byAgent = records
+                    .GroupBy(u => u.AgentId ?? string.Empty)
+                    .Select(g => new AgentUsage(
+                        AgentId: g.Key,
+                        InputTokens: g.Sum(u => u.InputTokens),
+                        OutputTokens: g.Sum(u => u.OutputTokens),
+                        EstimatedCostUsd: CalcCost(g)))
+                    .OrderByDescending(a => a.InputTokens + a.OutputTokens)
+                    .ToList();
+
+                // 按 Session 聚合（排除无 SessionId 的记录）
+                var bySession = records
+                    .Where(u => !string.IsNullOrEmpty(u.SessionId))
+                    .GroupBy(u => u.SessionId!)
+                    .Select(g => new SessionUsage(
+                        SessionId: g.Key,
+                        InputTokens: g.Sum(u => u.InputTokens),
+                        OutputTokens: g.Sum(u => u.OutputTokens),
+                        EstimatedCostUsd: CalcCost(g)))
+                    .OrderByDescending(s => s.InputTokens + s.OutputTokens)
+                    .Take(50)
+                    .ToList();
+
                 // 汇总
                 var summary = new UsageSummary(
                     TotalInputTokens: records.Sum(u => u.InputTokens),
                     TotalOutputTokens: records.Sum(u => u.OutputTokens),
                     TotalCostUsd: CalcCost(records));
 
-                return Results.Ok(new UsageQueryResult(dailyFull, byProvider, bySource, dailyByProvider, summary));
+                return Results.Ok(new UsageQueryResult(dailyFull, byProvider, bySource, dailyByProvider, summary, byAgent, bySession));
             })
         .WithTags("Usage");
 
@@ -103,7 +135,11 @@ public static class UsageEndpoints
         Math.Round(records.Sum(u => u.InputCostUsd + u.OutputCostUsd + u.CacheInputCostUsd + u.CacheOutputCostUsd), 6);
 }
 
-public sealed record UsageQueryRequest(string StartDate, string EndDate);
+public sealed record UsageQueryRequest(
+    string StartDate,
+    string EndDate,
+    string? AgentId = null,
+    string? SessionId = null);
 
 public sealed record DailyUsage(string Date, long InputTokens, long OutputTokens, decimal EstimatedCostUsd);
 
@@ -118,11 +154,25 @@ public sealed record SourceUsage(string Source, long InputTokens, long OutputTok
 
 public sealed record DailyProviderUsage(string Date, string ProviderId, string ProviderName, decimal EstimatedCostUsd);
 
-public sealed record UsageSummary(long TotalInputTokens, long TotalOutputTokens, decimal TotalCostUsd);
+public sealed record AgentUsage(
+    string AgentId,
+    long InputTokens,
+    long OutputTokens,
+    decimal EstimatedCostUsd);
+
+public sealed record SessionUsage(
+    string SessionId,
+    long InputTokens,
+    long OutputTokens,
+    decimal EstimatedCostUsd);
 
 public sealed record UsageQueryResult(
     IReadOnlyList<DailyUsage> Daily,
     IReadOnlyList<ProviderUsage> ByProvider,
     IReadOnlyList<SourceUsage> BySource,
     IReadOnlyList<DailyProviderUsage> DailyByProvider,
-    UsageSummary Summary);
+    UsageSummary Summary,
+    IReadOnlyList<AgentUsage> ByAgent,
+    IReadOnlyList<SessionUsage> BySession);
+
+public sealed record UsageSummary(long TotalInputTokens, long TotalOutputTokens, decimal TotalCostUsd);

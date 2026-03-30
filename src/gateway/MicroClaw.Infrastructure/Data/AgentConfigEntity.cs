@@ -19,4 +19,12 @@ public sealed class AgentConfigEntity
     /// null = 允许调用所有子代理（默认）；空数组 "[]" = 禁止调用任何子代理；具体 ID 列表 = 仅允许调用指定子代理。
     /// </summary>
     public string? AllowedSubAgentIdsJson { get; set; }
+    /// <summary>
+    /// Provider 路由策略：Default / QualityFirst / CostFirst / LatencyFirst。
+    /// null 等同于 Default（向后兼容历史数据）。
+    /// </summary>
+    public string? RoutingStrategy { get; set; }
+
+    /// <summary>月度预算上限（USD）。null 表示不限制。超出时记录 Warning 日志。</summary>
+    public decimal? MonthlyBudgetUsd { get; set; }
 }
