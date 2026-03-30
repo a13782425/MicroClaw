@@ -84,14 +84,13 @@ public sealed class RagDbContextFactory
     /// </summary>
     private static void EvolveSchema(RagDbContext context)
     {
-        try
-        {
-            context.Database.ExecuteSqlRaw(
-                "ALTER TABLE vector_chunks ADD COLUMN last_accessed_at_ms INTEGER NULL");
-        }
-        catch (SqliteException ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
-        {
-            // 列已存在，忽略
-        }
+        TryAddColumn(context, "ALTER TABLE vector_chunks ADD COLUMN last_accessed_at_ms INTEGER NULL");
+        TryAddColumn(context, "ALTER TABLE vector_chunks ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private static void TryAddColumn(RagDbContext context, string sql)
+    {
+        try { context.Database.ExecuteSqlRaw(sql); }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 }

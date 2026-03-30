@@ -1,6 +1,7 @@
 using MicroClaw.Agent.Memory;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Providers;
+using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,7 @@ public sealed class MemorySummarizationJob(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     MemoryService memoryService,
+    IRagService ragService,
     ILogger<MemorySummarizationJob> logger) : BackgroundService
 {
     // 每天凌晨 2 点（UTC）执行
@@ -125,6 +127,24 @@ public sealed class MemorySummarizationJob(
 
             if (dayMessages.Count > 0)
             {
+                // Coordinate with ContextOverflowSummarizer: if daily memory already exists
+                // (from overflow), only summarize messages posted after the memory was last updated.
+                DailyMemoryInfo? existingDailyMemory = memoryService.GetDailyMemory(session.Id, dateStr);
+                if (existingDailyMemory is not null)
+                {
+                    dayMessages = dayMessages
+                        .Where(m => m.Timestamp > existingDailyMemory.UpdatedAt)
+                        .ToList();
+
+                    if (dayMessages.Count == 0)
+                    {
+                        logger.LogDebug(
+                            "B-02 Session={SessionId} 在 {Date} 已有溢出总结且无新消息，跳过",
+                            session.Id, dateStr);
+                        goto weeklyMerge;
+                    }
+                }
+
                 ProviderConfig? provider = providerStore.All
                     .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
 
@@ -149,6 +169,7 @@ public sealed class MemorySummarizationJob(
                 logger.LogDebug("B-02 Session={SessionId} 在 {Date} 无有效消息，跳过", session.Id, dateStr);
             }
 
+            weeklyMerge:
             // 2. 每周合并长期记忆（逢周一）
             if (doWeeklyMerge)
                 await MergeToLongTermAsync(session, ct);
@@ -159,7 +180,10 @@ public sealed class MemorySummarizationJob(
         }
     }
 
-    /// <summary>将 7-13 天前的日记忆合并到长期记忆 MEMORY.md（每周执行一次）。</summary>
+    /// <summary>
+    /// 将 7-13 天前的日记忆合并到长期记忆 MEMORY.md（每周执行一次）。
+    /// 合并后同步更新 RAG（memory:long-term），并删除 7 天前的日记忆文件及其 RAG chunks。
+    /// </summary>
     private async Task MergeToLongTermAsync(SessionInfo session, CancellationToken ct)
     {
         DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -192,6 +216,66 @@ public sealed class MemorySummarizationJob(
         string merged = await BuildWeeklyMergeAsync(existingMemory, dailyContents, client, ct);
         memoryService.UpdateLongTermMemory(session.Id, merged);
         logger.LogInformation("B-02 Session={SessionId} 长期记忆已合并更新", session.Id);
+
+        // Ingest merged long-term memory into session RAG
+        const string longTermSourceId = "memory:long-term";
+        try
+        {
+            await ragService.DeleteBySourceIdAsync(longTermSourceId, RagScope.Session, session.Id, ct);
+            await ragService.IngestAsync(merged, longTermSourceId, RagScope.Session, session.Id, ct);
+            logger.LogInformation("B-02 Session={SessionId} 长期记忆已同步到 RAG", session.Id);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "B-02 Session={SessionId} 长期记忆写入 RAG 异常", session.Id);
+        }
+
+        // Delete daily memory files older than 7 days and their RAG chunks
+        await CleanupOldDailyMemoriesAsync(session, today, ct);
+    }
+
+    /// <summary>
+    /// Delete daily memory .md files and corresponding RAG chunks for dates older than 7 days.
+    /// </summary>
+    private async Task CleanupOldDailyMemoriesAsync(SessionInfo session, DateOnly today, CancellationToken ct)
+    {
+        IReadOnlyList<string> allDates = memoryService.ListDailyMemories(session.Id);
+        int deletedCount = 0;
+
+        foreach (string date in allDates)
+        {
+            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out DateOnly memDate))
+                continue;
+
+            int daysAgo = today.DayNumber - memDate.DayNumber;
+            if (daysAgo <= 7) continue; // Keep recent 7 days for SessionMemoryContextProvider
+
+            // Delete RAG chunks for this daily memory
+            string sourceId = $"memory:{date}";
+            try
+            {
+                await ragService.DeleteBySourceIdAsync(sourceId, RagScope.Session, session.Id, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "B-02 Session={SessionId} 删除 RAG chunks {SourceId} 异常",
+                    session.Id, sourceId);
+            }
+
+            // Delete local .md file
+            if (memoryService.DeleteDailyMemory(session.Id, date))
+                deletedCount++;
+        }
+
+        if (deletedCount > 0)
+        {
+            logger.LogInformation(
+                "B-02 Session={SessionId} 清理了 {Count} 个过期日记忆文件及其 RAG chunks",
+                session.Id, deletedCount);
+        }
     }
 
     // ── 静态 helpers（internal 供测试调用）────────────────────────────────────

@@ -1,4 +1,5 @@
 using MicroClaw.Agent.Sessions;
+using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.RAG;
 using MicroClaw.Sessions;
@@ -242,10 +243,61 @@ public static class RagEndpoints
             })
             .WithTags("RAG");
 
+        // GET /api/rag/config — 获取 RAG 遗忘配置
+        endpoints.MapGet("/rag/config", () =>
+            {
+                var options = MicroClawConfig.Get<RagOptions>();
+                return Results.Ok(new RagConfigDto(options.MaxStorageSizeMb, options.PruneTargetPercent));
+            })
+            .WithTags("RAG");
+
+        // POST /api/rag/config — 更新 RAG 遗忘配置（持久化到 YAML + 热更新内存）
+        endpoints.MapPost("/rag/config",
+            (RagConfigDto req, IRagPruner pruner) =>
+            {
+                if (req.MaxStorageSizeMb <= 0)
+                    return Results.BadRequest(new { success = false, message = "maxStorageSizeMb 必须大于 0。", errorCode = "BAD_REQUEST" });
+                if (req.PruneTargetPercent is <= 0 or > 1)
+                    return Results.BadRequest(new { success = false, message = "pruneTargetPercent 必须在 (0, 1] 之间。", errorCode = "BAD_REQUEST" });
+
+                // 1. Update in-memory config
+                var updated = new RagOptions
+                {
+                    MaxStorageSizeMb = req.MaxStorageSizeMb,
+                    PruneTargetPercent = req.PruneTargetPercent,
+                };
+                MicroClawConfig.Update(updated);
+
+                // 2. Update RagPruner thresholds at runtime
+                if (pruner is RagPruner concretePruner)
+                    concretePruner.UpdateThresholds(req.MaxStorageSizeMb, req.PruneTargetPercent);
+
+                // 3. Persist to YAML (write to {home}/config/rag.yaml for $imports pickup)
+                try
+                {
+                    string configDir = Path.Combine(MicroClawConfig.Env.Home, "config");
+                    Directory.CreateDirectory(configDir);
+                    string yamlContent = $"""
+                                          rag:
+                                            maxStorageSizeMb: {req.MaxStorageSizeMb}
+                                            pruneTargetPercent: {req.PruneTargetPercent}
+                                          """;
+                    File.WriteAllText(Path.Combine(configDir, "rag.yaml"), yamlContent);
+                }
+                catch
+                {
+                    // Config update already applied in memory; YAML persistence failure is non-fatal
+                }
+
+                return Results.Ok(new { success = true, maxStorageSizeMb = req.MaxStorageSizeMb, pruneTargetPercent = req.PruneTargetPercent });
+            })
+            .WithTags("RAG");
+
         return endpoints;
     }
 
     private sealed record DeleteDocumentRequest(string SourceId);
     private sealed record ReindexDocumentRequest(string SourceId);
     internal sealed record SessionRagStatusDto(string SessionId, int IndexedMessageCount, long? LastIndexedAtMs);
+    internal sealed record RagConfigDto(double MaxStorageSizeMb, double PruneTargetPercent);
 }

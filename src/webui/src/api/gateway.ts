@@ -1245,3 +1245,20 @@ export async function getRagQueryStats(scope?: 'Global' | 'Session'): Promise<Ra
   const { data } = await request.get<RagQueryStats>('/api/rag/stats', { params })
   return data
 }
+
+// ─── RAG Config ───────────────────────────────────────────────────────────────
+
+export type RagConfig = {
+  maxStorageSizeMb: number
+  pruneTargetPercent: number
+}
+
+export async function getRagConfig(): Promise<RagConfig> {
+  const { data } = await request.get<RagConfig>('/api/rag/config')
+  return data
+}
+
+export async function updateRagConfig(config: RagConfig): Promise<{ success: boolean }> {
+  const { data } = await request.post<{ success: boolean }>('/api/rag/config', config)
+  return data
+}

@@ -18,17 +18,20 @@ public sealed class RagService : IRagService
     private readonly RagDbContextFactory _dbFactory;
     private readonly HybridSearchService _hybridSearch;
     private readonly RagStatsDbContextFactory? _statsFactory;
+    private readonly IRagPruner? _pruner;
 
     public RagService(
         IEmbeddingService embedding,
         RagDbContextFactory dbFactory,
         HybridSearchService hybridSearch,
-        RagStatsDbContextFactory? statsFactory = null)
+        RagStatsDbContextFactory? statsFactory = null,
+        IRagPruner? pruner = null)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _hybridSearch = hybridSearch ?? throw new ArgumentNullException(nameof(hybridSearch));
         _statsFactory = statsFactory;
+        _pruner = pruner;
     }
 
     /// <inheritdoc/>
@@ -71,6 +74,8 @@ public sealed class RagService : IRagService
         using var db = _dbFactory.Create(scope, sessionId);
         db.VectorChunks.AddRange(entities);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        FirePruneIfNeeded(scope, sessionId);
     }
 
     /// <inheritdoc/>
@@ -198,6 +203,8 @@ public sealed class RagService : IRagService
         using var db = _dbFactory.Create(scope, sessionId);
         db.VectorChunks.AddRange(entities);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        FirePruneIfNeeded(scope, sessionId);
     }
 
     /// <inheritdoc/>
@@ -251,6 +258,8 @@ public sealed class RagService : IRagService
         using var db = _dbFactory.Create(scope, sessionId);
         db.VectorChunks.AddRange(entities);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        FirePruneIfNeeded(scope, sessionId);
 
         return sourceId;
     }
@@ -351,5 +360,24 @@ public sealed class RagService : IRagService
         }
         catch (JsonException) { }
         return null;
+    }
+
+    /// <summary>
+    /// Fire-and-forget prune check after ingest. Does not block the ingest response.
+    /// </summary>
+    private void FirePruneIfNeeded(RagScope scope, string? sessionId)
+    {
+        if (_pruner is null) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _pruner.PruneIfNeededAsync(scope, sessionId);
+            }
+            catch (Exception)
+            {
+                // Logged inside RagPruner; swallow here to avoid unobserved task exception.
+            }
+        });
     }
 }

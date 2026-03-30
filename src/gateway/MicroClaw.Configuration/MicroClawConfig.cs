@@ -21,6 +21,7 @@ public static class MicroClawConfig
         [typeof(SkillOptions)] = "skills",
         [typeof(FileToolsOptions)] = "filesystem",
         [typeof(AgentOptions)] = "agent",
+        [typeof(RagOptions)] = "rag",
     };
 
     /// <summary>
@@ -50,6 +51,22 @@ public static class MicroClawConfig
 
         throw new InvalidOperationException(
             $"配置类型 {typeof(T).Name} 未注册。请在 MicroClawConfig.SectionMap 中添加映射。");
+    }
+
+    /// <summary>
+    /// Hot-update a registered options instance in memory (does NOT persist to YAML).
+    /// Used when API endpoints modify config at runtime.
+    /// </summary>
+    public static void Update<T>(T value) where T : class, new()
+    {
+        if (_options is null)
+            throw new InvalidOperationException("MicroClawConfig 尚未初始化。");
+
+        if (!SectionMap.ContainsKey(typeof(T)))
+            throw new InvalidOperationException(
+                $"配置类型 {typeof(T).Name} 未注册。请在 MicroClawConfig.SectionMap 中添加映射。");
+
+        _options[typeof(T)] = value;
     }
 
     /// <summary>

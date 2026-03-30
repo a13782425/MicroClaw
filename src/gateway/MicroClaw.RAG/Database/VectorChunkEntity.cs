@@ -25,4 +25,7 @@ public sealed class VectorChunkEntity
 
     /// <summary>最近一次被检索命中的时间：Unix 毫秒时间戳。null 表示从未被访问过。</summary>
     public long? LastAccessedAtMs { get; set; }
+
+    /// <summary>被检索命中的累计次数，用于遗忘机制中判定重要性。</summary>
+    public int HitCount { get; set; }
 }

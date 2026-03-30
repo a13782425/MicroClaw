@@ -3,7 +3,6 @@ using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Agent.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Gateway.Contracts;
@@ -165,7 +164,6 @@ public static class SessionEndpoints
                    ProviderConfigStore providerStore,
                    AgentStore agentStore, AgentRunner agentRunner,
                    IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers,
-                   ISessionMessageIndexer messageIndexer,
                    HttpContext ctx, CancellationToken ct) =>
             {
                 SessionInfo? session = store.Get(id);
@@ -255,10 +253,6 @@ public static class SessionEndpoints
                     }, JsonOpts);
                     await WriteSseAsync(ctx.Response, doneData, ct);
                     await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
-
-                    // 触发异步增量索引（fire-and-forget，不阻塞 SSE 响应）
-                    IReadOnlyList<SessionMessage> allMessages = store.GetMessages(id);
-                    _ = messageIndexer.IndexNewMessagesAsync(id, allMessages, CancellationToken.None);
                 }
                 catch (OperationCanceledException)
                 {

@@ -4,6 +4,7 @@ using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Jobs;
 using MicroClaw.Providers;
+using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using Microsoft.EntityFrameworkCore;
@@ -270,6 +271,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
         // ── 创建 Job 并执行 ───────────────────────────────────────────────────
         var job = new MemorySummarizationJob(
             sessionStore, providerStore, clientFactory, _memory,
+            Substitute.For<IRagService>(),
             NullLogger<MemorySummarizationJob>.Instance);
 
         await job.RunSummarizationAsync(targetDate, doWeeklyMerge: false, CancellationToken.None);
@@ -306,6 +308,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
 
         var job = new MemorySummarizationJob(
             sessionStore, providerStore, clientFactory, _memory,
+            Substitute.For<IRagService>(),
             NullLogger<MemorySummarizationJob>.Instance);
 
         DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
@@ -359,6 +362,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
 
         var job = new MemorySummarizationJob(
             sessionStore, providerStore, clientFactory, _memory,
+            Substitute.For<IRagService>(),
             NullLogger<MemorySummarizationJob>.Instance);
 
         DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));

@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Sessions;
+using MicroClaw.Agent.Memory;
 using MicroClaw.Agent.Middleware;
 using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
@@ -49,7 +50,8 @@ public sealed class AgentRunner(
     IEmotionBehaviorMapper? emotionBehaviorMapper = null,
     IToolRiskRegistry? toolRiskRegistry = null,
     IToolRiskInterceptor? toolRiskInterceptor = null,
-    IProviderRouter? providerRouter = null) : IAgentMessageHandler
+    IProviderRouter? providerRouter = null,
+    IContextOverflowSummarizer? contextOverflowSummarizer = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
@@ -62,6 +64,7 @@ public sealed class AgentRunner(
     private readonly IToolRiskRegistry? _toolRiskRegistry = toolRiskRegistry;
     private readonly IToolRiskInterceptor? _toolRiskInterceptor = toolRiskInterceptor;
     private readonly IProviderRouter? _providerRouter = providerRouter;
+    private readonly IContextOverflowSummarizer? _contextOverflowSummarizer = contextOverflowSummarizer;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -205,7 +208,8 @@ public sealed class AgentRunner(
 
                 List<ChatMessage> messages = await BuildChatMessagesAsync(
                     agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
-                    behaviorSuffix: behaviorProfile?.SystemPromptSuffix, ct);
+                    behaviorSuffix: behaviorProfile?.SystemPromptSuffix,
+                    providerId: provider.Id, ct);
 
                 // 工具收集
                 SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
@@ -478,7 +482,7 @@ public sealed class AgentRunner(
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
-    private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, string? behaviorSuffix = null, CancellationToken ct = default)
+    private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, string? behaviorSuffix = null, string? providerId = null, CancellationToken ct = default)
     {
         // 提取最后一条用户消息，供 IUserAwareContextProvider（如 RagContextProvider）进行语义检索
         string? latestUserMessage = history
@@ -497,9 +501,22 @@ public sealed class AgentRunner(
             messages.Add(new ChatMessage(ChatRole.System, systemPrompt));
 
         // 应用滑动窗口：若配置了 ContextWindowMessages，只取最近 N 条消息传给 LLM
-        IEnumerable<SessionMessage> windowed = agent.ContextWindowMessages.HasValue
-            ? history.TakeLast(agent.ContextWindowMessages.Value)
-            : history;
+        IEnumerable<SessionMessage> windowed;
+        if (agent.ContextWindowMessages.HasValue && history.Count > agent.ContextWindowMessages.Value)
+        {
+            windowed = history.TakeLast(agent.ContextWindowMessages.Value);
+
+            // 触发异步溢出总结（fire-and-forget）
+            if (_contextOverflowSummarizer is not null && !string.IsNullOrWhiteSpace(sessionId) && !string.IsNullOrWhiteSpace(providerId))
+            {
+                var overflowMessages = history.Take(history.Count - agent.ContextWindowMessages.Value).ToList();
+                _ = _contextOverflowSummarizer.SummarizeAsync(sessionId, providerId, overflowMessages, CancellationToken.None);
+            }
+        }
+        else
+        {
+            windowed = history;
+        }
 
         // 过滤不可见消息，按 Id 分组，保持插入顺序
         var groups = new List<(string Id, List<SessionMessage> Items)>();

@@ -86,6 +86,18 @@ public sealed class MemoryService(string sessionsDir)
         File.WriteAllText(DailyPath(sessionId, date), content);
     }
 
+    /// <summary>删除指定日期的每日记忆文件。文件不存在时静默返回 false。</summary>
+    public bool DeleteDailyMemory(string sessionId, string date)
+    {
+        if (!IsValidDateFormat(date)) return false;
+
+        string path = DailyPath(sessionId, date);
+        if (!File.Exists(path)) return false;
+
+        File.Delete(path);
+        return true;
+    }
+
     /// <summary>列出所有每日记忆文件（按日期降序排列），返回日期字符串列表。</summary>
     public IReadOnlyList<string> ListDailyMemories(string sessionId)
     {

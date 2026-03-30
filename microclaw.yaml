@@ -6,3 +6,8 @@
 
 $imports:
   - ./config/*.yaml
+
+# RAG auto-forget configuration
+rag:
+  maxStorageSizeMb: 50
+  pruneTargetPercent: 0.8

@@ -199,12 +199,20 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IEmbeddingService, DynamicEmbeddingService>();
 		builder.Services.AddSingleton<HybridSearchService>();
 		builder.Services.AddSingleton<RagStatsDbContextFactory>(_ => new RagStatsDbContextFactory(workspaceRoot));
+		var ragOptions = MicroClawConfig.Get<RagOptions>();
+		builder.Services.AddSingleton<IRagPruner>(sp => new RagPruner(
+			sp.GetRequiredService<RagDbContextFactory>(),
+			sp.GetRequiredService<ILogger<RagPruner>>(),
+			ragOptions.MaxStorageSizeMb,
+			ragOptions.PruneTargetPercent));
 		builder.Services.AddSingleton<IRagService>(sp => new RagService(
 			sp.GetRequiredService<IEmbeddingService>(),
 			sp.GetRequiredService<RagDbContextFactory>(),
 			sp.GetRequiredService<HybridSearchService>(),
-			sp.GetRequiredService<RagStatsDbContextFactory>()));
+			sp.GetRequiredService<RagStatsDbContextFactory>(),
+			sp.GetRequiredService<IRagPruner>()));
 		builder.Services.AddSingleton<ISessionMessageIndexer, SessionMessageIndexer>();
+		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
 		// 情绪系统服务
 		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
