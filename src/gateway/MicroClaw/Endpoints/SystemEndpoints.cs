@@ -13,6 +13,7 @@ public static class SystemEndpoints
                 p.Id,
                 p.DisplayName,
                 Protocol = SerializeProtocol(p.Protocol),
+                ModelType = SerializeModelType(p.ModelType),
                 p.BaseUrl,
                 ApiKey = MaskApiKey(p.ApiKey),
                 p.ModelName,
@@ -38,6 +39,7 @@ public static class SystemEndpoints
             {
                 DisplayName = req.DisplayName.Trim(),
                 Protocol = ParseProtocol(req.Protocol),
+                ModelType = ParseModelType(req.ModelType),
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey.Trim(),
                 ModelName = req.ModelName.Trim(),
@@ -60,6 +62,7 @@ public static class SystemEndpoints
             {
                 DisplayName = req.DisplayName?.Trim() ?? string.Empty,
                 Protocol = ParseProtocol(req.Protocol),
+                ModelType = ParseModelType(req.ModelType),
                 BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey?.Trim() ?? string.Empty,
                 ModelName = req.ModelName?.Trim() ?? string.Empty,
@@ -129,6 +132,20 @@ public static class SystemEndpoints
             ProviderProtocol.Anthropic => "anthropic",
             _ => "openai"
         };
+
+    private static ModelType ParseModelType(string? value) =>
+        value?.ToLowerInvariant() switch
+        {
+            "embedding" => ModelType.Embedding,
+            _ => ModelType.Chat
+        };
+
+    private static string SerializeModelType(ModelType modelType) =>
+        modelType switch
+        {
+            ModelType.Embedding => "embedding",
+            _ => "chat"
+        };
 }
 
 public sealed record ProviderCreateRequest(
@@ -139,7 +156,8 @@ public sealed record ProviderCreateRequest(
     string ModelName,
     int MaxOutputTokens = 8192,
     bool IsEnabled = true,
-    ProviderCapabilities? Capabilities = null);
+    ProviderCapabilities? Capabilities = null,
+    string? ModelType = "chat");
 
 public sealed record ProviderUpdateRequest(
     string Id,
@@ -150,7 +168,8 @@ public sealed record ProviderUpdateRequest(
     string? ModelName,
     int? MaxOutputTokens = null,
     bool IsEnabled = true,
-    ProviderCapabilities? Capabilities = null);
+    ProviderCapabilities? Capabilities = null,
+    string? ModelType = null);
 
 public sealed record ProviderDeleteRequest(string Id);
 

@@ -57,13 +57,21 @@ public sealed class RagContextProvider : IUserAwareContextProvider
             // 确定检索作用域：有 sessionId 时使用 Session（合并全局+会话），否则仅检索全局
             RagScope scope = string.IsNullOrWhiteSpace(sessionId) ? RagScope.Global : RagScope.Session;
 
+            _logger.LogInformation("RAG 检索开始 (session={SessionId}, scope={Scope}, query={Query})",
+                sessionId, scope, userMessage.Length > 60 ? userMessage[..60] + "..." : userMessage);
+
             string content = await _ragService
                 .QueryAsync(userMessage, scope, sessionId, ct)
                 .ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(content))
+            {
+                _logger.LogInformation("RAG 检索无命中，跳过注入 (session={SessionId})", sessionId);
                 return null;
+            }
 
+            _logger.LogInformation("RAG 检索命中，已注入上下文 (session={SessionId}, contentLen={Len})",
+                sessionId, content.Length);
             return $"## RAG 相关知识\n\n{content}";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

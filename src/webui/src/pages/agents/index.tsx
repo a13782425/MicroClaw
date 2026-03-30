@@ -980,6 +980,28 @@ function AgentDetail({
     }
   }
 
+  const [contextWindowInput, setContextWindowInput] = useState(
+    agent.contextWindowMessages != null ? String(agent.contextWindowMessages) : ''
+  )
+  const [savingContextWindow, setSavingContextWindow] = useState(false)
+  const handleContextWindowSave = async () => {
+    const parsed = contextWindowInput.trim() === '' ? null : parseInt(contextWindowInput, 10)
+    if (contextWindowInput.trim() !== '' && (isNaN(parsed!) || parsed! < 1)) {
+      toaster.create({ type: 'error', title: '上下文窗口须为正整数或留空（不限制）' })
+      return
+    }
+    setSavingContextWindow(true)
+    try {
+      await updateAgent({ id: agent.id, contextWindowMessages: parsed, hasContextWindowMessages: true })
+      onUpdated({ ...agent, contextWindowMessages: parsed })
+      toaster.create({ type: 'success', title: parsed == null ? '上下文窗口限制已清除' : '上下文窗口已更新' })
+    } catch {
+      toaster.create({ type: 'error', title: '上下文窗口更新失败' })
+    } finally {
+      setSavingContextWindow(false)
+    }
+  }
+
   const handleDelete = async () => {
     setDeleting(true)
     try {
@@ -1138,6 +1160,26 @@ function AgentDetail({
                   onChange={(e) => setBudgetInput(e.target.value)}
                 />
                 <Button size="sm" colorPalette="blue" loading={savingBudget} onClick={handleBudgetSave}>
+                  保存
+                </Button>
+              </HStack>
+            </Box>
+            {/* 上下文窗口配置 */}
+            <Box mt="4">
+              <Text fontSize="xs" color="gray.500" mb="1">上下文窗口（条）</Text>
+              <Text fontSize="xs" color="gray.400" mb="2">发送给 LLM 的最近消息条数。配合 RAG 使用时建议设为 20-50，留空表示全量历史（不限制）。</Text>
+              <HStack>
+                <Input
+                  size="sm"
+                  maxW="160px"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="不限制"
+                  value={contextWindowInput}
+                  onChange={(e) => setContextWindowInput(e.target.value)}
+                />
+                <Button size="sm" colorPalette="blue" loading={savingContextWindow} onClick={handleContextWindowSave}>
                   保存
                 </Button>
               </HStack>

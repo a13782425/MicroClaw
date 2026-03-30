@@ -194,18 +194,9 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
 		builder.Services.AddSingleton<ProviderEmbeddingFactory>();
 		builder.Services.AddSingleton<RagDbContextFactory>(_ => new RagDbContextFactory(workspaceRoot));
-		builder.Services.AddSingleton<IEmbeddingService>(sp =>
-		{
-			var configStore = sp.GetRequiredService<ProviderConfigStore>();
-			var embeddingFactory = sp.GetRequiredService<ProviderEmbeddingFactory>();
-			var config = configStore.All.FirstOrDefault(p => p.IsEnabled && p.Capabilities.SupportsEmbedding);
-			if (config is null)
-			{
-				Log.Warning("未配置支持 Embedding 的 Provider，RAG 将降级为纯关键词检索");
-				return new NullEmbeddingService();
-			}
-			return new EmbeddingService(embeddingFactory.Create(config));
-		});
+		// EmbeddingProviderAccessor 每次调用时实时读取 DB，支持运行时热切换 Embedding Provider
+		builder.Services.AddSingleton<IEmbeddingProviderAccessor, EmbeddingProviderAccessor>();
+		builder.Services.AddSingleton<IEmbeddingService, DynamicEmbeddingService>();
 		builder.Services.AddSingleton<HybridSearchService>();
 		builder.Services.AddSingleton<RagStatsDbContextFactory>(_ => new RagStatsDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IRagService>(sp => new RagService(

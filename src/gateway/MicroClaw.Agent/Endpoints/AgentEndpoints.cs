@@ -81,7 +81,7 @@ public static class AgentEndpoints
                 IsEnabled = req.IsEnabled ?? existing.IsEnabled,
                 DisabledSkillIds = req.DisabledSkillIds ?? existing.DisabledSkillIds,
                 DisabledMcpServerIds = req.DisabledMcpServerIds ?? existing.DisabledMcpServerIds,
-                ContextWindowMessages = req.ContextWindowMessages ?? existing.ContextWindowMessages,
+                ContextWindowMessages = req.HasContextWindowMessages ? req.ContextWindowMessages : existing.ContextWindowMessages,
                 ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
                 AllowedSubAgentIds = req.HasAllowedSubAgentIds ? req.AllowedSubAgentIds : existing.AllowedSubAgentIds,
                 RoutingStrategy = req.RoutingStrategy is not null
@@ -329,6 +329,8 @@ public sealed record AgentUpdateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
+    /// <summary>是否明确传入 ContextWindowMessages（用于区分 null=未传 vs null=清除限制）。</summary>
+    bool HasContextWindowMessages = false,
     bool? ExposeAsA2A = null,
     IReadOnlyList<string>? AllowedSubAgentIds = null,
     /// <summary>

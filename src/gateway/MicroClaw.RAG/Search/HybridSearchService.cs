@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.RAG;
 
@@ -9,11 +10,13 @@ public sealed class HybridSearchService
 {
     private readonly IEmbeddingService _embedding;
     private readonly RagDbContextFactory _dbFactory;
+    private readonly ILogger<HybridSearchService> _logger;
 
-    public HybridSearchService(IEmbeddingService embedding, RagDbContextFactory dbFactory)
+    public HybridSearchService(IEmbeddingService embedding, RagDbContextFactory dbFactory, ILogger<HybridSearchService> logger)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>执行混合检索。</summary>
@@ -46,7 +49,7 @@ public sealed class HybridSearchService
         return results;
     }
 
-    /// <summary>语义检索：query → 向量化 → 余弦相似度 Top-K。</summary>
+    /// <summary>语义检索：query → 向量化 → 余弦相似度 Top-K。embedding 失败时降级返回空结果。</summary>
     private async Task<Dictionary<string, (VectorChunkEntity Entity, float Score)>> SemanticSearchAsync(
         string query,
         RagScope scope,
@@ -54,7 +57,16 @@ public sealed class HybridSearchService
         HybridSearchOptions options,
         CancellationToken ct)
     {
-        var queryVec = await _embedding.GenerateAsync(query, ct).ConfigureAwait(false);
+        ReadOnlyMemory<float> queryVec;
+        try
+        {
+            queryVec = await _embedding.GenerateAsync(query, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Embedding 向量化失败，语义检索将被跳过，降级为纯关键词检索");
+            return new Dictionary<string, (VectorChunkEntity, float)>();
+        }
         var candidateCount = options.TopK * options.SemanticCandidateMultiplier;
 
         using var db = _dbFactory.Create(scope, sessionId);

@@ -5,6 +5,7 @@ public sealed class ProviderConfigEntity
     public string Id { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string Protocol { get; set; } = string.Empty;
+    public string ModelType { get; set; } = "chat";
     public string? BaseUrl { get; set; }
     public string ApiKey { get; set; } = string.Empty;
     public string ModelName { get; set; } = string.Empty;

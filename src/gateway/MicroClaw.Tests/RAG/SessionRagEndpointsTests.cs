@@ -6,6 +6,7 @@ using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.RAG;
@@ -198,7 +199,7 @@ public class SessionRagEndpointsTests : IDisposable
                 return Task.FromResult(vecs);
             });
 
-        var hybridSearch = new HybridSearchService(embedding, _dbFactory);
+        var hybridSearch = new HybridSearchService(embedding, _dbFactory, NullLogger<HybridSearchService>.Instance);
         var ragService = new RagService(embedding, _dbFactory, hybridSearch);
         var indexer = new SessionMessageIndexer(ragService, Microsoft.Extensions.Logging.Abstractions.NullLogger<SessionMessageIndexer>.Instance);
 

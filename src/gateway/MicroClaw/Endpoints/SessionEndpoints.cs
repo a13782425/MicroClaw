@@ -41,6 +41,8 @@ public static class SessionEndpoints
             ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
+            if (provider.ModelType == ModelType.Embedding)
+                return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
 
             // 解析 ChannelId：默认使用内置 web channel
             string channelId = string.IsNullOrWhiteSpace(req.ChannelId)
@@ -124,6 +126,8 @@ public static class SessionEndpoints
             ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null || !provider.IsEnabled)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found or disabled.", errorCode = "NOT_FOUND" });
+            if (provider.ModelType == ModelType.Embedding)
+                return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
 
             SessionInfo? updated = store.UpdateProvider(req.Id, req.ProviderId);
             return updated is null

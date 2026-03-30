@@ -6,6 +6,12 @@ public enum ProviderProtocol
     Anthropic
 }
 
+public enum ModelType
+{
+    Chat,
+    Embedding
+}
+
 /// <summary>
 /// Provider 的能力描述，包含输入/输出模态、特殊功能及价格信息。
 /// 以 JSON 形式持久化到数据库，便于后续扩展新字段。
@@ -30,6 +36,10 @@ public sealed record ProviderCapabilities
     public bool SupportsResponsesApi { get; init; }
     public bool SupportsEmbedding { get; init; }
 
+    // Embedding 专用
+    public int? OutputDimensions { get; init; }
+    public int? MaxInputTokens { get; init; }
+
     // 价格（$/1M tokens）
     public decimal? InputPricePerMToken { get; init; }
     public decimal? OutputPricePerMToken { get; init; }
@@ -51,6 +61,7 @@ public sealed record ProviderConfig
     public string Id { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public ProviderProtocol Protocol { get; init; } = ProviderProtocol.OpenAI;
+    public ModelType ModelType { get; init; } = ModelType.Chat;
     public string? BaseUrl { get; init; }
     public string ApiKey { get; init; } = string.Empty;
     public string ModelName { get; init; } = string.Empty;

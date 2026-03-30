@@ -46,6 +46,7 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.ModelName).HasColumnName("model_name");
             b.Property(e => e.MaxOutputTokens).HasColumnName("max_output_tokens").HasDefaultValue(8192);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            b.Property(e => e.ModelType).HasColumnName("model_type").HasDefaultValue("chat");
             b.Property(e => e.IsDefault).HasColumnName("is_default").HasDefaultValue(false);
             b.Property(e => e.CapabilitiesJson).HasColumnName("capabilities_json");
         });

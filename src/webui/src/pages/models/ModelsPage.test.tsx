@@ -29,6 +29,7 @@ const mockProviders: ProviderConfig[] = [
     maxOutputTokens: 8192,
     isEnabled: true,
     isDefault: true,
+    modelType: 'chat',
     capabilities: {
       inputText: true,
       inputImage: true,
@@ -48,6 +49,8 @@ const mockProviders: ProviderConfig[] = [
       notes: null,
       qualityScore: 80,
       latencyTier: 'Medium',
+      outputDimensions: null,
+      maxInputTokens: null,
     },
   },
   {
@@ -60,6 +63,7 @@ const mockProviders: ProviderConfig[] = [
     maxOutputTokens: 16000,
     isEnabled: false,
     isDefault: false,
+    modelType: 'chat',
     capabilities: {
       inputText: true,
       inputImage: false,
@@ -79,6 +83,8 @@ const mockProviders: ProviderConfig[] = [
       notes: null,
       qualityScore: 50,
       latencyTier: 'High',
+      outputDimensions: null,
+      maxInputTokens: null,
     },
   },
 ]

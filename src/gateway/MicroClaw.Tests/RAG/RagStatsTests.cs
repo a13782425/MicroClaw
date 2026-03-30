@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using MicroClaw.RAG;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.RAG;
@@ -122,7 +123,7 @@ public class RagStatsTests : IDisposable
                     .ToList();
                 return Task.FromResult(vecs);
             });
-        var hybridSearch = new HybridSearchService(embedding, ragFactory);
+        var hybridSearch = new HybridSearchService(embedding, ragFactory, NullLogger<HybridSearchService>.Instance);
         return new RagService(embedding, ragFactory, hybridSearch, _statsFactory);
     }
 
@@ -142,7 +143,7 @@ public class RagStatsTests : IDisposable
     {
         var ragFactory = new RagDbContextFactory(_tempDir);
         var embedding = Substitute.For<IEmbeddingService>();
-        var hybridSearch = new HybridSearchService(embedding, ragFactory);
+        var hybridSearch = new HybridSearchService(embedding, ragFactory, NullLogger<HybridSearchService>.Instance);
         var sut = new RagService(embedding, ragFactory, hybridSearch); // 不注入 statsFactory
 
         var stats = await sut.GetQueryStatsAsync(null);

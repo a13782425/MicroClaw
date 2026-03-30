@@ -20,16 +20,27 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
     }
 
     /// <summary>
-    /// 返回当前设置为默认且已启用的 Provider；若无默认则返回第一个已启用的 Provider。
+    /// 返回当前设置为默认且已启用的 Chat 类型 Provider；若无默认则返回第一个已启用的 Chat Provider。
     /// </summary>
     public ProviderConfig? GetDefault()
     {
         using GatewayDbContext db = factory.CreateDbContext();
         return db.Providers
-            .Where(p => p.IsEnabled)
+            .Where(p => p.IsEnabled && p.ModelType != "embedding")
             .OrderByDescending(p => p.IsDefault)
             .Select(e => ToConfig(e))
             .FirstOrDefault();
+    }
+
+    /// <summary>返回所有已启用的 Embedding 类型 Provider，供 RAG 等服务调用。</summary>
+    public IReadOnlyList<ProviderConfig> GetEmbeddingProviders()
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        return db.Providers
+            .Where(p => p.IsEnabled && p.ModelType == "embedding")
+            .Select(e => ToConfig(e))
+            .ToList()
+            .AsReadOnly();
     }
 
     public ProviderConfig Add(ProviderConfig config)
@@ -53,6 +64,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
 
         entity.DisplayName = incoming.DisplayName;
         entity.Protocol = SerializeProtocol(incoming.Protocol);
+        entity.ModelType = SerializeModelType(incoming.ModelType);
         entity.BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl;
         entity.ModelName = incoming.ModelName;
         entity.MaxOutputTokens = incoming.MaxOutputTokens;
@@ -93,6 +105,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             Id = e.Id,
             DisplayName = e.DisplayName,
             Protocol = ParseProtocol(e.Protocol),
+            ModelType = ParseModelType(e.ModelType),
             BaseUrl = string.IsNullOrWhiteSpace(e.BaseUrl) ? null : e.BaseUrl,
             ApiKey = ResolveEnvVars(e.ApiKey) ?? string.Empty,
             ModelName = ResolveEnvVars(e.ModelName) ?? string.Empty,
@@ -108,6 +121,7 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             Id = c.Id,
             DisplayName = c.DisplayName,
             Protocol = SerializeProtocol(c.Protocol),
+            ModelType = SerializeModelType(c.ModelType),
             BaseUrl = string.IsNullOrWhiteSpace(c.BaseUrl) ? null : c.BaseUrl,
             ApiKey = c.ApiKey,
             ModelName = c.ModelName,
@@ -133,6 +147,20 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             ProviderProtocol.OpenAI => "openai",
             ProviderProtocol.Anthropic => "anthropic",
             _ => "openai"
+        };
+
+    private static ModelType ParseModelType(string? value) =>
+        value?.ToLowerInvariant() switch
+        {
+            "embedding" => ModelType.Embedding,
+            _ => ModelType.Chat
+        };
+
+    private static string SerializeModelType(ModelType modelType) =>
+        modelType switch
+        {
+            ModelType.Embedding => "embedding",
+            _ => "chat"
         };
 
     private static ProviderCapabilities DeserializeCapabilities(string? json)

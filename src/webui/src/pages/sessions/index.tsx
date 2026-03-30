@@ -215,7 +215,7 @@ export default function SessionsPage() {
   useEffect(() => {
     fetchSessions()
     Promise.all([listProviders(), listChannels(), listAgents()]).then(([ps, cs, as]) => {
-      setProviders(ps.filter((p) => p.isEnabled))
+      setProviders(ps.filter((p) => p.isEnabled && p.modelType === 'chat'))
       setChannels(cs.filter((c) => c.isEnabled))
       setAgents(as.filter((a) => a.isEnabled))
     })

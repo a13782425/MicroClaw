@@ -31,6 +31,8 @@ export async function login(username: string, password: string) {
 
 export type ProviderProtocol = 'openai' | 'anthropic'
 
+export type ModelType = 'chat' | 'embedding'
+
 export type ProviderCapabilities = {
   inputText: boolean
   inputImage: boolean
@@ -51,12 +53,16 @@ export type ProviderCapabilities = {
   // 路由策略权重
   qualityScore: number
   latencyTier: string
+  // Embedding 专用
+  outputDimensions: number | null
+  maxInputTokens: number | null
 }
 
 export type ProviderConfig = {
   id: string
   displayName: string
   protocol: ProviderProtocol
+  modelType: ModelType
   baseUrl: string | null
   apiKey: string
   modelName: string
@@ -69,6 +75,7 @@ export type ProviderConfig = {
 export type ProviderCreateRequest = {
   displayName: string
   protocol: ProviderProtocol
+  modelType: ModelType
   baseUrl?: string
   apiKey: string
   modelName: string
@@ -81,6 +88,7 @@ export type ProviderUpdateRequest = {
   id: string
   displayName?: string
   protocol?: ProviderProtocol
+  modelType?: ModelType
   baseUrl?: string
   apiKey?: string
   modelName?: string
@@ -517,6 +525,7 @@ export type AgentConfig = {
   allowedSubAgentIds: string[] | null
   routingStrategy: string
   monthlyBudgetUsd: number | null
+  contextWindowMessages: number | null
 }
 
 export type AgentCreateRequest = {
@@ -541,6 +550,8 @@ export type AgentUpdateRequest = {
   routingStrategy?: string
   monthlyBudgetUsd?: number | null
   hasMonthlyBudgetUsd?: boolean
+  contextWindowMessages?: number | null
+  hasContextWindowMessages?: boolean
 }
 
 export type ToolItem = {

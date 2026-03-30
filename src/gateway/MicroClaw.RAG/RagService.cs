@@ -109,10 +109,9 @@ public sealed class RagService : IRagService
             allResults.AddRange(await globalTask.ConfigureAwait(false));
         }
 
-        sw.Stop();
-
         if (allResults.Count == 0)
         {
+            sw.Stop();
             RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, 0);
             return string.Empty;
         }
@@ -125,6 +124,7 @@ public sealed class RagService : IRagService
             .Take(options.TopK)
             .ToList();
 
+        sw.Stop();
         RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, merged.Count);
 
         return string.Join("\n---\n", merged.Select(r => r.Record.Content));

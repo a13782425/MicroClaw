@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using MicroClaw.RAG;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.RAG;
@@ -26,7 +27,7 @@ public class HybridSearchServiceTests : IDisposable
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private HybridSearchService CreateSut() => new(_embedding, _factory);
+    private HybridSearchService CreateSut() => new(_embedding, _factory, NullLogger<HybridSearchService>.Instance);
 
     private static VectorChunkEntity MakeEntity(string id, string content, float[]? vec = null)
     {
@@ -60,14 +61,14 @@ public class HybridSearchServiceTests : IDisposable
     [Fact]
     public void Ctor_NullEmbedding_Throws()
     {
-        var act = () => new HybridSearchService(null!, _factory);
+        var act = () => new HybridSearchService(null!, _factory, NullLogger<HybridSearchService>.Instance);
         act.Should().Throw<ArgumentNullException>();
     }
 
     [Fact]
     public void Ctor_NullFactory_Throws()
     {
-        var act = () => new HybridSearchService(_embedding, null!);
+        var act = () => new HybridSearchService(_embedding, null!, NullLogger<HybridSearchService>.Instance);
         act.Should().Throw<ArgumentNullException>();
     }
 

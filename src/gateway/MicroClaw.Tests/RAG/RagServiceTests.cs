@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using MicroClaw.RAG;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.RAG;
@@ -33,7 +34,7 @@ public class RagServiceTests : IDisposable
                 return Task.FromResult(vecs);
             });
 
-        _hybridSearch = new HybridSearchService(_embedding, _factory);
+        _hybridSearch = new HybridSearchService(_embedding, _factory, NullLogger<HybridSearchService>.Instance);
     }
 
     public void Dispose()

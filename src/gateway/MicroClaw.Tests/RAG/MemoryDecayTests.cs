@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using MicroClaw.RAG;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace MicroClaw.Tests.RAG;
@@ -248,7 +249,7 @@ public class MemoryDecayTests : IDisposable
             await db.SaveChangesAsync();
         }
 
-        var sut = new HybridSearchService(_embedding, _factory);
+        var sut = new HybridSearchService(_embedding, _factory, NullLogger<HybridSearchService>.Instance);
 
         // Act
         var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -293,7 +294,7 @@ public class MemoryDecayTests : IDisposable
             await db.SaveChangesAsync();
         }
 
-        var sut = new HybridSearchService(_embedding, _factory);
+        var sut = new HybridSearchService(_embedding, _factory, NullLogger<HybridSearchService>.Instance);
         var opts = new HybridSearchOptions { EnableDecay = true, DecayHalfLifeDays = 90f };
 
         // Act
