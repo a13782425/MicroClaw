@@ -3,7 +3,7 @@ import {
   Box, Text, Badge, Tabs, Table, Button, HStack, Spinner, VStack,
   NativeSelect, Card, SimpleGrid, Separator, Progress, Input,
 } from '@chakra-ui/react'
-import { Upload, Trash2, RefreshCw, FileText, MessageSquare, Clock, BarChart2, Settings } from 'lucide-react'
+import { Upload, Trash2, RefreshCw, FileText, MessageSquare, Clock, BarChart2, Settings, Database } from 'lucide-react'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -13,6 +13,7 @@ import {
   reindexRagGlobalDocument,
   listSessions,
   getSessionRagStatus,
+  vectorizeSessionMessages,
   getRagQueryStats,
   getRagConfig,
   updateRagConfig,
@@ -236,6 +237,7 @@ function SessionKnowledgeTab() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [status, setStatus] = useState<SessionRagStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
+  const [vectorizing, setVectorizing] = useState(false)
 
   // 加载会话列表
   useEffect(() => {
@@ -303,6 +305,29 @@ function SessionKnowledgeTab() {
         >
           <RefreshCw size={14} />
           刷新
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          colorPalette="blue"
+          onClick={async () => {
+            if (!selectedSessionId) return
+            setVectorizing(true)
+            try {
+              const result = await vectorizeSessionMessages(selectedSessionId)
+              toaster.create({ type: 'success', title: `已将 ${result.messageCount} 条消息写入待处理队列` })
+              loadStatus(selectedSessionId)
+            } catch {
+              toaster.create({ type: 'error', title: '手动向量化失败' })
+            } finally {
+              setVectorizing(false)
+            }
+          }}
+          loading={vectorizing}
+          disabled={!selectedSessionId}
+        >
+          <Database size={14} />
+          手动向量化
         </Button>
       </HStack>
 

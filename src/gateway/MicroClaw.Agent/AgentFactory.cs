@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Plugins.Hooks;
 using MicroClaw.Safety;
 using MicroClaw.Skills;
 using Microsoft.Agents.AI;
@@ -46,7 +47,8 @@ internal static class AgentFactory
         int maxIterations = 10,
         IDevMetricsService? devMetrics = null,
         IToolRiskRegistry? riskRegistry = null,
-        IToolRiskInterceptor? riskInterceptor = null)
+        IToolRiskInterceptor? riskInterceptor = null,
+        IHookExecutor? hookExecutor = null)
     {
         Channel<StreamItem> eventChannel = Channel.CreateUnbounded<StreamItem>(
             new UnboundedChannelOptions { SingleReader = true });
@@ -58,7 +60,7 @@ internal static class AgentFactory
         {
             MaximumIterationsPerRequest = maxIterations,
             AllowConcurrentInvocation = true,
-            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, tracker, devMetrics, riskRegistry, riskInterceptor)
+            FunctionInvoker = BuildFunctionInvoker(eventChannel.Writer, tracker, devMetrics, riskRegistry, riskInterceptor, hookExecutor)
         };
 
         // UseProvidedChatClientAsIs = true：让我们自己的 FunctionInvokingChatClient 负责工具循环
@@ -92,7 +94,8 @@ internal static class AgentFactory
         MessageIdTracker tracker,
         IDevMetricsService? devMetrics,
         IToolRiskRegistry? riskRegistry,
-        IToolRiskInterceptor? riskInterceptor)
+        IToolRiskInterceptor? riskInterceptor,
+        IHookExecutor? hookExecutor)
     {
         return async (FunctionInvocationContext ctx, CancellationToken ct) =>
         {
@@ -108,6 +111,25 @@ internal static class AgentFactory
 
             // ② 设置 AsyncLocal 桥接，让子代理运行器可以向父 SSE 流写入进度事件
             SubAgentEventBridge.Current = eventWriter;
+
+            // ②b 插件 Hook：PreToolUse
+            if (hookExecutor is not null)
+            {
+                var hookCtx = new HookContext
+                {
+                    Event = HookEvent.PreToolUse,
+                    ToolName = ctx.Function.Name,
+                    ToolArguments = args
+                };
+                HookResult hookResult = await hookExecutor.ExecuteAsync(hookCtx, ct);
+                if (hookResult.Decision == HookDecision.Deny)
+                {
+                    string blockMsg = hookResult.DenyReason ?? "工具调用被插件 Hook 拒绝";
+                    await eventWriter.WriteAsync(
+                        new ToolResultItem(callId, ctx.Function.Name, $"[BLOCKED] {blockMsg}", false, 0) { MessageId = messageId, Visibility = visibility }, ct);
+                    return $"[BLOCKED] {blockMsg}";
+                }
+            }
 
             // ③ 风险前置拦截（仅当注册表和拦截器均配置时生效）
             if (riskRegistry is not null && riskInterceptor is not null)
@@ -134,6 +156,20 @@ internal static class AgentFactory
             {
                 success = false;
                 result = $"Error: {ex.Message}";
+
+                // 插件 Hook：PostToolUseFailure
+                if (hookExecutor is not null)
+                {
+                    var failCtx = new HookContext
+                    {
+                        Event = HookEvent.PostToolUseFailure,
+                        ToolName = ctx.Function.Name,
+                        ToolArguments = args,
+                        ToolSuccess = false,
+                        ErrorMessage = ex.Message
+                    };
+                    _ = hookExecutor.ExecuteAsync(failCtx, CancellationToken.None);
+                }
             }
             finally
             {
@@ -153,7 +189,19 @@ internal static class AgentFactory
             // ⑤ 发出工具结果事件（执行后）
             await eventWriter.WriteAsync(
                 new ToolResultItem(callId, ctx.Function.Name, resultText, success, sw.ElapsedMilliseconds) { MessageId = messageId, Visibility = visibility }, ct);
-
+            // ⑦ 插件 Hook：PostToolUse
+            if (hookExecutor is not null && success)
+            {
+                var postCtx = new HookContext
+                {
+                    Event = HookEvent.PostToolUse,
+                    ToolName = ctx.Function.Name,
+                    ToolArguments = args,
+                    ToolResult = resultText,
+                    ToolSuccess = true
+                };
+                _ = hookExecutor.ExecuteAsync(postCtx, CancellationToken.None);
+            }
             return success ? result : resultText;
         };
     }

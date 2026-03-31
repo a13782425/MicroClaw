@@ -1,5 +1,6 @@
 using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Agent.Memory;
 using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using Microsoft.EntityFrameworkCore;
@@ -254,6 +255,28 @@ public static class RagEndpoints
                 currentItem = tracker.CurrentItem,
                 error = tracker.Error,
             }))
+            .WithTags("RAG");
+
+        // POST /api/sessions/{sessionId}/rag/vectorize — 手动将会话全部消息写入 pending JSONL 等待向量化，并从活跃历史中移除
+        endpoints.MapPost("/sessions/{sessionId}/rag/vectorize",
+            (string sessionId, SessionStore sessionStore, MemoryService memoryService, ISessionMessageRemover messageRemover) =>
+            {
+                if (string.IsNullOrWhiteSpace(sessionId))
+                    return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                var allMessages = sessionStore.GetMessages(sessionId);
+                if (allMessages.Count == 0)
+                    return Results.BadRequest(new { success = false, message = "该会话暂无消息。", errorCode = "NO_MESSAGES" });
+
+                // 1. 写入 pending JSONL
+                string pendingFile = memoryService.WritePendingMessages(sessionId, allMessages);
+
+                // 2. 从 messages.jsonl 中移除已归档的消息
+                var ids = allMessages.Select(m => m.Id).ToHashSet();
+                messageRemover.RemoveMessages(sessionId, ids);
+
+                return Results.Ok(new { success = true, messageCount = allMessages.Count, pendingFile });
+            })
             .WithTags("RAG");
 
         return endpoints;

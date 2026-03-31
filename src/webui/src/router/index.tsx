@@ -18,6 +18,7 @@ const UsagePage = lazy(() => import('@/pages/usage'))
 const ConfigPage = lazy(() => import('@/pages/config'))
 const WorkflowsPage = lazy(() => import('@/pages/workflows'))
 const DevPage = lazy(() => import('@/pages/dev'))
+const PluginsPage = lazy(() => import('@/pages/plugins'))
 
 function RouteFallback() {
   return (
@@ -76,6 +77,7 @@ export const router = createBrowserRouter([
       { path: 'mcp',            element: withSuspense(<McpPage />) },
       { path: 'rag',            element: withSuspense(<RagPage />) },
       { path: 'tools',          element: withSuspense(<ToolsPage />) },
+      { path: 'plugins',        element: withSuspense(<PluginsPage />) },
       { path: 'models',         element: withSuspense(<ModelsPage />) },
       { path: 'channels',       element: withSuspense(<ChannelsPage />) },
       { path: 'session-manage', element: withSuspense(<SessionManagePage />) },

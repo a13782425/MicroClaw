@@ -24,6 +24,9 @@ public sealed class MicroClawConfigEnv
     /// <summary>Agent DNA 文件目录（workspace/agents/）。</summary>
     public string AgentsDir { get; }
 
+    /// <summary>插件目录（workspace/plugins/）。</summary>
+    public string PluginsDir { get; }
+
     /// <summary>滚动日志文件路径（含日期占位符）。</summary>
     public string LogFilePath { get; }
     
@@ -39,6 +42,7 @@ public sealed class MicroClawConfigEnv
         SessionsDir = ResolveSessionsDir(home, configFile);
         WorkspaceRoot = ResolveWorkspaceRoot(home, configFile);
         AgentsDir = Path.Combine(WorkspaceRoot, "agents");
+        PluginsDir = Path.Combine(WorkspaceRoot, "plugins");
         LogFilePath = ResolveLogFilePath(home, configFile);
     }
 

@@ -1,6 +1,6 @@
 import {
   MessageSquare, Timer, BarChart2,
-  Bot, Zap, Server, Database, Wrench,
+  Bot, Zap, Server, Database, Wrench, Puzzle,
   CpuIcon, Radio, ListTree, Settings, GitBranch, Bug,
 } from 'lucide-react'
 
@@ -34,6 +34,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { path: '/mcp', label: 'MCP 管理', icon: <Server size={18} /> },
       { path: '/rag', label: 'RAG 知识库', icon: <Database size={18} /> },
       { path: '/tools', label: '工具', icon: <Wrench size={18} /> },
+      { path: '/plugins', label: '插件', icon: <Puzzle size={18} /> },
     ],
   },
   {

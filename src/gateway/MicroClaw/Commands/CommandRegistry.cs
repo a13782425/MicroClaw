@@ -14,6 +14,7 @@ public static class CommandRegistry
         root.Subcommands.Add(new GatewayCommand());
         root.Subcommands.Add(new ProviderCommand());
         root.Subcommands.Add(new ChannelCommand());
+        root.Subcommands.Add(new PluginCommand());
 
         return root;
     }

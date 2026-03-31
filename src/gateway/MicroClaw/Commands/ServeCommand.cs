@@ -25,6 +25,9 @@ using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Emotion;
 using MicroClaw.Safety;
+using MicroClaw.Plugins;
+using MicroClaw.Plugins.Hooks;
+using MicroClaw.Plugins.Marketplace;
 using MicroClaw.RAG;
 using MicroClaw.Services;
 using MicroClaw.Sessions;
@@ -325,6 +328,19 @@ public class ServeCommand : Command
 			new FileToolProvider(sessionsDir));
 		builder.Services.AddSingleton<IToolProvider, SkillToolProvider>();
 		builder.Services.AddSingleton<ToolCollector>();
+
+		// 插件系统
+		builder.Services.AddSingleton<PluginLoader>();
+		builder.Services.AddSingleton<IPluginRegistry>(sp => sp.GetRequiredService<PluginLoader>());
+		builder.Services.AddHostedService(sp => sp.GetRequiredService<PluginLoader>());
+		builder.Services.AddSingleton<IHookExecutor, HookExecutor>();
+
+		// 插件市场
+		builder.Services.AddSingleton<IPluginMarketplace, ClaudeMarketplaceAdapter>();
+		builder.Services.AddSingleton<IPluginMarketplace, CopilotMarketplaceAdapter>();
+		builder.Services.AddSingleton<MarketplaceManager>();
+		builder.Services.AddSingleton<IMarketplaceManager>(sp => sp.GetRequiredService<MarketplaceManager>());
+		builder.Services.AddHostedService(sp => sp.GetRequiredService<MarketplaceManager>());
 
 		// Quartz.NET 定时任务调度
 		builder.Services.AddQuartz();

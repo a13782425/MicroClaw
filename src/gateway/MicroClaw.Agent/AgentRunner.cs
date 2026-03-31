@@ -15,6 +15,7 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Plugins.Hooks;
 using MicroClaw.Providers;
 using MicroClaw.Safety;
 using MicroClaw.Skills;
@@ -51,7 +52,8 @@ public sealed class AgentRunner(
     IToolRiskRegistry? toolRiskRegistry = null,
     IToolRiskInterceptor? toolRiskInterceptor = null,
     IProviderRouter? providerRouter = null,
-    IContextOverflowSummarizer? contextOverflowSummarizer = null) : IAgentMessageHandler
+    IContextOverflowSummarizer? contextOverflowSummarizer = null,
+    IHookExecutor? hookExecutor = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
@@ -65,6 +67,7 @@ public sealed class AgentRunner(
     private readonly IToolRiskInterceptor? _toolRiskInterceptor = toolRiskInterceptor;
     private readonly IProviderRouter? _providerRouter = providerRouter;
     private readonly IContextOverflowSummarizer? _contextOverflowSummarizer = contextOverflowSummarizer;
+    private readonly IHookExecutor? _hookExecutor = hookExecutor;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -253,10 +256,22 @@ public sealed class AgentRunner(
                     rawClient, agent.Name, chatOptions, loggerFactory,
                     devMetrics: devMetrics,
                     riskRegistry: _toolRiskRegistry,
-                    riskInterceptor: _toolRiskInterceptor);
+                    riskInterceptor: _toolRiskInterceptor,
+                    hookExecutor: _hookExecutor);
 
                 if (!string.IsNullOrWhiteSpace(sessionId))
                     await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
+
+                // 插件 Hook：SessionStart
+                if (_hookExecutor is not null)
+                {
+                    _ = _hookExecutor.ExecuteAsync(new HookContext
+                    {
+                        Event = HookEvent.SessionStart,
+                        SessionId = sessionId,
+                        AgentId = agent.Id
+                    }, CancellationToken.None);
+                }
 
                 // AF AgentSession：将 MicroClaw Session 元数据注入 StateBag
                 AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
@@ -362,6 +377,17 @@ public sealed class AgentRunner(
 
                 // 成功！完成输出 Channel
                 output.Writer.TryComplete();
+
+                // 插件 Hook：SessionEnd
+                if (_hookExecutor is not null)
+                {
+                    _ = _hookExecutor.ExecuteAsync(new HookContext
+                    {
+                        Event = HookEvent.SessionEnd,
+                        SessionId = sessionId,
+                        AgentId = agent.Id
+                    }, CancellationToken.None);
+                }
                 return;
             }
             catch (OperationCanceledException)
@@ -391,6 +417,17 @@ public sealed class AgentRunner(
             // 避免消费端 ReadAllAsync() 无限挂起。
             _logger.LogError(ex, "ExecuteStreamingCoreAsync 发生未处理异常，关闭 output Channel");
             output.Writer.TryComplete(ex);
+
+            // 插件 Hook：OnError
+            if (_hookExecutor is not null)
+            {
+                _ = _hookExecutor.ExecuteAsync(new HookContext
+                {
+                    Event = HookEvent.OnError,
+                    SessionId = sessionId,
+                    ErrorMessage = ex.Message
+                }, CancellationToken.None);
+            }
         }
     }
 
@@ -508,12 +545,16 @@ public sealed class AgentRunner(
         IEnumerable<SessionMessage> windowed;
         if (agent.ContextWindowMessages.HasValue && history.Count > agent.ContextWindowMessages.Value)
         {
-            windowed = history.TakeLast(agent.ContextWindowMessages.Value);
+            // 计算初始裁切点，然后向后调整以确保 tool_call/tool_result 配对完整性
+            int initialSplitIndex = history.Count - agent.ContextWindowMessages.Value;
+            int adjustedSplitIndex = AdjustSplitIndexForToolCalls(history, initialSplitIndex);
+
+            windowed = history.Skip(adjustedSplitIndex);
 
             // 触发异步溢出总结（fire-and-forget）
             if (_contextOverflowSummarizer is not null && !string.IsNullOrWhiteSpace(sessionId) && !string.IsNullOrWhiteSpace(providerId))
             {
-                var overflowMessages = history.Take(history.Count - agent.ContextWindowMessages.Value).ToList();
+                var overflowMessages = history.Take(adjustedSplitIndex).ToList();
                 _ = _contextOverflowSummarizer.SummarizeAsync(sessionId, providerId, overflowMessages, CancellationToken.None);
             }
         }
@@ -600,6 +641,71 @@ public sealed class AgentRunner(
         }
 
         return messages;
+    }
+
+    /// <summary>
+    /// Adjust the split index to ensure tool_call/tool_result pairs are not broken across
+    /// the overflow boundary. If any tool_call in the overflow portion has its corresponding
+    /// tool_result in the windowed portion, move the split index forward to include the
+    /// tool_result (and everything in between) in the overflow.
+    /// </summary>
+    private static int AdjustSplitIndexForToolCalls(IReadOnlyList<SessionMessage> history, int initialSplitIndex)
+    {
+        if (initialSplitIndex <= 0 || initialSplitIndex >= history.Count)
+            return initialSplitIndex;
+
+        // Collect callIds from tool_call messages in the overflow portion [0, splitIndex)
+        var pendingCallIds = new HashSet<string>();
+        for (int i = 0; i < initialSplitIndex; i++)
+        {
+            SessionMessage msg = history[i];
+            if (msg.MessageType == "tool_call" && msg.Metadata is not null
+                && msg.Metadata.TryGetValue("callId", out var callIdEl))
+            {
+                string? callId = callIdEl.GetString();
+                if (!string.IsNullOrEmpty(callId))
+                    pendingCallIds.Add(callId);
+            }
+            // Remove callIds that have their tool_result also in the overflow portion
+            if (msg.MessageType == "tool_result" && msg.Metadata is not null
+                && msg.Metadata.TryGetValue("callId", out var resultIdEl))
+            {
+                string? resultId = resultIdEl.GetString();
+                if (!string.IsNullOrEmpty(resultId))
+                    pendingCallIds.Remove(resultId);
+            }
+        }
+
+        // If no orphaned tool_calls, no adjustment needed
+        if (pendingCallIds.Count == 0)
+            return initialSplitIndex;
+
+        // Scan forward from splitIndex to find the last matching tool_result
+        int adjustedIndex = initialSplitIndex;
+        for (int i = initialSplitIndex; i < history.Count && pendingCallIds.Count > 0; i++)
+        {
+            SessionMessage msg = history[i];
+            if (msg.MessageType == "tool_result" && msg.Metadata is not null
+                && msg.Metadata.TryGetValue("callId", out var callIdEl))
+            {
+                string? callId = callIdEl.GetString();
+                if (!string.IsNullOrEmpty(callId) && pendingCallIds.Remove(callId))
+                {
+                    // Move split point past this tool_result
+                    adjustedIndex = i + 1;
+                }
+            }
+            // Also track tool_calls in the scanned region that might need their results
+            if (msg.MessageType == "tool_call" && msg.Metadata is not null
+                && msg.Metadata.TryGetValue("callId", out var newCallIdEl))
+            {
+                string? newCallId = newCallIdEl.GetString();
+                if (!string.IsNullOrEmpty(newCallId))
+                    pendingCallIds.Add(newCallId);
+            }
+        }
+
+        return adjustedIndex;
     }
 
     /// <summary>通过注册的 Restorer 将 SessionMessage 还原为 AIContent 列表。</summary>

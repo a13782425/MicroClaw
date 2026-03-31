@@ -35,6 +35,8 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapRagEndpoints();
 		protectedApi.MapEmotionEndpoints();
 		protectedApi.MapPainMemoryEndpoints();
+		protectedApi.MapPluginEndpoints();
+		protectedApi.MapMarketplaceEndpoints();
 
 		return endpoints;
 	}

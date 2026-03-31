@@ -1223,6 +1223,17 @@ export async function getSessionRagStatus(sessionId: string): Promise<SessionRag
   return data
 }
 
+export type VectorizeResult = {
+  success: boolean
+  messageCount: number
+  pendingFile: string
+}
+
+export async function vectorizeSessionMessages(sessionId: string): Promise<VectorizeResult> {
+  const { data } = await request.post<VectorizeResult>(`/api/sessions/${sessionId}/rag/vectorize`)
+  return data
+}
+
 // ─── RAG 检索统计 ────────────────────────────────────────────────────────────
 
 export type RagQueryStats = {
@@ -1273,5 +1284,166 @@ export async function startRagReindexAll(): Promise<{ started: boolean }> {
 
 export async function getRagReindexStatus(): Promise<RagReindexStatus> {
   const { data } = await request.get<RagReindexStatus>('/api/rag/reindex-all/status')
+  return data
+}
+
+// ─── Plugins ──────────────────────────────────────────────────────────────────
+
+export type PluginSource = {
+  type: 'local' | 'git'
+  url?: string
+  ref?: string
+}
+
+export type PluginSummary = {
+  name: string
+  isEnabled: boolean
+  source: PluginSource
+  installedAt: string
+  description?: string
+  version?: string
+  author?: string
+  skillCount: number
+  agentCount: number
+  hookCount: number
+  hasMcpConfig: boolean
+}
+
+export type PluginDetail = {
+  name: string
+  rootPath: string
+  isEnabled: boolean
+  source: PluginSource
+  installedAt: string
+  manifest?: {
+    name: string
+    version?: string
+    description?: string
+    author?: { name?: string; email?: string; url?: string }
+    keywords?: string[]
+  }
+  skillPaths: string[]
+  agentPaths: string[]
+  hooks: {
+    event: string
+    matcher?: string
+    type: string
+    command?: string
+    url?: string
+  }[]
+  mcpConfigPath?: string
+}
+
+export async function getPlugins(): Promise<PluginSummary[]> {
+  const { data } = await request.get<PluginSummary[]>('/api/plugins')
+  return data
+}
+
+export async function getPlugin(name: string): Promise<PluginDetail> {
+  const { data } = await request.get<PluginDetail>(`/api/plugins/${name}`)
+  return data
+}
+
+export type InstallPluginResult =
+  | { type: 'plugin'; plugin: PluginDetail }
+  | { type: 'marketplace'; marketplace: MarketplaceInfo }
+
+export async function installPlugin(url: string, ref?: string): Promise<InstallPluginResult> {
+  const { data } = await request.post<InstallPluginResult>('/api/plugins/install', { url, ref })
+  return data
+}
+
+export async function enablePlugin(name: string): Promise<void> {
+  await request.post(`/api/plugins/${name}/enable`)
+}
+
+export async function disablePlugin(name: string): Promise<void> {
+  await request.post(`/api/plugins/${name}/disable`)
+}
+
+export async function updatePlugin(name: string): Promise<void> {
+  await request.post(`/api/plugins/${name}/update`)
+}
+
+export async function uninstallPlugin(name: string): Promise<void> {
+  await request.delete(`/api/plugins/${name}`)
+}
+
+export async function reloadPlugins(): Promise<void> {
+  await request.post('/api/plugins/reload')
+}
+
+// ─── Marketplace ──────────────────────────────────────────────────────────────
+
+export type MarketplaceInfo = {
+  name: string
+  rootPath: string
+  marketplaceType: string
+  source: PluginSource
+  registeredAt: string
+}
+
+export type MarketplacePluginSource = {
+  sourceType: 'Local' | 'Url' | 'GitSubdir' | 'GitHub'
+  url?: string
+  path?: string
+  ref?: string
+  sha?: string
+  repo?: string
+}
+
+export type MarketplacePluginEntry = {
+  name: string
+  description?: string
+  category?: string
+  author?: { name?: string; email?: string; url?: string }
+  homepage?: string
+  keywords?: string[]
+  version?: string
+  source: MarketplacePluginSource
+  tags?: string[]
+}
+
+export async function getMarketplaces(): Promise<MarketplaceInfo[]> {
+  const { data } = await request.get<MarketplaceInfo[]>('/api/marketplace')
+  return data
+}
+
+export async function addMarketplace(url: string, ref?: string): Promise<MarketplaceInfo> {
+  const { data } = await request.post<MarketplaceInfo>('/api/marketplace', { url, ref })
+  return data
+}
+
+export async function removeMarketplace(name: string): Promise<void> {
+  await request.delete(`/api/marketplace/${encodeURIComponent(name)}`)
+}
+
+export async function updateMarketplace(name: string): Promise<MarketplaceInfo> {
+  const { data } = await request.post<MarketplaceInfo>(`/api/marketplace/${encodeURIComponent(name)}/update`)
+  return data
+}
+
+export async function getMarketplacePlugins(
+  name: string,
+  keyword?: string,
+  category?: string,
+): Promise<MarketplacePluginEntry[]> {
+  const params = new URLSearchParams()
+  if (keyword) params.set('keyword', keyword)
+  if (category) params.set('category', category)
+  const qs = params.toString()
+  const { data } = await request.get<MarketplacePluginEntry[]>(
+    `/api/marketplace/${encodeURIComponent(name)}/plugins${qs ? `?${qs}` : ''}`,
+  )
+  return data
+}
+
+export async function installMarketplacePlugin(
+  marketplaceName: string,
+  pluginName: string,
+): Promise<PluginDetail> {
+  const { data } = await request.post<PluginDetail>(
+    `/api/marketplace/${encodeURIComponent(marketplaceName)}/plugins/${encodeURIComponent(pluginName)}/install`,
+  )
   return data
 }

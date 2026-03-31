@@ -12,4 +12,5 @@
   <Project Path="MicroClaw.Safety/MicroClaw.Safety.csproj" />
   <Project Path="MicroClaw.Skills/MicroClaw.Skills.csproj" />
   <Project Path="MicroClaw.Configuration/MicroClaw.Configuration.csproj" />
+  <Project Path="MicroClaw.Plugins/MicroClaw.Plugins.csproj" />
 </Solution>
