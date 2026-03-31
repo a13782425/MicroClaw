@@ -11,6 +11,7 @@
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Skills\MicroClaw.Skills.csproj" />
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
+    <ProjectReference Include="..\MicroClaw.Plugins\MicroClaw.Plugins.csproj" />
   </ItemGroup>
 
   <ItemGroup>
