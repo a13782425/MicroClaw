@@ -576,6 +576,19 @@ public sealed class AgentRunner(
                 }
             }
 
+            // 容错：若本组含 tool_call 但对应 tool_result 缺失（如会话中断、子代理写入竞争导致消息乱序），
+            // 跳过整组，避免向 LLM 发送孤立的 tool_call 引发 "tool_call_id is not found" 错误。
+            // 消息仍保留在 JSONL 中，不影响历史完整性。
+            bool hasOrphanedToolCall = assistantContents.Any(c => c is FunctionCallContent)
+                                       && toolContents.Count == 0;
+            if (hasOrphanedToolCall)
+            {
+                _logger.LogWarning(
+                    "跳过孤立 tool_call（无对应 tool_result），GroupId={GroupId}，Session={SessionId}",
+                    groupId, sessionId);
+                continue;
+            }
+
             if (assistantContents.Count > 0)
             {
                 ChatRole role = items[0].Role == "user" ? ChatRole.User : ChatRole.Assistant;

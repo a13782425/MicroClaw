@@ -17,7 +17,7 @@ public sealed class SubAgentToolProvider(
     AgentDnaService agentDnaService,
     ISessionReader sessionReader) : IToolProvider
 {
-    public ToolCategory Category => ToolCategory.Builtin;
+    public ToolCategory Category => ToolCategory.Core;
     public string GroupId => "subagent";
     public string DisplayName => "子代理 & DNA";
 

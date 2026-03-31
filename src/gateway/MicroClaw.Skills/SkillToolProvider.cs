@@ -23,7 +23,7 @@ public sealed class SkillToolProvider(
         "run_skill_script"
     };
 
-    public ToolCategory Category => ToolCategory.Builtin;
+    public ToolCategory Category => ToolCategory.Core;
     public string GroupId => "skill";
     public string DisplayName => "技能调用";
 

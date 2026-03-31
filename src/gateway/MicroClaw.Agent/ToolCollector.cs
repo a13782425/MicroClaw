@@ -105,6 +105,8 @@ public sealed class ToolCollector(
         // ── DI 注册的 IToolProvider（builtin + channel + skill）──────────────
         foreach (IToolProvider provider in providers)
         {
+            if (provider.Category == ToolCategory.Core) 
+                continue;
             ToolGroupConfig? cfg = agent?.ToolGroupConfigs
                 .FirstOrDefault(g => g.GroupId == provider.GroupId);
             bool groupEnabled = cfg is null || cfg.IsEnabled;
