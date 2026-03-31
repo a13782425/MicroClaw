@@ -1045,7 +1045,7 @@ function AgentDetail({
             <Switch.Control><Switch.Thumb /></Switch.Control>
             <Switch.Label fontSize="sm">{agent.isEnabled ? '启用' : '停用'}</Switch.Label>
           </Switch.Root>
-          <Switch.Root
+          {/* <Switch.Root
             size="sm"
             checked={agent.exposeAsA2A}
             disabled={togglingA2A}
@@ -1054,7 +1054,7 @@ function AgentDetail({
             <Switch.HiddenInput />
             <Switch.Control><Switch.Thumb /></Switch.Control>
             <Switch.Label fontSize="sm">A2A</Switch.Label>
-          </Switch.Root>
+          </Switch.Root> */}
           <Button
             size="sm"
             variant="outline"

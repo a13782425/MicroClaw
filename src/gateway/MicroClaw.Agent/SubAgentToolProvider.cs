@@ -9,20 +9,18 @@ namespace MicroClaw.Agent;
 /// <summary>
 /// 子代理工具提供者。
 /// 根据 <see cref="ToolCreationContext"/> 中的调用代理 ID、祖先链和 ACL 白名单，
-/// 为当前代理动态生成可调用的子代理工具函数，并附加 <c>write_agent_memory</c> 工具。
+/// 为当前代理动态生成可调用的子代理工具函数，并附加 Agent 管理工具集。
 /// </summary>
 public sealed class SubAgentToolProvider(
     AgentStore agentStore,
     ISubAgentRunner subAgentRunner,
-    AgentDnaService agentDnaService,
-    ISessionReader sessionReader) : IToolProvider
+    AgentDnaService agentDnaService) : IToolProvider
 {
     public ToolCategory Category => ToolCategory.Core;
     public string GroupId => "subagent";
-    public string DisplayName => "子代理 & DNA";
+    public string DisplayName => "子代理 & Agent 管理";
 
-    public IReadOnlyList<(string Name, string Description)> GetToolDescriptions() =>
-        SubAgentTools.GetToolDescriptions();
+    public IReadOnlyList<(string Name, string Description)> GetToolDescriptions() => [];
 
     public Task<ToolProviderResult> CreateToolsAsync(ToolCreationContext context, CancellationToken ct = default)
     {
@@ -77,8 +75,8 @@ public sealed class SubAgentToolProvider(
                 description: description));
         }
 
-        // 固定保留 write_agent_memory 工具
-        tools.Add(SubAgentTools.CreateWriteMemoryTool(context.SessionId, agentStore, agentDnaService, sessionReader));
+        // 固定追加 Agent 管理工具集
+        tools.AddRange(SubAgentTools.CreateAgentManagementTools(agentStore, agentDnaService));
 
         return Task.FromResult(new ToolProviderResult(tools));
     }
