@@ -58,17 +58,21 @@ public static class SystemEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
 
-            ProviderConfig incoming = new()
+            ProviderConfig? existing = store.GetById(req.Id);
+            if (existing is null)
+                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+
+            ProviderConfig incoming = existing with
             {
-                DisplayName = req.DisplayName?.Trim() ?? string.Empty,
-                Protocol = ParseProtocol(req.Protocol),
-                ModelType = ParseModelType(req.ModelType),
-                BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
+                DisplayName = req.DisplayName?.Trim() ?? existing.DisplayName,
+                Protocol = req.Protocol != null ? ParseProtocol(req.Protocol) : existing.Protocol,
+                ModelType = req.ModelType != null ? ParseModelType(req.ModelType) : existing.ModelType,
+                BaseUrl = req.BaseUrl != null ? (string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim()) : existing.BaseUrl,
                 ApiKey = req.ApiKey?.Trim() ?? string.Empty,
-                ModelName = req.ModelName?.Trim() ?? string.Empty,
-                MaxOutputTokens = req.MaxOutputTokens ?? 8192,
+                ModelName = req.ModelName?.Trim() ?? existing.ModelName,
+                MaxOutputTokens = req.MaxOutputTokens ?? existing.MaxOutputTokens,
                 IsEnabled = req.IsEnabled,
-                Capabilities = req.Capabilities ?? new()
+                Capabilities = req.Capabilities ?? existing.Capabilities
             };
 
             ProviderConfig? updated = store.Update(req.Id, incoming);

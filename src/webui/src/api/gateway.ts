@@ -1214,17 +1214,12 @@ export async function deleteAgentPainMemory(agentId: string, memoryId: string): 
 
 export type SessionRagStatus = {
   sessionId: string
-  indexedMessageCount: number
-  lastIndexedAtMs: number | null
+  categoryCount: number
+  lastUpdatedAtMs: number | null
 }
 
 export async function getSessionRagStatus(sessionId: string): Promise<SessionRagStatus> {
   const { data } = await request.get<SessionRagStatus>(`/api/sessions/${sessionId}/rag/status`)
-  return data
-}
-
-export async function reindexSessionRag(sessionId: string): Promise<SessionRagStatus> {
-  const { data } = await request.post<SessionRagStatus>(`/api/sessions/${sessionId}/rag/reindex`)
   return data
 }
 
@@ -1260,5 +1255,23 @@ export async function getRagConfig(): Promise<RagConfig> {
 
 export async function updateRagConfig(config: RagConfig): Promise<{ success: boolean }> {
   const { data } = await request.post<{ success: boolean }>('/api/rag/config', config)
+  return data
+}
+
+export type RagReindexStatus = {
+  status: 'idle' | 'running' | 'done' | 'error'
+  total: number
+  completed: number
+  currentItem: string | null
+  error: string | null
+}
+
+export async function startRagReindexAll(): Promise<{ started: boolean }> {
+  const { data } = await request.post<{ started: boolean }>('/api/rag/reindex-all')
+  return data
+}
+
+export async function getRagReindexStatus(): Promise<RagReindexStatus> {
+  const { data } = await request.get<RagReindexStatus>('/api/rag/reindex-all/status')
   return data
 }

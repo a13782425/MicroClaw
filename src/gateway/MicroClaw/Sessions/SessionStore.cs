@@ -14,7 +14,7 @@ namespace MicroClaw.Sessions;
 /// 会话元数据存储在 SQLite，消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// 旧版 messages.json 在首次读写时自动迁移并重命名为 messages.json.bak。
 /// </summary>
-public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader
+public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader, ISessionMessageRemover
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
@@ -49,6 +49,59 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
                 .ToList()
                 .AsReadOnly();
         }
+    }
+
+    /// <summary>
+    /// 仅返回顶层会话（即非子代理会话，ParentSessionId 为 null）。
+    /// 用于会话管理列表，子代理会话不对用户暴露。
+    /// </summary>
+    public IReadOnlyList<SessionInfo> AllTopLevel
+    {
+        get
+        {
+            using GatewayDbContext db = factory.CreateDbContext();
+            return db.Sessions
+                .Where(e => e.ParentSessionId == null)
+                .OrderByDescending(e => e.CreatedAtMs)
+                .Select(e => ToInfo(e))
+                .ToList()
+                .AsReadOnly();
+        }
+    }
+
+    /// <summary>
+    /// 沿 ParentSessionId 链向上遍历，返回根会话 ID（顶层无 parent 的会话）。
+    /// 支持任意嵌套深度（如 A→B→C，从 C 出发返回 A）。
+    /// </summary>
+    public string GetRootSessionId(string sessionId)
+    {
+        string current = sessionId;
+        // 最多遍历 20 层，防止数据损坏导致死循环
+        for (int i = 0; i < 20; i++)
+        {
+            using GatewayDbContext db = factory.CreateDbContext();
+            SessionEntity? entity = db.Sessions.Find(current);
+            if (entity?.ParentSessionId is null)
+                return current;
+            current = entity.ParentSessionId;
+        }
+        return current;
+    }
+
+    /// <summary>
+    /// 在同一父会话 + 同一 AgentId 下查找空闲子代理会话（未在 activeSessionIds 中）。
+    /// 返回最近创建的一个，用于复用，避免重复创建子代理会话。
+    /// </summary>
+    public SessionInfo? FindIdleSubAgentSession(
+        string parentSessionId, string agentId, IReadOnlyCollection<string> activeSessionIds)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        return db.Sessions
+            .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
+            .Where(e => !activeSessionIds.Contains(e.Id))
+            .OrderByDescending(e => e.CreatedAtMs)
+            .Select(e => ToInfo(e))
+            .FirstOrDefault();
     }
 
     public SessionInfo? Get(string id)
@@ -129,8 +182,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         return ToInfo(entity);
     }
 
-    public void AddMessage(string sessionId, SessionMessage message)
-    {
+    public void AddMessage(string sessionId, SessionMessage message)    {
         string dir = GetSessionDir(sessionId);
         Directory.CreateDirectory(dir);
 
@@ -142,6 +194,38 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         {
             string line = JsonSerializer.Serialize(MessageJson.From(message), JsonLinesOptions);
             File.AppendAllText(jsonlPath, line + "\n");
+        }
+        finally
+        {
+            sem.Release();
+        }
+    }
+
+    /// <summary>
+    /// 从 messages.jsonl 中移除指定 ID 的消息（重写文件）。
+    /// 用于上下文溢出时将已归档消息从活跃对话历史中删除。
+    /// </summary>
+    public void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds)
+    {
+        if (messageIds.Count == 0) return;
+
+        string dir = GetSessionDir(sessionId);
+        string jsonlPath = Path.Combine(dir, JsonlFileName);
+        if (!File.Exists(jsonlPath)) return;
+
+        SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
+        sem.Wait();
+        try
+        {
+            string[] kept = File.ReadLines(jsonlPath)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Where(line =>
+                {
+                    MessageJson? m = JsonSerializer.Deserialize<MessageJson>(line, JsonLinesOptions);
+                    return m is null || m.Id is null || !messageIds.Contains(m.Id);
+                })
+                .ToArray();
+            File.WriteAllLines(jsonlPath, kept);
         }
         finally
         {

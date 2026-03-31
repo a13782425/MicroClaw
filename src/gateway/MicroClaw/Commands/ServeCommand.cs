@@ -211,8 +211,10 @@ public class ServeCommand : Command
 			sp.GetRequiredService<HybridSearchService>(),
 			sp.GetRequiredService<RagStatsDbContextFactory>(),
 			sp.GetRequiredService<IRagPruner>()));
-		builder.Services.AddSingleton<ISessionMessageIndexer, SessionMessageIndexer>();
+		builder.Services.AddSingleton<RagReindexJobTracker>();
+		builder.Services.AddSingleton<RagReindexService>();
 		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
+		builder.Services.AddSingleton<ISessionMessageRemover>(sp => sp.GetRequiredService<SessionStore>());
 		// 情绪系统服务
 		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
@@ -367,6 +369,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService<FeishuDocSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
 		builder.Services.AddHostedService<MemorySummarizationJob>();
+		builder.Services.AddHostedService<MemoryPendingProcessorJob>();
 		// D-2: 做梦模式——每日凌晨 3 点，跨会话归因/摘要，将认知整理结果写回 Agent MEMORY.md
 		builder.Services.AddHostedService<DreamingJob>();
 

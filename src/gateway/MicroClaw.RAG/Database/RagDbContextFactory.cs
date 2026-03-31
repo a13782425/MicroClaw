@@ -70,6 +70,23 @@ public sealed class RagDbContextFactory
         };
     }
 
+    /// <summary>
+    /// 返回工作区下所有已存在 RAG 数据库的会话 ID 列表。
+    /// 通过枚举 <c>{workspaceRoot}/sessions/*/rag.db</c> 得出。
+    /// </summary>
+    public IReadOnlyList<string> GetAllSessionIds()
+    {
+        string sessionsDir = Path.Combine(_workspaceRoot, "sessions");
+        if (!Directory.Exists(sessionsDir))
+            return [];
+
+        return Directory.GetFiles(sessionsDir, "rag.db", SearchOption.AllDirectories)
+            .Select(p => Path.GetFileName(Path.GetDirectoryName(p)!))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToList()
+            .AsReadOnly();
+    }
+
     private string ResolveSessionPath(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))

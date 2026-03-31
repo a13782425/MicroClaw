@@ -43,6 +43,13 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             .AsReadOnly();
     }
 
+    public ProviderConfig? GetById(string id)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        ProviderConfigEntity? entity = db.Providers.Find(id);
+        return entity is null ? null : ToConfig(entity);
+    }
+
     public ProviderConfig Add(ProviderConfig config)
     {
         using GatewayDbContext db = factory.CreateDbContext();

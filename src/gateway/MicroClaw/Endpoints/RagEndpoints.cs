@@ -1,4 +1,3 @@
-using MicroClaw.Agent.Sessions;
 using MicroClaw.Configuration;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.RAG;
@@ -136,7 +135,7 @@ public static class RagEndpoints
             })
             .WithTags("RAG");
 
-        // GET /api/sessions/{sessionId}/rag/status — 查询会话 RAG 索引状态
+        // GET /api/sessions/{sessionId}/rag/status — 查询会话RAG分类数据状态
         endpoints.MapGet("/sessions/{sessionId}/rag/status",
             async (string sessionId, RagDbContextFactory dbFactory, CancellationToken ct) =>
             {
@@ -146,78 +145,17 @@ public static class RagEndpoints
                 try
                 {
                     using var db = dbFactory.Create(RagScope.Session, sessionId);
-                    var msgChunks = await db.VectorChunks.AsNoTracking()
-                        .Where(e => e.SourceId.StartsWith("msg:"))
+                    var categoryChunks = await db.VectorChunks.AsNoTracking()
+                        .Where(e => !e.SourceId.StartsWith("doc:"))
                         .Select(e => new { e.SourceId, e.CreatedAtMs })
                         .ToListAsync(ct);
 
-                    int indexedMessageCount = msgChunks.Select(e => e.SourceId).Distinct().Count();
-                    long? lastIndexedAtMs = msgChunks.Count > 0
-                        ? msgChunks.Max(e => e.CreatedAtMs)
+                    int categoryCount = categoryChunks.Select(e => e.SourceId).Distinct().Count();
+                    long? lastUpdatedAtMs = categoryChunks.Count > 0
+                        ? categoryChunks.Max(e => e.CreatedAtMs)
                         : null;
 
-                    return Results.Ok(new SessionRagStatusDto(sessionId, indexedMessageCount, lastIndexedAtMs));
-                }
-                catch
-                {
-                    // 会话 RAG DB 可能尚未创建（无对话历史），视为空状态
-                    return Results.Ok(new SessionRagStatusDto(sessionId, 0, null));
-                }
-            })
-            .WithTags("RAG");
-
-        // POST /api/sessions/{sessionId}/rag/reindex — 强制全量重新索引会话消息
-        endpoints.MapPost("/sessions/{sessionId}/rag/reindex",
-            async (string sessionId, SessionStore sessionStore, IRagService ragService,
-                   ISessionMessageIndexer messageIndexer, RagDbContextFactory dbFactory,
-                   CancellationToken ct) =>
-            {
-                if (string.IsNullOrWhiteSpace(sessionId))
-                    return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
-
-                SessionInfo? session = sessionStore.Get(sessionId);
-                if (session is null)
-                    return Results.NotFound(new { success = false, message = $"会话 '{sessionId}' 不存在。", errorCode = "NOT_FOUND" });
-
-                // 步骤 1：收集所有 msg: 前缀 sourceId
-                List<string> msgSourceIds;
-                try
-                {
-                    using var db = dbFactory.Create(RagScope.Session, sessionId);
-                    msgSourceIds = await db.VectorChunks.AsNoTracking()
-                        .Where(e => e.SourceId.StartsWith("msg:"))
-                        .Select(e => e.SourceId)
-                        .Distinct()
-                        .ToListAsync(ct);
-                }
-                catch
-                {
-                    msgSourceIds = [];
-                }
-
-                // 步骤 2：删除所有旧分块
-                foreach (var sourceId in msgSourceIds)
-                    await ragService.DeleteBySourceIdAsync(sourceId, RagScope.Session, sessionId, ct);
-
-                // 步骤 3：获取全部消息并重新索引
-                IReadOnlyList<SessionMessage> messages = sessionStore.GetMessages(sessionId);
-                await messageIndexer.IndexNewMessagesAsync(sessionId, messages, ct);
-
-                // 步骤 4：返回更新后的状态
-                try
-                {
-                    using var db = dbFactory.Create(RagScope.Session, sessionId);
-                    var msgChunks = await db.VectorChunks.AsNoTracking()
-                        .Where(e => e.SourceId.StartsWith("msg:"))
-                        .Select(e => new { e.SourceId, e.CreatedAtMs })
-                        .ToListAsync(ct);
-
-                    int indexedMessageCount = msgChunks.Select(e => e.SourceId).Distinct().Count();
-                    long? lastIndexedAtMs = msgChunks.Count > 0
-                        ? msgChunks.Max(e => e.CreatedAtMs)
-                        : null;
-
-                    return Results.Ok(new SessionRagStatusDto(sessionId, indexedMessageCount, lastIndexedAtMs));
+                    return Results.Ok(new SessionRagStatusDto(sessionId, categoryCount, lastUpdatedAtMs));
                 }
                 catch
                 {
@@ -293,11 +231,36 @@ public static class RagEndpoints
             })
             .WithTags("RAG");
 
+        // POST /api/rag/reindex-all
+        endpoints.MapPost("/rag/reindex-all",
+            (RagReindexJobTracker tracker, RagReindexService reindexSvc) =>
+            {
+                if (tracker.Status == ReindexJobStatus.Running)
+                    return Results.Conflict(new { success = false, message = "重索引任务正在进行中，请稍候。" });
+
+                tracker.Reset();
+                _ = Task.Run(() => reindexSvc.RunAsync(tracker));
+                return Results.Ok(new { started = true });
+            })
+            .WithTags("RAG");
+
+        // GET /api/rag/reindex-all/status
+        endpoints.MapGet("/rag/reindex-all/status",
+            (RagReindexJobTracker tracker) => Results.Ok(new
+            {
+                status = tracker.Status.ToString().ToLowerInvariant(),
+                total = tracker.Total,
+                completed = tracker.Completed,
+                currentItem = tracker.CurrentItem,
+                error = tracker.Error,
+            }))
+            .WithTags("RAG");
+
         return endpoints;
     }
 
     private sealed record DeleteDocumentRequest(string SourceId);
     private sealed record ReindexDocumentRequest(string SourceId);
-    internal sealed record SessionRagStatusDto(string SessionId, int IndexedMessageCount, long? LastIndexedAtMs);
+    internal sealed record SessionRagStatusDto(string SessionId, int CategoryCount, long? LastUpdatedAtMs);
     internal sealed record RagConfigDto(double MaxStorageSizeMb, double PruneTargetPercent);
 }

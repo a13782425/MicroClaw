@@ -1,3 +1,6 @@
+using System.Text.Json;
+using MicroClaw.Gateway.Contracts.Sessions;
+
 namespace MicroClaw.Agent.Memory;
 
 /// <summary>单个每日记忆文件信息。</summary>
@@ -16,10 +19,10 @@ public sealed class MemoryService(string sessionsDir)
 
     private const string LongTermFile = "MEMORY.md";
     private const string DailySubDir = "memory";
+    private const string CategoriesFile = "categories.json";
 
-    // 权重衰减策略：最近 7 天全量，7-30 天仅首行，30 天以上忽略（已在 MEMORY.md 摘要）
-    private const int FullWeightDays = 7;
-    private const int PartialWeightDays = 30;
+    // 权重衰减策略：最近 3 天全量，3 天以上由 RAG 分类 chunk 提供
+    private const int FullWeightDays = 3;
 
     // ── 路径辅助 ──────────────────────────────────────────────────────────────
 
@@ -33,6 +36,9 @@ public sealed class MemoryService(string sessionsDir)
 
     private string DailyPath(string sessionId, string date) =>
         Path.Combine(DailyDir(sessionId), $"{date}.md");
+
+    private string CategoriesPath(string sessionId) =>
+        Path.Combine(DailyDir(sessionId), CategoriesFile);
 
     // ── 日期格式校验 ──────────────────────────────────────────────────────────
 
@@ -112,75 +118,101 @@ public sealed class MemoryService(string sessionsDir)
             .AsReadOnly();
     }
 
+    // ── 分类记忆 ──────────────────────────────────────────────────────────────
+
+    /// <summary>读取分类记忆 JSON（memory/categories.json）；文件不存在时返回 "{}"。</summary>
+    public string GetCategoriesJson(string sessionId)
+    {
+        string path = CategoriesPath(sessionId);
+        return File.Exists(path) ? File.ReadAllText(path) : "{}";
+    }
+
+    /// <summary>写入分类记忆 JSON（memory/categories.json）。</summary>
+    public void WriteCategoriesJson(string sessionId, string json)
+    {
+        string dir = DailyDir(sessionId);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(CategoriesPath(sessionId), json);
+    }
+
     // ── 上下文注入 ───────────────────────────────────────────────────────────
 
     /// <summary>
     /// 构建注入 System Prompt 的记忆上下文。
-    /// 权重策略：
-    /// - MEMORY.md（长期）：始终包含
-    /// - 最近 7 天：全量内容
-    /// - 7-30 天：仅包含每日记忆的首行摘要
-    /// - 30 天以上：忽略（已摘要到 MEMORY.md）
+    /// 只注入 MEMORY.md（长期分类目录），近期原文已移除以减少 token 消耗，
+    /// 细节由 RAG 分类 chunk 按需检索提供。
     /// </summary>
     public string BuildMemoryContext(string sessionId)
     {
-        var parts = new List<string>();
-
-        // 1. 长期记忆
         string longTerm = GetLongTermMemory(sessionId);
-        if (!string.IsNullOrWhiteSpace(longTerm))
-        {
-            parts.Add($"## 长期记忆\n\n{longTerm.Trim()}");
-        }
+        if (string.IsNullOrWhiteSpace(longTerm)) return string.Empty;
+        return $"## 长期记忆\n\n{longTerm.Trim()}";
+    }
 
-        // 2. 每日记忆（权重衰减）
-        IReadOnlyList<string> dates = ListDailyMemories(sessionId);
-        if (dates.Count == 0) return string.Join("\n\n", parts);
+    // ── 待归纳消息 (pending) ──────────────────────────────────────────────────
 
-        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var recentFull = new List<string>();
-        var partialSummary = new List<string>();
+    private const string PendingSubDir = "pending";
 
-        foreach (string date in dates)
-        {
-            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None,
-                out DateOnly memDate))
-                continue;
+    private static readonly JsonSerializerOptions PendingJsonOpts = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
-            int daysAgo = today.DayNumber - memDate.DayNumber;
+    private string PendingDir(string sessionId) =>
+        Path.Combine(DailyDir(sessionId), PendingSubDir);
 
-            if (daysAgo < 0) continue; // 未来日期，跳过
+    /// <summary>
+    /// 将溢出消息序列化写入 pending 文件（memory/pending/时间戳-尾部ID.jsonl）。
+    /// 返回写入的文件名。
+    /// </summary>
+    public string WritePendingMessages(string sessionId, IReadOnlyList<SessionMessage> messages)
+    {
+        string dir = PendingDir(sessionId);
+        Directory.CreateDirectory(dir);
 
-            if (daysAgo <= FullWeightDays)
-            {
-                DailyMemoryInfo? info = GetDailyMemory(sessionId, date);
-                if (info is not null && !string.IsNullOrWhiteSpace(info.Content))
-                    recentFull.Add($"### {date}\n\n{info.Content.Trim()}");
-            }
-            else if (daysAgo <= PartialWeightDays)
-            {
-                DailyMemoryInfo? info = GetDailyMemory(sessionId, date);
-                if (info is not null && !string.IsNullOrWhiteSpace(info.Content))
-                {
-                    string firstLine = info.Content.Trim().Split('\n')[0];
-                    partialSummary.Add($"- {date}: {firstLine}");
-                }
-            }
-            // 30+ 天：忽略
-        }
+        string ts = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        string lastId = messages[^1].Id;
+        string safeId = new string(lastId.Where(char.IsLetterOrDigit).ToArray())[..Math.Min(8, lastId.Length)];
+        string fileName = $"{ts}-{safeId}.jsonl";
 
-        if (recentFull.Count > 0)
-        {
-            parts.Add("## 近期记忆（最近 7 天）\n\n" + string.Join("\n\n", recentFull));
-        }
+        IEnumerable<string> lines = messages.Select(m => JsonSerializer.Serialize(m, PendingJsonOpts));
+        File.WriteAllText(Path.Combine(dir, fileName), string.Join("\n", lines));
+        return fileName;
+    }
 
-        if (partialSummary.Count > 0)
-        {
-            parts.Add("## 历史记忆摘要（7-30 天）\n\n" + string.Join("\n", partialSummary));
-        }
+    /// <summary>列出当前 session 的所有 pending 文件名（按时间戳升序）。</summary>
+    public IReadOnlyList<string> ListPendingFiles(string sessionId)
+    {
+        string dir = PendingDir(sessionId);
+        if (!Directory.Exists(dir)) return [];
+        return Directory.GetFiles(dir, "*.jsonl")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .OrderBy(f => f)
+            .ToList()
+            .AsReadOnly();
+    }
 
-        return string.Join("\n\n", parts);
+    /// <summary>读取指定 pending 文件中的消息列表。文件不存在时返回空列表。</summary>
+    public IReadOnlyList<SessionMessage> ReadPendingMessages(string sessionId, string fileName)
+    {
+        string path = Path.Combine(PendingDir(sessionId), fileName);
+        if (!File.Exists(path)) return [];
+        return File.ReadLines(path)
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(l => JsonSerializer.Deserialize<SessionMessage>(l, PendingJsonOpts))
+            .OfType<SessionMessage>()
+            .ToList()
+            .AsReadOnly();
+    }
+
+    /// <summary>删除指定 pending 文件。文件不存在时静默返回 false。</summary>
+    public bool DeletePendingFile(string sessionId, string fileName)
+    {
+        string path = Path.Combine(PendingDir(sessionId), fileName);
+        if (!File.Exists(path)) return false;
+        File.Delete(path);
+        return true;
     }
 }

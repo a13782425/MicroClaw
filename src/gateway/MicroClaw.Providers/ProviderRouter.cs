@@ -15,7 +15,10 @@ public sealed class ProviderRouter : IProviderRouter
         IReadOnlyList<ProviderConfig> candidates,
         ProviderRoutingStrategy strategy)
     {
-        List<ProviderConfig> enabled = candidates.Where(p => p.IsEnabled).ToList();
+        // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
+        List<ProviderConfig> enabled = candidates
+            .Where(p => p.IsEnabled && p.ModelType != ModelType.Embedding)
+            .ToList();
         if (enabled.Count == 0)
             return [];
 

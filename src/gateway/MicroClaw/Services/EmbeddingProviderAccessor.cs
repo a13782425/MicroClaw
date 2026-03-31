@@ -19,8 +19,15 @@ public sealed class EmbeddingProviderAccessor : IEmbeddingProviderAccessor
     private readonly ILogger<EmbeddingProviderAccessor> _logger;
 
     private readonly Lock _lock = new();
-    private string? _cachedProviderId;
+    private string? _cachedCacheKey;
     private IEmbeddingService? _cachedService;
+
+    /// <summary>
+    /// 生成缓存键，包含所有影响 EmbeddingGenerator 实例的字段。
+    /// 使用 ApiKey 的 HashCode 避免明文存储，同进程内字符串 HashCode 稳定。
+    /// </summary>
+    private static string ComputeCacheKey(ProviderConfig config) =>
+        $"{config.Id}|{config.Protocol}|{config.ModelName}|{config.BaseUrl}|{config.ApiKey.GetHashCode():X8}";
 
     public EmbeddingProviderAccessor(
         ProviderConfigStore configStore,
@@ -45,11 +52,13 @@ public sealed class EmbeddingProviderAccessor : IEmbeddingProviderAccessor
 
         lock (_lock)
         {
-            if (_cachedProviderId == config.Id && _cachedService is not null)
+            var cacheKey = ComputeCacheKey(config);
+
+            if (_cachedCacheKey == cacheKey && _cachedService is not null)
                 return _cachedService;
 
-            if (_cachedProviderId is not null && _cachedProviderId != config.Id)
-                _logger.LogInformation("Embedding Provider 已切换至: {Name} ({Id})", config.DisplayName, config.Id);
+            if (_cachedCacheKey is not null && _cachedCacheKey != cacheKey)
+                _logger.LogInformation("Embedding Provider 配置已变更，重建客户端: {Name} ({Id})", config.DisplayName, config.Id);
 
             var capturedId = config.Id;
             var capturedName = config.DisplayName;
@@ -70,7 +79,7 @@ public sealed class EmbeddingProviderAccessor : IEmbeddingProviderAccessor
                         inputCostUsd: cost);
                 });
 
-            _cachedProviderId = config.Id;
+            _cachedCacheKey = cacheKey;
             return _cachedService;
         }
     }

@@ -405,7 +405,11 @@ public sealed class AgentRunner(
         string primaryProviderId,
         ProviderRoutingStrategy strategy)
     {
-        IReadOnlyList<ProviderConfig> allProviders = providerStore.All;
+        // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
+        IReadOnlyList<ProviderConfig> allProviders = providerStore.All
+            .Where(p => p.ModelType != ModelType.Embedding)
+            .ToList()
+            .AsReadOnly();
 
         if (_providerRouter is null)
         {

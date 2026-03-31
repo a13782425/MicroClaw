@@ -13,7 +13,6 @@ import {
   reindexRagGlobalDocument,
   listSessions,
   getSessionRagStatus,
-  reindexSessionRag,
   getRagQueryStats,
   getRagConfig,
   updateRagConfig,
@@ -237,8 +236,6 @@ function SessionKnowledgeTab() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [status, setStatus] = useState<SessionRagStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
-  const [reindexing, setReindexing] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
 
   // 加载会话列表
   useEffect(() => {
@@ -270,20 +267,6 @@ function SessionKnowledgeTab() {
     if (selectedSessionId) loadStatus(selectedSessionId)
     else setStatus(null)
   }, [selectedSessionId, loadStatus])
-
-  const handleReindex = async () => {
-    setConfirmOpen(false)
-    setReindexing(true)
-    try {
-      const updated = await reindexSessionRag(selectedSessionId)
-      setStatus(updated)
-      toaster.create({ type: 'success', title: `重建索引完成，已索引 ${updated.indexedMessageCount} 条消息` })
-    } catch {
-      toaster.create({ type: 'error', title: '重新索引失败' })
-    } finally {
-      setReindexing(false)
-    }
-  }
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId)
 
@@ -339,24 +322,12 @@ function SessionKnowledgeTab() {
         </Box>
       ) : status ? (
         <Box>
-          <HStack mb="4" justify="space-between" align="center">
-            <Box>
-              <Text fontSize="sm" fontWeight="semibold">{selectedSession?.title ?? selectedSessionId}</Text>
-              <Text fontSize="xs" color="gray.400">
-                渠道：{selectedSession?.channelType} · ID：{selectedSessionId.slice(0, 8)}…
-              </Text>
-            </Box>
-            <Button
-              size="sm"
-              colorPalette="blue"
-              variant="outline"
-              onClick={() => setConfirmOpen(true)}
-              loading={reindexing}
-            >
-              <RefreshCw size={14} />
-              重建索引
-            </Button>
-          </HStack>
+          <Box mb="4">
+            <Text fontSize="sm" fontWeight="semibold">{selectedSession?.title ?? selectedSessionId}</Text>
+            <Text fontSize="xs" color="gray.400">
+              渠道：{selectedSession?.channelType} · ID：{selectedSessionId.slice(0, 8)}…
+            </Text>
+          </Box>
 
           <SimpleGrid columns={2} gap="4">
             <Card.Root variant="outline">
@@ -365,9 +336,9 @@ function SessionKnowledgeTab() {
                   <Box color="blue.500"><MessageSquare size={22} /></Box>
                   <Box>
                     <Text fontSize="2xl" fontWeight="bold" lineHeight="1">
-                      {status.indexedMessageCount}
+                      {status.categoryCount}
                     </Text>
-                    <Text fontSize="xs" color="gray.500" mt="0.5">已索引消息数</Text>
+                    <Text fontSize="xs" color="gray.500" mt="0.5">已建立分类数</Text>
                   </Box>
                 </HStack>
               </Card.Body>
@@ -379,40 +350,30 @@ function SessionKnowledgeTab() {
                   <Box color="green.500"><Clock size={22} /></Box>
                   <Box>
                     <Text fontSize="sm" fontWeight="semibold" lineHeight="1.2">
-                      {status.lastIndexedAtMs
-                        ? new Date(status.lastIndexedAtMs).toLocaleString('zh-CN', {
+                      {status.lastUpdatedAtMs
+                        ? new Date(status.lastUpdatedAtMs).toLocaleString('zh-CN', {
                             year: 'numeric', month: '2-digit', day: '2-digit',
                             hour: '2-digit', minute: '2-digit',
                           })
                         : '—'}
                     </Text>
-                    <Text fontSize="xs" color="gray.500" mt="0.5">最近索引时间</Text>
+                    <Text fontSize="xs" color="gray.500" mt="0.5">最近更新时间</Text>
                   </Box>
                 </HStack>
               </Card.Body>
             </Card.Root>
           </SimpleGrid>
 
-          {status.indexedMessageCount === 0 && (
+          {status.categoryCount === 0 && (
             <Box mt="4" p="4" bg="orange.50" borderRadius="md" border="1px solid" borderColor="orange.200">
               <Text fontSize="sm" color="orange.700">
-                该会话尚无已索引的消息。对话结束后系统会自动索引，也可点击「重建索引」手动触发。
+                该会话尚无已索引的消息。对话结束后系统会自动索引。
               </Text>
             </Box>
           )}
         </Box>
       ) : null}
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title="确认重建索引"
-        description={`将清除会话「${selectedSession?.title ?? selectedSessionId}」的所有向量索引并重新嵌入全部消息。此操作耗时较长，期间检索效果可能暂时受影响。`}
-        confirmText="重建索引"
-        colorPalette="blue"
-        loading={reindexing}
-        onConfirm={handleReindex}
-        onClose={() => setConfirmOpen(false)}
-      />
     </Box>
   )
 }

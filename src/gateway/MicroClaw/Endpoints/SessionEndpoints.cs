@@ -24,9 +24,9 @@ public static class SessionEndpoints
 
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        // GET /api/sessions — 获取所有会话
+        // GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）
         endpoints.MapGet("/sessions", (SessionStore store) =>
-            Results.Ok(store.All))
+            Results.Ok(store.AllTopLevel))
             .WithTags("Sessions");
 
         // POST /api/sessions — 创建会话

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Providers;
@@ -13,7 +14,8 @@ namespace MicroClaw.Jobs;
 /// B-02: 每日记忆总结后台任务。
 /// 每天凌晨 2 点（UTC）执行：
 ///   1. 为所有活跃 Session 总结前一天的对话消息，写入 memory/{date}.md。
-///   2. 每周（逢周一）将 7-13 天前的日记忆要点合并更新到长期记忆 MEMORY.md。
+///   2. 将同天日记忆按主题分类归纳，更新 RAG 分类 chunk 和 MEMORY.md 目录。
+///   3. 清理 3 天前的日记忆文件。
 /// </summary>
 public sealed class MemorySummarizationJob(
     SessionStore sessionStore,
@@ -43,19 +45,23 @@ public sealed class MemorySummarizationJob(
         {messages}
         """;
 
-    // 每周合并 Prompt（{existing} 和 {daily} 占位符）
-    internal const string WeeklyMergePromptTemplate =
+    // 分类归纳 Prompt（{existing_categories} 和 {daily_summary} 占位符）
+    internal const string CategoryClassificationPromptTemplate =
         """
-        请将以下最近几天的日记忆内容合并更新到现有长期记忆中（中文，500 字以内）：
-        - 保留长期记忆中的核心事实和持续存在的上下文
-        - 将新的日记忆要点整合进去，去除重复和过时信息
-        - 保持 Markdown 格式，条目清晰
+        你是记忆管理助手。请将今日记忆内容按主题分类整合到已有的分类记忆中。
 
-        现有长期记忆（MEMORY.md）：
-        {existing}
+        要求：
+        - 保留已有分类，必要时新增分类（最多保留 10 个分类）
+        - 每个分类内容精简（100 字以内），去除重复和过时信息
+        - 输出格式必须是合法的 JSON 对象：{"分类名": "分类内容正文", ...}
+        - 常见分类示例：项目进度、技术偏好、决策历史、用户习惯、待办事项
+        - 只输出 JSON，不要包含其他内容或 Markdown 代码块
 
-        最近几天的日记忆：
-        {daily}
+        已有分类记忆（JSON）：
+        {existing_categories}
+
+        今日记忆摘要：
+        {daily_summary}
         """;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,13 +82,12 @@ public sealed class MemorySummarizationJob(
             if (stoppingToken.IsCancellationRequested) return;
 
             DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-            bool doWeeklyMerge = DateTime.UtcNow.DayOfWeek == DayOfWeek.Monday;
 
             logger.LogInformation(
-                "B-02 MemorySummarizationJob 开始执行，目标日期={Date}，执行长期记忆合并={Weekly}",
-                targetDate, doWeeklyMerge);
+                "B-02 MemorySummarizationJob 开始执行，目标日期={Date}",
+                targetDate);
 
-            await RunSummarizationAsync(targetDate, doWeeklyMerge, stoppingToken);
+            await RunSummarizationAsync(targetDate, stoppingToken);
         }
 
         logger.LogInformation("B-02 MemorySummarizationJob 已停止");
@@ -99,20 +104,20 @@ public sealed class MemorySummarizationJob(
 
     /// <summary>
     /// 执行一轮记忆总结，供测试直接调用。
-    /// 遍历所有 Session：有消息的写入每日记忆；周一时额外合并长期记忆。
+    /// 遍历所有 Session：有消息的写入每日记忆，并触发分类归纳。
     /// </summary>
-    internal async Task RunSummarizationAsync(DateOnly date, bool doWeeklyMerge, CancellationToken ct)
+    internal async Task RunSummarizationAsync(DateOnly date, CancellationToken ct)
     {
         IReadOnlyList<SessionInfo> sessions = sessionStore.All;
         foreach (SessionInfo session in sessions)
         {
             if (ct.IsCancellationRequested) break;
-            await SummarizeSessionAsync(session, date, doWeeklyMerge, ct);
+            await SummarizeSessionAsync(session, date, ct);
         }
     }
 
     private async Task SummarizeSessionAsync(
-        SessionInfo session, DateOnly date, bool doWeeklyMerge, CancellationToken ct)
+        SessionInfo session, DateOnly date, CancellationToken ct)
     {
         try
         {
@@ -125,43 +130,43 @@ public sealed class MemorySummarizationJob(
                 .Where(m => m.Role is "user" or "assistant")
                 .ToList();
 
+            ProviderConfig? provider = providerStore.All
+                .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
+            IChatClient? client = provider is not null ? clientFactory.Create(provider) : null;
+
             if (dayMessages.Count > 0)
             {
-                // Coordinate with ContextOverflowSummarizer: if daily memory already exists
-                // (from overflow), only summarize messages posted after the memory was last updated.
+                // 与 ContextOverflowSummarizer 协调：溢出已写入时，只处理更新后的消息
                 DailyMemoryInfo? existingDailyMemory = memoryService.GetDailyMemory(session.Id, dateStr);
                 if (existingDailyMemory is not null)
                 {
                     dayMessages = dayMessages
                         .Where(m => m.Timestamp > existingDailyMemory.UpdatedAt)
                         .ToList();
-
-                    if (dayMessages.Count == 0)
-                    {
-                        logger.LogDebug(
-                            "B-02 Session={SessionId} 在 {Date} 已有溢出总结且无新消息，跳过",
-                            session.Id, dateStr);
-                        goto weeklyMerge;
-                    }
                 }
 
-                ProviderConfig? provider = providerStore.All
-                    .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
-
-                if (provider is null)
+                if (dayMessages.Count > 0)
                 {
-                    logger.LogWarning(
-                        "B-02 Session={SessionId} 无可用 Provider（{ProviderId}），跳过每日记忆总结",
-                        session.Id, session.ProviderId);
+                    if (client is null)
+                    {
+                        logger.LogWarning(
+                            "B-02 Session={SessionId} 无可用 Provider（{ProviderId}），跳过每日记忆总结",
+                            session.Id, session.ProviderId);
+                    }
+                    else
+                    {
+                        string summary = await BuildDailySummaryAsync(dayMessages, client, ct);
+                        memoryService.WriteDailyMemory(session.Id, dateStr, summary);
+                        logger.LogInformation(
+                            "B-02 Session={SessionId} 每日记忆已写入 {Date}，消息数={Count}",
+                            session.Id, dateStr, dayMessages.Count);
+                    }
                 }
                 else
                 {
-                    IChatClient client = clientFactory.Create(provider);
-                    string summary = await BuildDailySummaryAsync(dayMessages, client, ct);
-                    memoryService.WriteDailyMemory(session.Id, dateStr, summary);
-                    logger.LogInformation(
-                        "B-02 Session={SessionId} 每日记忆已写入 {Date}，消息数={Count}",
-                        session.Id, dateStr, dayMessages.Count);
+                    logger.LogDebug(
+                        "B-02 Session={SessionId} 在 {Date} 已有溢出总结且无新消息，跳过每日总结",
+                        session.Id, dateStr);
                 }
             }
             else
@@ -169,10 +174,16 @@ public sealed class MemorySummarizationJob(
                 logger.LogDebug("B-02 Session={SessionId} 在 {Date} 无有效消息，跳过", session.Id, dateStr);
             }
 
-            weeklyMerge:
-            // 2. 每周合并长期记忆（逢周一）
-            if (doWeeklyMerge)
-                await MergeToLongTermAsync(session, ct);
+            // 2. 分类归纳：基于今日日记忆更新 RAG 分类 chunk 和 MEMORY.md 目录
+            if (client is not null)
+            {
+                DailyMemoryInfo? dailyForDate = memoryService.GetDailyMemory(session.Id, dateStr);
+                if (dailyForDate is not null && !string.IsNullOrWhiteSpace(dailyForDate.Content))
+                    await ClassifyToCategoriesAsync(session, dateStr, client, ct);
+            }
+
+            // 3. 清理 3 天前的日记忆文件
+            CleanupOldDailyMemories(session, date);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -181,63 +192,61 @@ public sealed class MemorySummarizationJob(
     }
 
     /// <summary>
-    /// 将 7-13 天前的日记忆合并到长期记忆 MEMORY.md（每周执行一次）。
-    /// 合并后同步更新 RAG（memory:long-term），并删除 7 天前的日记忆文件及其 RAG chunks。
+    /// 将日记忆内容按主题分类，更新 Session RAG 分类 chunk 和 MEMORY.md 目录。
     /// </summary>
-    private async Task MergeToLongTermAsync(SessionInfo session, CancellationToken ct)
+    private async Task ClassifyToCategoriesAsync(
+        SessionInfo session, string dateStr, IChatClient client, CancellationToken ct)
     {
-        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
+        string existingJson = memoryService.GetCategoriesJson(session.Id);
+        DailyMemoryInfo? daily = memoryService.GetDailyMemory(session.Id, dateStr);
+        if (daily is null) return;
 
-        // 取 D-7 到 D-13 共 7 天的日记忆
-        List<string> dailyContents = Enumerable.Range(7, 7)
-            .Select(d => memoryService.GetDailyMemory(session.Id, today.AddDays(-d).ToString("yyyy-MM-dd")))
-            .Where(info => info is not null)
-            .Select(info => $"## {info!.Date}\n{info.Content}")
-            .ToList();
-
-        if (dailyContents.Count == 0)
+        string updatedJson = await BuildCategoryClassificationAsync(existingJson, daily.Content, client, ct);
+        if (string.IsNullOrWhiteSpace(updatedJson))
         {
-            logger.LogDebug("B-02 Session={SessionId} 无 7-13 天前的日记忆，跳过长期记忆合并", session.Id);
+            logger.LogWarning("B-02 Session={SessionId} 分类 LLM 返回空结果，跳过", session.Id);
             return;
         }
 
-        ProviderConfig? provider = providerStore.All
-            .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
-
-        if (provider is null)
-        {
-            logger.LogWarning(
-                "B-02 Session={SessionId} 无可用 Provider，跳过长期记忆合并", session.Id);
-            return;
-        }
-
-        IChatClient client = clientFactory.Create(provider);
-        string existingMemory = memoryService.GetLongTermMemory(session.Id);
-        string merged = await BuildWeeklyMergeAsync(existingMemory, dailyContents, client, ct);
-        memoryService.UpdateLongTermMemory(session.Id, merged);
-        logger.LogInformation("B-02 Session={SessionId} 长期记忆已合并更新", session.Id);
-
-        // Ingest merged long-term memory into session RAG
-        const string longTermSourceId = "memory:long-term";
+        Dictionary<string, string>? categories;
         try
         {
-            await ragService.DeleteBySourceIdAsync(longTermSourceId, RagScope.Session, session.Id, ct);
-            await ragService.IngestAsync(merged, longTermSourceId, RagScope.Session, session.Id, ct);
-            logger.LogInformation("B-02 Session={SessionId} 长期记忆已同步到 RAG", session.Id);
+            categories = JsonSerializer.Deserialize<Dictionary<string, string>>(updatedJson);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (JsonException ex)
         {
-            logger.LogError(ex, "B-02 Session={SessionId} 长期记忆写入 RAG 异常", session.Id);
+            logger.LogWarning(ex, "B-02 Session={SessionId} 分类 JSON 解析失败：{Json}",
+                session.Id, updatedJson[..Math.Min(200, updatedJson.Length)]);
+            return;
         }
 
-        // Delete daily memory files older than 7 days and their RAG chunks
-        await CleanupOldDailyMemoriesAsync(session, today, ct);
+        if (categories is null || categories.Count == 0) return;
+
+        foreach (var (categoryName, content) in categories)
+        {
+            try
+            {
+                await ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, session.Id, ct);
+                await ragService.IngestAsync(content, categoryName, RagScope.Session, session.Id, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "B-02 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
+                    session.Id, categoryName);
+            }
+        }
+
+        string newJson = JsonSerializer.Serialize(categories, new JsonSerializerOptions { WriteIndented = true });
+        memoryService.WriteCategoriesJson(session.Id, newJson);
+        memoryService.UpdateLongTermMemory(session.Id, BuildCategoryIndex(categories));
+        logger.LogInformation("B-02 Session={SessionId} 分类记忆已更新，共 {Count} 个分类",
+            session.Id, categories.Count);
     }
 
     /// <summary>
-    /// Delete daily memory .md files and corresponding RAG chunks for dates older than 7 days.
+    /// 删除 3 天前的日记忆文件（不再负责 RAG cleanup，分类 chunk 由分类作业单独管理）。
     /// </summary>
-    private async Task CleanupOldDailyMemoriesAsync(SessionInfo session, DateOnly today, CancellationToken ct)
+    private void CleanupOldDailyMemories(SessionInfo session, DateOnly today)
     {
         IReadOnlyList<string> allDates = memoryService.ListDailyMemories(session.Id);
         int deletedCount = 0;
@@ -251,21 +260,8 @@ public sealed class MemorySummarizationJob(
                 continue;
 
             int daysAgo = today.DayNumber - memDate.DayNumber;
-            if (daysAgo <= 7) continue; // Keep recent 7 days for SessionMemoryContextProvider
+            if (daysAgo <= 3) continue;
 
-            // Delete RAG chunks for this daily memory
-            string sourceId = $"memory:{date}";
-            try
-            {
-                await ragService.DeleteBySourceIdAsync(sourceId, RagScope.Session, session.Id, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(ex, "B-02 Session={SessionId} 删除 RAG chunks {SourceId} 异常",
-                    session.Id, sourceId);
-            }
-
-            // Delete local .md file
             if (memoryService.DeleteDailyMemory(session.Id, date))
                 deletedCount++;
         }
@@ -273,7 +269,7 @@ public sealed class MemorySummarizationJob(
         if (deletedCount > 0)
         {
             logger.LogInformation(
-                "B-02 Session={SessionId} 清理了 {Count} 个过期日记忆文件及其 RAG chunks",
+                "B-02 Session={SessionId} 清理了 {Count} 个过期日记忆文件",
                 session.Id, deletedCount);
         }
     }
@@ -296,24 +292,55 @@ public sealed class MemorySummarizationJob(
         return response.Text ?? string.Empty;
     }
 
-    /// <summary>调用 LLM 将每日记忆合并到长期记忆；返回合并后的文本。</summary>
-    internal static async Task<string> BuildWeeklyMergeAsync(
-        string existingMemory,
-        IReadOnlyList<string> dailyContents,
+    /// <summary>调用 LLM 将今日摘要归纳到已有分类记忆中；返回更新后的分类 JSON 字符串。</summary>
+    internal static async Task<string> BuildCategoryClassificationAsync(
+        string existingCategoriesJson,
+        string dailySummary,
         IChatClient client,
         CancellationToken ct)
     {
-        string existing = string.IsNullOrWhiteSpace(existingMemory) ? "（暂无长期记忆）" : existingMemory;
-        string daily = string.Join("\n\n", dailyContents);
-        string prompt = WeeklyMergePromptTemplate
-            .Replace("{existing}", existing)
-            .Replace("{daily}", daily);
+        string existing = string.IsNullOrWhiteSpace(existingCategoriesJson) ? "{}" : existingCategoriesJson;
+        string prompt = CategoryClassificationPromptTemplate
+            .Replace("{existing_categories}", existing)
+            .Replace("{daily_summary}", dailySummary);
 
         ChatResponse response = await client.GetResponseAsync(
             [new ChatMessage(ChatRole.User, prompt)],
             cancellationToken: ct);
 
-        return response.Text ?? string.Empty;
+        string text = (response.Text ?? string.Empty).Trim();
+
+        // 若 LLM 将 JSON 包裹在 Markdown 代码块中，提取纯 JSON
+        if (text.Contains("```"))
+        {
+            int start = text.IndexOf('{');
+            int end = text.LastIndexOf('}');
+            if (start >= 0 && end > start)
+                text = text[start..(end + 1)];
+        }
+
+        return text;
+    }
+
+    /// <summary>从分类字典生成 MEMORY.md 目录内容。</summary>
+    private static string BuildCategoryIndex(Dictionary<string, string> categories)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("## 记忆目录");
+        sb.AppendLine();
+        sb.AppendLine("以下是会话的长期记忆分类索引，详细内容可通过语义检索获取：");
+        sb.AppendLine();
+        foreach (var (name, content) in categories)
+        {
+            string summary = content.Trim();
+            int dotIdx = summary.IndexOfAny(['.', '。', '\n'], 0);
+            if (dotIdx > 0 && dotIdx < 80)
+                summary = summary[..dotIdx];
+            else if (summary.Length > 80)
+                summary = summary[..80] + "…";
+            sb.AppendLine($"- **{name}**：{summary}");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     /// <summary>将消息列表格式化为 LLM 可读文本（超过 500 字符的消息截断）。</summary>

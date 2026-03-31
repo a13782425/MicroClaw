@@ -172,50 +172,6 @@ public sealed class MemorySummarizationJobTests : IDisposable
         capturedMessages![0].Text.Should().Contain("测试消息");
     }
 
-    // ── BuildWeeklyMergeAsync ─────────────────────────────────────────────────
-
-    [Fact]
-    public async Task BuildWeeklyMergeAsync_ReturnsLlmResponse()
-    {
-        var client = Substitute.For<IChatClient>();
-        client.GetResponseAsync(
-                Arg.Any<IList<ChatMessage>>(),
-                Arg.Any<ChatOptions?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new ChatResponse(
-                new ChatMessage(ChatRole.Assistant, "- 合并后的长期记忆"))));
-
-        string merged = await MemorySummarizationJob.BuildWeeklyMergeAsync(
-            "现有记忆",
-            ["## 2025-06-08\n- 昨天做了A"],
-            client,
-            CancellationToken.None);
-
-        merged.Should().Be("- 合并后的长期记忆");
-    }
-
-    [Fact]
-    public async Task BuildWeeklyMergeAsync_EmptyExistingMemory_UsesPlaceholder()
-    {
-        var client = Substitute.For<IChatClient>();
-        IList<ChatMessage>? capturedMessages = null;
-
-        client.GetResponseAsync(
-                Arg.Do<IList<ChatMessage>>(msgs => capturedMessages = msgs),
-                Arg.Any<ChatOptions?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new ChatResponse(
-                new ChatMessage(ChatRole.Assistant, "ok"))));
-
-        await MemorySummarizationJob.BuildWeeklyMergeAsync(
-            string.Empty,
-            ["## 2025-06-08\n- 内容"],
-            client,
-            CancellationToken.None);
-
-        capturedMessages![0].Text.Should().Contain("（暂无长期记忆）");
-    }
-
     // ── RunSummarizationAsync 集成测试 ────────────────────────────────────────
 
     [Fact]
@@ -274,7 +230,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
             Substitute.For<IRagService>(),
             NullLogger<MemorySummarizationJob>.Instance);
 
-        await job.RunSummarizationAsync(targetDate, doWeeklyMerge: false, CancellationToken.None);
+        await job.RunSummarizationAsync(targetDate, CancellationToken.None);
 
         // ── 验证每日记忆文件已写入 ────────────────────────────────────────────
         DailyMemoryInfo? written = _memory.GetDailyMemory(session.Id, targetDate.ToString("yyyy-MM-dd"));
@@ -312,7 +268,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
             NullLogger<MemorySummarizationJob>.Instance);
 
         DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-        await job.RunSummarizationAsync(targetDate, doWeeklyMerge: false, CancellationToken.None);
+        await job.RunSummarizationAsync(targetDate, CancellationToken.None);
 
         // IChatClient 不应被调用
         await mockChatClient.DidNotReceive().GetResponseAsync(
@@ -323,53 +279,5 @@ public sealed class MemorySummarizationJobTests : IDisposable
         // 每日记忆文件不应被创建
         DailyMemoryInfo? written = _memory.GetDailyMemory(session.Id, targetDate.ToString("yyyy-MM-dd"));
         written.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task RunSummarizationAsync_DoesWeeklyMerge_WhenFlagIsTrue()
-    {
-        IDbContextFactory<MicroClaw.Infrastructure.Data.GatewayDbContext> dbFactory = _db.CreateFactory();
-        var sessionStore = new SessionStore(dbFactory, _tempDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
-
-        ProviderConfig testProvider = providerStore.Add(new ProviderConfig
-        {
-            DisplayName = "Test",
-            Protocol = ProviderProtocol.OpenAI,
-            ModelName = "gpt-4o",
-            ApiKey = "sk-x",
-            IsEnabled = true,
-        });
-
-        SessionInfo session = sessionStore.Create("合并会话", testProvider.Id, ChannelType.Web);
-
-        // 写入一条 7 天前的日记忆
-        DateOnly sevenDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-7));
-        _memory.WriteDailyMemory(session.Id, sevenDaysAgo.ToString("yyyy-MM-dd"), "- 七天前的记忆");
-
-        var mockChatClient = Substitute.For<IChatClient>();
-        mockChatClient.GetResponseAsync(
-                Arg.Any<IList<ChatMessage>>(),
-                Arg.Any<ChatOptions?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new ChatResponse(
-                new ChatMessage(ChatRole.Assistant, "- 合并后的长期记忆内容"))));
-
-        var mockModelProvider = Substitute.For<IModelProvider>();
-        mockModelProvider.Supports(ProviderProtocol.OpenAI).Returns(true);
-        mockModelProvider.Create(Arg.Any<ProviderConfig>()).Returns(mockChatClient);
-        var clientFactory = new ProviderClientFactory([mockModelProvider]);
-
-        var job = new MemorySummarizationJob(
-            sessionStore, providerStore, clientFactory, _memory,
-            Substitute.For<IRagService>(),
-            NullLogger<MemorySummarizationJob>.Instance);
-
-        DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-        await job.RunSummarizationAsync(targetDate, doWeeklyMerge: true, CancellationToken.None);
-
-        // 长期记忆应被更新
-        string longTerm = _memory.GetLongTermMemory(session.Id);
-        longTerm.Should().Be("- 合并后的长期记忆内容");
     }
 }
