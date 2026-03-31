@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MicroClaw.Gateway.Contracts.Plugins;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
@@ -10,7 +11,7 @@ namespace MicroClaw.Agent;
 /// <summary>
 /// Agent 配置的 CRUD 存储，基于 EF Core（与 ChannelConfigStore 结构对称）。
 /// </summary>
-public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
+public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory) : IPluginAgentRegistrar
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -233,4 +234,98 @@ public sealed class AgentStore(IDbContextFactory<GatewayDbContext> factory)
         Enum.TryParse<ProviderRoutingStrategy>(value, ignoreCase: true, out ProviderRoutingStrategy result)
             ? result
             : ProviderRoutingStrategy.Default;
+
+    // ── IPluginAgentRegistrar ───────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public Task ImportFromFileAsync(string filePath, string pluginName, CancellationToken ct = default)
+    {
+        if (!File.Exists(filePath))
+            return Task.CompletedTask;
+
+        string content = File.ReadAllText(filePath);
+        var (name, description) = ParseAgentFrontMatter(content, Path.GetFileNameWithoutExtension(filePath));
+
+        string sourceTag = $"plugin:{pluginName}";
+
+        using GatewayDbContext db = factory.CreateDbContext();
+
+        // Skip if agent from this plugin with same name already exists
+        if (db.Agents.Any(a => a.SourcePlugin == sourceTag && a.Name == name))
+            return Task.CompletedTask;
+
+        // Also skip if a non-plugin agent with same name exists (don't overwrite user-created agents)
+        if (db.Agents.Any(a => a.Name == name))
+            return Task.CompletedTask;
+
+        var entity = new AgentConfigEntity
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = name,
+            Description = description,
+            IsEnabled = true,
+            CreatedAtMs = TimeBase.ToMs(DateTimeOffset.UtcNow),
+            SourcePlugin = sourceTag,
+        };
+        db.Agents.Add(entity);
+        db.SaveChanges();
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public Task RemoveByPluginAsync(string pluginName, CancellationToken ct = default)
+    {
+        string sourceTag = $"plugin:{pluginName}";
+        using GatewayDbContext db = factory.CreateDbContext();
+        var toRemove = db.Agents.Where(a => a.SourcePlugin == sourceTag).ToList();
+        if (toRemove.Count > 0)
+        {
+            db.Agents.RemoveRange(toRemove);
+            db.SaveChanges();
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Parse YAML front-matter from a Markdown agent definition file.
+    /// Expected format:
+    /// <code>
+    /// ---
+    /// name: agent-name
+    /// description: Agent description
+    /// ---
+    /// </code>
+    /// </summary>
+    private static (string Name, string Description) ParseAgentFrontMatter(string content, string fallbackName)
+    {
+        string name = fallbackName;
+        string description = string.Empty;
+
+        if (!content.StartsWith("---")) return (name, description);
+
+        int endIdx = content.IndexOf("---", 3, StringComparison.Ordinal);
+        if (endIdx < 0) return (name, description);
+
+        string frontMatter = content[3..endIdx];
+        foreach (string line in frontMatter.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int colonIdx = line.IndexOf(':');
+            if (colonIdx < 0) continue;
+
+            string key = line[..colonIdx].Trim().ToLowerInvariant();
+            string value = line[(colonIdx + 1)..].Trim();
+
+            switch (key)
+            {
+                case "name":
+                    if (!string.IsNullOrWhiteSpace(value)) name = value;
+                    break;
+                case "description":
+                    description = value;
+                    break;
+            }
+        }
+
+        return (name, description);
+    }
 }

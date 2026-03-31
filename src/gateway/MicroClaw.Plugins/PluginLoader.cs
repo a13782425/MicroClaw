@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using MicroClaw.Configuration;
+using MicroClaw.Gateway.Contracts.Plugins;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Plugins.Models;
 using Microsoft.Extensions.Hosting;
@@ -25,11 +26,22 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
     private readonly ILogger<PluginLoader> _logger;
     private readonly ConcurrentDictionary<string, PluginInfo> _plugins = new(StringComparer.OrdinalIgnoreCase);
 
-    public PluginLoader(ILoggerFactory loggerFactory)
+    private readonly IPluginSkillRegistrar? _skillRegistrar;
+    private readonly IPluginMcpRegistrar? _mcpRegistrar;
+    private readonly IPluginAgentRegistrar? _agentRegistrar;
+
+    public PluginLoader(
+        ILoggerFactory loggerFactory,
+        IPluginSkillRegistrar? skillRegistrar = null,
+        IPluginMcpRegistrar? mcpRegistrar = null,
+        IPluginAgentRegistrar? agentRegistrar = null)
     {
         _logger = loggerFactory.CreateLogger<PluginLoader>();
         _pluginsDir = Path.Combine(MicroClawConfig.Env.WorkspaceRoot, "plugins");
         _registryPath = Path.Combine(_pluginsDir, "plugin.json");
+        _skillRegistrar = skillRegistrar;
+        _mcpRegistrar = mcpRegistrar;
+        _agentRegistrar = agentRegistrar;
     }
 
     // ── IHostedService ──────────────────────────────────────────────────────
@@ -61,6 +73,7 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
 
         _plugins[name] = plugin with { IsEnabled = true };
         await UpdateRegistryEntryAsync(name, entry => entry with { Enabled = true });
+        await RegisterPluginComponentsAsync(plugin);
         _logger.LogInformation("Plugin '{Name}' enabled", name);
     }
 
@@ -69,6 +82,7 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
         if (!_plugins.TryGetValue(name, out PluginInfo? plugin))
             throw new InvalidOperationException($"Plugin '{name}' not found.");
 
+        await UnregisterPluginComponentsAsync(plugin);
         _plugins[name] = plugin with { IsEnabled = false };
         await UpdateRegistryEntryAsync(name, entry => entry with { Enabled = false });
         _logger.LogInformation("Plugin '{Name}' disabled", name);
@@ -110,6 +124,8 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
         await AddRegistryEntryAsync(plugin.Name, entry);
         _plugins[plugin.Name] = plugin;
 
+        await RegisterPluginComponentsAsync(plugin);
+
         _logger.LogInformation("Plugin '{Name}' installed from {Source}", plugin.Name, source.Type);
         return plugin;
     }
@@ -142,6 +158,8 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
         await AddRegistryEntryAsync(plugin.Name, entry);
         _plugins[plugin.Name] = plugin;
 
+        await RegisterPluginComponentsAsync(plugin);
+
         _logger.LogInformation("Plugin '{Name}' installed from pre-cloned directory", plugin.Name);
         return plugin;
     }
@@ -150,6 +168,9 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
     {
         if (!_plugins.TryRemove(name, out PluginInfo? plugin))
             throw new InvalidOperationException($"Plugin '{name}' not found.");
+
+        // Unregister plugin components before deleting files
+        await UnregisterPluginComponentsAsync(plugin);
 
         // Remove from registry
         await RemoveRegistryEntryAsync(name);
@@ -181,9 +202,15 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
 
         await GitHelper.PullAsync(plugin.RootPath, ct);
 
+        // Unregister old components, reload, re-register
+        await UnregisterPluginComponentsAsync(plugin);
+
         // Reload the plugin
         PluginInfo updated = LoadPlugin(plugin.RootPath, plugin.Source) with { IsEnabled = plugin.IsEnabled };
         _plugins[name] = updated;
+
+        if (updated.IsEnabled)
+            await RegisterPluginComponentsAsync(updated);
 
         _logger.LogInformation("Plugin '{Name}' updated", name);
         return updated;
@@ -233,6 +260,73 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
                 _logger.LogWarning(ex, "Failed to load plugin from directory: {Dir}", dir);
             }
         }
+
+        // Register components for all enabled plugins after discovery
+        foreach (PluginInfo loadedPlugin in _plugins.Values.Where(p => p.IsEnabled))
+        {
+            try
+            {
+                await RegisterPluginComponentsAsync(loadedPlugin);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to register components for plugin: {Name}", loadedPlugin.Name);
+            }
+        }
+    }
+
+    // ── Plugin Component Registration ──────────────────────────────────────
+
+    private async Task RegisterPluginComponentsAsync(PluginInfo plugin)
+    {
+        // Skills: register each skill path's parent directory as a skill root
+        if (_skillRegistrar is not null && plugin.SkillPaths.Count > 0)
+        {
+            var roots = plugin.SkillPaths
+                .Select(p => Path.GetDirectoryName(p)!)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (string root in roots)
+            {
+                _skillRegistrar.AddRoot(root);
+                _logger.LogDebug("Registered skill root '{Root}' from plugin '{Name}'", root, plugin.Name);
+            }
+        }
+
+        // MCP Servers: load from .mcp.json
+        if (_mcpRegistrar is not null && plugin.McpConfigPath is not null)
+        {
+            await _mcpRegistrar.RegisterFromConfigFileAsync(plugin.McpConfigPath, plugin.Name);
+        }
+
+        // Agents: import from markdown files
+        if (_agentRegistrar is not null && plugin.AgentPaths.Count > 0)
+        {
+            foreach (string agentPath in plugin.AgentPaths)
+            {
+                await _agentRegistrar.ImportFromFileAsync(agentPath, plugin.Name);
+                _logger.LogDebug("Imported agent from '{Path}' for plugin '{Name}'", agentPath, plugin.Name);
+            }
+        }
+    }
+
+    private async Task UnregisterPluginComponentsAsync(PluginInfo plugin)
+    {
+        // Skills: remove registered roots
+        if (_skillRegistrar is not null && plugin.SkillPaths.Count > 0)
+        {
+            var roots = plugin.SkillPaths
+                .Select(p => Path.GetDirectoryName(p)!)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (string root in roots)
+                _skillRegistrar.RemoveRoot(root);
+        }
+
+        // MCP Servers: unregister by plugin name
+        _mcpRegistrar?.UnregisterByPlugin(plugin.Name);
+
+        // Agents: remove by plugin name
+        if (_agentRegistrar is not null)
+            await _agentRegistrar.RemoveByPluginAsync(plugin.Name);
     }
 
     // ── Plugin Loading ──────────────────────────────────────────────────────

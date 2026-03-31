@@ -15,6 +15,7 @@ using MicroClaw.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Gateway.Contracts;
+using MicroClaw.Gateway.Contracts.Plugins;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
@@ -190,6 +191,7 @@ public class ServeCommand : Command
 		string workspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
 		string agentsDir = MicroClawConfig.Env.AgentsDir;
 		builder.Services.AddSingleton<AgentStore>();
+		builder.Services.AddSingleton<IPluginAgentRegistrar>(sp => sp.GetRequiredService<AgentStore>());
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
 		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
@@ -297,8 +299,9 @@ public class ServeCommand : Command
 			foreach (string extra in skillOpts.AdditionalFolders)
 				roots.Add(ResolveFolder(extra, workspaceRoot));
 			
-			return new SkillService(workspaceRoot, roots);
+				return new SkillService(workspaceRoot, roots);
 		});
+		builder.Services.AddSingleton<IPluginSkillRegistrar>(sp => sp.GetRequiredService<SkillService>());
 		builder.Services.AddSingleton<SkillStore>(sp => new SkillStore(
 			sp.GetRequiredService<SkillService>()));
 		builder.Services.AddSingleton<SkillToolFactory>(sp => new SkillToolFactory(
@@ -317,6 +320,7 @@ public class ServeCommand : Command
 		// D-6: MCP 动态工具注册——运行时注册表，启动时从 DB 同步，API 变更后即时生效，无需重启
 		builder.Services.AddSingleton<McpServerRegistry>();
 		builder.Services.AddSingleton<IMcpServerRegistry>(sp => sp.GetRequiredService<McpServerRegistry>());
+		builder.Services.AddSingleton<IPluginMcpRegistrar>(sp => sp.GetRequiredService<McpServerRegistry>());
 		builder.Services.AddHostedService(sp => sp.GetRequiredService<McpServerRegistry>());
 
 		// 工具提供者（实现 IToolProvider，ToolCollector 自动发现，无需手动硬编码）

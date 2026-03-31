@@ -27,4 +27,10 @@ public sealed class AgentConfigEntity
 
     /// <summary>月度预算上限（USD）。null 表示不限制。超出时记录 Warning 日志。</summary>
     public decimal? MonthlyBudgetUsd { get; set; }
+
+    /// <summary>
+    /// Source plugin name (e.g. "plugin:my-plugin"). null = manually created, not from a plugin.
+    /// Used by <see cref="MicroClaw.Gateway.Contracts.Plugins.IPluginAgentRegistrar"/> for bulk removal.
+    /// </summary>
+    public string? SourcePlugin { get; set; }
 }

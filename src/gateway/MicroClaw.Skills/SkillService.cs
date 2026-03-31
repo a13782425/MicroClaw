@@ -1,3 +1,5 @@
+using MicroClaw.Gateway.Contracts.Plugins;
+
 namespace MicroClaw.Skills;
 
 /// <summary>
@@ -5,16 +7,22 @@ namespace MicroClaw.Skills;
 /// 管理一个或多个技能文件夹（skillRoots）下的 {skillId}/ 目录，防止路径穿越攻击。
 /// 第一个 root（DefaultSkillRoot）为新技能的写入目录；其余 root 仅用于读取和扫描。
 /// </summary>
-public sealed class SkillService
+public sealed class SkillService : IPluginSkillRegistrar
 {
     /// <summary>返回 workspace 根目录路径。</summary>
     public string WorkspaceRoot { get; }
 
+    private readonly List<string> _skillRoots;
+    private readonly object _rootsLock = new();
+
     /// <summary>所有技能文件夹的绝对路径列表（首个为默认写入目录）。</summary>
-    public IReadOnlyList<string> SkillRoots { get; }
+    public IReadOnlyList<string> SkillRoots
+    {
+        get { lock (_rootsLock) return _skillRoots.ToList().AsReadOnly(); }
+    }
 
     /// <summary>新技能的默认写入目录（SkillRoots[0]）。</summary>
-    public string DefaultSkillRoot => SkillRoots[0];
+    public string DefaultSkillRoot => _skillRoots[0];
 
     /// <summary>SkillManifest 文件级缓存：key=skillId, value=(文件最后修改时间, 解析结果)。</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime LastWrite, SkillManifest Manifest)> _manifestCache = new();
@@ -24,12 +32,36 @@ public sealed class SkillService
         WorkspaceRoot = workspaceRoot;
         if (skillRoots is { Count: > 0 })
         {
-            SkillRoots = skillRoots;
+            _skillRoots = [..skillRoots];
         }
         else
         {
             // 默认使用 {workspaceRoot}/skills/
-            SkillRoots = [Path.GetFullPath(Path.Combine(workspaceRoot, "skills"))];
+            _skillRoots = [Path.GetFullPath(Path.Combine(workspaceRoot, "skills"))];
+        }
+    }
+
+    // ── IPluginSkillRegistrar ───────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public void AddRoot(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        lock (_rootsLock)
+        {
+            if (_skillRoots.Any(r => string.Equals(Path.GetFullPath(r), fullPath, StringComparison.OrdinalIgnoreCase)))
+                return;
+            _skillRoots.Add(fullPath);
+        }
+    }
+
+    /// <inheritdoc/>
+    public void RemoveRoot(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        lock (_rootsLock)
+        {
+            _skillRoots.RemoveAll(r => string.Equals(Path.GetFullPath(r), fullPath, StringComparison.OrdinalIgnoreCase));
         }
     }
 
