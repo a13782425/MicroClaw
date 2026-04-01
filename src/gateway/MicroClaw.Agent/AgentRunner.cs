@@ -10,6 +10,7 @@ using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
 using MicroClaw.Agent.Restorers;
 using MicroClaw.Emotion;
+using MicroClaw.RAG;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Gateway.Contracts.Streaming;
@@ -53,7 +54,9 @@ public sealed class AgentRunner(
     IToolRiskInterceptor? toolRiskInterceptor = null,
     IProviderRouter? providerRouter = null,
     IContextOverflowSummarizer? contextOverflowSummarizer = null,
-    IHookExecutor? hookExecutor = null) : IAgentMessageHandler
+    IHookExecutor? hookExecutor = null,
+    IRagUsageAuditor? ragUsageAuditor = null,
+    RagRetrievalContext? ragRetrievalContext = null) : IAgentMessageHandler
 {
     private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
@@ -68,6 +71,8 @@ public sealed class AgentRunner(
     private readonly IProviderRouter? _providerRouter = providerRouter;
     private readonly IContextOverflowSummarizer? _contextOverflowSummarizer = contextOverflowSummarizer;
     private readonly IHookExecutor? _hookExecutor = hookExecutor;
+    private readonly IRagUsageAuditor? _ragUsageAuditor = ragUsageAuditor;
+    private readonly RagRetrievalContext? _ragRetrievalContext = ragRetrievalContext;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
@@ -319,14 +324,36 @@ public sealed class AgentRunner(
                     }, CancellationToken.None);
 
                     // 主流：读取内部 eventChannel，转发到外层 output channel
+                    var responseAccumulator = new System.Text.StringBuilder();
                     await foreach (StreamItem item in eventChannel.Reader.ReadAllAsync(ct))
                     {
                         anyItemWritten = true;
+                        if (item is TokenItem tokenItem)
+                            responseAccumulator.Append(tokenItem.Content);
                         await output.Writer.WriteAsync(item, ct);
                     }
 
                     await runTask; // 等待后台任务；异常在此抛出
                     succeeded = true;
+
+                    // RAG 审计：fire-and-forget，不阻塞流式输出完成
+                    if (_ragUsageAuditor is not null
+                        && _ragRetrievalContext?.RetrievedChunks is { Count: > 0 } chunks
+                        && responseAccumulator.Length > 0)
+                    {
+                        string response = responseAccumulator.ToString();
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _ragUsageAuditor.AuditAsync(chunks, response, CancellationToken.None);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "RAG 审计后台任务失败");
+                            }
+                        }, CancellationToken.None);
+                    }
                 }
                 catch (OperationCanceledException)
                 {

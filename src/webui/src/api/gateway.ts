@@ -503,11 +503,45 @@ export async function getSessionMemory(sessionId: string): Promise<string> {
   return data.content
 }
 
+/** @deprecated 长期记忆已设为只读，此函数保留但不再使用 */
 export async function updateSessionMemory(sessionId: string, content: string): Promise<string> {
   const { data } = await request.post<{ content: string }>(`/api/sessions/${sessionId}/memory`, {
     content,
   })
   return data.content
+}
+
+// ─── RAG Chunk Management ─────────────────────────────────────────────────────
+
+export interface RagChunkInfo {
+  id: string
+  sourceId: string
+  content: string
+  hitCount: number
+  createdAtMs: number
+  lastAccessedAtMs: number | null
+}
+
+export async function listSessionRagChunks(sessionId: string): Promise<RagChunkInfo[]> {
+  const { data } = await request.get<{ chunks: RagChunkInfo[] }>(`/api/sessions/${sessionId}/rag/chunks`)
+  return data.chunks
+}
+
+export async function listGlobalRagChunks(): Promise<RagChunkInfo[]> {
+  const { data } = await request.get<{ chunks: RagChunkInfo[] }>('/api/rag/global/chunks')
+  return data.chunks
+}
+
+export async function deleteRagChunk(chunkId: string, scope: 'Global' | 'Session', sessionId?: string): Promise<void> {
+  const params = new URLSearchParams({ scope })
+  if (sessionId) params.set('sessionId', sessionId)
+  await request.delete(`/api/rag/chunks/${encodeURIComponent(chunkId)}?${params}`)
+}
+
+export async function updateRagChunkHitCount(chunkId: string, hitCount: number, scope: 'Global' | 'Session', sessionId?: string): Promise<void> {
+  const params = new URLSearchParams({ scope })
+  if (sessionId) params.set('sessionId', sessionId)
+  await request.post(`/api/rag/chunks/${encodeURIComponent(chunkId)}/hit-count?${params}`, { hitCount })
 }
 
 // ─── Agents ──────────────────────────────────────────────────────────────────

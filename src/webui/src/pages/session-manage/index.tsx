@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Box, Flex, Text, Badge, Input, Spinner, Tabs, Textarea,
-  Button, HStack, VStack, For, Em,
+  Button, HStack, VStack, For, Em, Table, IconButton,
 } from '@chakra-ui/react'
-import { RefreshCw, Check, Ban } from 'lucide-react'
+import { RefreshCw, Check, Ban, Trash2, RotateCcw } from 'lucide-react'
 import { toaster } from '@/components/ui/toaster'
 import { eventBus } from '@/services/eventBus'
 import {
   listSessions, approveSession, disableSession,
   listSessionDna, updateSessionDna,
-  getSessionMemory, updateSessionMemory,
+  getSessionMemory,
+  listSessionRagChunks, deleteRagChunk, updateRagChunkHitCount,
   importSessionDnaFromFeishu,
-  type SessionInfo, type SessionDnaFileInfo,
+  type SessionInfo, type SessionDnaFileInfo, type RagChunkInfo,
 } from '@/api/gateway'
 
 // ──────────────────────────────── 左侧列表 ────────────────────────────────────
@@ -196,49 +197,163 @@ function DnaTab({ session }: { session: SessionInfo }) {
 // ─────────────────── Memory Tab ──────────────────────────────────────────────
 
 function MemoryTab({ session }: { session: SessionInfo }) {
-  const [content, setContent] = useState('')
+  const [memoryContent, setMemoryContent] = useState('')
+  const [chunks, setChunks] = useState<RagChunkInfo[]>([])
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [editingHitCount, setEditingHitCount] = useState<Record<string, number>>({})
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     setLoading(true)
-    getSessionMemory(session.id)
-      .then(setContent)
-      .catch(() => toaster.create({ type: 'error', title: '加载记忆失败' }))
-      .finally(() => setLoading(false))
+    try {
+      const [memory, chunkList] = await Promise.all([
+        getSessionMemory(session.id),
+        listSessionRagChunks(session.id),
+      ])
+      setMemoryContent(memory)
+      setChunks(chunkList)
+    } catch {
+      toaster.create({ type: 'error', title: '加载记忆数据失败' })
+    } finally {
+      setLoading(false)
+    }
   }, [session.id])
 
-  const save = async () => {
-    setSaving(true)
+  useEffect(() => { loadData() }, [loadData])
+
+  const handleDeleteChunk = async (chunk: RagChunkInfo) => {
     try {
-      await updateSessionMemory(session.id, content)
-      toaster.create({ type: 'success', title: '记忆已保存' })
+      await deleteRagChunk(chunk.id, 'Session', session.id)
+      setChunks((prev) => prev.filter((c) => c.id !== chunk.id))
+      toaster.create({ type: 'success', title: 'Chunk 已删除' })
     } catch {
-      toaster.create({ type: 'error', title: '保存失败' })
-    } finally {
-      setSaving(false)
+      toaster.create({ type: 'error', title: '删除失败' })
+    }
+  }
+
+  const handleUpdateHitCount = async (chunk: RagChunkInfo) => {
+    const newCount = editingHitCount[chunk.id]
+    if (newCount === undefined || newCount === chunk.hitCount) return
+    try {
+      await updateRagChunkHitCount(chunk.id, newCount, 'Session', session.id)
+      setChunks((prev) =>
+        prev.map((c) => (c.id === chunk.id ? { ...c, hitCount: newCount } : c)),
+      )
+      setEditingHitCount((prev) => {
+        const next = { ...prev }
+        delete next[chunk.id]
+        return next
+      })
+      toaster.create({ type: 'success', title: '命中次数已更新' })
+    } catch {
+      toaster.create({ type: 'error', title: '更新失败' })
     }
   }
 
   if (loading) return <Box p="4"><Spinner /></Box>
 
   return (
-    <Flex direction="column" h="100%" p="3" gap="2">
-      <Text fontSize="xs" color="gray.500">长期记忆（MEMORY.md）始终注入 System Prompt</Text>
-      <Textarea
-        flex="1"
-        fontFamily="mono"
-        fontSize="sm"
-        resize="none"
-        placeholder="此 Session 的长期记忆（Markdown 格式）..."
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        spellCheck={false}
-      />
+    <Flex direction="column" h="100%" p="3" gap="3" overflow="auto">
+      {/* 长期记忆（只读） */}
       <Box>
-        <Button size="sm" colorPalette="blue" loading={saving} onClick={save}>
-          保存
-        </Button>
+        <HStack justify="space-between" mb="1">
+          <Text fontSize="xs" color="gray.500">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
+          <IconButton aria-label="刷新" size="xs" variant="ghost" onClick={loadData}>
+            <RefreshCw size={14} />
+          </IconButton>
+        </HStack>
+        <Textarea
+          fontFamily="mono"
+          fontSize="sm"
+          resize="vertical"
+          minH="100px"
+          maxH="200px"
+          readOnly
+          value={memoryContent}
+          spellCheck={false}
+          bg="gray.50"
+          _dark={{ bg: 'gray.800' }}
+        />
+      </Box>
+
+      {/* RAG Chunks 管理 */}
+      <Box flex="1" overflow="auto">
+        <Text fontSize="xs" color="gray.500" mb="1">
+          RAG 知识片段（{chunks.length} 个）— 可删除或修改命中次数
+        </Text>
+        {chunks.length === 0 ? (
+          <Text fontSize="sm" color="gray.400" p="4" textAlign="center">暂无 RAG 知识片段</Text>
+        ) : (
+          <Table.Root size="sm" variant="outline">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeader w="40%">内容</Table.ColumnHeader>
+                <Table.ColumnHeader w="15%">来源</Table.ColumnHeader>
+                <Table.ColumnHeader w="15%">命中次数</Table.ColumnHeader>
+                <Table.ColumnHeader w="15%">创建时间</Table.ColumnHeader>
+                <Table.ColumnHeader w="15%">操作</Table.ColumnHeader>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {chunks.map((chunk) => (
+                <Table.Row key={chunk.id}>
+                  <Table.Cell>
+                    <Text fontSize="xs" lineClamp={3} title={chunk.content}>
+                      {chunk.content}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Text fontSize="xs" color="gray.500">{chunk.sourceId}</Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <HStack gap="1">
+                      <Input
+                        size="xs"
+                        type="number"
+                        w="60px"
+                        min={0}
+                        value={editingHitCount[chunk.id] ?? chunk.hitCount}
+                        onChange={(e) =>
+                          setEditingHitCount((prev) => ({
+                            ...prev,
+                            [chunk.id]: parseInt(e.target.value, 10) || 0,
+                          }))
+                        }
+                      />
+                      {editingHitCount[chunk.id] !== undefined &&
+                        editingHitCount[chunk.id] !== chunk.hitCount && (
+                          <IconButton
+                            aria-label="保存命中次数"
+                            size="xs"
+                            variant="ghost"
+                            colorPalette="green"
+                            onClick={() => handleUpdateHitCount(chunk)}
+                          >
+                            <Check size={12} />
+                          </IconButton>
+                        )}
+                    </HStack>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Text fontSize="xs" color="gray.500">
+                      {new Date(chunk.createdAtMs).toLocaleDateString()}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <IconButton
+                      aria-label="删除"
+                      size="xs"
+                      variant="ghost"
+                      colorPalette="red"
+                      onClick={() => handleDeleteChunk(chunk)}
+                    >
+                      <Trash2 size={14} />
+                    </IconButton>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Root>
+        )}
       </Box>
     </Flex>
   )

@@ -49,4 +49,30 @@ public interface IRagService
     /// <param name="scope">过滤作用域（null 表示全部）。</param>
     /// <param name="ct">取消令牌。</param>
     Task<RagQueryStats> GetQueryStatsAsync(RagScope? scope, CancellationToken ct = default);
+
+    /// <summary>
+    /// 结构化检索：返回格式化文本 + 分块引用列表（含命中次数），
+    /// 供 <see cref="RagContextProvider"/> 注入 System Prompt 和后续 AI 审计使用。
+    /// </summary>
+    Task<RagQueryResult> QueryWithMetadataAsync(string query, RagScope scope, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 列出指定作用域下的所有分块（不限于 doc: 前缀），供前端管理界面使用。
+    /// </summary>
+    Task<IReadOnlyList<RagChunkInfo>> ListChunksAsync(RagScope scope, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 删除指定 ID 的单个分块。
+    /// </summary>
+    Task DeleteChunkAsync(string chunkId, RagScope scope, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 手动设置指定分块的命中次数（用于用户修正 AI 审计结果）。
+    /// </summary>
+    Task UpdateChunkHitCountAsync(string chunkId, int hitCount, RagScope scope, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 批量增加指定分块的命中次数（+1），由 AI 审计服务在确认实际使用后调用。
+    /// </summary>
+    Task IncrementHitCountAsync(IReadOnlyList<string> chunkIds, RagScope scope, string? sessionId, CancellationToken ct = default);
 }

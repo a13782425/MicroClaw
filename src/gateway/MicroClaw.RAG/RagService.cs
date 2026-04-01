@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -379,5 +380,155 @@ public sealed class RagService : IRagService
                 // Logged inside RagPruner; swallow here to avoid unobserved task exception.
             }
         });
+    }
+
+    /// <inheritdoc/>
+    public async Task<RagQueryResult> QueryWithMetadataAsync(
+        string query, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
+        var options = new HybridSearchOptions();
+        var sw = Stopwatch.StartNew();
+
+        var globalTask = _hybridSearch.SearchAsync(query, RagScope.Global, null, options, ct);
+
+        Task<IReadOnlyList<HybridSearchResult>>? sessionTask = null;
+        if (scope == RagScope.Session && sessionId is not null)
+            sessionTask = _hybridSearch.SearchAsync(query, RagScope.Session, sessionId, options, ct);
+
+        var allResults = new List<HybridSearchResult>();
+
+        if (sessionTask is not null)
+        {
+            await Task.WhenAll(globalTask, sessionTask).ConfigureAwait(false);
+            // Tag global results
+            foreach (var r in globalTask.Result)
+                allResults.Add(r);
+            foreach (var r in sessionTask.Result)
+                allResults.Add(r);
+        }
+        else
+        {
+            allResults.AddRange(await globalTask.ConfigureAwait(false));
+        }
+
+        if (allResults.Count == 0)
+        {
+            sw.Stop();
+            RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, 0);
+            return new RagQueryResult(string.Empty, []);
+        }
+
+        var merged = allResults
+            .GroupBy(r => r.Record.Id)
+            .Select(g => g.MaxBy(r => r.FusedScore)!)
+            .OrderByDescending(r => r.FusedScore)
+            .Take(options.TopK)
+            .ToList();
+
+        sw.Stop();
+        RecordStatFireAndForget(scope, sw.ElapsedMilliseconds, merged.Count);
+
+        // Build chunk refs with scope info
+        var chunkRefs = merged.Select(r =>
+        {
+            // Determine scope: if the chunk was found in session search, tag as Session
+            bool isSessionChunk = sessionTask is not null &&
+                                  sessionTask.Result.Any(sr => sr.Record.Id == r.Record.Id);
+            return new RagChunkRef(
+                r.Record.Id,
+                r.Record.Content,
+                r.Record.HitCount,
+                r.Record.SourceId,
+                isSessionChunk ? RagScope.Session : RagScope.Global,
+                isSessionChunk ? sessionId : null);
+        }).ToList();
+
+        // Format content with hit count annotation
+        var sb = new StringBuilder();
+        sb.AppendLine("以下是从知识库中检索到的相关片段，命中次数越高说明该知识被验证使用的次数越多，可信度越高：");
+        sb.AppendLine();
+        foreach (var chunk in chunkRefs)
+        {
+            sb.AppendLine($"[可信度: {chunk.HitCount} 次命中]");
+            sb.AppendLine(chunk.Content);
+            sb.AppendLine("---");
+        }
+
+        return new RagQueryResult(sb.ToString().TrimEnd(), chunkRefs);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<RagChunkInfo>> ListChunksAsync(
+        RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        using var db = _dbFactory.Create(scope, sessionId);
+        var chunks = await db.VectorChunks
+            .AsNoTracking()
+            .OrderByDescending(e => e.HitCount)
+            .ThenByDescending(e => e.CreatedAtMs)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return chunks.Select(e => new RagChunkInfo(
+            e.Id, e.SourceId, e.Content,
+            e.HitCount, e.CreatedAtMs, e.LastAccessedAtMs
+        )).ToList();
+    }
+
+    /// <inheritdoc/>
+    public async Task DeleteChunkAsync(
+        string chunkId, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(chunkId);
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        var chunk = await db.VectorChunks
+            .FirstOrDefaultAsync(e => e.Id == chunkId, ct)
+            .ConfigureAwait(false);
+
+        if (chunk is not null)
+        {
+            db.VectorChunks.Remove(chunk);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task UpdateChunkHitCountAsync(
+        string chunkId, int hitCount, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(chunkId);
+        if (hitCount < 0) throw new ArgumentOutOfRangeException(nameof(hitCount), "HitCount must be >= 0.");
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        var chunk = await db.VectorChunks
+            .FirstOrDefaultAsync(e => e.Id == chunkId, ct)
+            .ConfigureAwait(false);
+
+        if (chunk is not null)
+        {
+            chunk.HitCount = hitCount;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task IncrementHitCountAsync(
+        IReadOnlyList<string> chunkIds, RagScope scope, string? sessionId, CancellationToken ct = default)
+    {
+        if (chunkIds.Count == 0) return;
+
+        using var db = _dbFactory.Create(scope, sessionId);
+        var chunks = await db.VectorChunks
+            .Where(e => chunkIds.Contains(e.Id))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var chunk in chunks)
+            chunk.HitCount += 1;
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

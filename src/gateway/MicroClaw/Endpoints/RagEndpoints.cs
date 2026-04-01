@@ -279,11 +279,70 @@ public static class RagEndpoints
             })
             .WithTags("RAG");
 
+        // ── RAG Chunk 管理端点 ──────────────────────────────────────────────
+
+        // GET /api/sessions/{sessionId}/rag/chunks — 列出会话所有 RAG chunk（含全局）
+        endpoints.MapGet("/sessions/{sessionId}/rag/chunks",
+            async (string sessionId, IRagService ragService, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(sessionId))
+                    return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                var chunks = await ragService.ListChunksAsync(RagScope.Session, sessionId, ct);
+                return Results.Ok(new { chunks });
+            })
+            .WithTags("RAG");
+
+        // GET /api/rag/global/chunks — 列出全局 RAG chunk
+        endpoints.MapGet("/rag/global/chunks",
+            async (IRagService ragService, CancellationToken ct) =>
+            {
+                var chunks = await ragService.ListChunksAsync(RagScope.Global, null, ct);
+                return Results.Ok(new { chunks });
+            })
+            .WithTags("RAG");
+
+        // DELETE /api/rag/chunks/{chunkId} — 删除指定 chunk
+        endpoints.MapDelete("/rag/chunks/{chunkId}",
+            async (string chunkId, string? scope, string? sessionId, IRagService ragService, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(chunkId))
+                    return Results.BadRequest(new { success = false, message = "chunkId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                RagScope ragScope = RagScope.Global;
+                if (!string.IsNullOrWhiteSpace(scope) && Enum.TryParse<RagScope>(scope, ignoreCase: true, out var parsed))
+                    ragScope = parsed;
+
+                await ragService.DeleteChunkAsync(chunkId, ragScope, sessionId, ct);
+                return Results.Ok(new { success = true });
+            })
+            .WithTags("RAG");
+
+        // POST /api/rag/chunks/{chunkId}/hit-count — 修改指定 chunk 的 HitCount
+        endpoints.MapPost("/rag/chunks/{chunkId}/hit-count",
+            async (string chunkId, UpdateHitCountRequest req, string? scope, string? sessionId, IRagService ragService, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(chunkId))
+                    return Results.BadRequest(new { success = false, message = "chunkId 不能为空。", errorCode = "BAD_REQUEST" });
+
+                if (req.HitCount < 0)
+                    return Results.BadRequest(new { success = false, message = "hitCount 不能为负数。", errorCode = "BAD_REQUEST" });
+
+                RagScope ragScope = RagScope.Global;
+                if (!string.IsNullOrWhiteSpace(scope) && Enum.TryParse<RagScope>(scope, ignoreCase: true, out var parsed))
+                    ragScope = parsed;
+
+                await ragService.UpdateChunkHitCountAsync(chunkId, req.HitCount, ragScope, sessionId, ct);
+                return Results.Ok(new { success = true });
+            })
+            .WithTags("RAG");
+
         return endpoints;
     }
 
     private sealed record DeleteDocumentRequest(string SourceId);
     private sealed record ReindexDocumentRequest(string SourceId);
+    private sealed record UpdateHitCountRequest(int HitCount);
     internal sealed record SessionRagStatusDto(string SessionId, int CategoryCount, long? LastUpdatedAtMs);
     internal sealed record RagConfigDto(double MaxStorageSizeMb, double PruneTargetPercent);
 }

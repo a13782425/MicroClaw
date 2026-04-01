@@ -332,16 +332,10 @@ public static class SessionEndpoints
         })
         .WithTags("SessionMemory");
 
-        // POST /api/sessions/{id}/memory — 更新长期记忆
-        endpoints.MapPost("/sessions/{id}/memory", (string id, UpdateMemoryRequest req, SessionStore store, MemoryService memory) =>
-        {
-            if (store.Get(id) is null)
-                return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
-
-            memory.UpdateLongTermMemory(id, req.Content ?? string.Empty);
-            string content = memory.GetLongTermMemory(id);
-            return Results.Ok(new { content });
-        })
+        // POST /api/sessions/{id}/memory — 已禁用（长期记忆只读，改用 RAG chunk 管理）
+        // 保留端点返回 405 Method Not Allowed，避免前端静默失败
+        endpoints.MapPost("/sessions/{id}/memory", () =>
+            Results.StatusCode(405))
         .WithTags("SessionMemory");
 
         // GET /api/sessions/{id}/memory/daily — 列出所有每日记忆（日期列表，降序）

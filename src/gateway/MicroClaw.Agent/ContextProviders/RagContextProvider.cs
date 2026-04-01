@@ -20,11 +20,16 @@ namespace MicroClaw.Agent.ContextProviders;
 public sealed class RagContextProvider : IUserAwareContextProvider
 {
     private readonly IRagService _ragService;
+    private readonly RagRetrievalContext _retrievalContext;
     private readonly ILogger<RagContextProvider> _logger;
 
-    public RagContextProvider(IRagService ragService, ILogger<RagContextProvider> logger)
+    public RagContextProvider(
+        IRagService ragService,
+        RagRetrievalContext retrievalContext,
+        ILogger<RagContextProvider> logger)
     {
         _ragService = ragService ?? throw new ArgumentNullException(nameof(ragService));
+        _retrievalContext = retrievalContext ?? throw new ArgumentNullException(nameof(retrievalContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -60,19 +65,22 @@ public sealed class RagContextProvider : IUserAwareContextProvider
             _logger.LogInformation("RAG 检索开始 (session={SessionId}, scope={Scope}, query={Query})",
                 sessionId, scope, userMessage.Length > 60 ? userMessage[..60] + "..." : userMessage);
 
-            string content = await _ragService
-                .QueryAsync(userMessage, scope, sessionId, ct)
+            RagQueryResult result = await _ragService
+                .QueryWithMetadataAsync(userMessage, scope, sessionId, ct)
                 .ConfigureAwait(false);
 
-            if (string.IsNullOrWhiteSpace(content))
+            if (string.IsNullOrWhiteSpace(result.Content))
             {
                 _logger.LogInformation("RAG 检索无命中，跳过注入 (session={SessionId})", sessionId);
                 return null;
             }
 
-            _logger.LogInformation("RAG 检索命中，已注入上下文 (session={SessionId}, contentLen={Len})",
-                sessionId, content.Length);
-            return $"## RAG 相关知识\n\n{content}";
+            // 将检索到的 chunk 引用写入 scoped 上下文，供后续 AI 审计使用
+            _retrievalContext.RetrievedChunks = result.RetrievedChunks;
+
+            _logger.LogInformation("RAG 检索命中 {ChunkCount} 个 chunk，已注入上下文 (session={SessionId}, contentLen={Len})",
+                result.RetrievedChunks.Count, sessionId, result.Content.Length);
+            return $"## RAG 相关知识\n\n{result.Content}";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

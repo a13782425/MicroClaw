@@ -167,7 +167,8 @@ public sealed class HybridSearchService
     }
 
     /// <summary>
-    /// 异步更新命中分块的最近访问时间和调用次数（fire-and-forget，不阻塞检索响应）。
+    /// 异步更新命中分块的最近访问时间（fire-and-forget，不阻塞检索响应）。
+    /// 注意：HitCount 不再在此处自动递增，改由 RagUsageAuditor 在 AI 审计确认实际使用后精确更新。
     /// </summary>
     private async Task UpdateLastAccessedAsync(RagScope scope, string? sessionId, List<string> ids, long nowMs)
     {
@@ -182,14 +183,13 @@ public sealed class HybridSearchService
             foreach (var chunk in chunks)
             {
                 chunk.LastAccessedAtMs = nowMs;
-                chunk.HitCount += 1;
             }
 
             await db.SaveChangesAsync().ConfigureAwait(false);
         }
         catch
         {
-            // 访问时间/调用次数更新失败不影响主链路，静默忽略
+            // 访问时间更新失败不影响主链路，静默忽略
         }
     }
 

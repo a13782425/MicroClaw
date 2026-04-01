@@ -218,6 +218,8 @@ public class ServeCommand : Command
 			sp.GetRequiredService<IRagPruner>()));
 		builder.Services.AddSingleton<RagReindexJobTracker>();
 		builder.Services.AddSingleton<RagReindexService>();
+		builder.Services.AddSingleton<RagRetrievalContext>();
+		builder.Services.AddSingleton<IRagUsageAuditor, RagUsageAuditor>();
 		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
 		builder.Services.AddSingleton<ISessionMessageRemover>(sp => sp.GetRequiredService<SessionStore>());
 		// 情绪系统服务
