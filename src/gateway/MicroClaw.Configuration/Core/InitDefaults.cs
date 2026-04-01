@@ -92,6 +92,71 @@ public static class InitDefaults
           allow_command_injection: false
         """;
 
+    public const string SandboxYaml = """
+        # 沙盒文件下载 Token 配置
+        # token_expiry_minutes: 下载链接的有效期（分钟），默认 60 分钟
+
+        sandbox:
+          token_expiry_minutes: 60
+        """;
+
+    public const string EmotionYaml = """
+        # 情绪行为配置
+        # 控制 Agent 根据情绪状态切换推理模式（正常 / 探索 / 谨慎 / 休息）
+        # 所有情绪值域：[0, 100]，判定优先级：谨慎 > 探索 > 休息 > 正常
+
+        emotion:
+          # ── 模式切换阈值 ──
+          # 谨慎：警觉度 >= 阈值
+          cautious_alertness_threshold: 70
+          # 谨慎：信心 <= 阈值
+          cautious_confidence_threshold: 30
+          # 探索：好奇心 >= 阈值
+          explore_min_curiosity: 70
+          # 探索：心情 >= 阈值
+          explore_min_mood: 60
+          # 休息：警觉度 <= 阈值
+          rest_max_alertness: 30
+          # 休息：心情 <= 阈值
+          rest_max_mood: 40
+
+          # ── 各模式推理参数（null 表示使用模型默认值）──
+          # normal_temperature:
+          # normal_top_p:
+          # normal_system_prompt_suffix:
+          # explore_temperature: 1.2
+          # explore_top_p: 0.95
+          # explore_system_prompt_suffix: "请发挥创造力，尝试新思路。"
+          # cautious_temperature: 0.3
+          # cautious_top_p: 0.5
+          # cautious_system_prompt_suffix: "请保持审慎，优先确保准确性。"
+          # rest_temperature: 0.5
+          # rest_top_p: 0.7
+          # rest_system_prompt_suffix:
+
+          # ── 事件加减分（正数=加，负数=减，省略该维度=不变）──
+          # 消息发送成功
+          # delta_message_success: { mood: 3, confidence: 2 }
+          # 消息发送失败
+          # delta_message_failed: { alertness: 8, mood: -5, confidence: -5 }
+          # Tool 执行成功
+          # delta_tool_success: { curiosity: 2, confidence: 3 }
+          # Tool 执行报错
+          # delta_tool_error: { alertness: 10, mood: -3, confidence: -5 }
+          # 用户满意
+          # delta_user_satisfied: { mood: 10, confidence: 5 }
+          # 用户不满意
+          # delta_user_dissatisfied: { mood: -10, confidence: -5, alertness: 5 }
+          # 任务完成
+          # delta_task_completed: { mood: 8, confidence: 8, alertness: -5 }
+          # 任务失败
+          # delta_task_failed: { alertness: 10, mood: -8, confidence: -8 }
+          # 高严重度痛觉
+          # delta_pain_high: { alertness: 22, mood: -5, confidence: -18 }
+          # 极高严重度痛觉
+          # delta_pain_critical: { alertness: 32, mood: -10, confidence: -28 }
+        """;
+
     public const string DotEnvExample = """
         # MicroClaw 环境变量示例
         # 复制为 .env 并填入实际值，服务启动时会自动加载

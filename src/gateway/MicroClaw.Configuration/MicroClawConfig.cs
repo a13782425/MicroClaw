@@ -22,6 +22,8 @@ public static class MicroClawConfig
         [typeof(FileToolsOptions)] = "filesystem",
         [typeof(AgentOptions)] = "agent",
         [typeof(RagOptions)] = "rag",
+        [typeof(SandboxOptions)] = "sandbox",
+        [typeof(EmotionOptions)] = "emotion",
     };
 
     /// <summary>

@@ -33,7 +33,10 @@ public static class FileTools
     /// 创建文件操作工具列表。所有路径操作限制在 <paramref name="sandboxDir"/> 内。
     /// 支持相对路径（自动解析到沙箱目录）。
     /// </summary>
-    public static IReadOnlyList<AIFunction> Create(string sandboxDir, FileToolsOptions options)
+    /// <param name="sandboxDir">沙盒根目录。</param>
+    /// <param name="options">限额配置。</param>
+    /// <param name="urlGenerator">可选。将文件相对路径转换为匿名下载 URL 的工厂函数。提供时，write_file / edit_file 成功后会在返回值中附加 downloadUrl 字段。</param>
+    public static IReadOnlyList<AIFunction> Create(string sandboxDir, FileToolsOptions options, Func<string, string>? urlGenerator = null)
     {
         string normalizedSandbox = NormalizeSandboxDir(sandboxDir);
         IReadOnlyList<string> allowedDirs = [normalizedSandbox];
@@ -43,8 +46,8 @@ public static class FileTools
         return
         [
             CreateReadFile(normalizedSandbox, allowedDirs, maxReadChars),
-            CreateWriteFile(normalizedSandbox, allowedDirs, maxWriteBytes),
-            CreateEditFile(normalizedSandbox, allowedDirs),
+            CreateWriteFile(normalizedSandbox, allowedDirs, maxWriteBytes, urlGenerator),
+            CreateEditFile(normalizedSandbox, allowedDirs, urlGenerator),
             CreateListDirectory(normalizedSandbox, allowedDirs),
             CreateSearchFiles(normalizedSandbox, allowedDirs),
         ];
@@ -113,7 +116,7 @@ public static class FileTools
 
     // ── write_file ───────────────────────────────────────────────────────────
 
-    private static AIFunction CreateWriteFile(string sandboxDir, IReadOnlyList<string> allowedDirs, long maxWriteBytes)
+    private static AIFunction CreateWriteFile(string sandboxDir, IReadOnlyList<string> allowedDirs, long maxWriteBytes, Func<string, string>? urlGenerator)
     {
         return AIFunctionFactory.Create(
             async (
@@ -136,11 +139,15 @@ public static class FileTools
 
                     await File.WriteAllTextAsync(fullPath, content, Encoding.UTF8);
 
+                    string relPath = Path.GetRelativePath(sandboxDir.TrimEnd(Path.DirectorySeparatorChar), fullPath).Replace('\\', '/');
+                    string? downloadUrl = urlGenerator?.Invoke(relPath);
+
                     return new
                     {
                         success = true,
                         filePath = fullPath,
                         bytesWritten = byteCount,
+                        downloadUrl,
                     };
                 }
                 catch (Exception ex)
@@ -154,7 +161,7 @@ public static class FileTools
 
     // ── edit_file ────────────────────────────────────────────────────────────
 
-    private static AIFunction CreateEditFile(string sandboxDir, IReadOnlyList<string> allowedDirs)
+    private static AIFunction CreateEditFile(string sandboxDir, IReadOnlyList<string> allowedDirs, Func<string, string>? urlGenerator)
     {
         return AIFunctionFactory.Create(
             async (
@@ -184,11 +191,15 @@ public static class FileTools
 
                 await File.WriteAllTextAsync(fullPath, updated, Encoding.UTF8);
 
+                string relPath = Path.GetRelativePath(sandboxDir.TrimEnd(Path.DirectorySeparatorChar), fullPath).Replace('\\', '/');
+                string? downloadUrl = urlGenerator?.Invoke(relPath);
+
                 return new
                 {
                     success = true,
                     filePath = fullPath,
                     replacements = 1,
+                    downloadUrl,
                 };
             },
             name: "edit_file",

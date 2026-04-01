@@ -259,3 +259,36 @@ export async function vectorizeSessionMessages(sessionId: string): Promise<Vecto
   const { data } = await request.post<VectorizeResult>(`/api/sessions/${sessionId}/rag/vectorize`)
   return data
 }
+
+// ── Sandbox ──────────────────────────────────────────────────────────────────
+
+export type SandboxNode = {
+  name: string
+  relativePath: string
+  size: number
+  modifiedAt: string
+  isDirectory: boolean
+  children?: SandboxNode[] | null
+  downloadUrl?: string | null
+}
+
+export type SandboxTokenResult = {
+  downloadUrl: string
+  expiresAt: string
+}
+
+export async function listSessionSandbox(sessionId: string): Promise<SandboxNode[]> {
+  const { data } = await request.get<SandboxNode[]>(`/api/sessions/${sessionId}/sandbox`)
+  return data
+}
+
+export async function createSandboxToken(
+  sessionId: string,
+  relativePath: string,
+): Promise<SandboxTokenResult> {
+  const { data } = await request.post<SandboxTokenResult>(
+    `/api/sessions/${sessionId}/sandbox/token`,
+    { relativePath },
+  )
+  return data
+}

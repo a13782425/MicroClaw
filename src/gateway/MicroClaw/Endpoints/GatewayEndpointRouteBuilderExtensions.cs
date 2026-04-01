@@ -14,6 +14,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		api.MapHealthEndpoints();
 		api.MapAuthEndpoints();
 		api.MapChannelWebhookEndpoints();
+		api.MapSandboxPublicEndpoints();
 
 		// A2A 端点（公开访问，无需 JWT）
 		endpoints.MapA2AEndpoints();
@@ -24,6 +25,7 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapChannelEndpoints();
 		protectedApi.MapAdminEndpoints();
 		protectedApi.MapSessionEndpoints();
+		protectedApi.MapSandboxProtectedEndpoints();
 		protectedApi.MapAgentEndpoints();
 		protectedApi.MapFeishuDocImportEndpoints();
 		protectedApi.MapCronEndpoints();

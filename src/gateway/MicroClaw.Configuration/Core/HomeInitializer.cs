@@ -12,6 +12,7 @@ public static class HomeInitializer
         ("config/channels.yaml",   InitDefaults.ChannelsYaml),
         ("config/logging.yaml",    InitDefaults.LoggingYaml),
         ("config/skills.yaml",     InitDefaults.SkillsYaml),
+        ("config/emotion.yaml",    InitDefaults.EmotionYaml),
         (".env",           InitDefaults.DotEnvExample),
     ];
 

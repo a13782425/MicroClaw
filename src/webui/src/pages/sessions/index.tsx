@@ -7,7 +7,7 @@ import {
 } from '@chakra-ui/react'
 import {
   MessageCircle, Plus, Trash2, Send, Square, Paperclip, X,
-  ChevronUp, EyeOff,
+  ChevronUp, EyeOff, HardDrive,
 } from 'lucide-react'
 import {
   listProviders, listChannels, listAgents,
@@ -23,6 +23,7 @@ import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import ChatMessage from '@/components/chat-message'
 import SessionTreeItem from './session-tree-item'
+import SandboxPanel from './sandbox-panel'
 
 // ─── 新建 Session 弹窗 ────────────────────────────────────────────────────────
 interface CreateDialogProps {
@@ -204,6 +205,7 @@ export default function SessionsPage() {
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set())
   const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null)
+  const [showSandbox, setShowSandbox] = useState(false)
 
   const messagesEl = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -445,32 +447,46 @@ export default function SessionsPage() {
                 <MessageCircle size={16} />
                 <Text fontWeight="medium" fontSize="sm">{currentSession?.title}</Text>
               </Flex>
-              <Select.Root
-                value={currentSession ? [currentSession.providerId] : []}
-                onValueChange={(v) => handleSwitchProvider(v.value[0] ?? '')}
-                disabled={chatting || isReadOnly}
-                collection={createListCollection({
-                  items: enabledProviders.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })),
-                })}
-                size="sm"
-              >
-                <Select.Trigger w="220px">
-                  <Select.ValueText placeholder="切换模型" />
-                </Select.Trigger>
-                <Portal>
-                  <Select.Positioner>
-                    <Select.Content>
-                      {enabledProviders.map((p) => (
-                        <Select.Item key={p.id} item={{ value: p.id, label: `${p.displayName} (${p.modelName})` }}>
-                          {p.displayName} ({p.modelName})
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Positioner>
-                </Portal>
-              </Select.Root>
+              <Flex align="center" gap="2">
+                <Select.Root
+                  value={currentSession ? [currentSession.providerId] : []}
+                  onValueChange={(v) => handleSwitchProvider(v.value[0] ?? '')}
+                  disabled={chatting || isReadOnly}
+                  collection={createListCollection({
+                    items: enabledProviders.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })),
+                  })}
+                  size="sm"
+                >
+                  <Select.Trigger w="220px">
+                    <Select.ValueText placeholder="切换模型" />
+                  </Select.Trigger>
+                  <Portal>
+                    <Select.Positioner>
+                      <Select.Content>
+                        {enabledProviders.map((p) => (
+                          <Select.Item key={p.id} item={{ value: p.id, label: `${p.displayName} (${p.modelName})` }}>
+                            {p.displayName} ({p.modelName})
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Positioner>
+                  </Portal>
+                </Select.Root>
+                <IconButton
+                  size="sm"
+                  variant={showSandbox ? 'solid' : 'ghost'}
+                  colorPalette={showSandbox ? 'blue' : undefined}
+                  aria-label="沙盒文件"
+                  title="沙盒文件"
+                  onClick={() => setShowSandbox((v) => !v)}
+                >
+                  <HardDrive size={15} />
+                </IconButton>
+              </Flex>
             </Flex>
 
+            {/* 消息列表 + 沙盒面板 */}
+            <Flex flex="1" overflow="hidden">
             {/* 消息列表 */}
             <Box
               ref={messagesEl}
@@ -568,6 +584,15 @@ export default function SessionsPage() {
                 </>
               )}
             </Box>
+
+            {/* 沙盒文件面板 */}
+            {showSandbox && store.currentSessionId && (
+              <SandboxPanel
+                sessionId={store.currentSessionId}
+                onClose={() => setShowSandbox(false)}
+              />
+            )}
+            </Flex>
 
             {/* 输入区 */}
             {isReadOnly ? (

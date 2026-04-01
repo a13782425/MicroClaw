@@ -1,3 +1,5 @@
+using MicroClaw.Configuration;
+
 namespace MicroClaw.Emotion;
 
 /// <summary>
@@ -52,4 +54,37 @@ public sealed class EmotionBehaviorMapperOptions
 
     /// <summary>休息模式的推理参数。默认 <see cref="BehaviorProfile.DefaultRest"/>。</summary>
     public BehaviorProfile RestProfile { get; set; } = BehaviorProfile.DefaultRest;
+
+    /// <summary>
+    /// 从 <see cref="EmotionOptions"/>（YAML 配置）构建 <see cref="EmotionBehaviorMapperOptions"/>。
+    /// </summary>
+    public static EmotionBehaviorMapperOptions FromEmotionOptions(EmotionOptions opts) => new()
+    {
+        CautiousAlertnessThreshold = opts.CautiousAlertnessThreshold,
+        CautiousConfidenceThreshold = opts.CautiousConfidenceThreshold,
+        ExploreMinCuriosity = opts.ExploreMinCuriosity,
+        ExploreMinMood = opts.ExploreMinMood,
+        RestMaxAlertness = opts.RestMaxAlertness,
+        RestMaxMood = opts.RestMaxMood,
+        NormalProfile = new BehaviorProfile(
+            BehaviorMode.Normal,
+            opts.NormalTemperature,
+            opts.NormalTopP,
+            opts.NormalSystemPromptSuffix),
+        ExploreProfile = new BehaviorProfile(
+            BehaviorMode.Explore,
+            opts.ExploreTemperature,
+            opts.ExploreTopP,
+            opts.ExploreSystemPromptSuffix),
+        CautiousProfile = new BehaviorProfile(
+            BehaviorMode.Cautious,
+            opts.CautiousTemperature,
+            opts.CautiousTopP,
+            opts.CautiousSystemPromptSuffix),
+        RestProfile = new BehaviorProfile(
+            BehaviorMode.Rest,
+            opts.RestTemperature,
+            opts.RestTopP,
+            opts.RestSystemPromptSuffix),
+    };
 }

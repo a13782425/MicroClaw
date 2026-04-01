@@ -159,6 +159,8 @@ public class ServeCommand : Command
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
 		builder.Services.AddSignalR();
+		builder.Services.AddDataProtection();
+		builder.Services.AddSingleton<MicroClaw.Services.SandboxTokenService>();
 		builder.Services.AddHttpClient("fetch", client =>
 		{
 			client.Timeout = TimeSpan.FromSeconds(30);
@@ -225,8 +227,10 @@ public class ServeCommand : Command
 		// 情绪系统服务
 		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
-		builder.Services.AddSingleton<IEmotionRuleEngine>(_ => new EmotionRuleEngine());
-		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ => new EmotionBehaviorMapper());
+		builder.Services.AddSingleton<IEmotionRuleEngine>(_ =>
+			new EmotionRuleEngine(EmotionRuleEngineOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));
+		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ =>
+			new EmotionBehaviorMapper(EmotionBehaviorMapperOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));
 		// 安全/痛觉系统服务
 		builder.Services.AddSingleton<SafetyDbContextFactory>(_ => new SafetyDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IPainMemoryStore, PainMemoryStore>();
@@ -330,8 +334,12 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IToolProvider, ShellToolProvider>();
 		builder.Services.AddSingleton<IToolProvider, CronToolProvider>();
 		builder.Services.AddSingleton<IToolProvider, SubAgentToolProvider>();
-		builder.Services.AddSingleton<IToolProvider>(_ =>
-			new FileToolProvider(sessionsDir));
+		builder.Services.AddSingleton<IToolProvider>(sp =>
+		{
+			var tokenSvc = sp.GetRequiredService<MicroClaw.Services.SandboxTokenService>();
+			return new FileToolProvider(sessionsDir,
+				(sessionId, relPath) => tokenSvc.GenerateDownloadUrl(sessionId, relPath));
+		});
 		builder.Services.AddSingleton<IToolProvider, SkillToolProvider>();
 		builder.Services.AddSingleton<ToolCollector>();
 
