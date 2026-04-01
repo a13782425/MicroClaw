@@ -1,7 +1,7 @@
-using MicroClaw.Agent.Memory;
+﻿using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

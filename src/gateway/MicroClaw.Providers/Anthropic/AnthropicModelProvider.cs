@@ -1,4 +1,4 @@
-using Anthropic.SDK;
+using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -21,11 +21,16 @@ public sealed class AnthropicModelProvider : IModelProvider
 
     public IChatClient Create(ProviderConfig config)
     {
-        AnthropicClient client = new(new APIAuthentication(config.ApiKey));
-        if (!string.IsNullOrWhiteSpace(config.BaseUrl))
-            client.ApiUrlFormat = config.BaseUrl.TrimEnd('/') + "/{0}/{1}";
-        
-        return new ChatClientBuilder(client.Messages)
+        AnthropicClient client = new()
+        {
+            ApiKey = config.ApiKey,
+            BaseUrl = string.IsNullOrWhiteSpace(config.BaseUrl)
+                ? "https://api.anthropic.com"
+                : config.BaseUrl.TrimEnd('/'),
+        };
+
+        return client.AsIChatClient(config.ModelName)
+            .AsBuilder()
             .UseLogging(_loggerFactory)
             .Build();
     }

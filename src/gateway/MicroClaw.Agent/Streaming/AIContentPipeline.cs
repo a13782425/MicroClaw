@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using MicroClaw.Abstractions.Streaming;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 

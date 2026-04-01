@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -7,7 +7,7 @@ using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.Models;
 using MicroClaw.Endpoints;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using MicroClaw.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

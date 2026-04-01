@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts.Plugins;
+﻿using MicroClaw.Abstractions.Plugins;
 
 namespace MicroClaw.Skills;
 

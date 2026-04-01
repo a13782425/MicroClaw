@@ -1,7 +1,7 @@
-using MicroClaw.Channels;
+﻿using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Services;

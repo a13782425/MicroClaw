@@ -1,6 +1,6 @@
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using MicroClaw.Abstractions.Sessions;
 
-namespace MicroClaw.Gateway.Contracts.Streaming;
+namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>
 /// StreamItem 持久化处理器接口。每种 StreamItem 子类型对应一个 Handler，

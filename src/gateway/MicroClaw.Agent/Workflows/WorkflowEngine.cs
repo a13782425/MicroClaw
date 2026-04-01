@@ -1,5 +1,5 @@
-using System.Diagnostics;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using System.Diagnostics;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
 using Microsoft.Extensions.Logging;
 
@@ -162,7 +162,7 @@ public sealed class WorkflowEngine(
             yield break;
         }
 
-        var history = new List<Gateway.Contracts.Sessions.SessionMessage>
+        var history = new List<MicroClaw.Abstractions.Sessions.SessionMessage>
         {
             new(Id: Guid.NewGuid().ToString("N"), Role: "user", Content: input, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: null)
         };

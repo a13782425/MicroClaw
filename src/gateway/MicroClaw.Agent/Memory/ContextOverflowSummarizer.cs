@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using System.Collections.Concurrent;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent.Memory;

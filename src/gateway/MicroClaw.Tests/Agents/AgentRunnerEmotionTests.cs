@@ -1,11 +1,11 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
 using MicroClaw.Emotion;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;

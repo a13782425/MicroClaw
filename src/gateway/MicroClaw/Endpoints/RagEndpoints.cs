@@ -1,5 +1,5 @@
-using MicroClaw.Configuration;
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using MicroClaw.Configuration;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Agent.Memory;
 using MicroClaw.RAG;
 using MicroClaw.Sessions;

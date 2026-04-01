@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
-namespace MicroClaw.Gateway.Contracts.Sessions;
+namespace MicroClaw.Abstractions.Sessions;
 
 public sealed record SessionInfo(
     string Id,

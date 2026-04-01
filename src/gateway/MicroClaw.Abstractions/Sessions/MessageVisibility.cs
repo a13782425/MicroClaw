@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Sessions;
+﻿namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>消息可见性常量。控制消息对前端和 LLM 的可见范围。</summary>
 public static class MessageVisibility

@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw", "MicroClaw\MicroClaw.csproj", "{2319C4F9-A7D7-4B82-A02D-5D4AE8A433FC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Gateway.Contracts", "MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj", "{739AEDD4-26D2-43EF-B130-61EF86C8E43F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Abstractions", "MicroClaw.Abstractions\MicroClaw.Abstractions.csproj", "{739AEDD4-26D2-43EF-B130-61EF86C8E43F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MicroClaw.Providers", "MicroClaw.Providers\MicroClaw.Providers.csproj", "{C1E2F3A4-B5D6-4E7F-8A9B-0C1D2E3F4A5B}"
 EndProject

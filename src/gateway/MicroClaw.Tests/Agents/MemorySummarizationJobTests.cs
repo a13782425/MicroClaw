@@ -1,7 +1,7 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Jobs;
 using MicroClaw.Providers;
 using MicroClaw.RAG;

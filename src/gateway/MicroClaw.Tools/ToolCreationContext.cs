@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts;
+﻿using MicroClaw.Abstractions;
 
 namespace MicroClaw.Tools;
 

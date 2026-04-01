@@ -1,6 +1,6 @@
-using System.Text;
+﻿using System.Text;
 
-namespace MicroClaw.Gateway.Contracts.Streaming;
+namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>将 IAsyncEnumerable&lt;StreamItem&gt; 物化为 AgentResponse 的扩展方法。</summary>
 public static class StreamExtensions

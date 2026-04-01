@@ -1,5 +1,5 @@
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 
 namespace MicroClaw.Streaming.PersistenceHandlers;
 

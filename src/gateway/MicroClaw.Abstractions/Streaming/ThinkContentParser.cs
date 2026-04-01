@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Streaming;
+﻿namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>从文本中提取 &lt;think&gt; 块，分离思考内容与主文本。</summary>
 public static class ThinkContentParser

@@ -1,11 +1,11 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using FluentAssertions;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using Microsoft.Extensions.Logging;
 using NSubstitute;

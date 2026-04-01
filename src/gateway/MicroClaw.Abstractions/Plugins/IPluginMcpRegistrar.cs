@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Plugins;
+﻿namespace MicroClaw.Abstractions.Plugins;
 
 /// <summary>
 /// Allows the plugin system to register / unregister MCP servers from a <c>.mcp.json</c> config file.

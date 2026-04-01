@@ -1,7 +1,7 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 

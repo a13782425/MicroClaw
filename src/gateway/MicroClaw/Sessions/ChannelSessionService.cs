@@ -1,10 +1,10 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using MicroClaw.Agent;
 using MicroClaw.Channels;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using Microsoft.AspNetCore.SignalR;
 

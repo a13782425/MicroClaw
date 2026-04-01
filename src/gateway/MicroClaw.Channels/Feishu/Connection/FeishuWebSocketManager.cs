@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using FeishuNetSdk.Services;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -28,31 +28,12 @@ public sealed class FeishuWebSocketManager(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // 启动时同步一次
+        // 启动时同步一次；后续轮询由 FeishuWebSocketSyncJob（IScheduledJob/Quartz）驱动
         await SyncChannelsAsync(stoppingToken);
-
-        // 定期轮询配置变更
-        using PeriodicTimer timer = new(TimeSpan.FromSeconds(30));
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                if (!await timer.WaitForNextTickAsync(stoppingToken)) break;
-                await SyncChannelsAsync(stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "飞书 WebSocket 配置同步异常");
-            }
-        }
     }
 
     /// <summary>对比当前连接与数据库配置，启停对应渠道的 WebSocket 连接。</summary>
-    private async Task SyncChannelsAsync(CancellationToken ct)
+    public async Task SyncChannelsAsync(CancellationToken ct)
     {
         IReadOnlyList<ChannelConfig> feishuChannels = channelStore.GetByType(ChannelType.Feishu);
 

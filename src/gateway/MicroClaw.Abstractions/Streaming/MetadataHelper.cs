@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
-namespace MicroClaw.Gateway.Contracts.Streaming;
+namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>将 Dictionary&lt;string, object?&gt; 序列化为 Dictionary&lt;string, JsonElement&gt; 供 SessionMessage.Metadata 使用。</summary>
 public static class MetadataHelper

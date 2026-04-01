@@ -1,6 +1,6 @@
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 
-namespace MicroClaw.Gateway.Contracts.Streaming;
+namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>
 /// 通过 <see cref="AsyncLocal{T}"/> 在父 Agent 工具调用上下文和子代理运行器之间传递事件 Channel。

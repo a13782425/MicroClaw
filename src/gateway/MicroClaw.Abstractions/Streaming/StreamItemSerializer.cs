@@ -1,8 +1,8 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace MicroClaw.Gateway.Contracts.Streaming;
+namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>
 /// 将 <see cref="StreamItem"/> 子类序列化为 SSE data 行的 JSON 字符串。

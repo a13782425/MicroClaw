@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using MicroClaw.Abstractions.Sessions;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Agent.Restorers;

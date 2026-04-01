@@ -1,5 +1,5 @@
-using System.Text.Json;
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using System.Text.Json;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Agent.Restorers;

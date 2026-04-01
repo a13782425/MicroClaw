@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 

@@ -1,5 +1,5 @@
-using MicroClaw.Channels.Models;
-using MicroClaw.Gateway.Contracts;
+﻿using MicroClaw.Channels.Models;
+using MicroClaw.Abstractions;
 
 namespace MicroClaw.Channels;
 

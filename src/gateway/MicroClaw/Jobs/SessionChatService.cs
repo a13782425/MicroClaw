@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Extensions.AI;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;

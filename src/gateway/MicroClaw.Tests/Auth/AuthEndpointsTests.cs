@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -6,7 +6,7 @@ using FluentAssertions;
 using MicroClaw.Configuration;
 using MicroClaw.Endpoints;
 using MicroClaw.Tests.Fixtures;
-using MicroClaw.Gateway.Contracts.Auth;
+using MicroClaw.Abstractions.Auth;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;

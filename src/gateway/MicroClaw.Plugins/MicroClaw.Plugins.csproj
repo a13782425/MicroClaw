@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
-    <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
   </ItemGroup>
 

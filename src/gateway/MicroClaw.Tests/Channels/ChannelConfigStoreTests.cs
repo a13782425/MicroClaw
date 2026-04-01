@@ -1,7 +1,7 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentAssertions;
 using MicroClaw.Channels;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using MicroClaw.Tests.Fixtures;
 
 namespace MicroClaw.Tests.Channels;

@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Streaming;
+﻿namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>Agent 执行的结构化响应，包含文本、思考内容和多模态附件。</summary>
 public sealed record AgentResponse(

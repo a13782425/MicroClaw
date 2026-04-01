@@ -1,7 +1,7 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

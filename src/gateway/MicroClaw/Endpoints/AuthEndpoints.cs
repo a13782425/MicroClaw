@@ -1,9 +1,9 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using MicroClaw.Configuration;
-using MicroClaw.Gateway.Contracts.Auth;
+using MicroClaw.Abstractions.Auth;
 
 namespace MicroClaw.Endpoints;
 

@@ -1,10 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.Models;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Channels.WeChat;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using MicroClaw.Tools;
 using Microsoft.Extensions.Logging;
 

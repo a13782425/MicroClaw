@@ -1,4 +1,4 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.Text;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
@@ -14,9 +14,9 @@ using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Plugins;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Plugins;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -263,10 +263,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.ThinkingContentHandler>();
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.AIContentPipeline>();
 		// StreamItem 持久化 Handler（供 SessionEndpoints 注入）
-		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolCallPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolResultPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentStartPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Gateway.Contracts.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentResultPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolCallPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolResultPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentStartPersistenceHandler>();
+		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentResultPersistenceHandler>();
 		// SessionMessage → AIContent 还原策略（供 BuildChatMessagesAsync 使用）
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.ThinkingContentRestorer>();
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.TextContentRestorer>();
@@ -367,6 +367,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ChannelRetryQueueService>();
 		builder.Services.AddSingleton<IChannelRetryQueue>(sp => sp.GetRequiredService<ChannelRetryQueueService>());
 		builder.Services.AddSingleton<IScheduledJob, ChannelRetryJob>();
+		// 2-A-11: RAG 定期容量清理（每日 UTC 01:00，早于记忆总结和做梦模式）
+		builder.Services.AddSingleton<IScheduledJob, RagPruneJob>();
+		// B-03: 情绪自然衰减（每小时向默认值 50 靠近，防止单次事件永久影响行为模式）
+		builder.Services.AddSingleton<IScheduledJob, EmotionDecayJob>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
@@ -389,6 +393,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IToolProvider>(sp => sp.GetRequiredService<FeishuToolsFactory>());
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
 		builder.Services.AddSingleton<IScheduledJob, FeishuDocSyncJob>();
+		// F-F-3: 飞书 WebSocket 渠道配置 30s 同步（从 FeishuWebSocketManager.PeriodicTimer 提取）
+		builder.Services.AddSingleton<IScheduledJob, FeishuWebSocketSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
 		builder.Services.AddSingleton<IScheduledJob, MemorySummarizationJob>();
 		builder.Services.AddSingleton<IScheduledJob, MemoryPendingProcessorJob>();

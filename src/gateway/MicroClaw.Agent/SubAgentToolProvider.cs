@@ -1,6 +1,6 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 

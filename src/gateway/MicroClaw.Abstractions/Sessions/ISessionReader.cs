@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Sessions;
+﻿namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// 供 AgentRunner 读取 Session 元数据（如 ProviderId）的轻量接口。

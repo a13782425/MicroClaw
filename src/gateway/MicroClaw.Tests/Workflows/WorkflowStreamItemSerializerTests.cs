@@ -1,5 +1,5 @@
-using FluentAssertions;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using FluentAssertions;
+using MicroClaw.Abstractions.Streaming;
 
 namespace MicroClaw.Tests.Workflows;
 

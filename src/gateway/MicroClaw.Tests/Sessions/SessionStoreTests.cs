@@ -1,6 +1,6 @@
-using FluentAssertions;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using FluentAssertions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 

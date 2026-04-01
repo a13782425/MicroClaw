@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Sessions;
+﻿namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// 渠道消息处理器通过此接口管理会话，由主项目实现。

@@ -1,7 +1,7 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Agent.Sessions;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.Agents.AI;
 
 namespace MicroClaw.Tests.Agents;

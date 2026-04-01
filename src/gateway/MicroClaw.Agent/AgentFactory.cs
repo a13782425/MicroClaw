@@ -1,9 +1,9 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Agent.Dev;
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Safety;
 using MicroClaw.Skills;

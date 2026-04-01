@@ -1,5 +1,5 @@
-using System.Text.Json;
-using MicroClaw.Gateway.Contracts.Sessions;
+﻿using System.Text.Json;
+using MicroClaw.Abstractions.Sessions;
 
 namespace MicroClaw.Agent.Memory;
 

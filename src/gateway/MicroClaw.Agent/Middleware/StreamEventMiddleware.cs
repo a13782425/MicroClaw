@@ -1,5 +1,5 @@
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Skills;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;

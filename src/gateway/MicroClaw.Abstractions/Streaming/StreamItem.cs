@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Streaming;
+﻿namespace MicroClaw.Abstractions.Streaming;
 
 /// <summary>流式 ReAct 循环中产出的事件基类。子类需实现 TypeName 和 ToSerializablePayload 以支持统一序列化。</summary>
 public abstract record StreamItem

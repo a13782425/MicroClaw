@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts;
+﻿namespace MicroClaw.Abstractions;
 
 /// <summary>
 /// F-D-1: 渠道消息失败重试队列抽象。

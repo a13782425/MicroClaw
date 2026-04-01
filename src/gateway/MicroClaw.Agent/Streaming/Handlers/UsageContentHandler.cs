@@ -1,5 +1,5 @@
-using MicroClaw.Agent.Middleware;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using MicroClaw.Agent.Middleware;
+using MicroClaw.Abstractions.Streaming;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Agent.Streaming.Handlers;

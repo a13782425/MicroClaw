@@ -1,8 +1,8 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.Logging;
 

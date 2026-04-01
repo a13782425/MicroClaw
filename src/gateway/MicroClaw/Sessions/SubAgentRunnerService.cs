@@ -1,12 +1,12 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Agent;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 
 namespace MicroClaw.Sessions;
 

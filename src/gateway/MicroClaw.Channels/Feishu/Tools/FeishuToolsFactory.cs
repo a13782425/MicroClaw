@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts;
+﻿using MicroClaw.Abstractions;
 using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;

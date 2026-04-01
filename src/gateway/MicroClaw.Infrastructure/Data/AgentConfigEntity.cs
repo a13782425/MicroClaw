@@ -1,4 +1,4 @@
-namespace MicroClaw.Infrastructure.Data;
+﻿namespace MicroClaw.Infrastructure.Data;
 
 public sealed class AgentConfigEntity
 {
@@ -30,7 +30,7 @@ public sealed class AgentConfigEntity
 
     /// <summary>
     /// Source plugin name (e.g. "plugin:my-plugin"). null = manually created, not from a plugin.
-    /// Used by <see cref="MicroClaw.Gateway.Contracts.Plugins.IPluginAgentRegistrar"/> for bulk removal.
+    /// Used by <see cref="MicroClaw.Abstractions.Plugins.IPluginAgentRegistrar"/> for bulk removal.
     /// </summary>
     public string? SourcePlugin { get; set; }
 }

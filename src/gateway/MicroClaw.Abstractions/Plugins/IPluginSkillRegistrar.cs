@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Plugins;
+﻿namespace MicroClaw.Abstractions.Plugins;
 
 /// <summary>
 /// Allows the plugin system to dynamically register / remove skill root directories.

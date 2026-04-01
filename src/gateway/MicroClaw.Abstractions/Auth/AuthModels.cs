@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Auth;
+﻿namespace MicroClaw.Abstractions.Auth;
 
 public sealed record LoginRequest(string Username, string Password);
 

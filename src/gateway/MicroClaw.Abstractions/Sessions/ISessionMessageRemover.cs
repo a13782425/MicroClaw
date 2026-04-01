@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Sessions;
+﻿namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// 允许从 Session 持久化历史中移除消息。

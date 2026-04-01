@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using MicroClaw.Channels.Models;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 
 namespace MicroClaw.Channels.WeCom;
 

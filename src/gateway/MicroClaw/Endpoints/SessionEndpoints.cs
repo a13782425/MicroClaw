@@ -1,12 +1,12 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Gateway.Contracts.Streaming;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
-using MicroClaw.Gateway.Contracts;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;

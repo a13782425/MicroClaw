@@ -1,10 +1,10 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MicroClaw.Channels.Models;
-using MicroClaw.Gateway.Contracts;
+using MicroClaw.Abstractions;
 using Microsoft.Extensions.Logging;
 namespace MicroClaw.Channels.Feishu;
 

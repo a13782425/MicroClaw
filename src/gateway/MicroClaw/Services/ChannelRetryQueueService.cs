@@ -1,4 +1,4 @@
-using MicroClaw.Gateway.Contracts;
+﻿using MicroClaw.Abstractions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

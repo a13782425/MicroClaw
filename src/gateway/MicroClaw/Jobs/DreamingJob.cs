@@ -1,6 +1,6 @@
-using MicroClaw.Agent;
+﻿using MicroClaw.Agent;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Gateway.Contracts.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;

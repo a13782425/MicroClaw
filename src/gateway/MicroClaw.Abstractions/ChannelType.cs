@@ -1,6 +1,6 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
-namespace MicroClaw.Gateway.Contracts;
+namespace MicroClaw.Abstractions;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ChannelType

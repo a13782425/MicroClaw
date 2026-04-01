@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using MicroClaw.Configuration;
-using MicroClaw.Gateway.Contracts.Plugins;
+using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Plugins.Models;
 using Microsoft.Extensions.Hosting;

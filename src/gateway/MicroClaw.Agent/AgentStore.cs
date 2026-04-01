@@ -1,5 +1,5 @@
-using System.Text.Json;
-using MicroClaw.Gateway.Contracts.Plugins;
+﻿using System.Text.Json;
+using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;

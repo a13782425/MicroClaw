@@ -1,6 +1,6 @@
-using System.Text;
-using MicroClaw.Gateway.Contracts.Sessions;
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using System.Text;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 
 namespace MicroClaw.Streaming;
 

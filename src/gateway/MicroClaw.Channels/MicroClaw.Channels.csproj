@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -10,13 +10,13 @@
     <PackageReference Include="FeishuNetSdk" Version="*" />
     <PackageReference Include="FeishuNetSdk.Endpoint" Version="4.0.1" />
     <PackageReference Include="FeishuNetSdk.WebSocket" Version="*" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
     <PackageReference Include="System.Threading.RateLimiting" Version="*" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MicroClaw.Gateway.Contracts\MicroClaw.Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />

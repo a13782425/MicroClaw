@@ -1,6 +1,6 @@
-using MicroClaw.Gateway.Contracts.Streaming;
+﻿using MicroClaw.Abstractions.Streaming;
 
-namespace MicroClaw.Gateway.Contracts.Sessions;
+namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// 渠道消息处理器通过此接口将消息路由到 Agent（ReAct 循环）执行。

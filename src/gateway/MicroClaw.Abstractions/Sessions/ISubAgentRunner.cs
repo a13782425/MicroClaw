@@ -1,4 +1,4 @@
-namespace MicroClaw.Gateway.Contracts.Sessions;
+﻿namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// 允许 Agent 工具层启动子 Agent 会话执行任务（类似 Claude Code 子任务机制）。
