@@ -22,7 +22,7 @@ import { eventBus } from '@/services/eventBus'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import ChatMessage from '@/components/chat-message'
-import SessionTreeItem from './SessionTreeItem'
+import SessionTreeItem from './session-tree-item'
 
 // ─── 新建 Session 弹窗 ────────────────────────────────────────────────────────
 interface CreateDialogProps {

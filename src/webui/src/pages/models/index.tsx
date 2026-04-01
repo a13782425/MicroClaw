@@ -1,968 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  Box, Flex, Text, Button, Badge, Switch, Spinner,
-  Input, Textarea, Select, Portal, createListCollection,
-  SimpleGrid, Card, Collapsible, CheckboxCard, Tabs,
+  Box, Flex, Text, Button, Badge, Tabs, SimpleGrid, Spinner,
 } from '@chakra-ui/react'
-import { Plus, Cpu, Link as LinkIcon, Edit, Trash2, ChevronDown } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
-  listProviders, createProvider, updateProvider, deleteProvider, setDefaultProvider,
-  startRagReindexAll, getRagReindexStatus,
-  type ProviderConfig, type ProviderCreateRequest, type ProviderUpdateRequest,
-  type ProviderProtocol, type ProviderCapabilities, type ModelType, type RagReindexStatus,
+  listProviders,
+  updateProvider,
+  deleteProvider,
+  setDefaultProvider,
+  type ProviderConfig,
+  type ModelType,
 } from '@/api/gateway'
-import { AppDialog } from '@/components/ui/app-dialog'
-import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-
-// ─── 工具函数 ──────────────────────────────────────────────────────────────────
-function protocolLabel(p: ProviderProtocol): string {
-  return p === 'openai' ? 'OpenAI / 兼容' : 'Anthropic'
-}
-
-const PROTOCOL_OPTIONS = [
-  { value: 'openai', label: 'OpenAI / 兼容' },
-  { value: 'anthropic', label: 'Anthropic (Claude)' },
-]
-const protocolCollection = createListCollection({ items: PROTOCOL_OPTIONS })
-
-const EMBEDDING_PROTOCOL_OPTIONS = [
-  { value: 'openai', label: 'OpenAI / 兼容' },
-]
-const embeddingProtocolCollection = createListCollection({ items: EMBEDDING_PROTOCOL_OPTIONS })
-
-const LATENCY_TIER_OPTIONS = [
-  { value: 'Low', label: '低延迟（本地/轻量云端）' },
-  { value: 'Medium', label: '中等延迟（标准云端）' },
-  { value: 'High', label: '高延迟（大上下文/推理型）' },
-]
-const latencyTierCollection = createListCollection({ items: LATENCY_TIER_OPTIONS })
-
-function latencyTierLabel(tier: string): string {
-  return LATENCY_TIER_OPTIONS.find((o) => o.value === tier)?.label.split('（')[0] ?? tier
-}
-
-function latencyTierColor(tier: string): string {
-  if (tier === 'Low') return 'green'
-  if (tier === 'High') return 'orange'
-  return 'blue'
-}
-
-// ─── 模态 & 能力选项 ──────────────────────────────────────────────────────────
-const INPUT_MODALITIES = [
-  { key: 'inputImage', label: '图片' },
-  { key: 'inputAudio', label: '音频' },
-  { key: 'inputVideo', label: '视频' },
-  { key: 'inputFile', label: '文件' },
-] as const
-
-const OUTPUT_MODALITIES = [
-  { key: 'outputImage', label: '图片' },
-  { key: 'outputAudio', label: '音频' },
-  { key: 'outputVideo', label: '视频' },
-] as const
-
-// ─── 默认表单 ─────────────────────────────────────────────────────────────────
-function defaultChatForm() {
-  return {
-    displayName: '',
-    protocol: 'openai' as ProviderProtocol,
-    baseUrl: '',
-    apiKey: '',
-    modelName: '',
-    maxOutputTokens: 8192,
-    isEnabled: true,
-    inputImage: false,
-    inputAudio: false,
-    inputVideo: false,
-    inputFile: false,
-    outputImage: false,
-    outputAudio: false,
-    outputVideo: false,
-    supportsFunctionCalling: true,
-    supportsResponsesApi: false,
-    inputPricePerMToken: '',
-    outputPricePerMToken: '',
-    cacheInputPricePerMToken: '',
-    cacheOutputPricePerMToken: '',
-    notes: '',
-    qualityScore: 50,
-    latencyTier: 'Medium',
-  }
-}
-
-function defaultEmbeddingForm() {
-  return {
-    displayName: '',
-    protocol: 'openai' as ProviderProtocol,
-    baseUrl: '',
-    apiKey: '',
-    modelName: '',
-    isEnabled: true,
-    maxInputTokens: '',
-    outputDimensions: '',
-    inputPricePerMToken: '',
-    notes: '',
-  }
-}
-
-type ChatFormState = ReturnType<typeof defaultChatForm>
-type EmbeddingFormState = ReturnType<typeof defaultEmbeddingForm>
-
-function hasNonDefaultCapabilities(caps: ProviderCapabilities | undefined | null): boolean {
-  if (!caps) return false
-  return caps.inputImage || caps.inputAudio || caps.inputVideo || caps.inputFile
-    || caps.outputImage || caps.outputAudio || caps.outputVideo
-    || caps.supportsFunctionCalling || caps.supportsResponsesApi
-}
-
-function hasNonDefaultPricing(caps: ProviderCapabilities | undefined | null): boolean {
-  if (!caps) return false
-  return !!(caps.inputPricePerMToken || caps.outputPricePerMToken
-    || caps.cacheInputPricePerMToken || caps.cacheOutputPricePerMToken
-    || caps.notes)
-}
-
-function buildChatCapabilities(form: ChatFormState): Partial<ProviderCapabilities> {
-  return {
-    inputImage: form.inputImage,
-    inputAudio: form.inputAudio,
-    inputVideo: form.inputVideo,
-    inputFile: form.inputFile,
-    outputImage: form.outputImage,
-    outputAudio: form.outputAudio,
-    outputVideo: form.outputVideo,
-    supportsFunctionCalling: form.supportsFunctionCalling,
-    supportsResponsesApi: form.supportsResponsesApi,
-    inputPricePerMToken: parseFloat(form.inputPricePerMToken) || null,
-    outputPricePerMToken: parseFloat(form.outputPricePerMToken) || null,
-    cacheInputPricePerMToken: parseFloat(form.cacheInputPricePerMToken) || null,
-    cacheOutputPricePerMToken: parseFloat(form.cacheOutputPricePerMToken) || null,
-    notes: form.notes || null,
-    qualityScore: form.qualityScore,
-    latencyTier: form.latencyTier,
-  }
-}
-
-function buildEmbeddingCapabilities(form: EmbeddingFormState): Partial<ProviderCapabilities> {
-  return {
-    inputPricePerMToken: parseFloat(form.inputPricePerMToken) || null,
-    maxInputTokens: parseInt(form.maxInputTokens) || null,
-    outputDimensions: parseInt(form.outputDimensions) || null,
-    notes: form.notes || null,
-  }
-}
-
-// ─── 编辑/新建弹窗 ────────────────────────────────────────────
-interface ChatProviderDialogProps {
-  open: boolean
-  editing: ProviderConfig | null
-  onClose: () => void
-  onSaved: () => void
-}
-
-function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProviderDialogProps) {
-  const [form, setForm] = useState<ChatFormState>(defaultChatForm())
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      if (editing) {
-        const caps = editing.capabilities
-        setForm({
-          displayName: editing.displayName,
-          protocol: editing.protocol,
-          baseUrl: editing.baseUrl ?? '',
-          apiKey: '',
-          modelName: editing.modelName,
-          maxOutputTokens: editing.maxOutputTokens,
-          isEnabled: editing.isEnabled,
-          inputImage: caps?.inputImage ?? false,
-          inputAudio: caps?.inputAudio ?? false,
-          inputVideo: caps?.inputVideo ?? false,
-          inputFile: caps?.inputFile ?? false,
-          outputImage: caps?.outputImage ?? false,
-          outputAudio: caps?.outputAudio ?? false,
-          outputVideo: caps?.outputVideo ?? false,
-          supportsFunctionCalling: caps?.supportsFunctionCalling ?? false,
-          supportsResponsesApi: caps?.supportsResponsesApi ?? false,
-          inputPricePerMToken: caps?.inputPricePerMToken?.toString() ?? '',
-          outputPricePerMToken: caps?.outputPricePerMToken?.toString() ?? '',
-          cacheInputPricePerMToken: caps?.cacheInputPricePerMToken?.toString() ?? '',
-          cacheOutputPricePerMToken: caps?.cacheOutputPricePerMToken?.toString() ?? '',
-          notes: caps?.notes ?? '',
-          qualityScore: caps?.qualityScore ?? 50,
-          latencyTier: caps?.latencyTier ?? 'Medium',
-        })
-      } else {
-        setForm(defaultChatForm())
-      }
-    }
-  }, [open, editing])
-
-  if (!open) return null
-
-  const set = (k: keyof ChatFormState, v: unknown) => setForm((f) => ({ ...f, [k]: v }))
-
-  const handleSave = async () => {
-    if (!form.displayName.trim() || !form.modelName.trim()) {
-      toaster.create({ type: 'error', title: '请填写显示名称和模型名称' })
-      return
-    }
-    if (!editing && !form.apiKey.trim()) {
-      toaster.create({ type: 'error', title: '请填写 API Key' })
-      return
-    }
-    setSaving(true)
-    try {
-      const capabilities = buildChatCapabilities(form)
-      if (editing) {
-        const req: ProviderUpdateRequest = {
-          id: editing.id,
-          displayName: form.displayName,
-          protocol: form.protocol,
-          modelType: 'chat',
-          baseUrl: form.baseUrl || undefined,
-          apiKey: form.apiKey || undefined,
-          modelName: form.modelName,
-          maxOutputTokens: form.maxOutputTokens,
-          isEnabled: form.isEnabled,
-          capabilities,
-        }
-        await updateProvider(req)
-      } else {
-        const req: ProviderCreateRequest = {
-          displayName: form.displayName,
-          protocol: form.protocol,
-          modelType: 'chat',
-          baseUrl: form.baseUrl || undefined,
-          apiKey: form.apiKey,
-          modelName: form.modelName,
-          maxOutputTokens: form.maxOutputTokens,
-          isEnabled: form.isEnabled,
-          capabilities,
-        }
-        await createProvider(req)
-      }
-      toaster.create({ type: 'success', title: editing ? '更新成功' : '添加成功' })
-      onSaved()
-      onClose()
-    } catch (err) {
-      toaster.create({ type: 'error', title: '保存失败', description: String(err) })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <AppDialog
-      open={open}
-      onClose={onClose}
-      title={editing ? '编辑聊天模型' : '添加聊天模型'}
-      contentProps={{ maxW: '540px' }}
-      footer={(
-        <>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button colorPalette="blue" loading={saving} onClick={handleSave}>保存</Button>
-        </>
-      )}
-    >
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">显示名称 *</Text>
-        <Input value={form.displayName} onChange={(e) => set('displayName', e.target.value)} placeholder="例如：My GPT-4o" />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">协议类型 *</Text>
-        <Select.Root
-          value={[form.protocol]}
-          onValueChange={(v) => set('protocol', v.value[0] as ProviderProtocol)}
-          collection={protocolCollection}
-        >
-          <Select.Trigger><Select.ValueText /></Select.Trigger>
-          <Portal>
-            <Select.Positioner>
-              <Select.Content>
-                {PROTOCOL_OPTIONS.map((o) => (
-                  <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Positioner>
-          </Portal>
-        </Select.Root>
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">Base URL</Text>
-        <Input value={form.baseUrl} onChange={(e) => set('baseUrl', e.target.value)} placeholder="留空使用官方默认端点" />
-        <Text fontSize="xs" color="gray.500" mt="1">填写可接入兼容 API 或代理</Text>
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">API Key {!editing && '*'}</Text>
-        <Input
-          type="password"
-          value={form.apiKey}
-          onChange={(e) => set('apiKey', e.target.value)}
-          placeholder={editing ? '留空保留原有 Key' : '请输入 API Key'}
-        />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">模型名称 *</Text>
-        <Input
-          value={form.modelName}
-          onChange={(e) => set('modelName', e.target.value)}
-          placeholder={form.protocol === 'openai' ? 'gpt-4o' : 'claude-opus-4-5'}
-        />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">最大输出 Tokens</Text>
-        <Input
-          type="number"
-          value={form.maxOutputTokens}
-          onChange={(e) => set('maxOutputTokens', parseInt(e.target.value) || 8192)}
-          min={256} max={131072}
-        />
-      </Box>
-
-      {/* ─── 能力配置 ─────────────────────────────────────── */}
-      <Collapsible.Root defaultOpen={editing ? hasNonDefaultCapabilities(editing.capabilities) : false}>
-        <Collapsible.Trigger asChild>
-          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
-            <Text fontSize="sm" fontWeight="medium">能力配置</Text>
-            <ChevronDown size={14} />
-          </Button>
-        </Collapsible.Trigger>
-        <Collapsible.Content>
-          <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="2">输入模态</Text>
-            <Flex gap="3" flexWrap="wrap" mb="3">
-              {INPUT_MODALITIES.map((m) => (
-                <CheckboxCard.Root
-                  key={m.key}
-                  variant="subtle"
-                  size="sm"
-                  colorPalette="teal"
-                  checked={form[m.key as keyof ChatFormState] as boolean}
-                  onCheckedChange={(e) => set(m.key as keyof ChatFormState, !!e.checked)}
-                >
-                  <CheckboxCard.HiddenInput />
-                  <CheckboxCard.Control>
-                    <CheckboxCard.Indicator />
-                    <CheckboxCard.Label>{m.label}</CheckboxCard.Label>
-                  </CheckboxCard.Control>
-                </CheckboxCard.Root>
-              ))}
-            </Flex>
-
-            <Text fontSize="xs" color="gray.500" mb="2">输出模态</Text>
-            <Flex gap="3" flexWrap="wrap" mb="3">
-              {OUTPUT_MODALITIES.map((m) => (
-                <CheckboxCard.Root
-                  key={m.key}
-                  variant="subtle"
-                  size="sm"
-                  colorPalette="teal"
-                  checked={form[m.key as keyof ChatFormState] as boolean}
-                  onCheckedChange={(e) => set(m.key as keyof ChatFormState, !!e.checked)}
-                >
-                  <CheckboxCard.HiddenInput />
-                  <CheckboxCard.Control>
-                    <CheckboxCard.Indicator />
-                    <CheckboxCard.Label>{m.label}</CheckboxCard.Label>
-                  </CheckboxCard.Control>
-                </CheckboxCard.Root>
-              ))}
-            </Flex>
-
-            <Text fontSize="xs" color="gray.500" mb="2">特殊能力</Text>
-            <Flex gap="4">
-              <Switch.Root size="sm" checked={form.supportsFunctionCalling} onCheckedChange={(d) => set('supportsFunctionCalling', d.checked)}>
-                <Switch.HiddenInput />
-                <Switch.Control><Switch.Thumb /></Switch.Control>
-                <Switch.Label fontSize="xs">Function Calling</Switch.Label>
-              </Switch.Root>
-              <Switch.Root size="sm" checked={form.supportsResponsesApi} onCheckedChange={(d) => set('supportsResponsesApi', d.checked)}>
-                <Switch.HiddenInput />
-                <Switch.Control><Switch.Thumb /></Switch.Control>
-                <Switch.Label fontSize="xs">Responses API</Switch.Label>
-              </Switch.Root>
-            </Flex>
-          </Box>
-        </Collapsible.Content>
-      </Collapsible.Root>
-
-      {/* ─── 价格 & 备注 ─────────────────────────────────── */}
-      <Collapsible.Root defaultOpen={editing ? hasNonDefaultPricing(editing.capabilities) : false}>
-        <Collapsible.Trigger asChild>
-          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
-            <Text fontSize="sm" fontWeight="medium">价格 & 备注</Text>
-            <ChevronDown size={14} />
-          </Button>
-        </Collapsible.Trigger>
-        <Collapsible.Content>
-          <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="2">单价（$ / 1M tokens）</Text>
-            <SimpleGrid columns={2} gap="3" mb="3">
-              <Box>
-                <Text fontSize="xs" mb="1">输入</Text>
-                <Input size="sm" type="number" step="0.01" min={0}
-                  value={form.inputPricePerMToken}
-                  onChange={(e) => set('inputPricePerMToken', e.target.value)}
-                  placeholder="0.00" />
-              </Box>
-              <Box>
-                <Text fontSize="xs" mb="1">输出</Text>
-                <Input size="sm" type="number" step="0.01" min={0}
-                  value={form.outputPricePerMToken}
-                  onChange={(e) => set('outputPricePerMToken', e.target.value)}
-                  placeholder="0.00" />
-              </Box>
-              <Box>
-                <Text fontSize="xs" mb="1">缓存输入</Text>
-                <Input size="sm" type="number" step="0.01" min={0}
-                  value={form.cacheInputPricePerMToken}
-                  onChange={(e) => set('cacheInputPricePerMToken', e.target.value)}
-                  placeholder="0.00" />
-              </Box>
-              <Box>
-                <Text fontSize="xs" mb="1">缓存输出</Text>
-                <Input size="sm" type="number" step="0.01" min={0}
-                  value={form.cacheOutputPricePerMToken}
-                  onChange={(e) => set('cacheOutputPricePerMToken', e.target.value)}
-                  placeholder="0.00" />
-              </Box>
-            </SimpleGrid>
-            <Text fontSize="xs" mb="1">备注</Text>
-            <Textarea size="sm" rows={2}
-              value={form.notes}
-              onChange={(e) => set('notes', e.target.value)}
-              placeholder="可选备注信息" />
-          </Box>
-        </Collapsible.Content>
-      </Collapsible.Root>
-      {/* ─── 路由策略权重 ────────────────────────────────── */}
-      <Collapsible.Root>
-        <Collapsible.Trigger asChild>
-          <Button variant="ghost" size="sm" w="full" justifyContent="space-between" mb="2">
-            <Text fontSize="sm" fontWeight="medium">路由策略权重</Text>
-            <ChevronDown size={14} />
-          </Button>
-        </Collapsible.Trigger>
-        <Collapsible.Content>
-          <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="3">
-              配置此 Provider 在自动路由时的优先权重。Agent 选择"质量优先"策略时按质量分排序；选择"延迟优先"策略时按延迟层级排序。
-            </Text>
-            <SimpleGrid columns={2} gap="3">
-              <Box>
-                <Text fontSize="xs" mb="1">质量评分（0-100）</Text>
-                <Input
-                  size="sm"
-                  type="number"
-                  min={0} max={100}
-                  value={form.qualityScore}
-                  onChange={(e) => set('qualityScore', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                  placeholder="50"
-                />
-                <Text fontSize="xs" color="gray.400" mt="1">值越高"质量优先"时越优先</Text>
-              </Box>
-              <Box>
-                <Text fontSize="xs" mb="1">延迟层级</Text>
-                <Select.Root
-                  value={[form.latencyTier]}
-                  onValueChange={(v) => set('latencyTier', v.value[0])}
-                  collection={latencyTierCollection}
-                  size="sm"
-                >
-                  <Select.Trigger><Select.ValueText /></Select.Trigger>
-                  <Portal>
-                    <Select.Positioner>
-                      <Select.Content>
-                        {LATENCY_TIER_OPTIONS.map((o) => (
-                          <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Positioner>
-                  </Portal>
-                </Select.Root>
-                <Text fontSize="xs" color="gray.400" mt="1">值越低"延迟优先"时越优先</Text>
-              </Box>
-            </SimpleGrid>
-          </Box>
-        </Collapsible.Content>
-      </Collapsible.Root>
-    </AppDialog>
-  )
-}
-
-// ─── 嵌入模型弹窗 ─────────────────────────────────────────────────────────────
-interface EmbeddingDialogProps {
-  open: boolean
-  editing: ProviderConfig | null
-  onClose: () => void
-  onSaved: () => void
-}
-
-function EmbeddingDialog({ open, editing, onClose, onSaved }: EmbeddingDialogProps) {
-  const [form, setForm] = useState<EmbeddingFormState>(defaultEmbeddingForm())
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      if (editing) {
-        const caps = editing.capabilities
-        setForm({
-          displayName: editing.displayName,
-          protocol: editing.protocol,
-          baseUrl: editing.baseUrl ?? '',
-          apiKey: '',
-          modelName: editing.modelName,
-          isEnabled: editing.isEnabled,
-          maxInputTokens: caps?.maxInputTokens?.toString() ?? '',
-          outputDimensions: caps?.outputDimensions?.toString() ?? '',
-          inputPricePerMToken: caps?.inputPricePerMToken?.toString() ?? '',
-          notes: caps?.notes ?? '',
-        })
-      } else {
-        setForm(defaultEmbeddingForm())
-      }
-    }
-  }, [open, editing])
-
-  if (!open) return null
-
-  const set = (k: keyof EmbeddingFormState, v: unknown) => setForm((f) => ({ ...f, [k]: v }))
-
-  const handleSave = async () => {
-    if (!form.displayName.trim() || !form.modelName.trim()) {
-      toaster.create({ type: 'error', title: '请填写显示名称和模型名称' })
-      return
-    }
-    if (!editing && !form.apiKey.trim()) {
-      toaster.create({ type: 'error', title: '请填写 API Key' })
-      return
-    }
-    setSaving(true)
-    try {
-      const capabilities = buildEmbeddingCapabilities(form)
-      if (editing) {
-        await updateProvider({
-          id: editing.id,
-          displayName: form.displayName,
-          protocol: form.protocol,
-          modelType: 'embedding',
-          baseUrl: form.baseUrl || undefined,
-          apiKey: form.apiKey || undefined,
-          modelName: form.modelName,
-          isEnabled: form.isEnabled,
-          capabilities,
-        })
-      } else {
-        await createProvider({
-          displayName: form.displayName,
-          protocol: form.protocol,
-          modelType: 'embedding',
-          baseUrl: form.baseUrl || undefined,
-          apiKey: form.apiKey,
-          modelName: form.modelName,
-          isEnabled: form.isEnabled,
-          capabilities,
-        })
-      }
-      toaster.create({ type: 'success', title: editing ? '更新成功' : '添加成功' })
-      onSaved()
-      onClose()
-    } catch (err) {
-      toaster.create({ type: 'error', title: '保存失败', description: String(err) })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <AppDialog
-      open={open}
-      onClose={onClose}
-      title={editing ? '编辑嵌入模型' : '添加嵌入模型'}
-      contentProps={{ maxW: '480px' }}
-      footer={(
-        <>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button colorPalette="purple" loading={saving} onClick={handleSave}>保存</Button>
-        </>
-      )}
-    >
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">显示名称 *</Text>
-        <Input value={form.displayName} onChange={(e) => set('displayName', e.target.value)} placeholder="例如：text-embedding-3-small" />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">协议类型</Text>
-        <Select.Root
-          value={[form.protocol]}
-          onValueChange={(v) => set('protocol', v.value[0] as ProviderProtocol)}
-          collection={embeddingProtocolCollection}
-        >
-          <Select.Trigger><Select.ValueText /></Select.Trigger>
-          <Portal>
-            <Select.Positioner>
-              <Select.Content>
-                {EMBEDDING_PROTOCOL_OPTIONS.map((o) => (
-                  <Select.Item key={o.value} item={o}>{o.label}</Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Positioner>
-          </Portal>
-        </Select.Root>
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">Base URL</Text>
-        <Input value={form.baseUrl} onChange={(e) => set('baseUrl', e.target.value)} placeholder="留空使用官方默认端点" />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">API Key {!editing && '*'}</Text>
-        <Input
-          type="password"
-          value={form.apiKey}
-          onChange={(e) => set('apiKey', e.target.value)}
-          placeholder={editing ? '留空保留原有 Key' : '请输入 API Key'}
-        />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">模型名称 *</Text>
-        <Input
-          value={form.modelName}
-          onChange={(e) => set('modelName', e.target.value)}
-          placeholder="text-embedding-3-small"
-        />
-      </Box>
-
-      <SimpleGrid columns={2} gap="3" mb="3">
-        <Box>
-          <Text fontSize="sm" mb="1" fontWeight="medium">最大输入 Tokens</Text>
-          <Input
-            type="number"
-            min={1}
-            value={form.maxInputTokens}
-            onChange={(e) => set('maxInputTokens', e.target.value)}
-            placeholder="8192"
-          />
-        </Box>
-        <Box>
-          <Text fontSize="sm" mb="1" fontWeight="medium">向量维度</Text>
-          <Input
-            type="number"
-            min={1}
-            value={form.outputDimensions}
-            onChange={(e) => set('outputDimensions', e.target.value)}
-            placeholder="1536"
-          />
-        </Box>
-      </SimpleGrid>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">输入价格（$ / 1M tokens）</Text>
-        <Input
-          type="number"
-          step="0.001"
-          min={0}
-          value={form.inputPricePerMToken}
-          onChange={(e) => set('inputPricePerMToken', e.target.value)}
-          placeholder="0.020"
-        />
-      </Box>
-
-      <Box mb="3">
-        <Text fontSize="sm" mb="1" fontWeight="medium">备注</Text>
-        <Textarea
-          rows={2}
-          value={form.notes}
-          onChange={(e) => set('notes', e.target.value)}
-          placeholder="可选备注信息"
-        />
-      </Box>
-    </AppDialog>
-  )
-}
-
-// ─── 主组件 ──────────────────────────────────────────────────────────────────
-function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
-  p: ProviderConfig
-  onEdit: (p: ProviderConfig) => void
-  onDelete: (p: ProviderConfig) => void
-  onToggle: (p: ProviderConfig, enabled: boolean) => void
-  onSetDefault: (p: ProviderConfig) => void
-}) {
-  return (
-    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline">
-      <Card.Body p="4">
-        <Flex align="center" gap="2" mb="2">
-          <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
-          {p.isDefault && <Badge colorPalette="yellow" size="sm">默认</Badge>}
-          <Badge colorPalette={p.protocol === 'openai' ? 'blue' : 'purple'} size="sm">
-            {protocolLabel(p.protocol)}
-          </Badge>
-        </Flex>
-
-        <Flex align="center" gap="1" color="gray.600" _dark={{ color: 'gray.400' }} fontSize="sm" mb="1">
-          <Cpu size={13} />
-          <Text>{p.modelName}</Text>
-        </Flex>
-        <Text fontSize="xs" color="gray.400" mb="1">
-          最大输出 {p.maxOutputTokens.toLocaleString()} tokens
-        </Text>
-
-        {p.baseUrl && (
-          <Flex align="center" gap="1" color="gray.500" fontSize="xs" mb="2">
-            <LinkIcon size={11} />
-            <Text truncate>{p.baseUrl}</Text>
-          </Flex>
-        )}
-
-        <Flex gap="1" flexWrap="wrap" mb="3">
-          {p.capabilities?.inputImage && <Badge size="sm" colorPalette="cyan" variant="subtle">图片输入</Badge>}
-          {p.capabilities?.inputAudio && <Badge size="sm" colorPalette="teal" variant="subtle">音频输入</Badge>}
-          {p.capabilities?.inputVideo && <Badge size="sm" colorPalette="blue" variant="subtle">视频输入</Badge>}
-          {p.capabilities?.inputFile && <Badge size="sm" colorPalette="gray" variant="subtle">文件</Badge>}
-          {p.capabilities?.outputImage && <Badge size="sm" colorPalette="cyan" variant="outline">图片输出</Badge>}
-          {p.capabilities?.outputAudio && <Badge size="sm" colorPalette="teal" variant="outline">音频输出</Badge>}
-          {p.capabilities?.outputVideo && <Badge size="sm" colorPalette="blue" variant="outline">视频输出</Badge>}
-          {p.capabilities?.supportsFunctionCalling && <Badge size="sm" colorPalette="orange" variant="subtle">Functions</Badge>}
-          {p.capabilities?.supportsResponsesApi && <Badge size="sm" colorPalette="green" variant="subtle">Responses</Badge>}
-          {(p.capabilities?.inputPricePerMToken || p.capabilities?.outputPricePerMToken) && (
-            <Badge size="sm" variant="outline" colorPalette="purple">
-              ${p.capabilities.inputPricePerMToken ?? '?'}/{p.capabilities.outputPricePerMToken ?? '?'}/M
-            </Badge>
-          )}
-        </Flex>
-
-        <Flex gap="2" mb="3" align="center">
-          <Text fontSize="xs" color="gray.400">路由:</Text>
-          <Badge size="sm" colorPalette="violet" variant="subtle">质量 {p.capabilities?.qualityScore ?? 50}</Badge>
-          <Badge size="sm" colorPalette={latencyTierColor(p.capabilities?.latencyTier ?? 'Medium')} variant="subtle">
-            {latencyTierLabel(p.capabilities?.latencyTier ?? 'Medium')}延迟
-          </Badge>
-        </Flex>
-
-        <Flex align="center" justify="space-between">
-          <Switch.Root size="sm" checked={p.isEnabled} onCheckedChange={(d) => onToggle(p, d.checked)}>
-            <Switch.HiddenInput />
-            <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Label fontSize="xs">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
-          </Switch.Root>
-
-          <Flex gap="1">
-            <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => onEdit(p)}>
-              <Edit size={12} /> 编辑
-            </Button>
-            {!p.isDefault && (
-              <Button size="xs" variant="ghost" colorPalette="yellow" onClick={() => onSetDefault(p)}>
-                设默认
-              </Button>
-            )}
-            <Button size="xs" variant="ghost" colorPalette="red" aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
-              <Trash2 size={12} />
-            </Button>
-          </Flex>
-        </Flex>
-      </Card.Body>
-    </Card.Root>
-  )
-}
-
-function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
-  p: ProviderConfig
-  onEdit: (p: ProviderConfig) => void
-  onDelete: (p: ProviderConfig) => void
-  onToggle: (p: ProviderConfig, enabled: boolean) => void
-}) {
-  return (
-    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline">
-      <Card.Body p="4">
-        <Flex align="center" gap="2" mb="2">
-          <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
-          <Badge colorPalette="purple" size="sm">嵌入</Badge>
-          <Badge colorPalette="blue" size="sm">OpenAI</Badge>
-        </Flex>
-
-        <Flex align="center" gap="1" color="gray.600" _dark={{ color: 'gray.400' }} fontSize="sm" mb="2">
-          <Cpu size={13} />
-          <Text>{p.modelName}</Text>
-        </Flex>
-
-        {p.baseUrl && (
-          <Flex align="center" gap="1" color="gray.500" fontSize="xs" mb="2">
-            <LinkIcon size={11} />
-            <Text truncate>{p.baseUrl}</Text>
-          </Flex>
-        )}
-
-        <Flex gap="1" flexWrap="wrap" mb="3">
-          {p.capabilities?.outputDimensions && (
-            <Badge size="sm" colorPalette="purple" variant="subtle">维度 {p.capabilities.outputDimensions}</Badge>
-          )}
-          {p.capabilities?.maxInputTokens && (
-            <Badge size="sm" colorPalette="blue" variant="subtle">输入 {p.capabilities.maxInputTokens.toLocaleString()} tokens</Badge>
-          )}
-          {p.capabilities?.inputPricePerMToken && (
-            <Badge size="sm" variant="outline" colorPalette="green">${p.capabilities.inputPricePerMToken}/M</Badge>
-          )}
-        </Flex>
-
-        <Flex align="center" justify="space-between">
-          <Switch.Root size="sm" checked={p.isEnabled} onCheckedChange={(d) => onToggle(p, d.checked)}>
-            <Switch.HiddenInput />
-            <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Label fontSize="xs">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
-          </Switch.Root>
-
-          <Flex gap="1">
-            <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => onEdit(p)}>
-              <Edit size={12} /> 编辑
-            </Button>
-            <Button size="xs" variant="ghost" colorPalette="red" aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
-              <Trash2 size={12} />
-            </Button>
-          </Flex>
-        </Flex>
-      </Card.Body>
-    </Card.Root>
-  )
-}
-
-// ─── 嵌入模型切换后全量重索引对话框 ──────────────────────────────────────────────
-function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [phase, setPhase] = useState<'confirm' | 'progress'>('confirm')
-  const [status, setStatus] = useState<RagReindexStatus | null>(null)
-  const [starting, setStarting] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const clearPolling = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }
-
-  const startPolling = () => {
-    clearPolling()
-    intervalRef.current = setInterval(async () => {
-      try {
-        const s = await getRagReindexStatus()
-        setStatus(s)
-        if (s.status === 'done' || s.status === 'error') clearPolling()
-      } catch { /* ignore poll errors */ }
-    }, 1500)
-  }
-
-  useEffect(() => {
-    if (open) {
-      setPhase('confirm')
-      setStatus(null)
-      setStarting(false)
-    } else {
-      clearPolling()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  useEffect(() => () => clearPolling(), [])
-
-  const handleStart = async () => {
-    setStarting(true)
-    setPhase('progress')
-    try {
-      await startRagReindexAll()
-      const s = await getRagReindexStatus()
-      setStatus(s)
-      startPolling()
-    } catch (err) {
-      toaster.create({ type: 'error', title: '启动失败', description: String(err) })
-      setPhase('confirm')
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const jobStatus = status?.status ?? 'idle'
-  const isRunning = phase === 'progress' && (jobStatus === 'running' || starting)
-  const isDone = jobStatus === 'done'
-  const isError = jobStatus === 'error'
-
-  // 运行中禁止关闭（传入空函数，Chakra 受控 open 不会更改）
-  const handleClose = isRunning ? () => {} : onClose
-
-  if (phase === 'confirm') {
-    return (
-      <AppDialog
-        open={open}
-        onClose={onClose}
-        title="嵌入模型已更换 — 知识库重索引"
-        footer={(
-          <>
-            <Button variant="ghost" onClick={onClose}>跳过</Button>
-            <Button colorPalette="purple" loading={starting} onClick={handleStart}>
-              开始重索引
-            </Button>
-          </>
-        )}
-      >
-        <Text color="gray.500" fontSize="sm" mb="4">
-          切换嵌入模型后，旧向量维度与新模型不兼容。建议立即对所有知识库进行重索引以确保搜索正常。
-        </Text>
-        <Text color="gray.400" fontSize="sm">点击「开始重索引」以自动处理全局文档与所有会话知识库。</Text>
-      </AppDialog>
-    )
-  }
-
-  return (
-    <AppDialog
-      open={open}
-      onClose={handleClose}
-      title="知识库重索引"
-      footer={!isRunning ? (
-        <Button variant="ghost" onClick={onClose}>
-          {isDone ? '完成' : '关闭'}
-        </Button>
-      ) : undefined}
-    >
-      <Text color="gray.500" fontSize="sm" mb="4">
-        切换嵌入模型后，旧向量维度与新模型不兼容。建议立即对所有知识库进行重索引以确保搜索正常。
-      </Text>
-      {isRunning && (
-        <Flex align="center" gap="3">
-          <Spinner size="sm" color="purple.400" />
-          <Box>
-            <Text fontSize="sm" fontWeight="medium">正在重索引中…</Text>
-            {status && (
-              <Text fontSize="xs" color="gray.500" mt="1">
-                已完成 {status.completed} / {status.total}
-                {status.currentItem && `（当前：${status.currentItem}）`}
-              </Text>
-            )}
-          </Box>
-        </Flex>
-      )}
-      {isDone && (
-        <Text color="green.400" fontSize="sm" fontWeight="medium">
-          重索引完成！共处理 {status?.total ?? 0} 个项目。
-        </Text>
-      )}
-      {isError && (
-        <Text color="red.400" fontSize="sm">
-          重索引失败：{status?.error ?? '未知错误'}
-        </Text>
-      )}
-    </AppDialog>
-  )
-}
+import { toaster } from '@/components/ui/toaster'
+import { ChatProviderDialog } from './chat-provider-dialog'
+import { EmbeddingDialog } from './embedding-dialog'
+import { EmbeddingReindexDialog } from './embedding-reindex-dialog'
+import { ChatCard, EmbeddingCard } from './provider-cards'
 
 export default function ModelsPage() {
   const [providers, setProviders] = useState<ProviderConfig[]>([])
@@ -974,8 +28,8 @@ export default function ModelsPage() {
   const [editing, setEditing] = useState<ProviderConfig | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProviderConfig | null>(null)
 
-  const chatProviders = providers.filter((p) => p.modelType === 'chat')
-  const embeddingProviders = providers.filter((p) => p.modelType === 'embedding')
+  const chatProviders = providers.filter((provider) => provider.modelType === 'chat')
+  const embeddingProviders = providers.filter((provider) => provider.modelType === 'embedding')
 
   const load = async () => {
     setLoading(true)
@@ -989,43 +43,43 @@ export default function ModelsPage() {
 
   useEffect(() => { load() }, [])
 
-  const handleToggle = async (p: ProviderConfig, enabled: boolean) => {
+  const handleToggle = async (provider: ProviderConfig, enabled: boolean) => {
     try {
-      await updateProvider({ id: p.id, isEnabled: enabled })
-      setProviders((prev) => prev.map((x) => x.id === p.id ? { ...x, isEnabled: enabled } : x))
-      if (p.modelType === 'embedding' && enabled) {
+      await updateProvider({ id: provider.id, isEnabled: enabled })
+      setProviders((prev) => prev.map((item) => item.id === provider.id ? { ...item, isEnabled: enabled } : item))
+      if (provider.modelType === 'embedding' && enabled) {
         setReindexDialogOpen(true)
       }
-    } catch (err) {
-      toaster.create({ type: 'error', title: '操作失败', description: String(err) })
+    } catch (error) {
+      toaster.create({ type: 'error', title: '操作失败', description: String(error) })
     }
   }
 
-  const handleDelete = async (p: ProviderConfig) => {
+  const handleDelete = async (provider: ProviderConfig) => {
     try {
-      await deleteProvider(p.id)
-      setProviders((prev) => prev.filter((x) => x.id !== p.id))
+      await deleteProvider(provider.id)
+      setProviders((prev) => prev.filter((item) => item.id !== provider.id))
       toaster.create({ type: 'success', title: '已删除' })
-    } catch (err) {
-      toaster.create({ type: 'error', title: '删除失败', description: String(err) })
+    } catch (error) {
+      toaster.create({ type: 'error', title: '删除失败', description: String(error) })
     } finally {
       setDeleteTarget(null)
     }
   }
 
-  const handleSetDefault = async (p: ProviderConfig) => {
+  const handleSetDefault = async (provider: ProviderConfig) => {
     try {
-      await setDefaultProvider(p.id)
-      setProviders((prev) => prev.map((x) => ({ ...x, isDefault: x.id === p.id })))
-      toaster.create({ type: 'success', title: `已将「${p.displayName}」设为默认` })
-    } catch (err) {
-      toaster.create({ type: 'error', title: '操作失败', description: String(err) })
+      await setDefaultProvider(provider.id)
+      setProviders((prev) => prev.map((item) => ({ ...item, isDefault: item.id === provider.id })))
+      toaster.create({ type: 'success', title: `已将「${provider.displayName}」设为默认` })
+    } catch (error) {
+      toaster.create({ type: 'error', title: '操作失败', description: String(error) })
     }
   }
 
-  const openEdit = (p: ProviderConfig) => {
-    setEditing(p)
-    if (p.modelType === 'embedding') setEmbeddingDialogOpen(true)
+  const openEdit = (provider: ProviderConfig) => {
+    setEditing(provider)
+    if (provider.modelType === 'embedding') setEmbeddingDialogOpen(true)
     else setChatDialogOpen(true)
   }
 
@@ -1042,12 +96,12 @@ export default function ModelsPage() {
           <Text fontSize="xl" fontWeight="bold">模型</Text>
           <Text color="gray.500" fontSize="sm" mt="1">管理 AI 模型提供方，支持聊天模型与嵌入模型</Text>
         </Box>
-        <Button colorPalette={activeTab === 'embedding' ? 'purple' : 'blue'} onClick={openAdd}>
-          <Plus size={16} /> {activeTab === 'embedding' ? '添加嵌入模型' : '添加聊天模型'}
+        <Button colorPalette={activeTab === 'embedding' ? 'purple' : 'blue'} onClick={openAdd} aria-label="添加提供方">
+          <Plus size={16} /> 添加提供方
         </Button>
       </Flex>
 
-      <Tabs.Root value={activeTab} onValueChange={(d) => setActiveTab(d.value as ModelType)}>
+      <Tabs.Root value={activeTab} onValueChange={(details) => setActiveTab(details.value as ModelType)}>
         <Tabs.List mb="4">
           <Tabs.Trigger value="chat">
             聊天模型
@@ -1059,23 +113,19 @@ export default function ModelsPage() {
           </Tabs.Trigger>
         </Tabs.List>
 
-        <Tabs.Content value="chat" pt="4">
+        <Tabs.Content value="chat">
           {loading ? (
-            <Flex justify="center" py="16"><Spinner /></Flex>
+            <Box py="10" textAlign="center"><Spinner /></Box>
           ) : chatProviders.length === 0 ? (
-            <Flex align="center" justify="center" py="16" flexDir="column" gap="3" color="gray.400">
-              <Cpu size={48} />
-              <Text>暂无聊天模型</Text>
-              <Button colorPalette="blue" onClick={openAdd}><Plus size={16} /> 添加聊天模型</Button>
-            </Flex>
+            <Box py="12" textAlign="center" color="gray.400">暂无聊天模型</Box>
           ) : (
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="4">
-              {chatProviders.map((p) => (
+            <SimpleGrid columns={{ base: 1, xl: 2 }} gap="4">
+              {chatProviders.map((provider) => (
                 <ChatCard
-                  key={p.id}
-                  p={p}
+                  key={provider.id}
+                  p={provider}
                   onEdit={openEdit}
-                  onDelete={(x) => setDeleteTarget(x)}
+                  onDelete={setDeleteTarget}
                   onToggle={handleToggle}
                   onSetDefault={handleSetDefault}
                 />
@@ -1084,23 +134,19 @@ export default function ModelsPage() {
           )}
         </Tabs.Content>
 
-        <Tabs.Content value="embedding" pt="4">
+        <Tabs.Content value="embedding">
           {loading ? (
-            <Flex justify="center" py="16"><Spinner /></Flex>
+            <Box py="10" textAlign="center"><Spinner /></Box>
           ) : embeddingProviders.length === 0 ? (
-            <Flex align="center" justify="center" py="16" flexDir="column" gap="3" color="gray.400">
-              <Cpu size={48} />
-              <Text>暂无嵌入模型</Text>
-              <Button colorPalette="purple" onClick={openAdd}><Plus size={16} /> 添加嵌入模型</Button>
-            </Flex>
+            <Box py="12" textAlign="center" color="gray.400">暂无嵌入模型</Box>
           ) : (
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="4">
-              {embeddingProviders.map((p) => (
+            <SimpleGrid columns={{ base: 1, xl: 2 }} gap="4">
+              {embeddingProviders.map((provider) => (
                 <EmbeddingCard
-                  key={p.id}
-                  p={p}
+                  key={provider.id}
+                  p={provider}
                   onEdit={openEdit}
-                  onDelete={(x) => setDeleteTarget(x)}
+                  onDelete={setDeleteTarget}
                   onToggle={handleToggle}
                 />
               ))}
@@ -1111,29 +157,26 @@ export default function ModelsPage() {
 
       <ChatProviderDialog
         open={chatDialogOpen}
-        editing={editing}
+        editing={editing?.modelType === 'chat' ? editing : null}
         onClose={() => setChatDialogOpen(false)}
-        onSaved={load}
+        onSaved={() => { setChatDialogOpen(false); void load() }}
       />
 
       <EmbeddingDialog
         open={embeddingDialogOpen}
-        editing={editing}
+        editing={editing?.modelType === 'embedding' ? editing : null}
         onClose={() => setEmbeddingDialogOpen(false)}
-        onSaved={() => { load(); setReindexDialogOpen(true) }}
+        onSaved={() => { setEmbeddingDialogOpen(false); void load() }}
       />
 
-      <EmbeddingReindexDialog
-        open={reindexDialogOpen}
-        onClose={() => setReindexDialogOpen(false)}
-      />
+      <EmbeddingReindexDialog open={reindexDialogOpen} onClose={() => setReindexDialogOpen(false)} />
 
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
         title="删除提供方"
-        description={`确认删除提供方「${deleteTarget?.displayName}」？`}
+        description={`确认删除模型「${deleteTarget?.displayName}」？`}
         confirmText="删除"
       />
     </Box>

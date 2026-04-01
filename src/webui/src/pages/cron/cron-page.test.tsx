@@ -2,12 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
 import CronPage from '@/pages/cron'
-import * as cronModule from '@/api/cron'
 import * as gateway from '@/api/gateway'
-import type { CronJob } from '@/api/cron'
+import type { CronJob } from '@/api/gateway'
 
-vi.mock('@/api/cron', async (importOriginal) => {
-  const actual = await importOriginal<typeof cronModule>()
+vi.mock('@/api/gateway', async (importOriginal) => {
+  const actual = await importOriginal<typeof gateway>()
   return {
     ...actual,
     cronApi: {
@@ -19,13 +18,6 @@ vi.mock('@/api/cron', async (importOriginal) => {
       trigger: vi.fn(),
       getLogs: vi.fn(),
     },
-  }
-})
-
-vi.mock('@/api/gateway', async (importOriginal) => {
-  const actual = await importOriginal<typeof gateway>()
-  return {
-    ...actual,
     listSessions: vi.fn(),
   }
 })
@@ -53,13 +45,13 @@ const wrap = (ui: React.ReactElement) =>
 
 describe('CronPage', () => {
   beforeEach(() => {
-    vi.mocked(cronModule.cronApi.list).mockResolvedValue(mockJobs)
+    vi.mocked(gateway.cronApi.list).mockResolvedValue(mockJobs)
     vi.mocked(gateway.listSessions).mockResolvedValue([
       { id: 'sess1', title: '测试会话', providerId: 'p1', isApproved: true, channelType: 'web', channelId: '', createdAt: '' },
     ])
-    vi.mocked(cronModule.cronApi.trigger).mockResolvedValue({ success: true, status: 'success', durationMs: 100, errorMessage: null })
-    vi.mocked(cronModule.cronApi.delete).mockResolvedValue(undefined)
-    vi.mocked(cronModule.cronApi.toggle).mockResolvedValue({ ...mockJobs[0], isEnabled: false })
+    vi.mocked(gateway.cronApi.trigger).mockResolvedValue({ success: true, status: 'success', durationMs: 100, errorMessage: null })
+    vi.mocked(gateway.cronApi.delete).mockResolvedValue(undefined)
+    vi.mocked(gateway.cronApi.toggle).mockResolvedValue({ ...mockJobs[0], isEnabled: false })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
@@ -94,7 +86,7 @@ describe('CronPage', () => {
   it('加载时调用 cronApi.list 和 listSessions', async () => {
     wrap(<CronPage />)
     await waitFor(() => {
-      expect(cronModule.cronApi.list).toHaveBeenCalled()
+      expect(gateway.cronApi.list).toHaveBeenCalled()
       expect(gateway.listSessions).toHaveBeenCalled()
     })
   })
