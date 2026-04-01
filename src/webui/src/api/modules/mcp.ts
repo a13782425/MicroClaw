@@ -1,6 +1,13 @@
 import request from '../request'
 
 export type McpTransportType = 'stdio' | 'sse' | 'http'
+export type McpServerSource = 'manual' | 'plugin'
+
+export type McpEnvVarInfo = {
+  name: string
+  isSet: boolean
+  foundIn: string
+}
 
 export type McpServerConfig = {
   id: string
@@ -13,6 +20,10 @@ export type McpServerConfig = {
   headers?: Record<string, string> | null
   isEnabled: boolean
   createdAtUtc: string
+  source: McpServerSource
+  pluginId?: string | null
+  pluginName?: string | null
+  requiredEnvVars?: McpEnvVarInfo[] | null
 }
 
 export type McpServerCreateRequest = {

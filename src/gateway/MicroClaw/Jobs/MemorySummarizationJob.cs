@@ -5,7 +5,6 @@ using MicroClaw.Providers;
 using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -23,13 +22,13 @@ public sealed class MemorySummarizationJob(
     ProviderClientFactory clientFactory,
     MemoryService memoryService,
     IRagService ragService,
-    ILogger<MemorySummarizationJob> logger) : BackgroundService
+    ILogger<MemorySummarizationJob> logger) : IScheduledJob
 {
     // 每天凌晨 2 点（UTC）执行
     internal static readonly TimeOnly RunTime = new(2, 0, 0);
 
-    // 启动延迟：等待其他 Hosted Service 就绪
-    private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(60);
+    public string JobName => "memory-summarization";
+    public JobSchedule Schedule => new JobSchedule.DailyAt(RunTime, TimeSpan.FromSeconds(60));
 
     // 每日总结 Prompt（{messages} 占位符由 FormatMessages 替换）
     internal const string DailySummaryPromptTemplate =
@@ -64,36 +63,14 @@ public sealed class MemorySummarizationJob(
         {daily_summary}
         """;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("B-02 MemorySummarizationJob 已启动");
-
-        try { await Task.Delay(StartupDelay, stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            TimeSpan delay = CalcDelayUntilNextRun();
-            logger.LogDebug("B-02 MemorySummarizationJob 下次执行约 {Hours:F1} 小时后", delay.TotalHours);
-
-            try { await Task.Delay(delay, stoppingToken); }
-            catch (OperationCanceledException) { return; }
-
-            if (stoppingToken.IsCancellationRequested) return;
-
-            DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-
-            logger.LogInformation(
-                "B-02 MemorySummarizationJob 开始执行，目标日期={Date}",
-                targetDate);
-
-            await RunSummarizationAsync(targetDate, stoppingToken);
-        }
-
-        logger.LogInformation("B-02 MemorySummarizationJob 已停止");
+        DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+        logger.LogInformation("B-02 MemorySummarizationJob 开始执行，目标日期={Date}", targetDate);
+        await RunSummarizationAsync(targetDate, ct);
     }
 
-    /// <summary>计算距离今日 RunTime 的等待时长（保证下次恰好在 RunTime 触发）。内部方法供测试使用。</summary>
+    /// <summary>计算距离下次 RunTime 的等待时长。保留供测试使用。</summary>
     internal static TimeSpan CalcDelayUntilNextRun(DateTime? utcNow = null)
     {
         DateTime now = utcNow ?? DateTime.UtcNow;

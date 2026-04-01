@@ -98,6 +98,55 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
             .AsReadOnly();
     }
 
+    /// <summary>
+    /// 插入或更新一个 MCP Server 配置（主要用于插件注册）。
+    /// 若 ID 已存在则更新；否则则插入。
+    /// </summary>
+    public McpServerConfig Upsert(McpServerConfig config)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        McpServerConfigEntity? existing = db.McpServers.Find(config.Id);
+        if (existing is null)
+        {
+            McpServerConfig toAdd = config.CreatedAtUtc == default
+                ? config with { CreatedAtUtc = DateTimeOffset.UtcNow }
+                : config;
+            McpServerConfigEntity entity = ToEntity(toAdd);
+            db.McpServers.Add(entity);
+            db.SaveChanges();
+            return ToConfig(entity);
+        }
+        else
+        {
+            // 插件注册时更新所有字段（Env/Headers 也更新以反映碌盖写）
+            existing.Name          = config.Name;
+            existing.TransportType = SerializeTransport(config.TransportType);
+            existing.Command       = config.Command;
+            existing.ArgsJson      = config.Args is not null ? JsonSerializer.Serialize(config.Args, JsonOpts) : null;
+            existing.EnvJson       = config.Env is not null  ? JsonSerializer.Serialize(config.Env, JsonOpts)  : null;
+            existing.Url           = config.Url;
+            existing.HeadersJson   = config.Headers is not null ? JsonSerializer.Serialize(config.Headers, JsonOpts) : null;
+            existing.IsEnabled     = config.IsEnabled;
+            existing.Source        = (int)config.Source;
+            existing.PluginId      = config.PluginId;
+            existing.PluginName    = config.PluginName;
+            db.SaveChanges();
+            return ToConfig(existing);
+        }
+    }
+
+    /// <summary>按插件 ID 删除该插件注册的所有 MCP Server。</summary>
+    public int DeleteByPluginId(string pluginId)
+    {
+        using GatewayDbContext db = factory.CreateDbContext();
+        List<McpServerConfigEntity> entities = db.McpServers
+            .Where(e => e.PluginId == pluginId)
+            .ToList();
+        db.McpServers.RemoveRange(entities);
+        db.SaveChanges();
+        return entities.Count;
+    }
+
     private static McpServerConfig ToConfig(McpServerConfigEntity e) => new(
         Id: e.Id,
         Name: e.Name,
@@ -114,20 +163,26 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
             ? JsonSerializer.Deserialize<Dictionary<string, string>>(e.HeadersJson)
             : null,
         IsEnabled: e.IsEnabled,
-        CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs));
+        CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs),
+        Source: (McpServerSource)e.Source,
+        PluginId: e.PluginId,
+        PluginName: e.PluginName);
 
     private static McpServerConfigEntity ToEntity(McpServerConfig c) => new()
     {
-        Id           = c.Id,
-        Name         = c.Name,
+        Id            = c.Id,
+        Name          = c.Name,
         TransportType = SerializeTransport(c.TransportType),
-        Command      = c.Command,
-        ArgsJson     = c.Args is not null ? JsonSerializer.Serialize(c.Args, JsonOpts) : null,
-        EnvJson      = c.Env is not null  ? JsonSerializer.Serialize(c.Env, JsonOpts)  : null,
-        Url          = c.Url,
-        HeadersJson  = c.Headers is not null ? JsonSerializer.Serialize(c.Headers, JsonOpts) : null,
-        IsEnabled    = c.IsEnabled,
-        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
+        Command       = c.Command,
+        ArgsJson      = c.Args is not null ? JsonSerializer.Serialize(c.Args, JsonOpts) : null,
+        EnvJson       = c.Env is not null  ? JsonSerializer.Serialize(c.Env, JsonOpts)  : null,
+        Url           = c.Url,
+        HeadersJson   = c.Headers is not null ? JsonSerializer.Serialize(c.Headers, JsonOpts) : null,
+        IsEnabled     = c.IsEnabled,
+        CreatedAtMs   = TimeBase.ToMs(c.CreatedAtUtc),
+        Source        = (int)c.Source,
+        PluginId      = c.PluginId,
+        PluginName    = c.PluginName,
     };
 
     private static McpTransportType ParseTransport(string? value) =>

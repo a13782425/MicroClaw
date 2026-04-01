@@ -4,7 +4,6 @@ using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -24,13 +23,13 @@ public sealed class DreamingJob(
     ProviderClientFactory clientFactory,
     AgentDnaService agentDnaService,
     MemoryService memoryService,
-    ILogger<DreamingJob> logger) : BackgroundService
+    ILogger<DreamingJob> logger) : IScheduledJob
 {
+    public string JobName => "dreaming";
+    public JobSchedule Schedule => new JobSchedule.DailyAt(RunTime, TimeSpan.FromSeconds(90));
+
     // 每天凌晨 3 点（UTC）执行
     internal static readonly TimeOnly RunTime = new(3, 0, 0);
-
-    // 启动延迟：等待其他 Hosted Service 就绪
-    private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(90);
 
     // 收集最近几天日记忆的回溯窗口
     internal const int DailyMemoryLookbackDays = 7;
@@ -52,31 +51,13 @@ public sealed class DreamingJob(
         {memories}
         """;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("D-2 DreamingJob 已启动");
-
-        try { await Task.Delay(StartupDelay, stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            TimeSpan delay = CalcDelayUntilNextRun();
-            logger.LogDebug("D-2 DreamingJob 下次执行约 {Hours:F1} 小时后", delay.TotalHours);
-
-            try { await Task.Delay(delay, stoppingToken); }
-            catch (OperationCanceledException) { return; }
-
-            if (stoppingToken.IsCancellationRequested) return;
-
-            logger.LogInformation("D-2 DreamingJob 开始执行离线认知整理");
-            await RunDreamingAsync(stoppingToken);
-        }
-
-        logger.LogInformation("D-2 DreamingJob 已停止");
+        logger.LogInformation("D-2 DreamingJob 开始执行离线认知整理");
+        await RunDreamingAsync(ct);
     }
 
-    /// <summary>计算距离今日 RunTime 的等待时长（保证下次恰好在 RunTime 触发）。内部方法供测试使用。</summary>
+    /// <summary>计算距离下次 RunTime 的等待时长。保留供测试使用。</summary>
     internal static TimeSpan CalcDelayUntilNextRun(DateTime? utcNow = null)
     {
         DateTime now = utcNow ?? DateTime.UtcNow;
@@ -87,8 +68,6 @@ public sealed class DreamingJob(
 
     /// <summary>
     /// 执行一轮认知整理，供测试直接调用。
-    /// 遍历所有已启用 Agent，逐个进行跨 Session 记忆归因。
-    /// </summary>
     internal async Task RunDreamingAsync(CancellationToken ct)
     {
         IReadOnlyList<AgentConfig> agents = agentStore.All;

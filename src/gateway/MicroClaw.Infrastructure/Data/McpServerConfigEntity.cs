@@ -19,4 +19,10 @@ public sealed class McpServerConfigEntity
     public bool IsEnabled { get; set; } = true;
     /// <summary>创建时间：相对于 TimeBase.BaseTime 的毫秒偏移。</summary>
     public long CreatedAtMs { get; set; }
+    /// <summary>来源：0=手动创建，1=插件注册。</summary>
+    public int Source { get; set; } = 0;
+    /// <summary>来源插件 ID（仅 Source=Plugin 时有效）。</summary>
+    public string? PluginId { get; set; }
+    /// <summary>来源插件名称（仅 Source=Plugin 时有效）。</summary>
+    public string? PluginName { get; set; }
 }

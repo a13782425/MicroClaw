@@ -52,27 +52,29 @@ public static class ToolRegistry
 
     private static IClientTransport CreateTransport(McpServerConfig cfg, ILoggerFactory? loggerFactory)
     {
-        return cfg.TransportType switch
+        McpServerConfig resolved = McpConfigurationResolver.ResolveEnvironmentVariables(cfg);
+
+        return resolved.TransportType switch
         {
             McpTransportType.Stdio => new StdioClientTransport(new StdioClientTransportOptions
             {
-                Command = cfg.Command
-                    ?? throw new InvalidOperationException($"MCP server '{cfg.Name}' requires Command for stdio transport."),
-                Arguments = cfg.Args?.ToList(),
-                EnvironmentVariables = cfg.Env?.ToDictionary(kv => kv.Key, kv => kv.Value),
-                Name = cfg.Name,
+                Command = resolved.Command
+                    ?? throw new InvalidOperationException($"MCP server '{resolved.Name}' requires Command for stdio transport."),
+                Arguments = resolved.Args?.ToList(),
+                EnvironmentVariables = resolved.Env?.ToDictionary(kv => kv.Key, kv => kv.Value),
+                Name = resolved.Name,
             }, loggerFactory!),
             McpTransportType.Sse or McpTransportType.Http => new HttpClientTransport(new HttpClientTransportOptions
             {
-                Endpoint = new Uri(cfg.Url
-                    ?? throw new InvalidOperationException($"MCP server '{cfg.Name}' requires Url for {cfg.TransportType} transport.")),
-                Name = cfg.Name,
-                TransportMode = cfg.TransportType == McpTransportType.Http
+                Endpoint = new Uri(resolved.Url
+                    ?? throw new InvalidOperationException($"MCP server '{resolved.Name}' requires Url for {resolved.TransportType} transport.")),
+                Name = resolved.Name,
+                TransportMode = resolved.TransportType == McpTransportType.Http
                     ? HttpTransportMode.StreamableHttp
                     : HttpTransportMode.Sse,
-                AdditionalHeaders = cfg.Headers,
+                AdditionalHeaders = resolved.Headers,
             }, loggerFactory!),
-            _ => throw new NotSupportedException($"Transport type '{cfg.TransportType}' is not supported."),
+            _ => throw new NotSupportedException($"Transport type '{resolved.TransportType}' is not supported."),
         };
     }
 }

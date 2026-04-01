@@ -349,7 +349,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService(sp => sp.GetRequiredService<MarketplaceManager>());
 
 		// Quartz.NET 定时任务调度
-		builder.Services.AddQuartz();
+		builder.Services.AddQuartz(q => q.AddJob<SystemJobRunner>(opts => opts.StoreDurably()));
 		builder.Services.AddQuartzHostedService(opt =>
 		{
 			opt.WaitForJobsToComplete = true;
@@ -366,7 +366,7 @@ public class ServeCommand : Command
 		// F-D-1: 渠道消息失败重试队列
 		builder.Services.AddSingleton<ChannelRetryQueueService>();
 		builder.Services.AddSingleton<IChannelRetryQueue>(sp => sp.GetRequiredService<ChannelRetryQueueService>());
-		builder.Services.AddHostedService<ChannelRetryJob>();
+		builder.Services.AddSingleton<IScheduledJob, ChannelRetryJob>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
@@ -388,12 +388,14 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<FeishuToolsFactory>();
 		builder.Services.AddSingleton<IToolProvider>(sp => sp.GetRequiredService<FeishuToolsFactory>());
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
-		builder.Services.AddHostedService<FeishuDocSyncJob>();
+		builder.Services.AddSingleton<IScheduledJob, FeishuDocSyncJob>();
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
-		builder.Services.AddHostedService<MemorySummarizationJob>();
-		builder.Services.AddHostedService<MemoryPendingProcessorJob>();
+		builder.Services.AddSingleton<IScheduledJob, MemorySummarizationJob>();
+		builder.Services.AddSingleton<IScheduledJob, MemoryPendingProcessorJob>();
 		// D-2: 做梦模式——每日凌晨 3 点，跨会话归因/摘要，将认知整理结果写回 Agent MEMORY.md
-		builder.Services.AddHostedService<DreamingJob>();
+		builder.Services.AddSingleton<IScheduledJob, DreamingJob>();
+		// 系统 Job 统一调度器
+		builder.Services.AddHostedService<SystemJobRegistrar>();
 
 		builder.Services.AddSingleton<IChannel, WeComChannel>();
 		builder.Services.AddSingleton<IChannel, WeChatChannel>();

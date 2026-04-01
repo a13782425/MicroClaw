@@ -7,6 +7,7 @@ using NSubstitute;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -342,6 +343,102 @@ public sealed class McpServerRegistryTests : IDisposable
         });
 
         resp.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task RegisterFromConfigFileAsync_LegacyRootFormat_RegistersServer()
+    {
+        McpServerRegistry reg = BuildRegistry();
+        string tempFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, """
+            {
+              "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {
+                  "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+                }
+              }
+            }
+            """);
+
+            await reg.RegisterFromConfigFileAsync(tempFile, "github-plugin");
+
+            McpServerConfig? config = reg.GetById("plugin:github-plugin:github");
+            config.Should().NotBeNull();
+            config!.TransportType.Should().Be(McpTransportType.Http);
+            config.Url.Should().Be("https://api.githubcopilot.com/mcp/");
+            config.Headers.Should().ContainKey("Authorization")
+                .WhoseValue.Should().Be("Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}");
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public async Task RegisterFromConfigFileAsync_MetadataRootWithoutServerFields_IsIgnored()
+    {
+        McpServerRegistry reg = BuildRegistry();
+        string tempFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, """
+            {
+              "metadata": {
+                "name": "github"
+              }
+            }
+            """);
+
+            await reg.RegisterFromConfigFileAsync(tempFile, "github-plugin");
+
+            reg.GetAll().Should().BeEmpty();
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public async Task TestEndpoint_WhenEnvVariableMissing_ReturnsHelpfulError()
+    {
+        string? originalValue = Environment.GetEnvironmentVariable("MCP_TEST_TOKEN");
+        Environment.SetEnvironmentVariable("MCP_TEST_TOKEN", null);
+
+        try
+        {
+            var registry = BuildRegistry();
+            using TestServer server = BuildTestServer(registry);
+            using HttpClient client = server.CreateClient();
+
+            var createResp = await client.PostAsJsonAsync("/mcp-servers", new
+            {
+                name = "http-env-server",
+                transportType = "http",
+                url = "https://api.githubcopilot.com/mcp/",
+                headers = new Dictionary<string, string>
+                {
+                    ["Authorization"] = "Bearer ${MCP_TEST_TOKEN}",
+                }
+            });
+            var created = await createResp.Content.ReadFromJsonAsync<JsonElement>(JsonOpts);
+            string id = created.GetProperty("id").GetString()!;
+
+            var testResp = await client.PostAsync($"/mcp-servers/{id}/test", null);
+            JsonElement payload = await testResp.Content.ReadFromJsonAsync<JsonElement>(JsonOpts);
+
+            payload.GetProperty("success").GetBoolean().Should().BeFalse();
+            payload.GetProperty("error").GetString().Should().Contain("MCP_TEST_TOKEN (headers.Authorization)");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("MCP_TEST_TOKEN", originalValue);
+        }
     }
 
     // ── ToolCollector 优先使用 Registry ──────────────────────────────────────

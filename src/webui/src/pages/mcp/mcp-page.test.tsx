@@ -30,6 +30,7 @@ const mockServers: McpServerConfig[] = [
     headers: null,
     isEnabled: true,
     createdAtUtc: '2024-01-01T00:00:00Z',
+    source: 'manual',
   },
   {
     id: 'm2',
@@ -42,6 +43,7 @@ const mockServers: McpServerConfig[] = [
     headers: null,
     isEnabled: false,
     createdAtUtc: '2024-01-02T00:00:00Z',
+    source: 'manual',
   },
 ]
 

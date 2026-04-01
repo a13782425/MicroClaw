@@ -4,7 +4,6 @@ using MicroClaw.Channels.Feishu;
 using MicroClaw.Gateway.Contracts;
 using MicroClaw.Gateway.Contracts.Sessions;
 using MicroClaw.Sessions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -27,45 +26,17 @@ namespace MicroClaw.Jobs;
 public sealed class FeishuDocSyncJob(
     ChannelConfigStore channelConfigStore,
     SessionStore sessionStore,
-    ILogger<FeishuDocSyncJob> logger) : BackgroundService
+    ILogger<FeishuDocSyncJob> logger) : IScheduledJob
 {
-    /// <summary>后台检查间隔（频繁轮询，按各渠道独立间隔决定是否真正触发）。</summary>
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(2);
-
-    /// <summary>启动后等待时间，让其他 Hosted Service 先完成初始化。</summary>
-    private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(30);
+    public string JobName => "feishu-doc-sync";
+    public JobSchedule Schedule => new JobSchedule.FixedInterval(TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30));
 
     /// <summary>Key = channelId，Value = 该渠道最后一次同步完成时间（UTC）。</summary>
     private readonly ConcurrentDictionary<string, DateTimeOffset> _lastSyncAt = new();
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("F-C-7 FeishuDocSyncJob 已启动，检查间隔={Interval}min", CheckInterval.TotalMinutes);
-
-        // 延迟启动，等待其他服务就绪
-        try
-        {
-            await Task.Delay(StartupDelay, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        using var timer = new PeriodicTimer(CheckInterval);
-        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            try
-            {
-                await SyncAllChannelsAsync(stoppingToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogError(ex, "F-C-7 FeishuDocSyncJob 执行异常");
-            }
-        }
-
-        logger.LogInformation("F-C-7 FeishuDocSyncJob 已停止");
+        await SyncAllChannelsAsync(ct);
     }
 
     /// <summary>扫描所有启用了 SummaryDocToken 的飞书渠道，并按各自间隔决定是否触发同步。</summary>
@@ -88,7 +59,7 @@ public sealed class FeishuDocSyncJob(
             // 首次遇到该渠道：将 lastSync 初始化为「当前时间 - 间隔」，下一个 tick 前不会立即触发
             DateTimeOffset lastSync = _lastSyncAt.GetOrAdd(
                 config.Id,
-                _ => DateTimeOffset.UtcNow - interval + CheckInterval); // 首次约等一个 CheckInterval 后触发
+                _ => DateTimeOffset.UtcNow - interval + TimeSpan.FromMinutes(2)); // 首次约等一个检查间隔后触发
 
             if (DateTimeOffset.UtcNow - lastSync < interval) continue;
 

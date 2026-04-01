@@ -8,7 +8,6 @@ using MicroClaw.Services;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -27,34 +26,27 @@ public sealed class ChannelRetryJob(
     SessionStore sessionStore,
     FeishuMessageProcessor feishuProcessor,
     IAgentMessageHandler? agentHandler,
-    ILogger<ChannelRetryJob> logger) : BackgroundService
+    ILogger<ChannelRetryJob> logger) : IScheduledJob
 {
     private const int MaxRetries = 3;
-    private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(60);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public string JobName => "channel-retry";
+    public JobSchedule Schedule => new JobSchedule.FixedInterval(TimeSpan.FromSeconds(60), TimeSpan.Zero);
+
+    public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("F-D-1 ChannelRetryJob 已启动，扫描间隔={Interval}s", ScanInterval.TotalSeconds);
-
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
-            {
-                await ProcessPendingEntriesAsync(stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "F-D-1 ChannelRetryJob 扫描周期发生未预期异常");
-            }
-
-            await Task.Delay(ScanInterval, stoppingToken);
+            await ProcessPendingEntriesAsync(ct);
         }
-
-        logger.LogInformation("F-D-1 ChannelRetryJob 已停止");
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // ignore, normal shutdown
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "F-D-1 ChannelRetryJob 扫描周期发生未预期异常");
+        }
     }
 
     private async Task ProcessPendingEntriesAsync(CancellationToken ct)

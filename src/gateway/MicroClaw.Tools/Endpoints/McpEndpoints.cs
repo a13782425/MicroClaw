@@ -65,21 +65,34 @@ public static class McpEndpoints
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"MCP server '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            McpTransportType transport = req.TransportType is not null
-                ? ParseTransport(req.TransportType)
-                : existing.TransportType;
-
-            McpServerConfig updated = existing with
+            McpServerConfig updated;
+            if (existing.Source == McpServerSource.Plugin)
             {
-                Name          = req.Name?.Trim()            ?? existing.Name,
-                TransportType = transport,
-                Command       = req.Command?.Trim()          ?? existing.Command,
-                Args          = req.Args                     ?? existing.Args,
-                Env           = req.Env                      ?? existing.Env,
-                Url           = req.Url?.Trim()              ?? existing.Url,
-                Headers       = req.Headers                  ?? existing.Headers,
-                IsEnabled     = req.IsEnabled                ?? existing.IsEnabled,
-            };
+                // 插件 MCP 只允许覆盖 Env 和 Headers 字段
+                updated = existing with
+                {
+                    Env     = req.Env     ?? existing.Env,
+                    Headers = req.Headers ?? existing.Headers,
+                };
+            }
+            else
+            {
+                McpTransportType transport = req.TransportType is not null
+                    ? ParseTransport(req.TransportType)
+                    : existing.TransportType;
+
+                updated = existing with
+                {
+                    Name          = req.Name?.Trim()            ?? existing.Name,
+                    TransportType = transport,
+                    Command       = req.Command?.Trim()          ?? existing.Command,
+                    Args          = req.Args                     ?? existing.Args,
+                    Env           = req.Env                      ?? existing.Env,
+                    Url           = req.Url?.Trim()              ?? existing.Url,
+                    Headers       = req.Headers                  ?? existing.Headers,
+                    IsEnabled     = req.IsEnabled                ?? existing.IsEnabled,
+                };
+            }
 
             McpServerConfig? result = store.Update(req.Id, updated);
             if (result is not null) registry?.Register(result);  // 同步运行时注册表
@@ -92,6 +105,15 @@ public static class McpEndpoints
             IMcpServerRegistry? registry = sp.GetService<IMcpServerRegistry>();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
+
+            McpServerConfig? existing = store.GetById(req.Id);
+            if (existing is null)
+                return Results.NotFound(new { success = false, message = $"MCP server '{req.Id}' not found.", errorCode = "NOT_FOUND" });
+
+            if (existing.Source == McpServerSource.Plugin)
+                return Results.Json(
+                    new { success = false, message = $"插件 MCP 不能手动删除，请卸载插件 \u201c{existing.PluginName}\u201d 后自动移除。", errorCode = "FORBIDDEN" },
+                    statusCode: 403);
 
             if (!store.Delete(req.Id))
                 return Results.NotFound(new { success = false, message = $"MCP server '{req.Id}' not found.", errorCode = "NOT_FOUND" });
@@ -183,16 +205,22 @@ public static class McpEndpoints
 
     private static object ToDto(McpServerConfig c) => new
     {
-        id            = c.Id,
-        name          = c.Name,
-        transportType = c.TransportType.ToString().ToLowerInvariant(),
-        command       = c.Command,
-        args          = c.Args,
-        env           = c.Env,
-        url           = c.Url,
-        headers       = c.Headers,
-        isEnabled     = c.IsEnabled,
-        createdAtUtc  = c.CreatedAtUtc,
+        id             = c.Id,
+        name           = c.Name,
+        transportType  = c.TransportType.ToString().ToLowerInvariant(),
+        command        = c.Command,
+        args           = c.Args,
+        env            = c.Env,
+        url            = c.Url,
+        headers        = c.Headers,
+        isEnabled      = c.IsEnabled,
+        createdAtUtc   = c.CreatedAtUtc,
+        source         = c.Source.ToString().ToLowerInvariant(),
+        pluginId       = c.PluginId,
+        pluginName     = c.PluginName,
+        requiredEnvVars = EnvVarResolver.ExtractPlaceholders(c)
+            .Select(v => new { name = v.Name, isSet = v.IsSet, foundIn = v.FoundIn })
+            .ToList(),
     };
 
     private static McpTransportType ParseTransport(string? value) =>

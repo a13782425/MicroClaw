@@ -170,6 +170,9 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.HeadersJson).HasColumnName("headers_json").IsRequired(false);
             b.Property(e => e.IsEnabled).HasColumnName("is_enabled");
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.Property(e => e.Source).HasColumnName("source").HasDefaultValue(0);
+            b.Property(e => e.PluginId).HasColumnName("plugin_id").IsRequired(false);
+            b.Property(e => e.PluginName).HasColumnName("plugin_name").IsRequired(false);
         });
 
         modelBuilder.Entity<RagConfigEntity>(b =>

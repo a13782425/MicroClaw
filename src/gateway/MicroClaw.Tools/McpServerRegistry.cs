@@ -82,8 +82,21 @@ public sealed class McpServerRegistry(McpServerConfigStore store, ILogger<McpSer
         string json = await File.ReadAllTextAsync(filePath, ct);
         using JsonDocument doc = JsonDocument.Parse(json);
 
-        // Support { "mcpServers": { "name": { ... } } } format (Claude / Copilot standard)
-        if (!doc.RootElement.TryGetProperty("mcpServers", out JsonElement serversEl))
+        // Support both the standard { "mcpServers": { ... } } format and the
+        // legacy root-level { "name": { ... } } format used by some plugin repos.
+        JsonElement serversEl;
+        if (doc.RootElement.TryGetProperty("mcpServers", out JsonElement standardServersEl))
+        {
+            serversEl = standardServersEl;
+        }
+        else if (IsLegacyServerMap(doc.RootElement))
+        {
+            serversEl = doc.RootElement;
+            logger.LogWarning(
+                "Plugin MCP config uses legacy root server format without 'mcpServers': {Path}",
+                filePath);
+        }
+        else
         {
             logger.LogWarning("Plugin MCP config missing 'mcpServers' property: {Path}", filePath);
             return;
@@ -94,7 +107,9 @@ public sealed class McpServerRegistry(McpServerConfigStore store, ILogger<McpSer
             string serverId = $"plugin:{pluginName}:{entry.Name}";
             try
             {
-                McpServerConfig config = ParseMcpEntry(entry.Name, entry.Value, serverId);
+                McpServerConfig config = ParseMcpEntry(entry.Name, entry.Value, serverId, pluginName);
+                // 同步写入持久化层（幂等 upsert），使插件 MCP 可在管理页展示
+                store.Upsert(config);
                 Register(config);
                 logger.LogInformation("Registered plugin MCP server: {Name} (Id={Id}) from plugin '{Plugin}'",
                     config.Name, config.Id, pluginName);
@@ -114,11 +129,13 @@ public sealed class McpServerRegistry(McpServerConfigStore store, ILogger<McpSer
         foreach (string id in toRemove)
             Unregister(id);
 
-        if (toRemove.Count > 0)
-            logger.LogInformation("Unregistered {Count} MCP servers from plugin '{Plugin}'", toRemove.Count, pluginName);
+        // 同步删除持久化层中该插件的所有 MCP Server
+        int deleted = store.DeleteByPluginId(pluginName);
+        logger.LogInformation("Unregistered {Count} MCP servers from plugin '{Plugin}' (DB removed: {DbCount})",
+            toRemove.Count, pluginName, deleted);
     }
 
-    private static McpServerConfig ParseMcpEntry(string name, JsonElement el, string serverId)
+    private static McpServerConfig ParseMcpEntry(string name, JsonElement el, string serverId, string pluginName)
     {
         // Determine transport type
         McpTransportType transport = McpTransportType.Stdio;
@@ -163,6 +180,36 @@ public sealed class McpServerRegistry(McpServerConfigStore store, ILogger<McpSer
             Headers: headers,
             Id: serverId,
             IsEnabled: true,
-            CreatedAtUtc: DateTimeOffset.UtcNow);
+            CreatedAtUtc: DateTimeOffset.UtcNow,
+            Source: McpServerSource.Plugin,
+            PluginId: pluginName,
+            PluginName: pluginName);
     }
+
+    private static bool IsLegacyServerMap(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+            return false;
+
+        bool hasEntries = false;
+        foreach (JsonProperty entry in root.EnumerateObject())
+        {
+            hasEntries = true;
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+                return false;
+
+            if (!LooksLikeServerDefinition(entry.Value))
+                return false;
+        }
+
+        return hasEntries;
+    }
+
+    private static bool LooksLikeServerDefinition(JsonElement element) =>
+        element.TryGetProperty("command", out _) ||
+        element.TryGetProperty("url", out _) ||
+        element.TryGetProperty("type", out _) ||
+        element.TryGetProperty("args", out _) ||
+        element.TryGetProperty("env", out _) ||
+        element.TryGetProperty("headers", out _);
 }

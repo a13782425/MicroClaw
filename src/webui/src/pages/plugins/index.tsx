@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Box, Text, Badge, HStack, VStack, Spinner, Button, Table, Input, Tabs, Flex,
+  Box, Text, Badge, HStack, VStack, Spinner, Button, Table, Input, Tabs, Flex, Dialog,
 } from '@chakra-ui/react'
 import {
   Puzzle, RefreshCw, Download, Trash2, Power, PowerOff, ArrowUpCircle,
   Store, Plus, Search, ExternalLink, ChevronDown,
 } from 'lucide-react'
 import {
-  getPlugins, installPlugin, enablePlugin, disablePlugin,
+  getPlugins, getPlugin, installPlugin, enablePlugin, disablePlugin,
   updatePlugin, uninstallPlugin, reloadPlugins,
   getMarketplaces, addMarketplace, removeMarketplace, updateMarketplace,
   getMarketplacePlugins, installMarketplacePlugin,
   type PluginSummary, type MarketplaceInfo, type MarketplacePluginEntry,
-  type InstallPluginResult,
+  type InstallPluginResult, type PluginDetail,
 } from '@/api/gateway'
+import { getApiErrorMessage } from '@/api/request'
 import { toaster } from '@/components/ui/toaster'
 
 // ─── Installed Tab ────────────────────────────────────────────────────────────
@@ -23,13 +24,20 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
   const [loading, setLoading] = useState(false)
   const [installUrl, setInstallUrl] = useState('')
   const [installing, setInstalling] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detail, setDetail] = useState<PluginDetail | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       setPlugins(await getPlugins())
-    } catch {
-      toaster.create({ type: 'error', title: '加载插件列表失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '加载插件列表失败',
+        description: getApiErrorMessage(error, '加载插件列表失败'),
+      })
     } finally {
       setLoading(false)
     }
@@ -51,8 +59,12 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
         setInstallUrl('')
         await load()
       }
-    } catch {
-      toaster.create({ type: 'error', title: '插件安装失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '插件安装失败',
+        description: getApiErrorMessage(error, '插件安装失败'),
+      })
     } finally {
       setInstalling(false)
     }
@@ -62,8 +74,12 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
     try {
       if (enabled) await disablePlugin(name); else await enablePlugin(name)
       await load()
-    } catch {
-      toaster.create({ type: 'error', title: '操作失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '操作失败',
+        description: getApiErrorMessage(error, '切换插件状态失败'),
+      })
     }
   }
 
@@ -72,8 +88,12 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
       await updatePlugin(name)
       toaster.create({ type: 'success', title: '插件已更新' })
       await load()
-    } catch {
-      toaster.create({ type: 'error', title: '更新失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '更新失败',
+        description: getApiErrorMessage(error, '插件更新失败'),
+      })
     }
   }
 
@@ -82,8 +102,12 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
       await uninstallPlugin(name)
       toaster.create({ type: 'success', title: '插件已卸载' })
       await load()
-    } catch {
-      toaster.create({ type: 'error', title: '卸载失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '卸载失败',
+        description: getApiErrorMessage(error, '插件卸载失败'),
+      })
     }
   }
 
@@ -92,8 +116,29 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
       await reloadPlugins()
       toaster.create({ type: 'success', title: '插件已重新加载' })
       await load()
-    } catch {
-      toaster.create({ type: 'error', title: '重新加载失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '重新加载失败',
+        description: getApiErrorMessage(error, '重新加载插件失败'),
+      })
+    }
+  }
+
+  const handleShowDetail = async (name: string) => {
+    setDetailOpen(true)
+    setDetailLoading(true)
+    try {
+      setDetail(await getPlugin(name))
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '加载插件详情失败',
+        description: getApiErrorMessage(error, '加载插件详情失败'),
+      })
+      setDetailOpen(false)
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -168,6 +213,9 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
                         <ArrowUpCircle size={14} />
                       </Button>
                     )}
+                    <Button size="xs" variant="ghost" onClick={() => handleShowDetail(p.name)} title="详情">
+                      <ExternalLink size={14} />
+                    </Button>
                     <Button size="xs" variant="ghost" colorPalette="red" onClick={() => handleUninstall(p.name)} title="卸载">
                       <Trash2 size={14} />
                     </Button>
@@ -178,6 +226,51 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
           </Table.Body>
         </Table.Root>
       )}
+
+      <Dialog.Root open={detailOpen} onOpenChange={(e) => { if (!e.open) { setDetailOpen(false); setDetail(null) } }}>
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content maxW="720px">
+            <Dialog.Header>
+              <Dialog.Title>插件详情</Dialog.Title>
+            </Dialog.Header>
+            <Dialog.Body>
+              {detailLoading ? (
+                <VStack py="8"><Spinner /><Text>加载中...</Text></VStack>
+              ) : detail ? (
+                <VStack align="stretch" gap="4">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium">名称</Text>
+                    <Text fontSize="sm">{detail.name}</Text>
+                  </Box>
+                  <HStack gap="2" flexWrap="wrap">
+                    <Badge colorPalette={detail.isEnabled ? 'green' : 'gray'}>{detail.isEnabled ? '启用' : '禁用'}</Badge>
+                    <Badge colorPalette={detail.source.type === 'git' ? 'blue' : 'orange'}>{detail.source.type}</Badge>
+                    <Badge variant="outline">{detail.skillPaths.length} 技能</Badge>
+                    <Badge variant="outline">{detail.agentPaths.length} Agent</Badge>
+                    <Badge variant="outline">{detail.hooks.length} Hook</Badge>
+                    {detail.mcpConfigPath && <Badge colorPalette="cyan">插件 MCP 配置</Badge>}
+                  </HStack>
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium">MCP 配置文件</Text>
+                    <Text fontSize="xs" color={detail.mcpConfigPath ? 'gray.600' : 'gray.400'}>
+                      {detail.mcpConfigPath ? '.mcp.json（插件自带）' : '无'}
+                    </Text>
+                    {detail.mcpConfigPath && (
+                      <Text fontSize="xs" color="gray.500" mt="1">这是插件自带的 MCP 配置来源，与全局 MCP 管理页中的手工配置分开管理。</Text>
+                    )}
+                  </Box>
+                </VStack>
+              ) : (
+                <Text color="gray.400">暂无详情</Text>
+              )}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Button variant="outline" onClick={() => { setDetailOpen(false); setDetail(null) }}>关闭</Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </Box>
   )
 }
@@ -207,8 +300,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       if (list.length > 0 && !list.find(m => m.name === selectedMp)) {
         setSelectedMp(list[0].name)
       }
-    } catch {
-      toaster.create({ type: 'error', title: '加载市场列表失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '加载市场列表失败',
+        description: getApiErrorMessage(error, '加载市场列表失败'),
+      })
     } finally {
       setLoadingMp(false)
     }
@@ -219,8 +316,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
     setLoadingPlugins(true)
     try {
       setMpPlugins(await getMarketplacePlugins(selectedMp, keyword || undefined))
-    } catch {
-      toaster.create({ type: 'error', title: '加载插件列表失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '加载插件列表失败',
+        description: getApiErrorMessage(error, '加载市场插件列表失败'),
+      })
     } finally {
       setLoadingPlugins(false)
     }
@@ -238,8 +339,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       setAddUrl('')
       setSelectedMp(info.name)
       await loadMarketplaces()
-    } catch {
-      toaster.create({ type: 'error', title: '注册市场失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '注册市场失败',
+        description: getApiErrorMessage(error, '注册插件市场失败'),
+      })
     } finally {
       setAdding(false)
     }
@@ -253,8 +358,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       setSelectedMp('')
       setMpPlugins([])
       await loadMarketplaces()
-    } catch {
-      toaster.create({ type: 'error', title: '移除失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '移除失败',
+        description: getApiErrorMessage(error, '移除插件市场失败'),
+      })
     }
   }
 
@@ -264,8 +373,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       await updateMarketplace(selectedMp)
       toaster.create({ type: 'success', title: '市场索引已更新' })
       await loadPlugins()
-    } catch {
-      toaster.create({ type: 'error', title: '更新失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '更新失败',
+        description: getApiErrorMessage(error, '更新插件市场失败'),
+      })
     }
   }
 
@@ -276,8 +389,12 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       await installMarketplacePlugin(selectedMp, pluginName)
       toaster.create({ type: 'success', title: `插件 "${pluginName}" 安装成功` })
       onInstalled()
-    } catch {
-      toaster.create({ type: 'error', title: `安装 "${pluginName}" 失败` })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: `安装 "${pluginName}" 失败`,
+        description: getApiErrorMessage(error, `安装插件 "${pluginName}" 失败`),
+      })
     } finally {
       setInstallingPlugin(null)
     }

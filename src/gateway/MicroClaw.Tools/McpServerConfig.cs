@@ -19,11 +19,24 @@ public sealed record McpServerConfig(
     // 全局管理元数据
     string Id = "",
     bool IsEnabled = true,
-    DateTimeOffset CreatedAtUtc = default);
+    DateTimeOffset CreatedAtUtc = default,
+    // 来源信息
+    McpServerSource Source = McpServerSource.Manual,
+    string? PluginId = null,
+    string? PluginName = null);
 
 public enum McpTransportType
 {
     Stdio,
     Sse,
     Http,
+}
+
+/// <summary>MCP Server 配置来源。</summary>
+public enum McpServerSource
+{
+    /// <summary>通过 UI 手动创建。</summary>
+    Manual = 0,
+    /// <summary>由插件自动注册（来自插件目录中的 .mcp.json）。</summary>
+    Plugin = 1,
 }

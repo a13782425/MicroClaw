@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Box, Flex, Text, Badge, Button, HStack, VStack, Spinner,
-  Input, Table, Switch, Dialog,
-  createListCollection, Select, Portal,
+  Input, Card, Dialog, Alert,
+  createListCollection, Select, Portal, Tooltip,
 } from '@chakra-ui/react'
-import { Plus, Trash2, Edit, ChevronDown, ChevronRight, Zap, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Zap, RefreshCw, Puzzle, CheckCircle, XCircle } from 'lucide-react'
 import {
   listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer,
   testMcpServer, listMcpServerTools,
-  type McpServerConfig, type McpTransportType, type McpToolInfo,
+  type McpServerConfig, type McpTransportType, type McpToolInfo, type McpEnvVarInfo,
 } from '@/api/gateway'
+import { McpServerCard } from './mcp-cards'
+import { getApiErrorMessage } from '@/api/request'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
@@ -25,6 +27,10 @@ function transportLabel(t: McpTransportType): string {
 }
 
 type KVEntry = { key: string; value: string }
+
+function isSensitiveKey(key: string): boolean {
+  return /authorization|api[-_]?key|token|secret|password/i.test(key)
+}
 
 function kvToRecord(list: KVEntry[]): Record<string, string> {
   return Object.fromEntries(list.filter((e) => e.key.trim()).map((e) => [e.key.trim(), e.value]))
@@ -56,12 +62,47 @@ function KVEditor({ label, entries, onChange }: { label: string; entries: KVEntr
         {entries.map((e, i) => (
           <HStack key={i} gap="1">
             <Input size="xs" placeholder="Key" value={e.key} onChange={(ev) => update(i, 'key', ev.target.value)} />
-            <Input size="xs" placeholder="Value" value={e.value} onChange={(ev) => update(i, 'value', ev.target.value)} />
+            <Input
+              size="xs"
+              type={isSensitiveKey(e.key) ? 'password' : 'text'}
+              placeholder={isSensitiveKey(e.key) ? '直接值、Bearer ${TOKEN} 或 ${TOKEN}' : '直接值或 ${ENV_VAR}'}
+              value={e.value}
+              onChange={(ev) => update(i, 'value', ev.target.value)}
+            />
             <Button size="xs" variant="ghost" colorPalette="red" onClick={() => remove(i)}><Trash2 size={10} /></Button>
           </HStack>
         ))}
       </VStack>
     </Box>
+  )
+}
+
+// ─── 所需环境变量展示区 ──────────────────────────────────────────────────────────
+
+function RequiredEnvVarsList({ vars }: { vars: McpEnvVarInfo[] }) {
+  if (vars.length === 0) return null
+  const hasMissing = vars.some((v) => !v.isSet)
+  return (
+    <Alert.Root status={hasMissing ? 'warning' : 'info'} size="sm" borderRadius="md">
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title fontSize="xs" mb="1">所需环境变量</Alert.Title>
+        <VStack gap="1" align="stretch">
+          {vars.map((v) => (
+            <HStack key={v.name} gap="2" fontSize="xs">
+              {v.isSet
+                ? <CheckCircle size={12} color="var(--chakra-colors-green-500)" />
+                : <XCircle size={12} color="var(--chakra-colors-red-500)" />}
+              <Text fontFamily="mono" fontWeight="medium">${`{${v.name}}`}</Text>
+              <Badge size="xs" variant="subtle" colorPalette="gray">{v.foundIn}</Badge>
+              <Text color={v.isSet ? 'green.600' : 'red.500'}>
+                {v.isSet ? '已设置' : '未设置'}
+              </Text>
+            </HStack>
+          ))}
+        </VStack>
+      </Alert.Content>
+    </Alert.Root>
   )
 }
 
@@ -75,6 +116,7 @@ interface McpDialogProps {
 }
 
 function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
+  const isPlugin = editing?.source === 'plugin'
   const [name, setName] = useState('')
   const [transport, setTransport] = useState<McpTransportType>('stdio')
   const [command, setCommand] = useState('')
@@ -105,28 +147,48 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
   }, [open, editing])
 
   const handleSave = async () => {
-    if (!name.trim()) { toaster.create({ type: 'error', title: '请填写名称' }); return }
+    if (!name.trim() && !isPlugin) { toaster.create({ type: 'error', title: '请填写名称' }); return }
     setSaving(true)
     try {
-      const base = {
-        name: name.trim(),
-        transportType: transport,
-        command: transport === 'stdio' ? command.trim() || undefined : undefined,
-        args: transport === 'stdio' ? args.trim().split(/\s+/).filter(Boolean) : undefined,
-        env: transport === 'stdio' ? kvToRecord(env) : undefined,
-        url: transport !== 'stdio' ? url.trim() || undefined : undefined,
-        headers: transport !== 'stdio' ? kvToRecord(headers) : undefined,
-      }
-      if (editing) {
+      if (editing && isPlugin) {
+        // 插件 MCP 只允许更新 Env 和 Headers
+        await updateMcpServer({
+          id: editing.id,
+          env: kvToRecord(env),
+          headers: kvToRecord(headers),
+        })
+      } else if (editing) {
+        const base = {
+          name: name.trim(),
+          transportType: transport,
+          command: transport === 'stdio' ? command.trim() || undefined : undefined,
+          args: transport === 'stdio' ? args.trim().split(/\s+/).filter(Boolean) : undefined,
+          env: transport === 'stdio' ? kvToRecord(env) : undefined,
+          url: transport !== 'stdio' ? url.trim() || undefined : undefined,
+          headers: transport !== 'stdio' ? kvToRecord(headers) : undefined,
+        }
         await updateMcpServer({ id: editing.id, ...base })
       } else {
+        const base = {
+          name: name.trim(),
+          transportType: transport,
+          command: transport === 'stdio' ? command.trim() || undefined : undefined,
+          args: transport === 'stdio' ? args.trim().split(/\s+/).filter(Boolean) : undefined,
+          env: transport === 'stdio' ? kvToRecord(env) : undefined,
+          url: transport !== 'stdio' ? url.trim() || undefined : undefined,
+          headers: transport !== 'stdio' ? kvToRecord(headers) : undefined,
+        }
         await createMcpServer({ ...base, isEnabled: true })
       }
       toaster.create({ type: 'success', title: editing ? 'MCP 服务器已更新' : 'MCP 服务器已创建' })
       onSaved()
       onClose()
-    } catch {
-      toaster.create({ type: 'error', title: '保存失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '保存失败',
+        description: getApiErrorMessage(error, '保存 MCP 服务器失败'),
+      })
     } finally {
       setSaving(false)
     }
@@ -143,8 +205,8 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
       } else {
         setTestResult(`❌ 连接失败：${res.error}`)
       }
-    } catch {
-      setTestResult('❌ 测试请求失败')
+    } catch (error) {
+      setTestResult(`❌ ${getApiErrorMessage(error, '测试请求失败')}`)
     } finally {
       setTesting(false)
     }
@@ -156,25 +218,68 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
       <Dialog.Positioner>
         <Dialog.Content maxW="540px">
           <Dialog.Header>
-            <Dialog.Title>{editing ? '编辑 MCP 服务器' : '新建 MCP 服务器'}</Dialog.Title>
+            <Dialog.Title>
+              {editing
+                ? (isPlugin ? `查看插件 MCP：${editing.name}` : '编辑 MCP 服务器')
+                : '新建 MCP 服务器'}
+            </Dialog.Title>
           </Dialog.Header>
           <Dialog.Body>
             <VStack gap="4" align="stretch">
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">名称 <Text as="span" color="red.500">*</Text></Text>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="服务器名称" />
-              </Box>
-              <Box>
-                <Text fontSize="sm" mb="1" fontWeight="medium">传输类型</Text>
-                <Select.Root collection={transportCollection} value={[transport]} onValueChange={(e) => { setTransport(e.value[0] as McpTransportType); setTestResult(null) }}>
-                  <Select.HiddenSelect />
-                  <Select.Control><Select.Trigger><Select.ValueText /></Select.Trigger><Select.IndicatorGroup><Select.Indicator /></Select.IndicatorGroup></Select.Control>
-                  <Portal><Select.Positioner><Select.Content>
-                    {TRANSPORT_OPTIONS.map((o) => <Select.Item key={o.value} item={o}>{o.label}</Select.Item>)}
-                  </Select.Content></Select.Positioner></Portal>
-                </Select.Root>
-              </Box>
-              {transport === 'stdio' && (
+              {/* 插件来源提示 */}
+              {isPlugin && editing && (
+                <Alert.Root status="info" size="sm" borderRadius="md">
+                  <Alert.Indicator><Puzzle size={12} /></Alert.Indicator>
+                  <Alert.Content>
+                    <Alert.Description fontSize="xs">
+                      此 MCP 服务器来自插件「{editing.pluginName}」，只能修改环境变量和请求头字段，并不允许手动删除。
+                    </Alert.Description>
+                  </Alert.Content>
+                </Alert.Root>
+              )}
+
+              {/* 所需环境变量展示 */}
+              {isPlugin && editing && (editing.requiredEnvVars ?? []).length > 0 && (
+                <RequiredEnvVarsList vars={editing.requiredEnvVars!} />
+              )}
+
+              {!isPlugin && (
+                <Box>
+                  <Text fontSize="sm" mb="1" fontWeight="medium">名称 <Text as="span" color="red.500">*</Text></Text>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="服务器名称" />
+                </Box>
+              )}
+              {!isPlugin && (
+                <Box>
+                  <Text fontSize="sm" mb="1" fontWeight="medium">传输类型</Text>
+                  <Select.Root collection={transportCollection} value={[transport]} onValueChange={(e) => { setTransport(e.value[0] as McpTransportType); setTestResult(null) }}>
+                    <Select.HiddenSelect />
+                    <Select.Control><Select.Trigger><Select.ValueText /></Select.Trigger><Select.IndicatorGroup><Select.Indicator /></Select.IndicatorGroup></Select.Control>
+                    <Portal><Select.Positioner><Select.Content>
+                      {TRANSPORT_OPTIONS.map((o) => <Select.Item key={o.value} item={o}>{o.label}</Select.Item>)}
+                    </Select.Content></Select.Positioner></Portal>
+                  </Select.Root>
+                </Box>
+              )}
+
+              {/* 插件 MCP 只读展示基本信息 */}
+              {isPlugin && editing && (
+                <VStack gap="2" align="stretch">
+                  <HStack><Text fontSize="sm" color="gray.500" w="80px">传输类型</Text><Badge size="sm">{transportLabel(editing.transportType)}</Badge></HStack>
+                  {editing.transportType === 'stdio' && (
+                    <>
+                      {editing.command && <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">命令</Text><Text fontSize="sm" fontFamily="mono">{editing.command}</Text></HStack>}
+                      {(editing.args ?? []).length > 0 && <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">参数</Text><Text fontSize="sm" fontFamily="mono">{(editing.args ?? []).join(' ')}</Text></HStack>}
+                    </>
+                  )}
+                  {editing.transportType !== 'stdio' && editing.url && (
+                    <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">URL</Text><Text fontSize="sm" fontFamily="mono" wordBreak="break-all">{editing.url}</Text></HStack>
+                  )}
+                </VStack>
+              )}
+
+              {/* Stdio 模式输入字段 */}
+              {!isPlugin && transport === 'stdio' && (
                 <>
                   <Box>
                     <Text fontSize="sm" mb="1" fontWeight="medium">命令</Text>
@@ -184,18 +289,34 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
                     <Text fontSize="sm" mb="1" fontWeight="medium">参数（空格分隔）</Text>
                     <Input value={args} onChange={(e) => setArgs(e.target.value)} placeholder="如 server.py --port 8000" />
                   </Box>
-                  <KVEditor label="环境变量" entries={env} onChange={setEnv} />
                 </>
               )}
-              {(transport === 'sse' || transport === 'http') && (
+              {!isPlugin && (transport === 'sse' || transport === 'http') && (
+                <Box>
+                  <Text fontSize="sm" mb="1" fontWeight="medium">URL <Text as="span" color="red.500">*</Text></Text>
+                  <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://localhost:8000/sse" />
+                  <Text fontSize="xs" color="gray.500" mt="1">URL 支持直接输入，或使用 {"${ENV_VAR}"} 拼接运行时环境变量。</Text>
+                </Box>
+              )}
+
+              {/* 环境变量编辑 */}
+              {(transport === 'stdio' || (isPlugin && editing?.transportType === 'stdio')) && (
                 <>
-                  <Box>
-                    <Text fontSize="sm" mb="1" fontWeight="medium">URL <Text as="span" color="red.500">*</Text></Text>
-                    <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://localhost:8000/sse" />
-                  </Box>
-                  <KVEditor label="请求头" entries={headers} onChange={setHeaders} />
+                  {isPlugin && <Text fontSize="xs" color="blue.600" fontWeight="medium">覆盖插件默认环境变量（空则保持插件原始默认值）</Text>}
+                  <KVEditor label="环境变量" entries={env} onChange={setEnv} />
+                  <Text fontSize="xs" color="gray.500" mt="-2">支持直接输入值，或使用 {"${ENV_VAR}"} 引用当前服务进程环境变量。</Text>
                 </>
               )}
+
+              {/* 请求头编辑 */}
+              {(transport === 'sse' || transport === 'http' || (isPlugin && editing?.transportType !== 'stdio')) && (
+                <>
+                  {isPlugin && <Text fontSize="xs" color="blue.600" fontWeight="medium">覆盖插件默认请求头（空则保持插件原始默认值）</Text>}
+                  <KVEditor label="请求头" entries={headers} onChange={setHeaders} />
+                  <Text fontSize="xs" color="gray.500" mt="-2">请求头支持直接值，也支持例如 Bearer {"${TOKEN}"} 这样的环境变量引用。</Text>
+                </>
+              )}
+
               {editing && (
                 <Box>
                   <Button size="sm" variant="outline" loading={testing} onClick={handleTest}><Zap size={14} />测试连接</Button>
@@ -206,7 +327,8 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
           </Dialog.Body>
           <Dialog.Footer>
             <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button colorPalette="blue" loading={saving} onClick={handleSave} disabled={!name.trim()}>保存</Button>
+            <Button colorPalette="blue" loading={saving} onClick={handleSave}
+              disabled={!isPlugin && !name.trim()}>保存</Button>
           </Dialog.Footer>
         </Dialog.Content>
       </Dialog.Positioner>
@@ -231,8 +353,12 @@ export default function McpPage() {
     try {
       const data = await listMcpServers()
       setServers(data)
-    } catch {
-      toaster.create({ type: 'error', title: '加载 MCP 服务器列表失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '加载 MCP 服务器列表失败',
+        description: getApiErrorMessage(error, '加载 MCP 服务器列表失败'),
+      })
     } finally {
       setLoading(false)
     }
@@ -248,8 +374,12 @@ export default function McpPage() {
       try {
         const t = await listMcpServerTools(id)
         setTools((prev) => ({ ...prev, [id]: t }))
-      } catch {
-        toaster.create({ type: 'error', title: '加载工具失败' })
+      } catch (error) {
+        toaster.create({
+          type: 'error',
+          title: '加载工具失败',
+          description: getApiErrorMessage(error, '加载工具失败'),
+        })
       } finally {
         setToolsLoading((prev) => ({ ...prev, [id]: false }))
       }
@@ -261,8 +391,12 @@ export default function McpPage() {
       await deleteMcpServer(s.id)
       toaster.create({ type: 'success', title: '已删除' })
       setServers((prev) => prev.filter((x) => x.id !== s.id))
-    } catch {
-      toaster.create({ type: 'error', title: '删除失败' })
+    } catch (error) {
+      toaster.create({
+        type: 'error',
+        title: '删除失败',
+        description: getApiErrorMessage(error, '删除 MCP 服务器失败'),
+      })
     } finally {
       setDeleteTarget(null)
     }
@@ -287,59 +421,20 @@ export default function McpPage() {
       )}
 
       {!loading && servers.length > 0 && (
-        <Table.Root variant="outline">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader w="32px"></Table.ColumnHeader>
-              <Table.ColumnHeader>名称</Table.ColumnHeader>
-              <Table.ColumnHeader>传输类型</Table.ColumnHeader>
-              <Table.ColumnHeader>命令 / URL</Table.ColumnHeader>
-              <Table.ColumnHeader>状态</Table.ColumnHeader>
-              <Table.ColumnHeader>操作</Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {servers.map((s) => (
-              <React.Fragment key={s.id}>
-                <Table.Row>
-                  <Table.Cell cursor="pointer" onClick={() => toggleExpand(s.id)}>
-                    {expanded[s.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </Table.Cell>
-                  <Table.Cell fontWeight="medium">{s.name}</Table.Cell>
-                  <Table.Cell><Badge size="sm">{transportLabel(s.transportType)}</Badge></Table.Cell>
-                  <Table.Cell fontSize="xs" maxW="200px" truncate>
-                    {s.transportType === 'stdio' ? (s.command ?? '') : (s.url ?? '')}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Box w="8px" h="8px" rounded="full" bg={s.isEnabled ? 'green.400' : 'gray.300'} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <HStack gap="1">
-                      <Button size="xs" variant="ghost" onClick={() => openEdit(s)}><Edit size={12} /></Button>
-                      <Button size="xs" variant="ghost" colorPalette="red" onClick={() => setDeleteTarget(s)}><Trash2 size={12} /></Button>
-                    </HStack>
-                  </Table.Cell>
-                </Table.Row>
-                {expanded[s.id] && (
-                  <Table.Row key={`${s.id}-tools`} bg="gray.50" _dark={{ bg: 'gray.900' }}>
-                    <Table.Cell colSpan={6} pl="10">
-                      {toolsLoading[s.id] && <Spinner size="sm" />}
-                      {!toolsLoading[s.id] && (tools[s.id] ?? []).length === 0 && (
-                        <Text fontSize="xs" color="gray.400">无工具（或尚未加载）</Text>
-                      )}
-                      {!toolsLoading[s.id] && (tools[s.id] ?? []).map((t) => (
-                        <HStack key={t.name} py="1">
-                          <Text fontSize="xs" fontWeight="medium" w="160px">{t.name}</Text>
-                          <Text fontSize="xs" color="gray.500">{t.description}</Text>
-                        </HStack>
-                      ))}
-                    </Table.Cell>
-                  </Table.Row>
-                )}
-              </React.Fragment>
-            ))}
-          </Table.Body>
-        </Table.Root>
+        <VStack gap="3" align="stretch">
+          {servers.map((s) => (
+            <McpServerCard
+              key={s.id}
+              server={s}
+              expanded={!!expanded[s.id]}
+              tools={tools[s.id]}
+              toolsLoading={!!toolsLoading[s.id]}
+              onExpand={toggleExpand}
+              onEdit={openEdit}
+              onDelete={setDeleteTarget}
+            />
+          ))}
+        </VStack>
       )}
 
       <McpDialog open={dialogOpen} editing={editing} onClose={() => setDialogOpen(false)} onSaved={load} />

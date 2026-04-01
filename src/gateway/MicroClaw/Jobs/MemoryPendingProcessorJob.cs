@@ -5,7 +5,6 @@ using MicroClaw.Providers;
 using MicroClaw.RAG;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -24,30 +23,14 @@ public sealed class MemoryPendingProcessorJob(
     ProviderClientFactory clientFactory,
     MemoryService memoryService,
     IRagService ragService,
-    ILogger<MemoryPendingProcessorJob> logger) : BackgroundService
+    ILogger<MemoryPendingProcessorJob> logger) : IScheduledJob
 {
-    // 每次运行间隔
-    private static readonly TimeSpan RunInterval = TimeSpan.FromHours(1);
+    public string JobName => "memory-pending-processor";
+    public JobSchedule Schedule => new JobSchedule.FixedInterval(TimeSpan.FromHours(1), TimeSpan.FromSeconds(90));
 
-    // 启动延迟：避免与其他 BackgroundService 竞争
-    private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(90);
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("B-03 MemoryPendingProcessorJob 已启动");
-
-        try { await Task.Delay(StartupDelay, stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await ProcessAllSessionsAsync(stoppingToken);
-
-            try { await Task.Delay(RunInterval, stoppingToken); }
-            catch (OperationCanceledException) { return; }
-        }
-
-        logger.LogInformation("B-03 MemoryPendingProcessorJob 已停止");
+        await ProcessAllSessionsAsync(ct);
     }
 
     internal async Task ProcessAllSessionsAsync(CancellationToken ct)
