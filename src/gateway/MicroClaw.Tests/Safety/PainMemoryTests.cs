@@ -1,4 +1,5 @@
 using FluentAssertions;
+using MicroClaw.Infrastructure;
 using MicroClaw.Safety;
 
 namespace MicroClaw.Tests.Safety;

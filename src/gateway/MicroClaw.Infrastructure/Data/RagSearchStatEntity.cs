@@ -1,8 +1,8 @@
-namespace MicroClaw.RAG;
+namespace MicroClaw.Infrastructure;
 
 /// <summary>
 /// RAG 检索统计记录实体（EF Core）。
-/// 每次 <see cref="IRagService.QueryAsync"/> 调用产生一条记录。
+/// 每次 RAG 查询调用产生一条记录，存储于 <c>rag_search_stats</c> 表。
 /// </summary>
 public sealed class RagSearchStatEntity
 {

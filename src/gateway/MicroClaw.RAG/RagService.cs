@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.RAG;
@@ -18,14 +20,14 @@ public sealed class RagService : IRagService
     private readonly IEmbeddingService _embedding;
     private readonly RagDbContextFactory _dbFactory;
     private readonly HybridSearchService _hybridSearch;
-    private readonly RagStatsDbContextFactory? _statsFactory;
+    private readonly IDbContextFactory<GatewayDbContext>? _statsFactory;
     private readonly IRagPruner? _pruner;
 
     public RagService(
         IEmbeddingService embedding,
         RagDbContextFactory dbFactory,
         HybridSearchService hybridSearch,
-        RagStatsDbContextFactory? statsFactory = null,
+        IDbContextFactory<GatewayDbContext>? statsFactory = null,
         IRagPruner? pruner = null)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
@@ -144,8 +146,8 @@ public sealed class RagService : IRagService
         {
             try
             {
-                using var db = _statsFactory.Create();
-                db.SearchStats.Add(new RagSearchStatEntity
+                using var db = _statsFactory.CreateDbContext();
+                db.RagSearchStats.Add(new RagSearchStatEntity
                 {
                     Id = Guid.NewGuid().ToString("N"),
                     Scope = scope.ToString(),
@@ -320,9 +322,9 @@ public sealed class RagService : IRagService
         if (_statsFactory is null)
             return new RagQueryStats(scope?.ToString() ?? "All", 0, 0, 0, 0, 0, 0);
 
-        using var db = _statsFactory.Create();
+        using var db = _statsFactory.CreateDbContext();
 
-        IQueryable<RagSearchStatEntity> query = db.SearchStats.AsNoTracking();
+        IQueryable<RagSearchStatEntity> query = db.RagSearchStats.AsNoTracking();
         if (scope.HasValue)
             query = query.Where(e => e.Scope == scope.Value.ToString());
 

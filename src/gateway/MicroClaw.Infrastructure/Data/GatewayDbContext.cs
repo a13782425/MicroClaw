@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using MicroClaw.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Infrastructure.Data;
 
@@ -10,6 +11,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<CronJobRunLogEntity> CronJobRunLogs => Set<CronJobRunLogEntity>();
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
+    public DbSet<PainMemoryEntity> PainMemories => Set<PainMemoryEntity>();
+    public DbSet<RagSearchStatEntity> RagSearchStats => Set<RagSearchStatEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,6 +88,36 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.LastErrorMessage).HasColumnName("last_error_message");
             b.HasIndex(e => e.Status).HasDatabaseName("ix_channel_retry_queue_status");
             b.HasIndex(e => e.MessageId).HasDatabaseName("ix_channel_retry_queue_message_id").IsUnique();
+        });
+
+        modelBuilder.Entity<PainMemoryEntity>(b =>
+        {
+            b.ToTable("pain_memories");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(32);
+            b.Property(e => e.AgentId).HasColumnName("agent_id").HasMaxLength(128);
+            b.Property(e => e.TriggerDescription).HasColumnName("trigger_description");
+            b.Property(e => e.ConsequenceDescription).HasColumnName("consequence_description");
+            b.Property(e => e.AvoidanceStrategy).HasColumnName("avoidance_strategy");
+            b.Property(e => e.Severity).HasColumnName("severity");
+            b.Property(e => e.OccurrenceCount).HasColumnName("occurrence_count");
+            b.Property(e => e.LastOccurredAtMs).HasColumnName("last_occurred_at_ms");
+            b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
+            b.HasIndex(e => e.AgentId).HasDatabaseName("ix_pain_memories_agent_id");
+            b.HasIndex(e => new { e.AgentId, e.Severity }).HasDatabaseName("ix_pain_memories_agent_severity");
+        });
+
+        modelBuilder.Entity<RagSearchStatEntity>(b =>
+        {
+            b.ToTable("rag_search_stats");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+            b.Property(e => e.Scope).HasColumnName("scope").HasMaxLength(32);
+            b.Property(e => e.ElapsedMs).HasColumnName("elapsed_ms");
+            b.Property(e => e.RecallCount).HasColumnName("recall_count");
+            b.Property(e => e.RecordedAtMs).HasColumnName("recorded_at_ms");
+            b.HasIndex(e => e.RecordedAtMs).HasDatabaseName("ix_rag_search_stats_recorded_at_ms");
+            b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_search_stats_scope");
         });
     }
 }

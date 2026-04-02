@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Emotion;
+using MicroClaw.Infrastructure;
 using MicroClaw.Safety;
 using NSubstitute;
 

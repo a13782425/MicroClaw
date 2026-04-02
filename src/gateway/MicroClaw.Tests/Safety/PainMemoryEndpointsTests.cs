@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MicroClaw.Endpoints;
+using MicroClaw.Infrastructure;
 using MicroClaw.Safety;
 using NSubstitute;
 

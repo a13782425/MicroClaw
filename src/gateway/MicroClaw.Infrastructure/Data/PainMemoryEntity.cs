@@ -1,4 +1,4 @@
-namespace MicroClaw.Safety;
+namespace MicroClaw.Infrastructure;
 
 /// <summary>
 /// 痛觉记忆的持久化实体，存储于 <c>pain_memories</c> 表。

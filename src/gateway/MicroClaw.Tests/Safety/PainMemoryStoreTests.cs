@@ -1,13 +1,16 @@
 using FluentAssertions;
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using MicroClaw.Safety;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
 namespace MicroClaw.Tests.Safety;
 
 public class PainMemoryStoreTests : IDisposable
 {
-    private readonly SafetyDbContextFactory _factory;
+    private readonly TestGatewayDbContextFactoryForSafety _factory;
     private readonly PainMemoryStore _store;
     private readonly string _tempDir;
 
@@ -15,13 +18,12 @@ public class PainMemoryStoreTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "microclaw_safety_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
-        _factory = new SafetyDbContextFactory(_tempDir);
+        _factory = new TestGatewayDbContextFactoryForSafety(_tempDir);
         _store = new PainMemoryStore(_factory);
     }
 
     public void Dispose()
     {
-        // 释放 SQLite 连接池，确保文件句柄关闭后再删除临时目录
         SqliteConnection.ClearAllPools();
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* 清理失败静默忽略 */ }
     }
@@ -267,35 +269,6 @@ public class PainMemoryStoreTests : IDisposable
         remaining[0].Id.Should().Be(m2.Id);
     }
 
-    // ── SafetyDbContextFactory ─────────────────────────────────────────────────
-
-    [Fact]
-    public void SafetyDbContextFactory_NullWorkspaceRoot_Throws()
-    {
-        var act = () => new SafetyDbContextFactory(null!);
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void SafetyDbContextFactory_EmptyWorkspaceRoot_Throws()
-    {
-        var act = () => new SafetyDbContextFactory("");
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void SafetyDbContextFactory_DbPath_EndsWithSafetyDb()
-    {
-        _factory.DbPath.Should().EndWith("safety.db");
-    }
-
-    [Fact]
-    public void SafetyDbContextFactory_Create_CreatesDbFile()
-    {
-        using var ctx = _factory.Create();
-        File.Exists(_factory.DbPath).Should().BeTrue();
-    }
-
     // ── 痛觉-情绪联动集成 ──────────────────────────────────────────────────────
 
     [Fact]
@@ -347,4 +320,21 @@ public class PainMemoryStoreTests : IDisposable
         saved.Should().NotBeNull();
         saved.AgentId.Should().Be("agent1");
     }
+}
+
+/// <summary>测试用 GatewayDbContext 工厂，使用 SQLite 文件数据库。</summary>
+internal sealed class TestGatewayDbContextFactoryForSafety : IDbContextFactory<GatewayDbContext>
+{
+    private readonly DbContextOptions<GatewayDbContext> _opts;
+
+    public TestGatewayDbContextFactoryForSafety(string tempDir)
+    {
+        _opts = new DbContextOptionsBuilder<GatewayDbContext>()
+            .UseSqlite($"Data Source={Path.Combine(tempDir, "test.db")}")
+            .Options;
+        using var ctx = new GatewayDbContext(_opts);
+        ctx.Database.EnsureCreated();
+    }
+
+    public GatewayDbContext CreateDbContext() => new(_opts);
 }

@@ -1,6 +1,9 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using MicroClaw.RAG;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
@@ -9,13 +12,13 @@ namespace MicroClaw.Tests.RAG;
 public class RagStatsTests : IDisposable
 {
     private readonly string _tempDir;
-    private readonly RagStatsDbContextFactory _statsFactory;
+    private readonly TestGatewayDbContextFactoryForRagStats _statsFactory;
 
     public RagStatsTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "mc_ragstats_tests_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(_tempDir);
-        _statsFactory = new RagStatsDbContextFactory(_tempDir);
+        _statsFactory = new TestGatewayDbContextFactoryForRagStats(_tempDir);
     }
 
     public void Dispose()
@@ -25,42 +28,12 @@ public class RagStatsTests : IDisposable
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    // ── RagStatsDbContextFactory ──
-
-    [Fact]
-    public void DbPath_ShouldPoint_ToRagStatsDb()
-    {
-        _statsFactory.DbPath.Should().EndWith("ragstats.db");
-    }
-
-    [Fact]
-    public void Create_ShouldReturnContext_AndCreateDbFile()
-    {
-        using var db = _statsFactory.Create();
-        db.Should().NotBeNull();
-        File.Exists(_statsFactory.DbPath).Should().BeTrue();
-    }
-
-    [Fact]
-    public void Constructor_NullWorkspaceRoot_ShouldThrow()
-    {
-        var act = () => new RagStatsDbContextFactory(null!);
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void Constructor_EmptyWorkspaceRoot_ShouldThrow()
-    {
-        var act = () => new RagStatsDbContextFactory(string.Empty);
-        act.Should().Throw<ArgumentException>();
-    }
-
     // ── RagSearchStatEntity 持久化 ──
 
     [Fact]
     public async Task SaveAndQuery_SingleStat_ShouldPersist()
     {
-        using var db = _statsFactory.Create();
+        using var db = _statsFactory.CreateDbContext();
         var entity = new RagSearchStatEntity
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -70,11 +43,11 @@ public class RagStatsTests : IDisposable
             RecordedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
 
-        db.SearchStats.Add(entity);
+        db.RagSearchStats.Add(entity);
         await db.SaveChangesAsync();
 
-        using var db2 = _statsFactory.Create();
-        var saved = db2.SearchStats.Find(entity.Id);
+        using var db2 = _statsFactory.CreateDbContext();
+        var saved = db2.RagSearchStats.Find(entity.Id);
         saved.Should().NotBeNull();
         saved!.Scope.Should().Be("Global");
         saved.ElapsedMs.Should().Be(250);
@@ -154,9 +127,9 @@ public class RagStatsTests : IDisposable
     public async Task GetQueryStatsAsync_AfterRecordingStats_ShouldAggregateCorrectly()
     {
         // 直接写入统计数据
-        using (var db = _statsFactory.Create())
+        using (var db = _statsFactory.CreateDbContext())
         {
-            db.SearchStats.AddRange(
+            db.RagSearchStats.AddRange(
                 new RagSearchStatEntity { Id = "s1", Scope = "Global", ElapsedMs = 100, RecallCount = 5, RecordedAtMs = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds() },
                 new RagSearchStatEntity { Id = "s2", Scope = "Global", ElapsedMs = 200, RecallCount = 0, RecordedAtMs = DateTimeOffset.UtcNow.AddHours(-2).ToUnixTimeMilliseconds() },
                 new RagSearchStatEntity { Id = "s3", Scope = "Session", ElapsedMs = 150, RecallCount = 3, RecordedAtMs = DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeMilliseconds() }
@@ -193,9 +166,9 @@ public class RagStatsTests : IDisposable
     [Fact]
     public async Task GetQueryStatsAsync_Last24h_ShouldExcludeOldRecords()
     {
-        using (var db = _statsFactory.Create())
+        using (var db = _statsFactory.CreateDbContext())
         {
-            db.SearchStats.AddRange(
+            db.RagSearchStats.AddRange(
                 new RagSearchStatEntity { Id = "old1", Scope = "Global", ElapsedMs = 100, RecallCount = 2, RecordedAtMs = DateTimeOffset.UtcNow.AddHours(-25).ToUnixTimeMilliseconds() },
                 new RagSearchStatEntity { Id = "new1", Scope = "Global", ElapsedMs = 120, RecallCount = 3, RecordedAtMs = DateTimeOffset.UtcNow.AddMinutes(-30).ToUnixTimeMilliseconds() }
             );
@@ -207,4 +180,21 @@ public class RagStatsTests : IDisposable
         stats.TotalQueries.Should().Be(2); // 总数包含所有记录
         stats.Last24hQueries.Should().Be(1); // 近 24h 仅 1 条
     }
+}
+
+/// <summary>RagStatsTests 专用 GatewayDbContext 工厂，使用 SQLite 文件数据库。</summary>
+internal sealed class TestGatewayDbContextFactoryForRagStats : IDbContextFactory<GatewayDbContext>
+{
+    private readonly DbContextOptions<GatewayDbContext> _opts;
+
+    public TestGatewayDbContextFactoryForRagStats(string tempDir)
+    {
+        _opts = new DbContextOptionsBuilder<GatewayDbContext>()
+            .UseSqlite($"Data Source={Path.Combine(tempDir, "test.db")}")
+            .Options;
+        using var ctx = new GatewayDbContext(_opts);
+        ctx.Database.EnsureCreated();
+    }
+
+    public GatewayDbContext CreateDbContext() => new(_opts);
 }

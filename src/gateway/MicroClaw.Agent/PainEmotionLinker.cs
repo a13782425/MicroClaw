@@ -1,4 +1,5 @@
 using MicroClaw.Emotion;
+using MicroClaw.Infrastructure;
 using MicroClaw.Safety;
 
 namespace MicroClaw.Agent;

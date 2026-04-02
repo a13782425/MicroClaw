@@ -1,16 +1,18 @@
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Safety;
 
 /// <summary>
-/// 基于 SQLite 的 <see cref="IPainMemoryStore"/> 实现。
+/// 基于 GatewayDbContext 的 <see cref="IPainMemoryStore"/> 实现。
 /// </summary>
 public sealed class PainMemoryStore : IPainMemoryStore
 {
-    private readonly SafetyDbContextFactory _factory;
+    private readonly IDbContextFactory<GatewayDbContext> _factory;
     private readonly IPainEmotionLinker? _emotionLinker;
 
-    public PainMemoryStore(SafetyDbContextFactory factory, IPainEmotionLinker? emotionLinker = null)
+    public PainMemoryStore(IDbContextFactory<GatewayDbContext> factory, IPainEmotionLinker? emotionLinker = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         _factory = factory;
@@ -22,7 +24,7 @@ public sealed class PainMemoryStore : IPainMemoryStore
     {
         ArgumentNullException.ThrowIfNull(memory);
 
-        using var ctx = _factory.Create();
+        using var ctx = _factory.CreateDbContext();
 
         var entity = new PainMemoryEntity
         {
@@ -54,7 +56,7 @@ public sealed class PainMemoryStore : IPainMemoryStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        using var ctx = _factory.Create();
+        using var ctx = _factory.CreateDbContext();
 
         var entities = await ctx.PainMemories
             .Where(e => e.AgentId == agentId)
@@ -74,7 +76,7 @@ public sealed class PainMemoryStore : IPainMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(painMemoryId);
 
-        using var ctx = _factory.Create();
+        using var ctx = _factory.CreateDbContext();
 
         var entity = await ctx.PainMemories
             .FirstOrDefaultAsync(e => e.Id == painMemoryId && e.AgentId == agentId, ct);
@@ -95,7 +97,7 @@ public sealed class PainMemoryStore : IPainMemoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(painMemoryId);
 
-        using var ctx = _factory.Create();
+        using var ctx = _factory.CreateDbContext();
 
         var entity = await ctx.PainMemories
             .FirstOrDefaultAsync(e => e.Id == painMemoryId && e.AgentId == agentId, ct);

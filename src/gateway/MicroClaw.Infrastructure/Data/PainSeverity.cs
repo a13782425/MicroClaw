@@ -1,4 +1,4 @@
-namespace MicroClaw.Safety;
+namespace MicroClaw.Infrastructure;
 
 /// <summary>
 /// 痛觉记忆的严重度等级，用于决策规避优先级和情绪联动强度。

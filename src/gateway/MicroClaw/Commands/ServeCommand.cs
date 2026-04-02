@@ -212,7 +212,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IEmbeddingProviderAccessor, EmbeddingProviderAccessor>();
 		builder.Services.AddSingleton<IEmbeddingService, DynamicEmbeddingService>();
 		builder.Services.AddSingleton<HybridSearchService>();
-		builder.Services.AddSingleton<RagStatsDbContextFactory>(_ => new RagStatsDbContextFactory(workspaceRoot));
 		var ragOptions = MicroClawConfig.Get<RagOptions>();
 		builder.Services.AddSingleton<IRagPruner>(sp => new RagPruner(
 			sp.GetRequiredService<RagDbContextFactory>(),
@@ -223,7 +222,7 @@ public class ServeCommand : Command
 			sp.GetRequiredService<IEmbeddingService>(),
 			sp.GetRequiredService<RagDbContextFactory>(),
 			sp.GetRequiredService<HybridSearchService>(),
-			sp.GetRequiredService<RagStatsDbContextFactory>(),
+			sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>(),
 			sp.GetRequiredService<IRagPruner>()));
 		builder.Services.AddSingleton<RagReindexJobTracker>();
 		builder.Services.AddSingleton<RagReindexService>();
@@ -239,7 +238,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ =>
 			new EmotionBehaviorMapper(EmotionBehaviorMapperOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));
 		// 安全/痛觉系统服务
-		builder.Services.AddSingleton<SafetyDbContextFactory>(_ => new SafetyDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IPainMemoryStore, PainMemoryStore>();
 		builder.Services.AddSingleton<IToolRiskRegistry>(_ => new DefaultToolRiskRegistry());
 		// 白名单/灰名单配置：从 YAML safety 节读取（字段不存在则返回空列表，等同于不配置）
