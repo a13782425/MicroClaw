@@ -14,6 +14,7 @@ using MicroClaw.Channels.WeCom;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Abstractions;
@@ -72,7 +73,7 @@ public class ServeCommand : Command
 			builder.Configuration.AddMicroClawYaml(configFile);
 
 		// 初始化静态配置门面（必须在 YAML 加载之后、使用配置之前）
-		MicroClawConfig.Initialize(builder.Configuration);
+		MicroClawConfig.Initialize(builder.Configuration, MicroClawConfig.Env.ConfigDir);
 
 		ConfigureLogging(builder);
 		ConfigureAuth(builder);
@@ -186,8 +187,8 @@ public class ServeCommand : Command
 		});
 
 		builder.Services.AddSingleton<ConfigService>();
-		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore(configDir));
-		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(configDir, sessionsDir));
+		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore());
+		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(sessionsDir));
 		builder.Services.AddSingleton<ISessionReader>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
@@ -198,7 +199,7 @@ public class ServeCommand : Command
 		// Agent 服务
 		string workspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
 		string agentsDir = MicroClawConfig.Env.AgentsDir;
-		builder.Services.AddSingleton<AgentStore>(_ => new AgentStore(configDir));
+		builder.Services.AddSingleton<AgentStore>(_ => new AgentStore());
 		builder.Services.AddSingleton<IPluginAgentRegistrar>(sp => sp.GetRequiredService<AgentStore>());
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
@@ -264,7 +265,7 @@ public class ServeCommand : Command
 			sp.GetRequiredService<SessionStore>(),
 			sp.GetRequiredService<AgentStore>(),
 			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>()),
-			MicroClawConfig.Get<AgentOptions>().SubAgentMaxDepth));
+			MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth));
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		// AIContent→StreamItem 转换管道（Handler + Pipeline）
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.TextContentHandler>();

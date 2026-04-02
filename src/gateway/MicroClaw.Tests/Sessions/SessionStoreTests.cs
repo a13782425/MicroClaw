@@ -13,7 +13,7 @@ public sealed class SessionStoreTests : IDisposable
 
     public SessionStoreTests()
     {
-        _store = new SessionStore(_tempDir.Path, _tempDir.Path);
+        _store = new SessionStore(_tempDir.Path);
     }
 
     public void Dispose()

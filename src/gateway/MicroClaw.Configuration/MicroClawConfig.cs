@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Configuration;
 
@@ -10,6 +11,7 @@ public static class MicroClawConfig
 {
     private static MicroClawConfigEnv? _env;
     private static Dictionary<Type, object>? _options;
+    private static string? _configDir;
     private static int _initialized;
 
     /// <summary>
@@ -20,10 +22,26 @@ public static class MicroClawConfig
         [typeof(AuthOptions)] = "auth",
         [typeof(SkillOptions)] = "skills",
         [typeof(FileToolsOptions)] = "filesystem",
-        [typeof(AgentOptions)] = "agent",
+        [typeof(AgentsOptions)] = "agents",
+        [typeof(SessionsOptions)] = "sessions",
+        [typeof(ProvidersOptions)] = "providers",
         [typeof(RagOptions)] = "rag",
         [typeof(SandboxOptions)] = "sandbox",
         [typeof(EmotionOptions)] = "emotion",
+    };
+
+    /// <summary>
+    /// Options 类型到对应 YAML 文件名的映射（相对于 configDir）。
+    /// 只有需要运行时写回的类型才需要注册。
+    /// </summary>
+    private static readonly Dictionary<Type, string> FileMap = new()
+    {
+        [typeof(AgentsOptions)] = "agents.yaml",
+        [typeof(SessionsOptions)] = "sessions.yaml",
+        [typeof(ProvidersOptions)] = "providers.yaml",
+        [typeof(EmotionOptions)] = "emotion.yaml",
+        [typeof(SkillOptions)] = "skills.yaml",
+        [typeof(RagOptions)] = "rag.yaml",
     };
 
     /// <summary>
@@ -72,13 +90,39 @@ public static class MicroClawConfig
     }
 
     /// <summary>
+    /// 热更新内存中的配置实例，并同步写回对应的 YAML 文件。
+    /// 需在 <see cref="Initialize"/> 之后调用；调用方负责自身的线程安全。
+    /// </summary>
+    public static void Save<T>(T value) where T : class, new()
+    {
+        if (_configDir is null)
+            throw new InvalidOperationException("MicroClawConfig 尚未初始化。");
+
+        Update(value);
+
+        if (!FileMap.TryGetValue(typeof(T), out string? fileName))
+            throw new InvalidOperationException(
+                $"配置类型 {typeof(T).Name} 未在 FileMap 中注册，无法写回文件。");
+
+        if (!SectionMap.TryGetValue(typeof(T), out string? sectionKey))
+            throw new InvalidOperationException(
+                $"配置类型 {typeof(T).Name} 未在 SectionMap 中注册。");
+
+        string filePath = Path.Combine(_configDir, fileName);
+        YamlSectionWriter.Write(filePath, sectionKey, value);
+    }
+
+    /// <summary>
     /// 初始化配置系统。必须在应用启动时调用一次，重复调用将抛出异常。
     /// </summary>
     /// <param name="configuration">ASP.NET Core 配置根对象。</param>
-    public static void Initialize(IConfiguration configuration)
+    /// <param name="configDir">配置文件目录（用于 <see cref="Save{T}"/> 写回）。</param>
+    public static void Initialize(IConfiguration configuration, string configDir)
     {
         if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
             throw new InvalidOperationException("MicroClawConfig.Initialize() 不可重复调用。");
+
+        _configDir = configDir;
 
         var options = new Dictionary<Type, object>();
         foreach (var (type, section) in SectionMap)
@@ -97,6 +141,7 @@ public static class MicroClawConfig
     {
         _env = null;
         _options = null;
+        _configDir = null;
         Interlocked.Exchange(ref _initialized, 0);
     }
 }

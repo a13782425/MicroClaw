@@ -69,7 +69,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         IEmotionBehaviorMapper? emotionBehaviorMapper = null)
     {
         string configDir = _tempDir.Path;
-        var agentStore = new AgentStore(configDir);
+        var agentStore = new AgentStore();
         var skillService = new SkillService(_tempDir.Path);
         var skillStore = new SkillStore(skillService);
         var skillToolFactory = new SkillToolFactory(skillStore, skillService);
@@ -82,7 +82,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         return new AgentRunner(
             agentStore:            agentStore,
             contextProviders:      providers ?? [new AgentDnaContextProvider(_agentDna)],
-            providerStore:         new ProviderConfigStore(configDir),
+            providerStore:         new ProviderConfigStore(),
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
             skillToolFactory:      skillToolFactory,

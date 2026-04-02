@@ -19,7 +19,7 @@ public sealed class ChannelSessionServiceTests : IDisposable
 
     public ChannelSessionServiceTests()
     {
-        _sessionStore = new SessionStore(_tempDir.Path, _tempDir.Path);
+        _sessionStore = new SessionStore(_tempDir.Path);
 
         _hubContext = Substitute.For<IHubContext<GatewayHub>>();
         var clients = Substitute.For<IHubClients>();
@@ -27,7 +27,7 @@ public sealed class ChannelSessionServiceTests : IDisposable
         _hubContext.Clients.Returns(clients);
         clients.All.Returns(clientProxy);
 
-        var agentStore = new AgentStore(_tempDir.Path);
+        var agentStore = new AgentStore();
         _service = new ChannelSessionService(_sessionStore, agentStore, _hubContext);
     }
 

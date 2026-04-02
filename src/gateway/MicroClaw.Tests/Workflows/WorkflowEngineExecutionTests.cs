@@ -39,8 +39,8 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
         TestConfigFixture.EnsureInitialized();
         string configDir = _tempDir.Path;
 
-        _agentStore = new AgentStore(configDir);
-        _providerStore = new ProviderConfigStore(configDir);
+        _agentStore = new AgentStore();
+        _providerStore = new ProviderConfigStore();
 
         // 确保存在默认 Agent（main）
         _agentStore.EnsureMainAgent();

@@ -75,7 +75,25 @@ public static class InitDefaults
         # 通过 WebUI 或 API 添加 Provider 后，配置将保存在此文件中
         # 请勿直接提交包含真实 API Key 的此文件
 
-        providers: []
+        providers:
+          items: []
+        """;
+
+    public const string AgentsYaml = """
+        # Agent 实体配置
+        # 通过 WebUI 或 API 管理 Agent 后，配置将保存在此文件中
+
+        agents:
+          sub_agent_max_depth: 3
+          items: []
+        """;
+
+    public const string SessionsYaml = """
+        # 会话元数据配置
+        # 由系统自动管理，请勿手动编辑
+
+        sessions:
+          items: []
         """;
 
     public const string SkillsYaml = """

@@ -29,10 +29,8 @@ public sealed class FeishuDeduplicationTests : IDisposable
 
     public FeishuDeduplicationTests()
     {
-        // ProviderConfigStore 使用临时目录 → providerConfig 查找失败 → provider 检查处提前返回
-        string configDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(configDir);
-        ProviderConfigStore providerStore = new(configDir);
+        // ProviderConfigStore now uses MicroClawConfig (in-memory), returns empty list by default
+        ProviderConfigStore providerStore = new();
         ProviderClientFactory clientFactory = new([]);
         IChannelSessionService sessionService = Substitute.For<IChannelSessionService>();
         ILogger<FeishuMessageProcessor> logger = Substitute.For<ILogger<FeishuMessageProcessor>>();

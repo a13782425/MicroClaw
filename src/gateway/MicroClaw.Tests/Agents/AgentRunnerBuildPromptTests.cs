@@ -57,7 +57,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             NullLoggerFactory.Instance.CreateLogger<SkillInvocationTool>(),
             subAgentRunner: null);
 
-        var agentStore = new AgentStore(configDir);
+        var agentStore = new AgentStore();
 
         // F9：使用 Context Provider 替代直接注入三个服务
         var contextProviders = new IAgentContextProvider[]
@@ -70,7 +70,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
         _runner = new AgentRunner(
             agentStore:            agentStore,
             contextProviders:      contextProviders,
-            providerStore:         new ProviderConfigStore(configDir),
+            providerStore:         new ProviderConfigStore(),
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
             skillToolFactory:      skillToolFactory,

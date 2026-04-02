@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Tests.Fixtures;
 
@@ -14,7 +14,7 @@ public sealed class A2AAgentStoreTests : IDisposable
 
     public A2AAgentStoreTests()
     {
-        _store = new AgentStore(_tempDir.Path);
+        _store = new AgentStore();
     }
 
     public void Dispose() => _tempDir.Dispose();

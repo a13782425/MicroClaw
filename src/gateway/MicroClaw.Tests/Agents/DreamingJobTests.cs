@@ -238,9 +238,9 @@ public sealed class DreamingJobTests : IDisposable
     public async Task RunDreamingAsync_DisabledAgent_IsSkipped()
     {
         string configDir = _configDir.Path;
-        var agentStore = new AgentStore(configDir);
-        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var agentStore = new AgentStore();
+        var sessionStore = new SessionStore(_sessionsDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         // 创建已禁用的 Agent
         agentStore.Add(new AgentConfig(
@@ -276,9 +276,9 @@ public sealed class DreamingJobTests : IDisposable
     public async Task RunDreamingAsync_EnabledAgentWithNoSessions_IsSkipped()
     {
         string configDir = _configDir.Path;
-        var agentStore = new AgentStore(configDir);
-        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var agentStore = new AgentStore();
+        var sessionStore = new SessionStore(_sessionsDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         // 创建已启用的 Agent，但不创建任何关联 Session
         agentStore.Add(new AgentConfig(
@@ -313,9 +313,9 @@ public sealed class DreamingJobTests : IDisposable
     public async Task RunDreamingAsync_AgentSessionsWithNoDailyMemories_IsSkipped()
     {
         string configDir = _configDir.Path;
-        var agentStore = new AgentStore(configDir);
-        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var agentStore = new AgentStore();
+        var sessionStore = new SessionStore(_sessionsDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         // 创建 Agent
         string agentId = Guid.NewGuid().ToString("N");
@@ -362,9 +362,9 @@ public sealed class DreamingJobTests : IDisposable
     public async Task RunDreamingAsync_AgentSessionsWithDailyMemories_UpdatesAgentDnaMemory()
     {
         string configDir = _configDir.Path;
-        var agentStore = new AgentStore(configDir);
-        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var agentStore = new AgentStore();
+        var sessionStore = new SessionStore(_sessionsDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         // 创建 Agent（必须使用 Add 返回的 Config 以获取真实生成的 Id）
         AgentConfig createdAgent = agentStore.Add(new AgentConfig(
@@ -436,9 +436,9 @@ public sealed class DreamingJobTests : IDisposable
     public async Task RunDreamingAsync_NoEnabledProviderAvailable_IsSkipped()
     {
         string configDir = _configDir.Path;
-        var agentStore = new AgentStore(configDir);
-        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var agentStore = new AgentStore();
+        var sessionStore = new SessionStore(_sessionsDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         // 创建 Agent
         string agentId = Guid.NewGuid().ToString("N");

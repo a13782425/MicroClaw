@@ -13,6 +13,9 @@ public static class HomeInitializer
         ("config/logging.yaml",    InitDefaults.LoggingYaml),
         ("config/skills.yaml",     InitDefaults.SkillsYaml),
         ("config/emotion.yaml",    InitDefaults.EmotionYaml),
+        ("config/agents.yaml",     InitDefaults.AgentsYaml),
+        ("config/sessions.yaml",   InitDefaults.SessionsYaml),
+        ("config/providers.yaml",  InitDefaults.ProvidersYaml),
         (".env",           InitDefaults.DotEnvExample),
     ];
 

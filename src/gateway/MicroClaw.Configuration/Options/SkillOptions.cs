@@ -21,6 +21,7 @@ public sealed class SkillOptions
     /// 超出预算时将截断末尾条目并附加 "[truncated]" 提示。
     /// 默认 16000 字符；设为 0 表示不限制。
     /// </summary>
+    [ConfigurationKeyName("catalog_char_budget")]
     public int CatalogCharBudget { get; set; } = 16_000;
 
     /// <summary>

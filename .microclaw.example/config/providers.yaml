@@ -2,4 +2,5 @@
 # 通过 WebUI 或 API 添加 Provider 后，配置将保存在此文件中
 # 请勿直接提交包含真实 API Key 的此文件
 
-providers: []
+providers:
+  items: []

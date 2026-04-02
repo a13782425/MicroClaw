@@ -1,4 +1,5 @@
 using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -21,7 +22,7 @@ public sealed class ConfigService
 
     public SystemConfigDto GetSystemConfig()
     {
-        var agent = MicroClawConfig.Get<AgentOptions>();
+        var agent = MicroClawConfig.Get<AgentsOptions>();
         var skills = MicroClawConfig.Get<SkillOptions>();
         var emotion = MicroClawConfig.Get<EmotionOptions>();
 
@@ -37,16 +38,13 @@ public sealed class ConfigService
 
     public void UpdateAgentConfig(AgentConfigSection section)
     {
-        var filePath = Path.Combine(_configDir, "agent.yaml");
-        EnsureFileExists(filePath, $"agent:\n  sub_agent_max_depth: 3\n");
-
-        var yaml = LoadYaml(filePath);
-        var root = EnsureMappingRoot(yaml);
-        var agentNode = EnsureChildMapping(root, "agent");
-        agentNode.Children[new YamlScalarNode("sub_agent_max_depth")] =
-            new YamlScalarNode(section.SubAgentMaxDepth.ToString());
-
-        BackupAndSave(filePath, yaml);
+        var current = MicroClawConfig.Get<AgentsOptions>();
+        var updated = new AgentsOptions
+        {
+            SubAgentMaxDepth = section.SubAgentMaxDepth,
+            Items = current.Items
+        };
+        MicroClawConfig.Save(updated);
     }
 
     public void UpdateSkillsConfig(SkillsConfigSection section)

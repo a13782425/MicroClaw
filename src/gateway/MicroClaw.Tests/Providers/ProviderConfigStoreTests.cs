@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Providers;
 using MicroClaw.Tests.Fixtures;
 
@@ -11,7 +11,7 @@ public sealed class ProviderConfigStoreTests : IDisposable
 
     public ProviderConfigStoreTests()
     {
-        _store = new ProviderConfigStore(_configDir.Path);
+        _store = new ProviderConfigStore();
     }
 
     public void Dispose() => _configDir.Dispose();

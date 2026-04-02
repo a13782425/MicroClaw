@@ -181,8 +181,8 @@ public sealed class MemorySummarizationJobTests : IDisposable
         string configDir = _configDir.Path;
         string sessionsDir = _tempDir.Path;
 
-        var sessionStore = new SessionStore(configDir, sessionsDir);
-        var providerStore = new ProviderConfigStore(configDir);
+        var sessionStore = new SessionStore(sessionsDir);
+        var providerStore = new ProviderConfigStore();
 
         // 创建测试 Provider
         ProviderConfig testProvider = providerStore.Add(new ProviderConfig
@@ -242,8 +242,8 @@ public sealed class MemorySummarizationJobTests : IDisposable
     public async Task RunSummarizationAsync_SkipsSessionWithNoMessages()
     {
         string configDir = _configDir.Path;
-        var sessionStore = new SessionStore(configDir, _tempDir.Path);
-        var providerStore = new ProviderConfigStore(configDir);
+        var sessionStore = new SessionStore(_tempDir.Path);
+        var providerStore = new ProviderConfigStore();
 
         ProviderConfig testProvider = providerStore.Add(new ProviderConfig
         {

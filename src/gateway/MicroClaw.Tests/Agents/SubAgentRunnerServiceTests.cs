@@ -26,8 +26,8 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
 
     public SubAgentRunnerServiceTests()
     {
-        _sessionStore = new SessionStore(_tempDir.Path, _tempDir.Path);
-        _agentStore = new AgentStore(_tempDir.Path);
+        _sessionStore = new SessionStore(_tempDir.Path);
+        _agentStore = new AgentStore();
         _service = new SubAgentRunnerService(_sessionStore, _agentStore, UnreachableRunner);
     }
 

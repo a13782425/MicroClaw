@@ -4,18 +4,17 @@ using System.Text.Json.Serialization;
 using MicroClaw.Channels;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
 
 namespace MicroClaw.Sessions;
 
 /// <summary>
-/// 会话元数据存储在 YAML 文件，消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
-/// 旧版 messages.json 在首次读写时自动迁移并重命名为 messages.json.bak。
+/// 会话元数据存储在 sessions.yaml（通过 MicroClawConfig），消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// </summary>
-public sealed class SessionStore(string configDir, string sessionsDir)
-    : YamlFileStore<SessionEntity>(Path.Combine(configDir, "sessions.yaml"), e => e.Id),
-      ISessionReader, ISessionMessageRemover
+public sealed class SessionStore(string sessionsDir)
+    : ISessionReader, ISessionMessageRemover
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
@@ -38,21 +37,38 @@ public sealed class SessionStore(string configDir, string sessionsDir)
 
     // 每个 sessionId 对应一把写锁，防止并发追加写造成文件损坏
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
+    private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
 
     public IReadOnlyList<SessionInfo> All
-        => GetAll().OrderByDescending(e => e.CreatedAtMs).Select(ToInfo).ToList().AsReadOnly();
+    {
+        get
+        {
+            _lock.EnterReadLock();
+            try { return GetItems().OrderByDescending(e => e.CreatedAtMs).Select(ToInfo).ToList().AsReadOnly(); }
+            finally { _lock.ExitReadLock(); }
+        }
+    }
 
     /// <summary>
     /// 仅返回顶层会话（即非子代理会话，ParentSessionId 为 null）。
     /// 用于会话管理列表，子代理会话不对用户暴露。
     /// </summary>
     public IReadOnlyList<SessionInfo> AllTopLevel
-        => GetAll()
-            .Where(e => e.ParentSessionId == null)
-            .OrderByDescending(e => e.CreatedAtMs)
-            .Select(ToInfo)
-            .ToList()
-            .AsReadOnly();
+    {
+        get
+        {
+            _lock.EnterReadLock();
+            try
+            {
+                return GetItems()
+                    .Where(e => e.ParentSessionId == null)
+                    .OrderByDescending(e => e.CreatedAtMs)
+                    .Select(ToInfo)
+                    .ToList().AsReadOnly();
+            }
+            finally { _lock.ExitReadLock(); }
+        }
+    }
 
     /// <summary>
     /// 沿 ParentSessionId 链向上遍历，返回根会话 ID（顶层无 parent 的会话）。
@@ -61,15 +77,20 @@ public sealed class SessionStore(string configDir, string sessionsDir)
     public string GetRootSessionId(string sessionId)
     {
         string current = sessionId;
-        // 最多遍历 20 层，防止数据损坏导致死循环
-        for (int i = 0; i < 20; i++)
+        _lock.EnterReadLock();
+        try
         {
-            SessionEntity? entity = GetYamlById(current);
-            if (entity?.ParentSessionId is null)
-                return current;
-            current = entity.ParentSessionId;
+            // 最多遍历 20 层，防止数据损坏导致死循环
+            for (int i = 0; i < 20; i++)
+            {
+                var entity = GetItems().FirstOrDefault(e => e.Id == current);
+                if (entity?.ParentSessionId is null)
+                    return current;
+                current = entity.ParentSessionId;
+            }
+            return current;
         }
-        return current;
+        finally { _lock.ExitReadLock(); }
     }
 
     /// <summary>
@@ -78,19 +99,30 @@ public sealed class SessionStore(string configDir, string sessionsDir)
     /// </summary>
     public SessionInfo? FindIdleSubAgentSession(
         string parentSessionId, string agentId, IReadOnlyCollection<string> activeSessionIds)
-        => GetAll()
-            .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
-            .Where(e => !activeSessionIds.Contains(e.Id))
-            .OrderByDescending(e => e.CreatedAtMs)
-            .Select(ToInfo)
-            .FirstOrDefault();
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
+                .Where(e => !activeSessionIds.Contains(e.Id))
+                .OrderByDescending(e => e.CreatedAtMs)
+                .Select(ToInfo)
+                .FirstOrDefault();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
 
     public SessionInfo? Get(string id)
-        => GetYamlById(id) is { } e ? ToInfo(e) : null;
+    {
+        _lock.EnterReadLock();
+        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToInfo(e) : null; }
+        finally { _lock.ExitReadLock(); }
+    }
 
     public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null, string? channelId = null)
     {
-        SessionEntity entity = new()
+        var entity = new SessionEntity
         {
             Id = id ?? Guid.NewGuid().ToString("N"),
             Title = title,
@@ -103,14 +135,28 @@ public sealed class SessionStore(string configDir, string sessionsDir)
             ParentSessionId = parentSessionId,
         };
 
-        SetYaml(entity);
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<SessionsOptions>();
+            MicroClawConfig.Save(new SessionsOptions { Items = [.. opts.Items, entity] });
+        }
+        finally { _lock.ExitWriteLock(); }
+
         Directory.CreateDirectory(GetSessionDir(entity.Id));
         return ToInfo(entity);
     }
 
     public bool Delete(string id)
     {
-        if (!RemoveYaml(id)) return false;
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<SessionsOptions>();
+            if (!opts.Items.Any(e => e.Id == id)) return false;
+            MicroClawConfig.Save(new SessionsOptions { Items = opts.Items.Where(e => e.Id != id).ToList() });
+        }
+        finally { _lock.ExitWriteLock(); }
 
         string dir = GetSessionDir(id);
         if (Directory.Exists(dir))
@@ -120,31 +166,14 @@ public sealed class SessionStore(string configDir, string sessionsDir)
     }
 
     public SessionInfo? Approve(string id, string? reason = null)
-    {
-        var updated = MutateYaml(id, e =>
-        {
-            e.IsApproved = true;
-            e.ApprovalReason = reason;
-        });
-        return updated is null ? null : ToInfo(updated);
-    }
+        => MutateItem(id, e => e with { IsApproved = true, ApprovalReason = reason });
 
     public SessionInfo? Disable(string id, string? reason = null)
-    {
-        var updated = MutateYaml(id, e =>
-        {
-            e.IsApproved = false;
-            e.ApprovalReason = reason;
-        });
-        return updated is null ? null : ToInfo(updated);
-    }
+        => MutateItem(id, e => e with { IsApproved = false, ApprovalReason = reason });
 
     /// <summary>更新会话绑定的 Provider（用于中途切换模型）。</summary>
     public SessionInfo? UpdateProvider(string id, string providerId)
-    {
-        var updated = MutateYaml(id, e => e.ProviderId = providerId);
-        return updated is null ? null : ToInfo(updated);
-    }
+        => MutateItem(id, e => e with { ProviderId = providerId });
 
     public void AddMessage(string sessionId, SessionMessage message)
     {
@@ -236,11 +265,24 @@ public sealed class SessionStore(string configDir, string sessionsDir)
 
     private string GetSessionDir(string id) => Path.Combine(sessionsDir, id);
 
-    private static List<MessageJson> LoadMessages(string filePath)
+    private static List<SessionEntity> GetItems()
+        => MicroClawConfig.Get<SessionsOptions>().Items;
+
+    private SessionInfo? MutateItem(string id, Func<SessionEntity, SessionEntity> mutate)
     {
-        if (!File.Exists(filePath)) return [];
-        string json = File.ReadAllText(filePath);
-        return JsonSerializer.Deserialize<List<MessageJson>>(json, JsonOptions) ?? [];
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<SessionsOptions>();
+            int idx = opts.Items.FindIndex(e => e.Id == id);
+            if (idx < 0) return null;
+
+            var mutated = mutate(opts.Items[idx]);
+            var newItems = new List<SessionEntity>(opts.Items) { [idx] = mutated };
+            MicroClawConfig.Save(new SessionsOptions { Items = newItems });
+            return ToInfo(mutated);
+        }
+        finally { _lock.ExitWriteLock(); }
     }
 
     private static SessionInfo ToInfo(SessionEntity e) =>

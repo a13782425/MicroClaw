@@ -1,81 +1,135 @@
 ﻿using System.Text.Json;
 using System.Text.RegularExpressions;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Providers;
 
-public sealed class ProviderConfigStore(string configDir)
-    : YamlFileStore<ProviderConfigEntity>(Path.Combine(configDir, "providers.yaml"), e => e.Id)
+public sealed class ProviderConfigStore
 {
+    private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
+
     public IReadOnlyList<ProviderConfig> All
-        => GetAll().Select(ToConfig).ToList().AsReadOnly();
+    {
+        get
+        {
+            _lock.EnterReadLock();
+            try { return GetItems().Select(ToConfig).ToList().AsReadOnly(); }
+            finally { _lock.ExitReadLock(); }
+        }
+    }
 
-    /// <summary>
-    /// 杩斿洖褰撳墠璁剧疆涓洪粯璁や笖宸插惎鐢ㄧ殑 Chat 绫诲瀷 Provider锛涜嫢鏃犻粯璁ゅ垯杩斿洖绗竴涓凡鍚敤鐨?Chat Provider銆?
-    /// </summary>
     public ProviderConfig? GetDefault()
-        => GetAll()
-            .Where(p => p.IsEnabled && p.ModelType != "embedding")
-            .OrderByDescending(p => p.IsDefault)
-            .Select(ToConfig)
-            .FirstOrDefault();
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(p => p.IsEnabled && p.ModelType != "embedding")
+                .OrderByDescending(p => p.IsDefault)
+                .Select(ToConfig)
+                .FirstOrDefault();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
 
-    /// <summary>杩斿洖鎵€鏈夊凡鍚敤鐨?Embedding 绫诲瀷 Provider锛屼緵 RAG 绛夋湇鍔¤皟鐢ㄣ€?/summary>
     public IReadOnlyList<ProviderConfig> GetEmbeddingProviders()
-        => GetAll()
-            .Where(p => p.IsEnabled && p.ModelType == "embedding")
-            .Select(ToConfig)
-            .ToList()
-            .AsReadOnly();
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(p => p.IsEnabled && p.ModelType == "embedding")
+                .Select(ToConfig)
+                .ToList()
+                .AsReadOnly();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
 
     public ProviderConfig? GetById(string id)
-        => GetYamlById(id) is { } e ? ToConfig(e) : null;
+    {
+        _lock.EnterReadLock();
+        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToConfig(e) : null; }
+        finally { _lock.ExitReadLock(); }
+    }
 
     public ProviderConfig Add(ProviderConfig config)
     {
-        ProviderConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
-        ExecuteWrite(items =>
+        var entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
+
+        _lock.EnterWriteLock();
+        try
         {
+            var opts = MicroClawConfig.Get<ProvidersOptions>();
             // First added provider auto-set as default
-            if (!items.Any()) entity.IsDefault = true;
-            items[entity.Id] = entity;
-            return true;
-        });
+            if (!opts.Items.Any()) entity = entity with { IsDefault = true };
+            MicroClawConfig.Save(new ProvidersOptions { Items = [.. opts.Items, entity] });
+        }
+        finally { _lock.ExitWriteLock(); }
+
         return ToConfig(entity);
     }
 
     public ProviderConfig? Update(string id, ProviderConfig incoming)
     {
-        var updated = MutateYaml(id, e =>
+        _lock.EnterWriteLock();
+        try
         {
-            e.DisplayName = incoming.DisplayName;
-            e.Protocol = SerializeProtocol(incoming.Protocol);
-            e.ModelType = SerializeModelType(incoming.ModelType);
-            e.BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl;
-            e.ModelName = incoming.ModelName;
-            e.MaxOutputTokens = incoming.MaxOutputTokens;
-            e.IsEnabled = incoming.IsEnabled;
-            e.CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities);
+            var opts = MicroClawConfig.Get<ProvidersOptions>();
+            int idx = opts.Items.FindIndex(e => e.Id == id);
+            if (idx < 0) return null;
 
-            if (!string.IsNullOrWhiteSpace(incoming.ApiKey) && incoming.ApiKey != "***")
-                e.ApiKey = incoming.ApiKey;
-        });
-        return updated is null ? null : ToConfig(updated);
+            var current = opts.Items[idx];
+            var updated = current with
+            {
+                DisplayName = incoming.DisplayName,
+                Protocol = SerializeProtocol(incoming.Protocol),
+                ModelType = SerializeModelType(incoming.ModelType),
+                BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl,
+                ModelName = incoming.ModelName,
+                MaxOutputTokens = incoming.MaxOutputTokens,
+                IsEnabled = incoming.IsEnabled,
+                CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities),
+                ApiKey = !string.IsNullOrWhiteSpace(incoming.ApiKey) && incoming.ApiKey != "***"
+                    ? incoming.ApiKey
+                    : current.ApiKey,
+            };
+            var newItems = new List<ProviderConfigEntity>(opts.Items) { [idx] = updated };
+            MicroClawConfig.Save(new ProvidersOptions { Items = newItems });
+            return ToConfig(updated);
+        }
+        finally { _lock.ExitWriteLock(); }
     }
 
-    public bool Delete(string id) => RemoveYaml(id);
+    public bool Delete(string id)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<ProvidersOptions>();
+            if (!opts.Items.Any(e => e.Id == id)) return false;
+            MicroClawConfig.Save(new ProvidersOptions { Items = opts.Items.Where(e => e.Id != id).ToList() });
+            return true;
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
 
     public bool SetDefault(string id)
     {
-        if (!ContainsYaml(id)) return false;
-        ExecuteWrite(items =>
+        _lock.EnterWriteLock();
+        try
         {
-            foreach (var e in items.Values)
-                e.IsDefault = e.Id == id;
+            var opts = MicroClawConfig.Get<ProvidersOptions>();
+            if (!opts.Items.Any(e => e.Id == id)) return false;
+            var newItems = opts.Items.Select(e => e with { IsDefault = e.Id == id }).ToList();
+            MicroClawConfig.Save(new ProvidersOptions { Items = newItems });
             return true;
-        });
-        return true;
+        }
+        finally { _lock.ExitWriteLock(); }
     }
+
+    private static List<ProviderConfigEntity> GetItems() => MicroClawConfig.Get<ProvidersOptions>().Items;
 
     private static ProviderConfig ToConfig(ProviderConfigEntity e) =>
         new()

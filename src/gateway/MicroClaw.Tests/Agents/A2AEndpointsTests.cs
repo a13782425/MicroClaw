@@ -31,14 +31,14 @@ public sealed class A2AEndpointsTests : IDisposable
     public A2AEndpointsTests()
     {
         string configDir = _tempDir.Path;
-        _agentStore = new AgentStore(configDir);
+        _agentStore = new AgentStore();
 
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
                 services.AddRouting();
                 services.AddLogging(b => b.ClearProviders());
-                services.AddSingleton<AgentStore>(_ => new AgentStore(configDir));
+                services.AddSingleton<AgentStore>(_ => new AgentStore());
             })
             .Configure(app =>
             {
