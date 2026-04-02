@@ -253,6 +253,7 @@ public class ServeCommand : Command
 		// 痛觉-情绪联动服务（依赖 IEmotionStore + IEmotionRuleEngine，需在两者之后注册）
 		builder.Services.AddSingleton<IPainEmotionLinker, PainEmotionLinker>();
 		// Context Providers（按 Order 聚合 System Prompt）
+		builder.Services.AddSingleton<IAgentContextProvider, ServerTimeContextProvider>();  // Order 5：服务器时间层
 		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();
 		builder.Services.AddSingleton<IAgentContextProvider, RagContextProvider>(); // Order 15：语义检索层
 		builder.Services.AddSingleton<IAgentContextProvider, SessionDnaContextProvider>();

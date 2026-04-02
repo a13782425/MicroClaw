@@ -15,10 +15,9 @@ public static class CronTools
     private static readonly IReadOnlyList<(string Name, string Description)> BuiltinToolDescriptions =
     [
         ("list_cron_jobs",    "列出所有定时任务，返回任务ID、名称、类型（one-time=一次性/recurring=周期性）、触发时间或Cron表达式、目标会话、触发提示词、启用状态和上次执行时间。"),
-        ("create_cron_job",   "创建定时任务。一次性任务（如'5分钟后'）用 runAt 参数填绝对时间，需先调用 get_current_time 计算；周期性任务（如'每天9点'）用 cronExpression 填 Quartz cron 表达式。两个参数互斥，只能填一个。"),
+        ("create_cron_job",   "创建定时任务。一次性任务（如'5分钟后'）用 runAt 参数填绝对时间，当前时间已在系统提示中提供；周期性任务（如'每天9点'）用 cronExpression 填 Quartz cron 表达式。两个参数互斥，只能填一个。"),
         ("update_cron_job",   "更新已有定时任务的配置（名称、Cron表达式、提示词、目标会话、启用状态等），只需传入要修改的字段。注意：一次性任务（runAt 类型）不支持修改触发时间，如需更改请删除后重新创建。"),
         ("delete_cron_job",   "删除指定定时任务，任务将从调度器中移除并永久删除。"),
-        ("get_current_time",  "获取服务器当前本地时间和 UTC 时间。创建一次性任务时（如用户说'5分钟后'、'明天早上9点'等），必须先调用此工具获取当前时间，将其加上用户指定的偏移量，得到精确的 ISO 8601 绝对时间字符串，再作为 runAt 参数传给 create_cron_job。"),
     ];
 
     /// <summary>返回所有内置定时工具的元数据（不需要 sessionId）。供工具列表 API 使用。</summary>
@@ -64,7 +63,7 @@ public static class CronTools
                     [Description("任务触发时发送给 AI 的提示词，AI 会基于此生成回复")] string prompt,
                     [Description(
                         "【一次性任务】预定触发的绝对时间，ISO 8601 格式，例如：'2026-03-20T15:35:00+08:00'。" +
-                        "若用户说'5分钟后'、'明天早上9点'等相对时间，必须先调用 get_current_time 获取当前时间，" +
+                        "若用户说'5分钟后'、'明天早上9点'等相对时间，请根据系统提示中提供的当前时间，" +
                         "计算出准确的绝对时间后再填入此参数。与 cronExpression 互斥，只能填一个。")]
                     string? runAt = null,
                     [Description(
@@ -90,7 +89,7 @@ public static class CronTools
                         if (!DateTimeOffset.TryParse(runAt, out DateTimeOffset parsed))
                             return (object)new { success = false, error = $"runAt 格式无效：'{runAt}'，请使用 ISO 8601 格式，例如 '2026-03-20T15:35:00+08:00'。" };
                         if (parsed <= DateTimeOffset.UtcNow)
-                            return (object)new { success = false, error = $"runAt 指定的时间已过期（{parsed:O}），请指定未来的时间。请先调用 get_current_time 确认当前时间。" };
+                            return (object)new { success = false, error = $"runAt 指定的时间已过期（{parsed:O}），请指定未来的时间。" };
                         runAtUtc = parsed.ToUniversalTime();
                     }
                     else if (!CronExpression.IsValidExpression(cronExpression!))
@@ -122,7 +121,7 @@ public static class CronTools
                     };
                 },
                 name: "create_cron_job",
-                description: "创建定时任务。一次性任务（如'5分钟后'）用 runAt 参数填绝对时间，需先调用 get_current_time 计算；周期性任务（如'每天9点'）用 cronExpression 填 Quartz cron 表达式。两个参数互斥，只能填一个。"),
+                description: "创建定时任务。一次性任务（如'5分钟后'）用 runAt 参数填绝对时间，当前时间已在系统提示中提供；周期性任务（如'每天9点'）用 cronExpression 填 Quartz cron 表达式。两个参数互斥，只能填一个。"),
 
             AIFunctionFactory.Create(
                 async (
@@ -160,14 +159,6 @@ public static class CronTools
                 name: "delete_cron_job",
                 description: "删除指定定时任务，任务将从调度器中移除并永久删除。"),
 
-            AIFunctionFactory.Create(
-                () => new
-                {
-                    localTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"),
-                    utcTime = DateTimeOffset.UtcNow.ToString("O")
-                },
-                name: "get_current_time",
-                description: "获取服务器当前本地时间和 UTC 时间。创建一次性任务时（如用户说'5分钟后'、'明天早上9点'等），必须先调用此工具获取当前时间，将其加上用户指定的偏移量，得到精确的 ISO 8601 绝对时间字符串，再作为 runAt 参数传给 create_cron_job。"),
         ];
     }
 }
