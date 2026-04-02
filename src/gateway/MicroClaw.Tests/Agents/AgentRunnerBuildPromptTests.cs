@@ -29,7 +29,6 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
 {
     private const string SessionId = "test-session-001";
 
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
 
     private readonly SessionDnaService _sessionDna;
@@ -47,7 +46,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
         string agentsDir = Path.Combine(_tempDir.Path, "agents");
         _agentDna = new AgentDnaService(agentsDir);
 
-        IDbContextFactory<GatewayDbContext> dbFactory = _db.CreateFactory();
+        string configDir = _tempDir.Path;
 
         var skillService = new SkillService(_tempDir.Path);
         var skillStore = new SkillStore(skillService);
@@ -58,7 +57,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             NullLoggerFactory.Instance.CreateLogger<SkillInvocationTool>(),
             subAgentRunner: null);
 
-        var agentStore = new AgentStore(dbFactory);
+        var agentStore = new AgentStore(configDir);
 
         // F9：使用 Context Provider 替代直接注入三个服务
         var contextProviders = new IAgentContextProvider[]
@@ -71,14 +70,14 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
         _runner = new AgentRunner(
             agentStore:            agentStore,
             contextProviders:      contextProviders,
-            providerStore:         new ProviderConfigStore(dbFactory),
+            providerStore:         new ProviderConfigStore(configDir),
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
             skillToolFactory:      skillToolFactory,
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
             agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
-            toolCollector:         new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
+            toolCollector:         new ToolCollector([], new McpServerConfigStore(configDir), NullLoggerFactory.Instance),
             devMetrics:            Substitute.For<IDevMetricsService>(),
             contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
             chatContentRestorers:  Array.Empty<MicroClaw.Agent.Restorers.IChatContentRestorer>());
@@ -99,7 +98,6 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // ── 无 sessionId 场景 ──────────────────────────────────────────────────────

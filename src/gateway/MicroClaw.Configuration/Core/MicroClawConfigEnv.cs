@@ -29,7 +29,10 @@ public sealed class MicroClawConfigEnv
 
     /// <summary>滚动日志文件路径（含日期占位符）。</summary>
     public string LogFilePath { get; }
-    
+
+    /// <summary>YAML 配置文件目录（存放 agents.yaml、providers.yaml、sessions.yaml 等）。</summary>
+    public string ConfigDir { get; }
+
     internal MicroClawConfigEnv()
     {
         string? home = Get(MICROCLAW_HOME);
@@ -44,6 +47,7 @@ public sealed class MicroClawConfigEnv
         AgentsDir = Path.Combine(WorkspaceRoot, "agents");
         PluginsDir = Path.Combine(WorkspaceRoot, "plugins");
         LogFilePath = ResolveLogFilePath(home, configFile);
+        ConfigDir = Path.Combine(Home, "config");
     }
 
     /// <summary>

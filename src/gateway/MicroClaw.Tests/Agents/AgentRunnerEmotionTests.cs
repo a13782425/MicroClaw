@@ -33,7 +33,6 @@ public sealed class AgentRunnerEmotionTests : IDisposable
     private const string AgentId = "emotion-test-agent";
     private const string SessionId = "emotion-test-session";
 
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly AgentDnaService _agentDna;
     private readonly AgentConfig _testAgent;
@@ -59,7 +58,6 @@ public sealed class AgentRunnerEmotionTests : IDisposable
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // ── 辅助方法 ─────────────────────────────────────────────────────────────
@@ -70,8 +68,8 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         IEmotionRuleEngine? emotionRuleEngine = null,
         IEmotionBehaviorMapper? emotionBehaviorMapper = null)
     {
-        IDbContextFactory<GatewayDbContext> dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
+        string configDir = _tempDir.Path;
+        var agentStore = new AgentStore(configDir);
         var skillService = new SkillService(_tempDir.Path);
         var skillStore = new SkillStore(skillService);
         var skillToolFactory = new SkillToolFactory(skillStore, skillService);
@@ -84,14 +82,14 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         return new AgentRunner(
             agentStore:            agentStore,
             contextProviders:      providers ?? [new AgentDnaContextProvider(_agentDna)],
-            providerStore:         new ProviderConfigStore(dbFactory),
+            providerStore:         new ProviderConfigStore(configDir),
             clientFactory:         CreateNoOpClientFactory(),
             sessionReader:         Substitute.For<ISessionReader>(),
             skillToolFactory:      skillToolFactory,
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
             agentStatusNotifier:   Substitute.For<IAgentStatusNotifier>(),
-            toolCollector:         new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
+            toolCollector:         new ToolCollector([], new McpServerConfigStore(configDir), NullLoggerFactory.Instance),
             devMetrics:            Substitute.For<IDevMetricsService>(),
             contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
             chatContentRestorers:  [],

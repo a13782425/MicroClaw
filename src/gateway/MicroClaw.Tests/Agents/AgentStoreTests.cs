@@ -6,15 +6,15 @@ namespace MicroClaw.Tests.Agents;
 
 public sealed class AgentStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly AgentStore _store;
 
     public AgentStoreTests()
     {
-        _store = new AgentStore(_db.CreateFactory());
+        _store = new AgentStore(_tempDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     private static AgentConfig CreateSampleConfig(
         string name = "Test Agent",

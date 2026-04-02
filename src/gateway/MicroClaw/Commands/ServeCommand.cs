@@ -1,5 +1,7 @@
 ﻿using System.CommandLine;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
@@ -156,6 +158,12 @@ public class ServeCommand : Command
 	/// <summary>注册核心基础设施服务：SQLite DbContext、SessionStore、ProviderConfigStore、各 ModelProvider、SignalR 和 Swagger。</summary>
 	private static void ConfigureServices(WebApplicationBuilder builder)
 	{
+		builder.Services.ConfigureHttpJsonOptions(options =>
+		{
+			options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+			options.SerializerOptions.PropertyNameCaseInsensitive = true;
+		});
+
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
 		builder.Services.AddSignalR();
@@ -167,21 +175,19 @@ public class ServeCommand : Command
 			client.DefaultRequestHeaders.UserAgent.ParseAdd("MicroClaw/1.0");
 		});
 
-		// SQLite 数据库路径（会话元数据 + Provider 配置）
+		// SQLite 数据库路径（仅用于 cron_jobs、usages、channel_retry_queue）
 		string dbPath = MicroClawConfig.Env.DbPath;
 		string sessionsDir = MicroClawConfig.Env.SessionsDir;
+		string configDir = MicroClawConfig.Env.ConfigDir;
 		builder.Services.AddDbContextFactory<GatewayDbContext>(opts =>
 		{
 			opts.UseSqlite($"Data Source={dbPath}");
 			opts.LogTo(_ => {}, LogLevel.None);  // 禁用所有 EF 日志
-			// 或只禁用 SQL 日志:
-			// opts.ConfigureWarnings(w => w.Ignore(CoreEventId.SensitiveDataLoggingEnabledWarning));
 		});
 
 		builder.Services.AddSingleton<ConfigService>();
-		builder.Services.AddSingleton<ProviderConfigStore>();
-		builder.Services.AddSingleton<SessionStore>(sp =>
-			new SessionStore(sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>(), sessionsDir));
+		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore(configDir));
+		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(configDir, sessionsDir));
 		builder.Services.AddSingleton<ISessionReader>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
@@ -192,7 +198,7 @@ public class ServeCommand : Command
 		// Agent 服务
 		string workspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
 		string agentsDir = MicroClawConfig.Env.AgentsDir;
-		builder.Services.AddSingleton<AgentStore>();
+		builder.Services.AddSingleton<AgentStore>(_ => new AgentStore(configDir));
 		builder.Services.AddSingleton<IPluginAgentRegistrar>(sp => sp.GetRequiredService<AgentStore>());
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
@@ -281,7 +287,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
 
 		// Workflow 服务
-		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();
+		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>(_ => new MicroClaw.Agent.Workflows.WorkflowStore(MicroClawConfig.Env.ConfigDir));
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowEngine>();
 
 		// 开发调试指标服务（始终注册；调试端点仅在 Development 环境映射）
@@ -321,7 +327,7 @@ public class ServeCommand : Command
 			sp.GetService<ISubAgentRunner>(),
 			sp.GetService<MicroClaw.Skills.IAgentLookup>()));
 		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.AgentStoreAgentLookup>();
-		builder.Services.AddSingleton<McpServerConfigStore>();
+		builder.Services.AddSingleton<McpServerConfigStore>(_ => new McpServerConfigStore(MicroClawConfig.Env.ConfigDir));
 
 		// D-6: MCP 动态工具注册——运行时注册表，启动时从 DB 同步，API 变更后即时生效，无需重启
 		builder.Services.AddSingleton<McpServerRegistry>();
@@ -384,7 +390,7 @@ public class ServeCommand : Command
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
-		builder.Services.AddSingleton<ChannelConfigStore>();
+		builder.Services.AddSingleton<ChannelConfigStore>(_ => new ChannelConfigStore(MicroClawConfig.Env.ConfigDir));
 
 		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
 		builder.Services.AddSingleton<FeishuTokenCache>();

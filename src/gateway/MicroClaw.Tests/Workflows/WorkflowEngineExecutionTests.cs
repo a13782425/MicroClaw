@@ -29,7 +29,6 @@ namespace MicroClaw.Tests.Workflows;
 [Collection("Config")]
 public sealed class WorkflowEngineExecutionTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly WorkflowEngine _engine;
     private readonly AgentStore _agentStore;
@@ -38,10 +37,10 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
     public WorkflowEngineExecutionTests()
     {
         TestConfigFixture.EnsureInitialized();
-        IDbContextFactory<GatewayDbContext> dbFactory = _db.CreateFactory();
+        string configDir = _tempDir.Path;
 
-        _agentStore = new AgentStore(dbFactory);
-        _providerStore = new ProviderConfigStore(dbFactory);
+        _agentStore = new AgentStore(configDir);
+        _providerStore = new ProviderConfigStore(configDir);
 
         // 确保存在默认 Agent（main）
         _agentStore.EnsureMainAgent();
@@ -71,7 +70,7 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
             usageTracker: Substitute.For<IUsageTracker>(),
             loggerFactory: NullLoggerFactory.Instance,
             agentStatusNotifier: Substitute.For<IAgentStatusNotifier>(),
-            toolCollector: new ToolCollector([], new McpServerConfigStore(dbFactory), NullLoggerFactory.Instance),
+            toolCollector: new ToolCollector([], new McpServerConfigStore(configDir), NullLoggerFactory.Instance),
             devMetrics: Substitute.For<IDevMetricsService>(),
             contentPipeline: new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
             chatContentRestorers: Array.Empty<MicroClaw.Agent.Restorers.IChatContentRestorer>());
@@ -86,7 +85,6 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // ── Function 节点测试 ─────────────────────────────────────────────────────

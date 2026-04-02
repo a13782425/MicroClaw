@@ -1,44 +1,26 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Tools;
 
 /// <summary>
-/// 全局 MCP Server 配置的 CRUD 存储，基于 EF Core。
+/// 鍏ㄥ眬 MCP Server 閰嶇疆鐨?CRUD 瀛樺偍锛屽熀浜?YAML 鏂囦欢锛堝唴瀛樼紦瀛?+ 鍐欐椂钀界洏锛夈€?
 /// </summary>
-public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> factory)
+public sealed class McpServerConfigStore(string configDir)
+    : YamlFileStore<McpServerConfigEntity>(Path.Combine(configDir, "mcp-servers.yaml"), e => e.Id)
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = false };
 
     public IReadOnlyList<McpServerConfig> All
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.McpServers.Select(ToConfig).ToList()
-                .OrderBy(s => s.CreatedAtUtc).ToList().AsReadOnly();
-        }
-    }
+        => GetAll().OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
 
-    /// <summary>返回所有 IsEnabled=true 的 MCP Server，用于空 EnabledMcpServerIds 时的默认全量加载。</summary>
+    /// <summary>杩斿洖鎵€鏈?IsEnabled=true 鐨?MCP Server锛岀敤浜庣┖ EnabledMcpServerIds 鏃剁殑榛樿鍏ㄩ噺鍔犺浇銆?/summary>
     public IReadOnlyList<McpServerConfig> AllEnabled
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.McpServers.Where(e => e.IsEnabled).Select(ToConfig).ToList()
-                .OrderBy(s => s.CreatedAtUtc).ToList().AsReadOnly();
-        }
-    }
+        => GetAll().Where(e => e.IsEnabled).OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
 
     public McpServerConfig? GetById(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        McpServerConfigEntity? entity = db.McpServers.Find(id);
-        return entity is null ? null : ToConfig(entity);
-    }
+        => GetYamlById(id) is { } e ? ToConfig(e) : null;
 
     public McpServerConfig Add(McpServerConfig config)
     {
@@ -48,104 +30,77 @@ public sealed class McpServerConfigStore(IDbContextFactory<GatewayDbContext> fac
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         McpServerConfigEntity entity = ToEntity(toAdd);
-        using GatewayDbContext db = factory.CreateDbContext();
-        db.McpServers.Add(entity);
-        db.SaveChanges();
+        SetYaml(entity);
         return ToConfig(entity);
     }
 
     public McpServerConfig? Update(string id, McpServerConfig incoming)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        McpServerConfigEntity? entity = db.McpServers.Find(id);
-        if (entity is null) return null;
-
-        entity.Name          = incoming.Name;
-        entity.TransportType = SerializeTransport(incoming.TransportType);
-        entity.Command       = incoming.Command;
-        entity.ArgsJson      = incoming.Args is not null
-            ? JsonSerializer.Serialize(incoming.Args, JsonOpts) : null;
-        entity.EnvJson       = incoming.Env is not null
-            ? JsonSerializer.Serialize(incoming.Env, JsonOpts) : null;
-        entity.Url           = incoming.Url;
-        entity.HeadersJson   = incoming.Headers is not null
-            ? JsonSerializer.Serialize(incoming.Headers, JsonOpts) : null;
-        entity.IsEnabled     = incoming.IsEnabled;
-
-        db.SaveChanges();
-        return ToConfig(entity);
+        var updated = MutateYaml(id, e =>
+        {
+            e.Name          = incoming.Name;
+            e.TransportType = SerializeTransport(incoming.TransportType);
+            e.Command       = incoming.Command;
+            e.ArgsJson      = incoming.Args is not null ? JsonSerializer.Serialize(incoming.Args, JsonOpts) : null;
+            e.EnvJson       = incoming.Env is not null  ? JsonSerializer.Serialize(incoming.Env, JsonOpts)  : null;
+            e.Url           = incoming.Url;
+            e.HeadersJson   = incoming.Headers is not null ? JsonSerializer.Serialize(incoming.Headers, JsonOpts) : null;
+            e.IsEnabled     = incoming.IsEnabled;
+        });
+        return updated is null ? null : ToConfig(updated);
     }
 
-    public bool Delete(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        McpServerConfigEntity? entity = db.McpServers.Find(id);
-        if (entity is null) return false;
-        db.McpServers.Remove(entity);
-        db.SaveChanges();
-        return true;
-    }
+    public bool Delete(string id) => RemoveYaml(id);
 
-    /// <summary>按 ID 列表返回启用的 MCP Server 配置（用于 Agent 引用过滤）。</summary>
+    /// <summary>鎸?ID 鍒楄〃杩斿洖鍚敤鐨?MCP Server 閰嶇疆锛堢敤浜?Agent 寮曠敤杩囨护锛夈€?/summary>
     public IReadOnlyList<McpServerConfig> GetEnabledByIds(IEnumerable<string> ids)
     {
         HashSet<string> idSet = ids.ToHashSet();
-        using GatewayDbContext db = factory.CreateDbContext();
-        return db.McpServers
+        return GetAll()
             .Where(e => e.IsEnabled && idSet.Contains(e.Id))
             .Select(ToConfig)
             .ToList()
             .AsReadOnly();
     }
 
-    /// <summary>
-    /// 插入或更新一个 MCP Server 配置（主要用于插件注册）。
-    /// 若 ID 已存在则更新；否则则插入。
-    /// </summary>
+    /// <summary>鎻掑叆鎴栨洿鏂颁竴涓?MCP Server 閰嶇疆锛堜富瑕佺敤浜庢彃浠舵敞鍐岋級銆?/summary>
     public McpServerConfig Upsert(McpServerConfig config)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        McpServerConfigEntity? existing = db.McpServers.Find(config.Id);
-        if (existing is null)
+        McpServerConfigEntity? result = null;
+        ExecuteWrite(items =>
         {
-            McpServerConfig toAdd = config.CreatedAtUtc == default
-                ? config with { CreatedAtUtc = DateTimeOffset.UtcNow }
-                : config;
-            McpServerConfigEntity entity = ToEntity(toAdd);
-            db.McpServers.Add(entity);
-            db.SaveChanges();
-            return ToConfig(entity);
-        }
-        else
-        {
-            // 插件注册时更新所有字段（Env/Headers 也更新以反映碌盖写）
-            existing.Name          = config.Name;
-            existing.TransportType = SerializeTransport(config.TransportType);
-            existing.Command       = config.Command;
-            existing.ArgsJson      = config.Args is not null ? JsonSerializer.Serialize(config.Args, JsonOpts) : null;
-            existing.EnvJson       = config.Env is not null  ? JsonSerializer.Serialize(config.Env, JsonOpts)  : null;
-            existing.Url           = config.Url;
-            existing.HeadersJson   = config.Headers is not null ? JsonSerializer.Serialize(config.Headers, JsonOpts) : null;
-            existing.IsEnabled     = config.IsEnabled;
-            existing.Source        = (int)config.Source;
-            existing.PluginId      = config.PluginId;
-            existing.PluginName    = config.PluginName;
-            db.SaveChanges();
-            return ToConfig(existing);
-        }
+            if (items.TryGetValue(config.Id, out McpServerConfigEntity? existing))
+            {
+                existing.Name          = config.Name;
+                existing.TransportType = SerializeTransport(config.TransportType);
+                existing.Command       = config.Command;
+                existing.ArgsJson      = config.Args is not null ? JsonSerializer.Serialize(config.Args, JsonOpts) : null;
+                existing.EnvJson       = config.Env is not null  ? JsonSerializer.Serialize(config.Env, JsonOpts)  : null;
+                existing.Url           = config.Url;
+                existing.HeadersJson   = config.Headers is not null ? JsonSerializer.Serialize(config.Headers, JsonOpts) : null;
+                existing.IsEnabled     = config.IsEnabled;
+                existing.Source        = (int)config.Source;
+                existing.PluginId      = config.PluginId;
+                existing.PluginName    = config.PluginName;
+                result = existing;
+            }
+            else
+            {
+                McpServerConfig toAdd = config.CreatedAtUtc == default
+                    ? config with { CreatedAtUtc = DateTimeOffset.UtcNow }
+                    : config;
+                McpServerConfigEntity entity = ToEntity(toAdd);
+                items[entity.Id] = entity;
+                result = entity;
+            }
+            return true;
+        });
+        return ToConfig(result!);
     }
 
-    /// <summary>按插件 ID 删除该插件注册的所有 MCP Server。</summary>
-    public int DeleteByPluginId(string pluginId)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        List<McpServerConfigEntity> entities = db.McpServers
-            .Where(e => e.PluginId == pluginId)
-            .ToList();
-        db.McpServers.RemoveRange(entities);
-        db.SaveChanges();
-        return entities.Count;
-    }
+    /// <summary>鎸夋彃浠?ID 鍒犻櫎璇ユ彃浠舵敞鍐岀殑鎵€鏈?MCP Server銆?/summary>
+    public int DeleteByPluginId(string pluginId) =>
+        RemoveAllYaml(e => e.PluginId == pluginId);
 
     private static McpServerConfig ToConfig(McpServerConfigEntity e) => new(
         Id: e.Id,

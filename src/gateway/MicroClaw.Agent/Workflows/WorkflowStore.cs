@@ -1,14 +1,14 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>
-/// 工作流配置的 CRUD 存储，基于 EF Core（与 AgentStore 结构对称）。
+/// 宸ヤ綔娴侀厤缃殑 CRUD 瀛樺偍锛屽熀浜?YAML 鏂囦欢锛堝唴瀛樼紦瀛?+ 鍐欐椂钀界洏锛夈€?
 /// </summary>
-public sealed class WorkflowStore(IDbContextFactory<GatewayDbContext> factory)
+public sealed class WorkflowStore(string configDir)
+    : YamlFileStore<WorkflowConfigEntity>(Path.Combine(configDir, "workflows.yaml"), e => e.Id)
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -16,61 +16,38 @@ public sealed class WorkflowStore(IDbContextFactory<GatewayDbContext> factory)
     };
 
     public IReadOnlyList<WorkflowConfig> All
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.Workflows.Select(e => ToConfig(e)).ToList().AsReadOnly();
-        }
-    }
+        => GetAll().Select(ToConfig).ToList().AsReadOnly();
 
     public WorkflowConfig? GetById(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        WorkflowConfigEntity? entity = db.Workflows.Find(id);
-        return entity is null ? null : ToConfig(entity);
-    }
+        => GetYamlById(id) is { } e ? ToConfig(e) : null;
 
     public WorkflowConfig Add(WorkflowConfig config)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
         WorkflowConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
-        db.Workflows.Add(entity);
-        db.SaveChanges();
+        SetYaml(entity);
         return ToConfig(entity);
     }
 
     public WorkflowConfig? Update(string id, WorkflowConfig config)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        WorkflowConfigEntity? entity = db.Workflows.Find(id);
-        if (entity is null) return null;
-
         long now = TimeBase.ToMs(DateTimeOffset.UtcNow);
-        entity.Name = config.Name;
-        entity.Description = config.Description;
-        entity.IsEnabled = config.IsEnabled;
-        entity.NodesJson = config.Nodes.Count > 0 ? JsonSerializer.Serialize(config.Nodes, JsonOpts) : null;
-        entity.EdgesJson = config.Edges.Count > 0 ? JsonSerializer.Serialize(config.Edges, JsonOpts) : null;
-        entity.EntryNodeId = config.EntryNodeId;
-        entity.DefaultProviderId = config.DefaultProviderId;
-        entity.UpdatedAtMs = now;
-
-        db.SaveChanges();
-        return ToConfig(entity);
+        var updated = MutateYaml(id, e =>
+        {
+            e.Name = config.Name;
+            e.Description = config.Description;
+            e.IsEnabled = config.IsEnabled;
+            e.NodesJson = config.Nodes.Count > 0 ? JsonSerializer.Serialize(config.Nodes, JsonOpts) : null;
+            e.EdgesJson = config.Edges.Count > 0 ? JsonSerializer.Serialize(config.Edges, JsonOpts) : null;
+            e.EntryNodeId = config.EntryNodeId;
+            e.DefaultProviderId = config.DefaultProviderId;
+            e.UpdatedAtMs = now;
+        });
+        return updated is null ? null : ToConfig(updated);
     }
 
-    public bool Delete(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        WorkflowConfigEntity? entity = db.Workflows.Find(id);
-        if (entity is null) return false;
-        db.Workflows.Remove(entity);
-        db.SaveChanges();
-        return true;
-    }
+    public bool Delete(string id) => RemoveYaml(id);
 
-    // ── 私有映射 ────────────────────────────────────────────────────────────
+    // 鈹€鈹€ 绉佹湁鏄犲皠 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private static WorkflowConfig ToConfig(WorkflowConfigEntity e)
     {

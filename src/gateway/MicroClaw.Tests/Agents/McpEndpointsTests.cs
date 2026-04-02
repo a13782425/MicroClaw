@@ -21,7 +21,7 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class McpEndpointsTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly TestServer _server;
     private readonly HttpClient _client;
 
@@ -29,13 +29,13 @@ public sealed class McpEndpointsTests : IDisposable
 
     public McpEndpointsTests()
     {
-        var factory = _db.CreateFactory();
+        string configDir = _tempDir.Path;
 
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
                 services.AddRouting();
-                services.AddSingleton<McpServerConfigStore>(_ => new McpServerConfigStore(factory));
+                services.AddSingleton<McpServerConfigStore>(_ => new McpServerConfigStore(configDir));
                 services.AddLogging(b => b.ClearProviders());
             })
             .Configure(app =>
@@ -52,7 +52,7 @@ public sealed class McpEndpointsTests : IDisposable
     {
         _client.Dispose();
         _server.Dispose();
-        _db.Dispose();
+        _tempDir.Dispose();
     }
 
     // ── GET /mcp-servers ─────────────────────────────────────────────────────

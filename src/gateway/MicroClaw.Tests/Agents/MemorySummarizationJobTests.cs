@@ -20,7 +20,7 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class MemorySummarizationJobTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _configDir = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly MemoryService _memory;
 
@@ -31,7 +31,7 @@ public sealed class MemorySummarizationJobTests : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
+        _configDir.Dispose();
         _tempDir.Dispose();
     }
 
@@ -177,12 +177,12 @@ public sealed class MemorySummarizationJobTests : IDisposable
     [Fact]
     public async Task RunSummarizationAsync_WritesMemoryForSessionWithMessages()
     {
-        // ── 准备 SessionStore 和 ProviderStore（使用真实 SQLite）──────────────
-        IDbContextFactory<MicroClaw.Infrastructure.Data.GatewayDbContext> dbFactory = _db.CreateFactory();
+        // ── 准备 SessionStore 和 ProviderStore ───────────────────────────────
+        string configDir = _configDir.Path;
         string sessionsDir = _tempDir.Path;
 
-        var sessionStore = new SessionStore(dbFactory, sessionsDir);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        var sessionStore = new SessionStore(configDir, sessionsDir);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建测试 Provider
         ProviderConfig testProvider = providerStore.Add(new ProviderConfig
@@ -241,9 +241,9 @@ public sealed class MemorySummarizationJobTests : IDisposable
     [Fact]
     public async Task RunSummarizationAsync_SkipsSessionWithNoMessages()
     {
-        IDbContextFactory<MicroClaw.Infrastructure.Data.GatewayDbContext> dbFactory = _db.CreateFactory();
-        var sessionStore = new SessionStore(dbFactory, _tempDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var sessionStore = new SessionStore(configDir, _tempDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         ProviderConfig testProvider = providerStore.Add(new ProviderConfig
         {

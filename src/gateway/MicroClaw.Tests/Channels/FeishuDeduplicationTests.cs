@@ -29,8 +29,10 @@ public sealed class FeishuDeduplicationTests : IDisposable
 
     public FeishuDeduplicationTests()
     {
-        // ProviderConfigStore 使用空内存 DB → providerConfig 查找失败 → provider 检查处提前返回
-        ProviderConfigStore providerStore = new(_db.CreateFactory());
+        // ProviderConfigStore 使用临时目录 → providerConfig 查找失败 → provider 检查处提前返回
+        string configDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(configDir);
+        ProviderConfigStore providerStore = new(configDir);
         ProviderClientFactory clientFactory = new([]);
         IChannelSessionService sessionService = Substitute.For<IChannelSessionService>();
         ILogger<FeishuMessageProcessor> logger = Substitute.For<ILogger<FeishuMessageProcessor>>();
@@ -64,7 +66,7 @@ public sealed class FeishuDeduplicationTests : IDisposable
         _settings = FeishuChannelSettings.TryParse(_channel.SettingsJson) ?? new();
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() { }
 
     // ─── 基础幂等性 ──────────────────────────────────────────────────────
 

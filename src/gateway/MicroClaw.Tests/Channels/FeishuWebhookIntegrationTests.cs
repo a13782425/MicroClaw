@@ -27,9 +27,9 @@ public sealed class FeishuWebhookIntegrationTests : IDisposable
     private const string TestEncryptKey = "test-encrypt-key-12345";
     private const string TestBody       = """{"event":"test_message"}""";
 
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     // ─── 辅助工厂方法 ─────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ public sealed class FeishuWebhookIntegrationTests : IDisposable
         string? encryptKey = null,
         bool enabled = true)
     {
-        var store = new ChannelConfigStore(_db.CreateFactory());
+        var store = new ChannelConfigStore(_tempDir.Path);
         var settings = new FeishuChannelSettings
         {
             AppId     = "cli_test_app",
@@ -126,7 +126,7 @@ public sealed class FeishuWebhookIntegrationTests : IDisposable
     public async Task Webhook_NonFeishuChannel_Returns404()
     {
         // 注册一个微信渠道，但访问飞书 Webhook 端点
-        var store = new ChannelConfigStore(_db.CreateFactory());
+        var store = new ChannelConfigStore(_tempDir.Path);
         ChannelConfig wechat = store.Add(new ChannelConfig
         {
             DisplayName  = "WeChat",

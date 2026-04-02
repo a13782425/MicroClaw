@@ -6,15 +6,16 @@ using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Sessions;
 
 /// <summary>
-/// 会话元数据存储在 SQLite，消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
+/// 会话元数据存储在 YAML 文件，消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// 旧版 messages.json 在首次读写时自动迁移并重命名为 messages.json.bak。
 /// </summary>
-public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, string sessionsDir) : ISessionReader, ISessionMessageRemover
+public sealed class SessionStore(string configDir, string sessionsDir)
+    : YamlFileStore<SessionEntity>(Path.Combine(configDir, "sessions.yaml"), e => e.Id),
+      ISessionReader, ISessionMessageRemover
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
@@ -39,35 +40,19 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
 
     public IReadOnlyList<SessionInfo> All
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.Sessions
-                .OrderByDescending(e => e.CreatedAtMs)
-                .Select(e => ToInfo(e))
-                .ToList()
-                .AsReadOnly();
-        }
-    }
+        => GetAll().OrderByDescending(e => e.CreatedAtMs).Select(ToInfo).ToList().AsReadOnly();
 
     /// <summary>
     /// 仅返回顶层会话（即非子代理会话，ParentSessionId 为 null）。
     /// 用于会话管理列表，子代理会话不对用户暴露。
     /// </summary>
     public IReadOnlyList<SessionInfo> AllTopLevel
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.Sessions
-                .Where(e => e.ParentSessionId == null)
-                .OrderByDescending(e => e.CreatedAtMs)
-                .Select(e => ToInfo(e))
-                .ToList()
-                .AsReadOnly();
-        }
-    }
+        => GetAll()
+            .Where(e => e.ParentSessionId == null)
+            .OrderByDescending(e => e.CreatedAtMs)
+            .Select(ToInfo)
+            .ToList()
+            .AsReadOnly();
 
     /// <summary>
     /// 沿 ParentSessionId 链向上遍历，返回根会话 ID（顶层无 parent 的会话）。
@@ -79,8 +64,7 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
         // 最多遍历 20 层，防止数据损坏导致死循环
         for (int i = 0; i < 20; i++)
         {
-            using GatewayDbContext db = factory.CreateDbContext();
-            SessionEntity? entity = db.Sessions.Find(current);
+            SessionEntity? entity = GetYamlById(current);
             if (entity?.ParentSessionId is null)
                 return current;
             current = entity.ParentSessionId;
@@ -94,22 +78,15 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
     /// </summary>
     public SessionInfo? FindIdleSubAgentSession(
         string parentSessionId, string agentId, IReadOnlyCollection<string> activeSessionIds)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        return db.Sessions
+        => GetAll()
             .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
             .Where(e => !activeSessionIds.Contains(e.Id))
             .OrderByDescending(e => e.CreatedAtMs)
-            .Select(e => ToInfo(e))
+            .Select(ToInfo)
             .FirstOrDefault();
-    }
 
     public SessionInfo? Get(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SessionEntity? entity = db.Sessions.Find(id);
-        return entity is null ? null : ToInfo(entity);
-    }
+        => GetYamlById(id) is { } e ? ToInfo(e) : null;
 
     public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null, string? channelId = null)
     {
@@ -126,21 +103,14 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
             ParentSessionId = parentSessionId,
         };
 
-        using GatewayDbContext db = factory.CreateDbContext();
-        db.Sessions.Add(entity);
-        db.SaveChanges();
-
+        SetYaml(entity);
         Directory.CreateDirectory(GetSessionDir(entity.Id));
         return ToInfo(entity);
     }
 
     public bool Delete(string id)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SessionEntity? entity = db.Sessions.Find(id);
-        if (entity is null) return false;
-        db.Sessions.Remove(entity);
-        db.SaveChanges();
+        if (!RemoveYaml(id)) return false;
 
         string dir = GetSessionDir(id);
         if (Directory.Exists(dir))
@@ -151,38 +121,33 @@ public sealed class SessionStore(IDbContextFactory<GatewayDbContext> factory, st
 
     public SessionInfo? Approve(string id, string? reason = null)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SessionEntity? entity = db.Sessions.Find(id);
-        if (entity is null) return null;
-        entity.IsApproved = true;
-        entity.ApprovalReason = reason;
-        db.SaveChanges();
-        return ToInfo(entity);
+        var updated = MutateYaml(id, e =>
+        {
+            e.IsApproved = true;
+            e.ApprovalReason = reason;
+        });
+        return updated is null ? null : ToInfo(updated);
     }
 
     public SessionInfo? Disable(string id, string? reason = null)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SessionEntity? entity = db.Sessions.Find(id);
-        if (entity is null) return null;
-        entity.IsApproved = false;
-        entity.ApprovalReason = reason;
-        db.SaveChanges();
-        return ToInfo(entity);
+        var updated = MutateYaml(id, e =>
+        {
+            e.IsApproved = false;
+            e.ApprovalReason = reason;
+        });
+        return updated is null ? null : ToInfo(updated);
     }
 
     /// <summary>更新会话绑定的 Provider（用于中途切换模型）。</summary>
     public SessionInfo? UpdateProvider(string id, string providerId)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        SessionEntity? entity = db.Sessions.Find(id);
-        if (entity is null) return null;
-        entity.ProviderId = providerId;
-        db.SaveChanges();
-        return ToInfo(entity);
+        var updated = MutateYaml(id, e => e.ProviderId = providerId);
+        return updated is null ? null : ToInfo(updated);
     }
 
-    public void AddMessage(string sessionId, SessionMessage message)    {
+    public void AddMessage(string sessionId, SessionMessage message)
+    {
         string dir = GetSessionDir(sessionId);
         Directory.CreateDirectory(dir);
 

@@ -6,15 +6,15 @@ namespace MicroClaw.Tests.Providers;
 
 public sealed class ProviderConfigStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _configDir = new();
     private readonly ProviderConfigStore _store;
 
     public ProviderConfigStoreTests()
     {
-        _store = new ProviderConfigStore(_db.CreateFactory());
+        _store = new ProviderConfigStore(_configDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _configDir.Dispose();
 
     private static ProviderConfig CreateSampleConfig(
         string displayName = "Test GPT",

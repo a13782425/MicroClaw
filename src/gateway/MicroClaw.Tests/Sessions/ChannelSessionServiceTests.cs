@@ -12,7 +12,6 @@ namespace MicroClaw.Tests.Sessions;
 
 public sealed class ChannelSessionServiceTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly SessionStore _sessionStore;
     private readonly IHubContext<GatewayHub> _hubContext;
@@ -20,7 +19,7 @@ public sealed class ChannelSessionServiceTests : IDisposable
 
     public ChannelSessionServiceTests()
     {
-        _sessionStore = new SessionStore(_db.CreateFactory(), _tempDir.Path);
+        _sessionStore = new SessionStore(_tempDir.Path, _tempDir.Path);
 
         _hubContext = Substitute.For<IHubContext<GatewayHub>>();
         var clients = Substitute.For<IHubClients>();
@@ -28,14 +27,13 @@ public sealed class ChannelSessionServiceTests : IDisposable
         _hubContext.Clients.Returns(clients);
         clients.All.Returns(clientProxy);
 
-        var agentStore = new AgentStore(_db.CreateFactory());
+        var agentStore = new AgentStore(_tempDir.Path);
         _service = new ChannelSessionService(_sessionStore, agentStore, _hubContext);
     }
 
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // --- Deterministic Session ID ---

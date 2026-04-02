@@ -22,7 +22,7 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class DreamingJobTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _configDir = new();
     private readonly TempDirectoryFixture _sessionsDir = new();
     private readonly TempDirectoryFixture _agentsDir = new();
     private readonly MemoryService _memory;
@@ -36,7 +36,7 @@ public sealed class DreamingJobTests : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
+        _configDir.Dispose();
         _sessionsDir.Dispose();
         _agentsDir.Dispose();
     }
@@ -237,10 +237,10 @@ public sealed class DreamingJobTests : IDisposable
     [Fact]
     public async Task RunDreamingAsync_DisabledAgent_IsSkipped()
     {
-        var dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
-        var sessionStore = new SessionStore(dbFactory, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var agentStore = new AgentStore(configDir);
+        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建已禁用的 Agent
         agentStore.Add(new AgentConfig(
@@ -275,10 +275,10 @@ public sealed class DreamingJobTests : IDisposable
     [Fact]
     public async Task RunDreamingAsync_EnabledAgentWithNoSessions_IsSkipped()
     {
-        var dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
-        var sessionStore = new SessionStore(dbFactory, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var agentStore = new AgentStore(configDir);
+        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建已启用的 Agent，但不创建任何关联 Session
         agentStore.Add(new AgentConfig(
@@ -312,10 +312,10 @@ public sealed class DreamingJobTests : IDisposable
     [Fact]
     public async Task RunDreamingAsync_AgentSessionsWithNoDailyMemories_IsSkipped()
     {
-        var dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
-        var sessionStore = new SessionStore(dbFactory, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var agentStore = new AgentStore(configDir);
+        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建 Agent
         string agentId = Guid.NewGuid().ToString("N");
@@ -361,10 +361,10 @@ public sealed class DreamingJobTests : IDisposable
     [Fact]
     public async Task RunDreamingAsync_AgentSessionsWithDailyMemories_UpdatesAgentDnaMemory()
     {
-        var dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
-        var sessionStore = new SessionStore(dbFactory, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var agentStore = new AgentStore(configDir);
+        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建 Agent（必须使用 Add 返回的 Config 以获取真实生成的 Id）
         AgentConfig createdAgent = agentStore.Add(new AgentConfig(
@@ -435,10 +435,10 @@ public sealed class DreamingJobTests : IDisposable
     [Fact]
     public async Task RunDreamingAsync_NoEnabledProviderAvailable_IsSkipped()
     {
-        var dbFactory = _db.CreateFactory();
-        var agentStore = new AgentStore(dbFactory);
-        var sessionStore = new SessionStore(dbFactory, _sessionsDir.Path);
-        var providerStore = new ProviderConfigStore(dbFactory);
+        string configDir = _configDir.Path;
+        var agentStore = new AgentStore(configDir);
+        var sessionStore = new SessionStore(configDir, _sessionsDir.Path);
+        var providerStore = new ProviderConfigStore(configDir);
 
         // 创建 Agent
         string agentId = Guid.NewGuid().ToString("N");
@@ -485,3 +485,4 @@ public sealed class DreamingJobTests : IDisposable
             Arg.Any<CancellationToken>());
     }
 }
+

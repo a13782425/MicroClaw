@@ -8,15 +8,15 @@ namespace MicroClaw.Tests.Channels;
 
 public sealed class ChannelConfigStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly ChannelConfigStore _store;
 
     public ChannelConfigStoreTests()
     {
-        _store = new ChannelConfigStore(_db.CreateFactory());
+        _store = new ChannelConfigStore(_tempDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     private static ChannelConfig CreateFeishuConfig(
         string displayName = "Test Feishu",

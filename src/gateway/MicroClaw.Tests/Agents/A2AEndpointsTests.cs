@@ -21,7 +21,7 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class A2AEndpointsTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly TestServer _server;
     private readonly HttpClient _client;
     private readonly AgentStore _agentStore;
@@ -30,15 +30,15 @@ public sealed class A2AEndpointsTests : IDisposable
 
     public A2AEndpointsTests()
     {
-        var factory = _db.CreateFactory();
-        _agentStore = new AgentStore(factory);
+        string configDir = _tempDir.Path;
+        _agentStore = new AgentStore(configDir);
 
         var builder = new WebHostBuilder()
             .ConfigureServices(services =>
             {
                 services.AddRouting();
                 services.AddLogging(b => b.ClearProviders());
-                services.AddSingleton<AgentStore>(_ => new AgentStore(factory));
+                services.AddSingleton<AgentStore>(_ => new AgentStore(configDir));
             })
             .Configure(app =>
             {
@@ -55,7 +55,7 @@ public sealed class A2AEndpointsTests : IDisposable
     {
         _client.Dispose();
         _server.Dispose();
-        _db.Dispose();
+        _tempDir.Dispose();
     }
 
     // 鈹€鈹€ Agent Card GET 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

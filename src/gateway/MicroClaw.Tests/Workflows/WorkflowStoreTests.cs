@@ -6,15 +6,15 @@ namespace MicroClaw.Tests.Workflows;
 
 public sealed class WorkflowStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly WorkflowStore _store;
 
     public WorkflowStoreTests()
     {
-        _store = new WorkflowStore(_db.CreateFactory());
+        _store = new WorkflowStore(_tempDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     private static WorkflowConfig CreateSampleWorkflow(
         string name = "Test Workflow",

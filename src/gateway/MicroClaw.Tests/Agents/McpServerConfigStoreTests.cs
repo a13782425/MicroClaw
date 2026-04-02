@@ -6,15 +6,15 @@ namespace MicroClaw.Tests.Agents;
 
 public sealed class McpServerConfigStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly McpServerConfigStore _store;
 
     public McpServerConfigStoreTests()
     {
-        _store = new McpServerConfigStore(_db.CreateFactory());
+        _store = new McpServerConfigStore(_tempDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     private static McpServerConfig Stdio(string name = "fs", bool isEnabled = true) =>
         new(

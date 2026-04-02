@@ -8,19 +8,17 @@ namespace MicroClaw.Tests.Sessions;
 
 public sealed class SessionStoreTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly SessionStore _store;
 
     public SessionStoreTests()
     {
-        _store = new SessionStore(_db.CreateFactory(), _tempDir.Path);
+        _store = new SessionStore(_tempDir.Path, _tempDir.Path);
     }
 
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // --- Create / Get / All ---

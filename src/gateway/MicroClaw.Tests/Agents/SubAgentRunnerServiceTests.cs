@@ -15,7 +15,6 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class SubAgentRunnerServiceTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly SessionStore _sessionStore;
     private readonly AgentStore _agentStore;
@@ -27,15 +26,14 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
 
     public SubAgentRunnerServiceTests()
     {
-        _sessionStore = new SessionStore(_db.CreateFactory(), _tempDir.Path);
-        _agentStore = new AgentStore(_db.CreateFactory());
+        _sessionStore = new SessionStore(_tempDir.Path, _tempDir.Path);
+        _agentStore = new AgentStore(_tempDir.Path);
         _service = new SubAgentRunnerService(_sessionStore, _agentStore, UnreachableRunner);
     }
 
     public void Dispose()
     {
         _tempDir.Dispose();
-        _db.Dispose();
     }
 
     // ── 辅助方法 ─────────────────────────────────────────────────────────────

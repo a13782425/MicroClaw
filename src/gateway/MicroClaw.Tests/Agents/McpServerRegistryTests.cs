@@ -21,15 +21,15 @@ namespace MicroClaw.Tests.Agents;
 /// </summary>
 public sealed class McpServerRegistryTests : IDisposable
 {
-    private readonly DatabaseFixture _db = new();
+    private readonly TempDirectoryFixture _tempDir = new();
     private readonly McpServerConfigStore _store;
 
     public McpServerRegistryTests()
     {
-        _store = new McpServerConfigStore(_db.CreateFactory());
+        _store = new McpServerConfigStore(_tempDir.Path);
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _tempDir.Dispose();
 
     // ── 辅助工厂 ─────────────────────────────────────────────────────────────
 

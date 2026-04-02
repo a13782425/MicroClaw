@@ -1,108 +1,79 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 using MicroClaw.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Providers;
 
-public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> factory)
+public sealed class ProviderConfigStore(string configDir)
+    : YamlFileStore<ProviderConfigEntity>(Path.Combine(configDir, "providers.yaml"), e => e.Id)
 {
     public IReadOnlyList<ProviderConfig> All
-    {
-        get
-        {
-            using GatewayDbContext db = factory.CreateDbContext();
-            return db.Providers
-                .Select(e => ToConfig(e))
-                .ToList()
-                .AsReadOnly();
-        }
-    }
+        => GetAll().Select(ToConfig).ToList().AsReadOnly();
 
     /// <summary>
-    /// 返回当前设置为默认且已启用的 Chat 类型 Provider；若无默认则返回第一个已启用的 Chat Provider。
+    /// 杩斿洖褰撳墠璁剧疆涓洪粯璁や笖宸插惎鐢ㄧ殑 Chat 绫诲瀷 Provider锛涜嫢鏃犻粯璁ゅ垯杩斿洖绗竴涓凡鍚敤鐨?Chat Provider銆?
     /// </summary>
     public ProviderConfig? GetDefault()
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        return db.Providers
+        => GetAll()
             .Where(p => p.IsEnabled && p.ModelType != "embedding")
             .OrderByDescending(p => p.IsDefault)
-            .Select(e => ToConfig(e))
+            .Select(ToConfig)
             .FirstOrDefault();
-    }
 
-    /// <summary>返回所有已启用的 Embedding 类型 Provider，供 RAG 等服务调用。</summary>
+    /// <summary>杩斿洖鎵€鏈夊凡鍚敤鐨?Embedding 绫诲瀷 Provider锛屼緵 RAG 绛夋湇鍔¤皟鐢ㄣ€?/summary>
     public IReadOnlyList<ProviderConfig> GetEmbeddingProviders()
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        return db.Providers
+        => GetAll()
             .Where(p => p.IsEnabled && p.ModelType == "embedding")
-            .Select(e => ToConfig(e))
+            .Select(ToConfig)
             .ToList()
             .AsReadOnly();
-    }
 
     public ProviderConfig? GetById(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        ProviderConfigEntity? entity = db.Providers.Find(id);
-        return entity is null ? null : ToConfig(entity);
-    }
+        => GetYamlById(id) is { } e ? ToConfig(e) : null;
 
     public ProviderConfig Add(ProviderConfig config)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        bool hasAny = db.Providers.Any();
         ProviderConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
-        // 第一个添加的模型自动设为默认
-        if (!hasAny)
-            entity.IsDefault = true;
-        db.Providers.Add(entity);
-        db.SaveChanges();
+        ExecuteWrite(items =>
+        {
+            // First added provider auto-set as default
+            if (!items.Any()) entity.IsDefault = true;
+            items[entity.Id] = entity;
+            return true;
+        });
         return ToConfig(entity);
     }
 
     public ProviderConfig? Update(string id, ProviderConfig incoming)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        ProviderConfigEntity? entity = db.Providers.Find(id);
-        if (entity is null) return null;
+        var updated = MutateYaml(id, e =>
+        {
+            e.DisplayName = incoming.DisplayName;
+            e.Protocol = SerializeProtocol(incoming.Protocol);
+            e.ModelType = SerializeModelType(incoming.ModelType);
+            e.BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl;
+            e.ModelName = incoming.ModelName;
+            e.MaxOutputTokens = incoming.MaxOutputTokens;
+            e.IsEnabled = incoming.IsEnabled;
+            e.CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities);
 
-        entity.DisplayName = incoming.DisplayName;
-        entity.Protocol = SerializeProtocol(incoming.Protocol);
-        entity.ModelType = SerializeModelType(incoming.ModelType);
-        entity.BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl;
-        entity.ModelName = incoming.ModelName;
-        entity.MaxOutputTokens = incoming.MaxOutputTokens;
-        entity.IsEnabled = incoming.IsEnabled;
-        entity.CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities);
-
-        if (!string.IsNullOrWhiteSpace(incoming.ApiKey) && incoming.ApiKey != "***")
-            entity.ApiKey = incoming.ApiKey;
-
-        db.SaveChanges();
-        return ToConfig(entity);
+            if (!string.IsNullOrWhiteSpace(incoming.ApiKey) && incoming.ApiKey != "***")
+                e.ApiKey = incoming.ApiKey;
+        });
+        return updated is null ? null : ToConfig(updated);
     }
 
-    public bool Delete(string id)
-    {
-        using GatewayDbContext db = factory.CreateDbContext();
-        ProviderConfigEntity? entity = db.Providers.Find(id);
-        if (entity is null) return false;
-        db.Providers.Remove(entity);
-        db.SaveChanges();
-        return true;
-    }
+    public bool Delete(string id) => RemoveYaml(id);
 
     public bool SetDefault(string id)
     {
-        using GatewayDbContext db = factory.CreateDbContext();
-        ProviderConfigEntity? target = db.Providers.Find(id);
-        if (target is null) return false;
-        foreach (ProviderConfigEntity e in db.Providers)
-            e.IsDefault = e.Id == id;
-        db.SaveChanges();
+        if (!ContainsYaml(id)) return false;
+        ExecuteWrite(items =>
+        {
+            foreach (var e in items.Values)
+                e.IsDefault = e.Id == id;
+            return true;
+        });
         return true;
     }
 
@@ -142,7 +113,6 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
         value?.ToLowerInvariant() switch
         {
             "openai" => ProviderProtocol.OpenAI,
-            // 历史数据兼容：openai-responses 静默降级为 OpenAI，SupportsResponsesApi 已移入 Capabilities
             "openai-responses" => ProviderProtocol.OpenAI,
             "anthropic" => ProviderProtocol.Anthropic,
             _ => ProviderProtocol.OpenAI
@@ -184,4 +154,3 @@ public sealed class ProviderConfigStore(IDbContextFactory<GatewayDbContext> fact
             Environment.GetEnvironmentVariable(m.Groups[1].Value) ?? m.Value);
     }
 }
-
