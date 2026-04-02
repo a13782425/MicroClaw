@@ -1,3 +1,5 @@
+using MicroClaw.Infrastructure;
+using MicroClaw.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Emotion;
@@ -8,9 +10,9 @@ namespace MicroClaw.Emotion;
 /// </summary>
 public sealed class EmotionStore : IEmotionStore
 {
-    private readonly EmotionDbContextFactory _factory;
+    private readonly IDbContextFactory<GatewayDbContext> _factory;
 
-    public EmotionStore(EmotionDbContextFactory factory)
+    public EmotionStore(IDbContextFactory<GatewayDbContext> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
         _factory = factory;
@@ -22,7 +24,7 @@ public sealed class EmotionStore : IEmotionStore
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
         ArgumentNullException.ThrowIfNull(state);
 
-        using var ctx = _factory.Create();
+        await using var ctx = await _factory.CreateDbContextAsync(ct);
 
         var entity = new EmotionSnapshotEntity
         {
@@ -43,14 +45,16 @@ public sealed class EmotionStore : IEmotionStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        using var ctx = _factory.Create();
+        await using var ctx = await _factory.CreateDbContextAsync(ct);
 
         var entity = await ctx.EmotionSnapshots
             .Where(e => e.AgentId == agentId)
             .OrderByDescending(e => e.RecordedAtMs)
             .FirstOrDefaultAsync(ct);
 
-        return entity?.ToEmotionState() ?? EmotionState.Default;
+        return entity is null
+            ? EmotionState.Default
+            : new EmotionState(entity.Alertness, entity.Mood, entity.Curiosity, entity.Confidence);
     }
 
     /// <inheritdoc/>
@@ -62,7 +66,7 @@ public sealed class EmotionStore : IEmotionStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        using var ctx = _factory.Create();
+        await using var ctx = await _factory.CreateDbContextAsync(ct);
 
         var entities = await ctx.EmotionSnapshots
             .Where(e => e.AgentId == agentId && e.RecordedAtMs >= from && e.RecordedAtMs <= to)
@@ -70,7 +74,9 @@ public sealed class EmotionStore : IEmotionStore
             .ToListAsync(ct);
 
         return entities
-            .Select(e => new EmotionSnapshot(e.ToEmotionState(), e.RecordedAtMs))
+            .Select(e => new EmotionSnapshot(
+                new EmotionState(e.Alertness, e.Mood, e.Curiosity, e.Confidence),
+                e.RecordedAtMs))
             .ToList();
     }
 }

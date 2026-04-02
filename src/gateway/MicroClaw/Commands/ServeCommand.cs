@@ -231,7 +231,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
 		builder.Services.AddSingleton<ISessionMessageRemover>(sp => sp.GetRequiredService<SessionStore>());
 		// 情绪系统服务
-		builder.Services.AddSingleton<EmotionDbContextFactory>(_ => new EmotionDbContextFactory(workspaceRoot));
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
 		builder.Services.AddSingleton<IEmotionRuleEngine>(_ =>
 			new EmotionRuleEngine(EmotionRuleEngineOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));

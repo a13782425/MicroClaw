@@ -1,6 +1,9 @@
 using FluentAssertions;
 using MicroClaw.Emotion;
 using MicroClaw.Endpoints;
+using MicroClaw.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
 namespace MicroClaw.Tests.Emotion;
@@ -120,7 +123,13 @@ public class EmotionEndpointsTests
         Directory.CreateDirectory(tempDir);
         try
         {
-            var factory = new EmotionDbContextFactory(tempDir);
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<GatewayDbContext>(opts =>
+                opts.UseSqlite($"Data Source={Path.Combine(tempDir, "microclaw.db")}"));
+            var sp = services.BuildServiceProvider();
+            var factory = sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
+            using var ctx = factory.CreateDbContext();
+            ctx.Database.EnsureCreated();
             var store = new EmotionStore(factory);
             const string agentId = "test-agent";
 
@@ -148,7 +157,13 @@ public class EmotionEndpointsTests
         Directory.CreateDirectory(tempDir);
         try
         {
-            var factory = new EmotionDbContextFactory(tempDir);
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<GatewayDbContext>(opts =>
+                opts.UseSqlite($"Data Source={Path.Combine(tempDir, "microclaw.db")}"));
+            var sp = services.BuildServiceProvider();
+            var factory = sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
+            using var ctx = factory.CreateDbContext();
+            ctx.Database.EnsureCreated();
             var store = new EmotionStore(factory);
             const string agentId = "test-agent";
 

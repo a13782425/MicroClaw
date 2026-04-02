@@ -1,28 +1,40 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using MicroClaw.Emotion;
+using MicroClaw.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Tests.Emotion;
 
 public class EmotionStoreTests : IDisposable
 {
     private readonly string _tempDir;
-    private readonly EmotionDbContextFactory _factory;
+    private readonly IDbContextFactory<GatewayDbContext> _factory;
     private readonly EmotionStore _store;
 
     public EmotionStoreTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "microclaw_emotion_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
-        _factory = new EmotionDbContextFactory(_tempDir);
+
+        var services = new ServiceCollection();
+        services.AddDbContextFactory<GatewayDbContext>(opts =>
+            opts.UseSqlite($"Data Source={Path.Combine(_tempDir, "microclaw.db")}"));
+        var provider = services.BuildServiceProvider();
+        _factory = provider.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
+
+        using var ctx = _factory.CreateDbContext();
+        ctx.Database.EnsureCreated();
+
         _store = new EmotionStore(_factory);
     }
 
     public void Dispose()
     {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* 清理，忽略 */ }
+        try { Directory.Delete(_tempDir, recursive: true); } catch { /* 娓呯悊锛屽拷鐣?*/ }
     }
 
-    // ── 构造函数参数验证 ──
+    // 鈹€鈹€ 鏋勯€犲嚱鏁板弬鏁伴獙璇?鈹€鈹€
 
     [Fact]
     public void Constructor_NullFactory_Throws()
@@ -31,25 +43,7 @@ public class EmotionStoreTests : IDisposable
         act.Should().Throw<ArgumentNullException>();
     }
 
-    // ── EmotionDbContextFactory 构造函数验证 ──
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void FactoryConstructor_InvalidRoot_Throws(string? root)
-    {
-        var act = () => new EmotionDbContextFactory(root!);
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void FactoryDbPath_ReturnsEmotionDbUnderWorkspace()
-    {
-        _factory.DbPath.Should().Be(Path.Combine(_tempDir, "emotion.db"));
-    }
-
-    // ── GetCurrentAsync：无记录返回默认值 ──
+    // 鈹€鈹€ GetCurrentAsync锛氭棤璁板綍杩斿洖榛樿鍊?鈹€鈹€
 
     [Fact]
     public async Task GetCurrentAsync_NoRecords_ReturnsDefault()
@@ -58,7 +52,7 @@ public class EmotionStoreTests : IDisposable
         state.Should().Be(EmotionState.Default);
     }
 
-    // ── SaveAsync 参数验证 ──
+    // 鈹€鈹€ SaveAsync 鍙傛暟楠岃瘉 鈹€鈹€
 
     [Theory]
     [InlineData(null)]
@@ -77,7 +71,7 @@ public class EmotionStoreTests : IDisposable
         await act.Should().ThrowAsync<ArgumentNullException>();
     }
 
-    // ── SaveAsync + GetCurrentAsync ──
+    // 鈹€鈹€ SaveAsync + GetCurrentAsync 鈹€鈹€
 
     [Fact]
     public async Task SaveThenGetCurrent_ReturnsSavedState()
@@ -108,7 +102,7 @@ public class EmotionStoreTests : IDisposable
         actual.Mood.Should().Be(latest.Mood);
     }
 
-    // ── Agent 隔离 ──
+    // 鈹€鈹€ Agent 闅旂 鈹€鈹€
 
     [Fact]
     public async Task GetCurrentAsync_DifferentAgents_AreIsolated()
@@ -135,7 +129,7 @@ public class EmotionStoreTests : IDisposable
         actual.Should().Be(EmotionState.Default);
     }
 
-    // ── GetHistoryAsync ──
+    // 鈹€鈹€ GetHistoryAsync 鈹€鈹€
 
     [Theory]
     [InlineData(null)]
@@ -222,7 +216,7 @@ public class EmotionStoreTests : IDisposable
         historyB[0].State.Alertness.Should().Be(20);
     }
 
-    // ── EmotionSnapshot record ──
+    // 鈹€鈹€ EmotionSnapshot record 鈹€鈹€
 
     [Fact]
     public void EmotionSnapshot_CorrectlyWrapsStateAndTimestamp()
@@ -234,3 +228,4 @@ public class EmotionStoreTests : IDisposable
         snapshot.RecordedAtMs.Should().Be(12345L);
     }
 }
+

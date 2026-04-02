@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
+    <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

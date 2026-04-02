@@ -14,6 +14,8 @@ using MicroClaw.Skills;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -257,7 +259,14 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         string dir = Path.Combine(Path.GetTempPath(), "mc_emotion_" + Guid.NewGuid().ToString("N"));
         try
         {
-            var factory = new EmotionDbContextFactory(dir);
+            Directory.CreateDirectory(dir);
+            var services = new ServiceCollection();
+            services.AddDbContextFactory<GatewayDbContext>(opts =>
+                opts.UseSqlite($"Data Source={Path.Combine(dir, "microclaw.db")}"));
+            var sp = services.BuildServiceProvider();
+            var factory = sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
+            using var ctx = factory.CreateDbContext();
+            ctx.Database.EnsureCreated();
             var store = new EmotionStore(factory);
             var engine = new EmotionRuleEngine();
 
