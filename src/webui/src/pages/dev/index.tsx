@@ -26,10 +26,10 @@ function StatCard({
   color?: string
 }) {
   return (
-    <Box p={4} borderWidth="1px" borderRadius="lg" bg="bg.panel">
-      <Text fontSize="xs" color="fg.muted" mb={1}>{label}</Text>
+    <Box p={4} borderWidth="1px" borderColor="var(--mc-border)" borderRadius="lg" bg="var(--mc-card)">
+      <Text fontSize="xs" color="var(--mc-text-muted)" mb={1}>{label}</Text>
       <Text fontSize="2xl" fontWeight="bold" color={color}>{value}</Text>
-      {sub && <Text fontSize="xs" color="fg.muted" mt={1}>{sub}</Text>}
+      {sub && <Text fontSize="xs" color="var(--mc-text-muted)" mt={1}>{sub}</Text>}
     </Box>
   )
 }
@@ -96,11 +96,19 @@ export default function DevPage() {
             <Text fontSize="xl" fontWeight="bold">DevUI — 调试控制台</Text>
             <Badge colorPalette="orange" variant="subtle" size="sm">Development Only</Badge>
           </HStack>
-          <Text fontSize="sm" color="fg.muted">
+          <Text fontSize="sm" color="var(--mc-text-muted)">
             实时展示 Agent 执行指标、工具耗时与中间件配置
           </Text>
         </VStack>
-        <Button size="sm" variant="outline" onClick={load} loading={loading}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={load}
+          loading={loading}
+          color="var(--mc-text)"
+          borderColor="var(--mc-border)"
+          _hover={{ bg: 'var(--mc-card-hover)' }}
+        >
           <RefreshCw size={14} />
           刷新
         </Button>
@@ -109,7 +117,7 @@ export default function DevPage() {
       {loading && !metrics && (
         <Box textAlign="center" py={12}>
           <Spinner />
-          <Text mt={2} color="fg.muted">加载中...</Text>
+          <Text mt={2} color="var(--mc-text-muted)">加载中...</Text>
         </Box>
       )}
 
@@ -125,23 +133,23 @@ export default function DevPage() {
             <StatCard
               label="Agent 总运行次数"
               value={metrics.totalAgentRuns}
-              color={metrics.totalAgentRuns > 0 ? 'blue.fg' : undefined}
+              color={metrics.totalAgentRuns > 0 ? 'var(--mc-primary)' : undefined}
             />
             <StatCard
               label="失败次数"
               value={metrics.failedAgentRuns}
-              color={metrics.failedAgentRuns > 0 ? 'red.fg' : 'green.fg'}
+              color={metrics.failedAgentRuns > 0 ? 'var(--mc-danger)' : 'var(--mc-success)'}
             />
             <StatCard
               label="成功率"
               value={successRate === '—' ? '—' : `${successRate}%`}
-              color={parseFloat(successRate) >= 90 ? 'green.fg' : 'orange.fg'}
+              color={parseFloat(successRate) >= 90 ? 'var(--mc-success)' : 'var(--mc-warning)'}
             />
           </SimpleGrid>
 
           {/* 工具耗时统计表 */}
-          <Box mb={6} borderWidth="1px" borderRadius="lg" overflow="hidden">
-            <Box px={4} py={3} bg="bg.subtle" borderBottomWidth="1px">
+          <Box mb={6} borderWidth="1px" borderColor="var(--mc-border)" borderRadius="lg" overflow="hidden">
+            <Box px={4} py={3} bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
               <HStack>
                 <Clock size={16} />
                 <Text fontWeight="semibold">工具执行耗时统计</Text>
@@ -149,7 +157,7 @@ export default function DevPage() {
               </HStack>
             </Box>
             {toolEntries.length === 0 ? (
-              <Box px={4} py={8} textAlign="center" color="fg.muted" fontSize="sm">
+              <Box px={4} py={8} textAlign="center" color="var(--mc-text-muted)" fontSize="sm">
                 暂无工具调用记录
               </Box>
             ) : (
@@ -172,7 +180,7 @@ export default function DevPage() {
                       </Table.Cell>
                       <Table.Cell textAlign="right">{stat.callCount}</Table.Cell>
                       <Table.Cell textAlign="right">
-                        <Text color={stat.errorCount > 0 ? 'red.fg' : 'fg.muted'}>
+                        <Text color={stat.errorCount > 0 ? 'var(--mc-danger)' : 'var(--mc-text-muted)'}>
                           {stat.errorCount}
                         </Text>
                       </Table.Cell>
@@ -187,8 +195,8 @@ export default function DevPage() {
           </Box>
 
           {/* 最近运行记录 */}
-          <Box mb={6} borderWidth="1px" borderRadius="lg" overflow="hidden">
-            <Box px={4} py={3} bg="bg.subtle" borderBottomWidth="1px">
+          <Box mb={6} borderWidth="1px" borderColor="var(--mc-border)" borderRadius="lg" overflow="hidden">
+            <Box px={4} py={3} bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
               <HStack>
                 <Activity size={16} />
                 <Text fontWeight="semibold">最近 Agent 运行记录</Text>
@@ -196,7 +204,7 @@ export default function DevPage() {
               </HStack>
             </Box>
             {(metrics.recentRuns ?? []).length === 0 ? (
-              <Box px={4} py={8} textAlign="center" color="fg.muted" fontSize="sm">
+              <Box px={4} py={8} textAlign="center" color="var(--mc-text-muted)" fontSize="sm">
                 暂无运行记录
               </Box>
             ) : (
@@ -214,15 +222,15 @@ export default function DevPage() {
                     <Table.Row key={idx}>
                       <Table.Cell>
                         {run.success
-                          ? <HStack gap={1}><CheckCircle size={14} color="var(--chakra-colors-green-fg)" /><Text fontSize="xs" color="green.fg">成功</Text></HStack>
-                          : <HStack gap={1}><AlertCircle size={14} color="var(--chakra-colors-red-fg)" /><Text fontSize="xs" color="red.fg">失败</Text></HStack>}
+                          ? <HStack gap={1}><CheckCircle size={14} color="var(--mc-success)" /><Text fontSize="xs" color="var(--mc-success)">成功</Text></HStack>
+                          : <HStack gap={1}><AlertCircle size={14} color="var(--mc-danger)" /><Text fontSize="xs" color="var(--mc-danger)">失败</Text></HStack>}
                       </Table.Cell>
                       <Table.Cell>
                         <Text fontFamily="mono" fontSize="xs">{run.agentId}</Text>
                       </Table.Cell>
                       <Table.Cell textAlign="right">{formatMs(run.durationMs)}</Table.Cell>
                       <Table.Cell textAlign="right">
-                        <Text fontSize="xs" color="fg.muted">{formatDate(run.executedAt)}</Text>
+                        <Text fontSize="xs" color="var(--mc-text-muted)">{formatDate(run.executedAt)}</Text>
                       </Table.Cell>
                     </Table.Row>
                   ))}
@@ -236,12 +244,12 @@ export default function DevPage() {
       {/* Context Providers + 中间件限制（横排两列） */}
       <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
         {/* Context Providers */}
-        <Box borderWidth="1px" borderRadius="lg" overflow="hidden">
-          <Box px={4} py={3} bg="bg.subtle" borderBottomWidth="1px">
+        <Box borderWidth="1px" borderColor="var(--mc-border)" borderRadius="lg" overflow="hidden">
+          <Box px={4} py={3} bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
             <Text fontWeight="semibold">Context Providers</Text>
           </Box>
           {providers.length === 0 ? (
-            <Box px={4} py={6} textAlign="center" color="fg.muted" fontSize="sm">
+            <Box px={4} py={6} textAlign="center" color="var(--mc-text-muted)" fontSize="sm">
               {loading ? <Spinner size="sm" /> : '无数据'}
             </Box>
           ) : (
@@ -269,12 +277,12 @@ export default function DevPage() {
         </Box>
 
         {/* 中间件限制 */}
-        <Box borderWidth="1px" borderRadius="lg" overflow="hidden">
-          <Box px={4} py={3} bg="bg.subtle" borderBottomWidth="1px">
+        <Box borderWidth="1px" borderColor="var(--mc-border)" borderRadius="lg" overflow="hidden">
+          <Box px={4} py={3} bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
             <Text fontWeight="semibold">中间件限制参数</Text>
           </Box>
           {!limits?.iterations ? (
-            <Box px={4} py={6} textAlign="center" color="fg.muted" fontSize="sm">
+            <Box px={4} py={6} textAlign="center" color="var(--mc-text-muted)" fontSize="sm">
               {loading ? <Spinner size="sm" /> : '无数据'}
             </Box>
           ) : (

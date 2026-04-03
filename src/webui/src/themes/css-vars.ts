@@ -22,6 +22,11 @@ export function applyThemeVars(tokens: ThemeTokens): void {
     const cssVarName = `--mc-${toKebabCase(key)}`
     root.style.setProperty(cssVarName, tokens[key as keyof ThemeTokens] as string)
   }
+
+  // 同步 body color/background，使 Chakra UI 默认 Text（无显式 color prop）
+  // 能正确继承当前主题的文字色与背景色，而不是 Chakra 内置的 gray.800
+  document.body.style.setProperty('color', 'var(--mc-text)')
+  document.body.style.setProperty('background-color', 'var(--mc-bg)')
 }
 
 /**

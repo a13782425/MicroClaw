@@ -8,7 +8,8 @@ export type ColorModeProviderProps = ThemeProviderProps
 
 export function ColorModeProvider({ children, ...props }: ColorModeProviderProps) {
   return (
-    <ThemeProvider attribute="class" disableTransitionOnChange {...props}>
+    // MicroClaw 使用自定义 --mc-* 主题系统管理亮/暗色，禁止 OS 偏好影响 Chakra 内置 token
+    <ThemeProvider attribute="class" disableTransitionOnChange defaultTheme="light" enableSystem={false} {...props}>
       {children}
     </ThemeProvider>
   )

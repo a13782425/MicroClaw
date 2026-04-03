@@ -13,6 +13,7 @@ export function ThemePicker() {
           p="1"
           borderRadius="md"
           cursor="pointer"
+          color="var(--mc-primary)"
           title={`当前主题：${themeId}`}
           _hover={{ bg: 'var(--mc-card-hover, var(--mc-card))' }}
           aria-label="切换主题"
