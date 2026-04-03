@@ -16,11 +16,39 @@ export default function RagPage() {
       </Box>
 
       <Tabs.Root defaultValue="global">
-        <Tabs.List mb="4" flexWrap="wrap">
-          <Tabs.Trigger value="global"><FileText size={14} /> 全局知识库</Tabs.Trigger>
-          <Tabs.Trigger value="session"><Database size={14} /> 会话知识库</Tabs.Trigger>
-          <Tabs.Trigger value="stats"><BarChart2 size={14} /> 检索统计</Tabs.Trigger>
-          <Tabs.Trigger value="settings"><Settings size={14} /> 配置</Tabs.Trigger>
+        <Tabs.List mb="4" flexWrap="wrap" bg="var(--mc-input)" borderWidth="1px" borderColor="var(--mc-border)" borderRadius="md" p="1">
+          <Tabs.Trigger
+            value="global"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            <FileText size={14} /> 全局知识库
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="session"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            <Database size={14} /> 会话知识库
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="stats"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            <BarChart2 size={14} /> 检索统计
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="settings"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            <Settings size={14} /> 配置
+          </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="global">

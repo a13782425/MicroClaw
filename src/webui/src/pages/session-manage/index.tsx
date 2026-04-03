@@ -257,7 +257,7 @@ function MemoryTab({ session }: { session: SessionInfo }) {
       <Box>
         <HStack justify="space-between" mb="1">
           <Text fontSize="xs" color="var(--mc-text-muted)">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
-          <IconButton aria-label="刷新" size="xs" variant="ghost" onClick={loadData}>
+          <IconButton aria-label="刷新" size="xs" variant="ghost" data-mc-refresh="true" onClick={loadData}>
             <RefreshCw size={14} />
           </IconButton>
         </HStack>
@@ -500,7 +500,7 @@ export default function SessionManagePage() {
       >
         <HStack px="3" py="2" borderBottomWidth="1px" justify="space-between">
           <Text fontWeight="semibold" fontSize="sm">会话管理</Text>
-          <Button size="xs" variant="ghost" loading={listLoading} onClick={() => load()}>
+          <Button size="xs" variant="ghost" data-mc-refresh="true" loading={listLoading} onClick={() => load()}>
             <RefreshCw size={14} />
           </Button>
         </HStack>

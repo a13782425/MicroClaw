@@ -2,7 +2,8 @@ import { Card, Flex, Text, Badge, Switch, Button } from '@chakra-ui/react'
 import { Cpu, Link as LinkIcon, Edit, Trash2 } from 'lucide-react'
 import type { ProviderConfig } from '@/api/gateway'
 import {
-  latencyTierColor,
+  latencyTierBg,
+  latencyTierFg,
   latencyTierLabel,
   protocolLabel,
 } from './model-form-helpers'
@@ -15,12 +16,12 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
   onSetDefault: (provider: ProviderConfig) => void
 }) {
   return (
-    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline">
+    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
       <Card.Body p="4">
         <Flex align="center" gap="2" mb="2">
           <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
-          {p.isDefault && <Badge colorPalette="yellow" size="sm">默认</Badge>}
-          <Badge colorPalette={p.protocol === 'openai' ? 'blue' : 'purple'} size="sm">
+          {p.isDefault && <Badge size="sm" bg="var(--mc-warning-soft)" color="var(--mc-warning)">默认</Badge>}
+          <Badge size="sm" bg={p.protocol === 'openai' ? 'var(--mc-primary-soft)' : 'var(--mc-accent-soft)'} color={p.protocol === 'openai' ? 'var(--mc-primary)' : 'var(--mc-accent)'}>
             {protocolLabel(p.protocol)}
           </Badge>
         </Flex>
@@ -41,17 +42,17 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
         )}
 
         <Flex gap="1" flexWrap="wrap" mb="3">
-          {p.capabilities?.inputImage && <Badge size="sm" colorPalette="cyan" variant="subtle">图片输入</Badge>}
-          {p.capabilities?.inputAudio && <Badge size="sm" colorPalette="teal" variant="subtle">音频输入</Badge>}
-          {p.capabilities?.inputVideo && <Badge size="sm" colorPalette="blue" variant="subtle">视频输入</Badge>}
-          {p.capabilities?.inputFile && <Badge size="sm" colorPalette="gray" variant="subtle">文件</Badge>}
-          {p.capabilities?.outputImage && <Badge size="sm" colorPalette="cyan" variant="outline">图片输出</Badge>}
-          {p.capabilities?.outputAudio && <Badge size="sm" colorPalette="teal" variant="outline">音频输出</Badge>}
-          {p.capabilities?.outputVideo && <Badge size="sm" colorPalette="blue" variant="outline">视频输出</Badge>}
-          {p.capabilities?.supportsFunctionCalling && <Badge size="sm" colorPalette="orange" variant="subtle">Functions</Badge>}
-          {p.capabilities?.supportsResponsesApi && <Badge size="sm" colorPalette="green" variant="subtle">Responses</Badge>}
+          {p.capabilities?.inputImage && <Badge size="sm" bg="var(--mc-info-soft)" color="var(--mc-info)">图片输入</Badge>}
+          {p.capabilities?.inputAudio && <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">音频输入</Badge>}
+          {p.capabilities?.inputVideo && <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">视频输入</Badge>}
+          {p.capabilities?.inputFile && <Badge size="sm" bg="var(--mc-card-hover)" color="var(--mc-text-muted)">文件</Badge>}
+          {p.capabilities?.outputImage && <Badge size="sm" variant="outline" borderColor="var(--mc-info)" color="var(--mc-info)">图片输出</Badge>}
+          {p.capabilities?.outputAudio && <Badge size="sm" variant="outline" borderColor="var(--mc-accent)" color="var(--mc-accent)">音频输出</Badge>}
+          {p.capabilities?.outputVideo && <Badge size="sm" variant="outline" borderColor="var(--mc-primary)" color="var(--mc-primary)">视频输出</Badge>}
+          {p.capabilities?.supportsFunctionCalling && <Badge size="sm" bg="var(--mc-warning-soft)" color="var(--mc-warning)">Functions</Badge>}
+          {p.capabilities?.supportsResponsesApi && <Badge size="sm" bg="var(--mc-success-soft)" color="var(--mc-success)">Responses</Badge>}
           {(p.capabilities?.inputPricePerMToken || p.capabilities?.outputPricePerMToken) && (
-            <Badge size="sm" variant="outline" colorPalette="purple">
+            <Badge size="sm" variant="outline" borderColor="var(--mc-accent)" color="var(--mc-accent)">
               ${p.capabilities.inputPricePerMToken ?? '?'}/{p.capabilities.outputPricePerMToken ?? '?'}/M
             </Badge>
           )}
@@ -59,8 +60,8 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
 
         <Flex gap="2" mb="3" align="center">
           <Text fontSize="xs" color="var(--mc-text-muted)">路由:</Text>
-          <Badge size="sm" colorPalette="violet" variant="subtle">质量 {p.capabilities?.qualityScore ?? 50}</Badge>
-          <Badge size="sm" colorPalette={latencyTierColor(p.capabilities?.latencyTier ?? 'Medium')} variant="subtle">
+          <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">质量 {p.capabilities?.qualityScore ?? 50}</Badge>
+          <Badge size="sm" bg={latencyTierBg(p.capabilities?.latencyTier ?? 'Medium')} color={latencyTierFg(p.capabilities?.latencyTier ?? 'Medium')}>
             {latencyTierLabel(p.capabilities?.latencyTier ?? 'Medium')}延迟
           </Badge>
         </Flex>
@@ -73,15 +74,15 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
           </Switch.Root>
 
           <Flex gap="1">
-            <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => onEdit(p)}>
+            <Button size="xs" variant="ghost" color="var(--mc-primary)" _hover={{ bg: 'var(--mc-primary-soft)' }} onClick={() => onEdit(p)}>
               <Edit size={12} /> 编辑
             </Button>
             {!p.isDefault && (
-              <Button size="xs" variant="ghost" colorPalette="yellow" onClick={() => onSetDefault(p)}>
+              <Button size="xs" variant="ghost" color="var(--mc-warning)" _hover={{ bg: 'var(--mc-warning-soft)' }} onClick={() => onSetDefault(p)}>
                 设默认
               </Button>
             )}
-            <Button size="xs" variant="ghost" colorPalette="red" aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
+            <Button size="xs" variant="ghost" color="var(--mc-danger)" _hover={{ bg: 'var(--mc-danger-soft)' }} aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
               <Trash2 size={12} />
             </Button>
           </Flex>
@@ -98,12 +99,12 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
   onToggle: (provider: ProviderConfig, enabled: boolean) => void
 }) {
   return (
-    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline">
+    <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
       <Card.Body p="4">
         <Flex align="center" gap="2" mb="2">
           <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
-          <Badge colorPalette="purple" size="sm">嵌入</Badge>
-          <Badge colorPalette="blue" size="sm">OpenAI</Badge>
+          <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">嵌入</Badge>
+          <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">OpenAI</Badge>
         </Flex>
 
         <Flex align="center" gap="1" color="var(--mc-text-muted)" fontSize="sm" mb="2">
@@ -120,13 +121,13 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
 
         <Flex gap="1" flexWrap="wrap" mb="3">
           {p.capabilities?.outputDimensions && (
-            <Badge size="sm" colorPalette="purple" variant="subtle">维度 {p.capabilities.outputDimensions}</Badge>
+            <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">维度 {p.capabilities.outputDimensions}</Badge>
           )}
           {p.capabilities?.maxInputTokens && (
-            <Badge size="sm" colorPalette="blue" variant="subtle">输入 {p.capabilities.maxInputTokens.toLocaleString()} tokens</Badge>
+            <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">输入 {p.capabilities.maxInputTokens.toLocaleString()} tokens</Badge>
           )}
           {p.capabilities?.inputPricePerMToken && (
-            <Badge size="sm" variant="outline" colorPalette="green">${p.capabilities.inputPricePerMToken}/M</Badge>
+            <Badge size="sm" variant="outline" borderColor="var(--mc-success)" color="var(--mc-success)">${p.capabilities.inputPricePerMToken}/M</Badge>
           )}
         </Flex>
 
@@ -138,10 +139,10 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
           </Switch.Root>
 
           <Flex gap="1">
-            <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => onEdit(p)}>
+            <Button size="xs" variant="ghost" color="var(--mc-primary)" _hover={{ bg: 'var(--mc-primary-soft)' }} onClick={() => onEdit(p)}>
               <Edit size={12} /> 编辑
             </Button>
-            <Button size="xs" variant="ghost" colorPalette="red" aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
+            <Button size="xs" variant="ghost" color="var(--mc-danger)" _hover={{ bg: 'var(--mc-danger-soft)' }} aria-label={`删除提供方 ${p.displayName}`} onClick={() => onDelete(p)}>
               <Trash2 size={12} />
             </Button>
           </Flex>

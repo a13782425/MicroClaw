@@ -394,13 +394,9 @@ export default function SessionsPage() {
           borderBottomWidth="1px"
         >
           <Text fontWeight="semibold" fontSize="sm">会话列表</Text>
-          <IconButton
-            size="sm" variant="ghost" colorPalette="blue"
-            aria-label="新建会话"
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus size={16} />
-          </IconButton>
+          <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => setShowCreate(true)}>
+            <Plus size={14} /> 添加
+          </Button>
         </Flex>
 
         {/* 会话列表（树形） */}
@@ -409,7 +405,6 @@ export default function SessionsPage() {
             <Flex align="center" justify="center" h="full" flexDir="column" gap="2" color="var(--mc-text-muted)">
               <MessageCircle size={32} />
               <Text fontSize="sm">暂无会话</Text>
-              <Button size="sm" onClick={() => setShowCreate(true)}>新建会话</Button>
             </Flex>
           )}
           {sessionTree.map((node) => (
@@ -432,9 +427,6 @@ export default function SessionsPage() {
           <Flex align="center" justify="center" flex="1" flexDir="column" gap="3" color="var(--mc-text-muted)">
             <MessageCircle size={48} />
             <Text>选择或创建一个会话开始对话</Text>
-            <Button colorPalette="blue" onClick={() => setShowCreate(true)}>
-              <Plus size={16} /> 新建会话
-            </Button>
           </Flex>
         ) : (
           <>

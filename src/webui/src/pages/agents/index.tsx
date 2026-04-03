@@ -73,9 +73,9 @@ export default function AgentsPage() {
                     borderWidth="1px"
                     rounded="md"
                     cursor="pointer"
-                    bg={isActive ? 'blue.50' : undefined}
-                   
-                    _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.800' } }}
+                    bg={isActive ? 'var(--mc-selected-bg)' : 'transparent'}
+                    borderColor={isActive ? 'var(--mc-primary)' : 'var(--mc-border)'}
+                    _hover={{ bg: isActive ? 'var(--mc-selected-hover-bg)' : 'var(--mc-card-hover)' }}
                     onClick={() => setSelected(agent)}
                   >
                     <HStack gap="2" align="start">

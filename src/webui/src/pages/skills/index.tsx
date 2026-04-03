@@ -57,9 +57,8 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
           <Box
             key={f.path}
             px="3" py="2" cursor="pointer"
-            bg={selectedFile === f.path ? 'blue.50' : 'transparent'}
-           
-            _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
+            bg={selectedFile === f.path ? 'var(--mc-selected-bg)' : 'transparent'}
+            _hover={{ bg: selectedFile === f.path ? 'var(--mc-selected-hover-bg)' : 'var(--mc-card-hover)' }}
             onClick={() => selectFile(f.path)}
           >
             <HStack gap="1">
@@ -183,7 +182,7 @@ export default function SkillsPage() {
       <HStack px="4" py="3" borderBottomWidth="1px" justify="space-between">
         <Text fontWeight="semibold">技能列表</Text>
         <HStack>
-          <Button size="sm" variant="outline" onClick={handleScan} loading={scanning}>
+          <Button size="sm" variant="outline" data-mc-refresh="true" onClick={handleScan} loading={scanning}>
             <RefreshCw size={14} />扫描
           </Button>
         </HStack>
@@ -197,9 +196,8 @@ export default function SkillsPage() {
             <Box
               key={s.id}
               px="3" py="2" cursor="pointer"
-              bg={selected?.id === s.id ? 'blue.50' : 'transparent'}
-             
-              _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
+              bg={selected?.id === s.id ? 'var(--mc-selected-bg)' : 'transparent'}
+              _hover={{ bg: selected?.id === s.id ? 'var(--mc-selected-hover-bg)' : 'var(--mc-card-hover)' }}
               onClick={() => setSelected(s)}
             >
               <HStack justify="space-between">
@@ -242,9 +240,23 @@ export default function SkillsPage() {
 
               {/* Tab 面板 */}
               <Tabs.Root defaultValue="info" flex="1" display="flex" flexDir="column" overflow="hidden">
-                <Tabs.List px="4">
-                  <Tabs.Trigger value="info">信息</Tabs.Trigger>
-                  <Tabs.Trigger value="files">文件</Tabs.Trigger>
+                <Tabs.List px="4" bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
+                  <Tabs.Trigger
+                    value="info"
+                    color="var(--mc-text-muted)"
+                    _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+                    _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+                  >
+                    信息
+                  </Tabs.Trigger>
+                  <Tabs.Trigger
+                    value="files"
+                    color="var(--mc-text-muted)"
+                    _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+                    _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+                  >
+                    文件
+                  </Tabs.Trigger>
                 </Tabs.List>
                 <Tabs.Content value="info" flex="1" overflow="auto" p="0">
                   <InfoTab skill={selected} />

@@ -259,7 +259,7 @@ export default function CronPage() {
       <HStack mb="4" justify="space-between">
         <Text fontWeight="semibold" fontSize="lg">计划任务</Text>
         <HStack>
-          <Button size="sm" variant="outline" loading={loading} onClick={load}><RefreshCw size={14} /></Button>
+          <Button size="sm" variant="outline" data-mc-refresh="true" loading={loading} onClick={load}><RefreshCw size={14} /></Button>
           <Button size="sm" colorPalette="blue" onClick={() => { setEditing(null); setDialogOpen(true) }}>
             <Plus size={14} />新建任务
           </Button>

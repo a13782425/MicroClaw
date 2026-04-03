@@ -8,10 +8,10 @@
   <Project Path="MicroClaw.Agent/MicroClaw.Agent.csproj" />
   <Project Path="MicroClaw.Tools/MicroClaw.Tools.csproj" />
   <Project Path="MicroClaw.RAG/MicroClaw.RAG.csproj" />
-  <Project Path="MicroClaw.Emotion/MicroClaw.Emotion.csproj" />
   <Project Path="MicroClaw.Safety/MicroClaw.Safety.csproj" />
   <Project Path="MicroClaw.Skills/MicroClaw.Skills.csproj" />
   <Project Path="MicroClaw.Configuration/MicroClaw.Configuration.csproj" />
   <Project Path="MicroClaw.Plugins/MicroClaw.Plugins.csproj" />
   <Project Path="MicroClaw.Jobs/MicroClaw.Jobs.csproj" />
+  <Project Path="MicroClaw.Pet/MicroClaw.Pet.csproj" />
 </Solution>

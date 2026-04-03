@@ -36,6 +36,18 @@ export function latencyTierColor(tier: string): string {
   return 'blue'
 }
 
+export function latencyTierBg(tier: string): string {
+  if (tier === 'Low') return 'var(--mc-success-soft)'
+  if (tier === 'High') return 'var(--mc-warning-soft)'
+  return 'var(--mc-primary-soft)'
+}
+
+export function latencyTierFg(tier: string): string {
+  if (tier === 'Low') return 'var(--mc-success)'
+  if (tier === 'High') return 'var(--mc-warning)'
+  return 'var(--mc-primary)'
+}
+
 export const INPUT_MODALITIES = [
   { key: 'inputImage', label: '图片' },
   { key: 'inputAudio', label: '音频' },

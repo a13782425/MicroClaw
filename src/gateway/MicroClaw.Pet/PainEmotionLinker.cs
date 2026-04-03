@@ -1,12 +1,14 @@
-using MicroClaw.Emotion;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
+using MicroClaw.Pet.Emotion;
 using MicroClaw.Safety;
 
-namespace MicroClaw.Agent;
+namespace MicroClaw.Pet;
 
 /// <summary>
-/// 痛觉-情绪联动服务：当高严重度痛觉（High / Critical）被记录时，
-/// 自动将对应情绪事件施加到指定 Agent 的情绪状态，使其向「谨慎」模式收敛。
+/// Pet 级痛觉-情绪联动服务：当高严重度痛觉被记录时，
+/// 自动将对应情绪事件施加到与该 Agent 关联的所有 Session 的 Pet 情绪状态，
+/// 使其向「谨慎」模式收敛。
 /// <para>
 /// 联动规则：
 /// <list type="bullet">
@@ -18,13 +20,17 @@ namespace MicroClaw.Agent;
 /// </summary>
 public sealed class PainEmotionLinker(
     IEmotionStore emotionStore,
-    IEmotionRuleEngine emotionRuleEngine) : IPainEmotionLinker
+    IEmotionRuleEngine emotionRuleEngine,
+    IAllSessionsReader sessionsReader) : IPainEmotionLinker
 {
     private readonly IEmotionStore _emotionStore = emotionStore
         ?? throw new ArgumentNullException(nameof(emotionStore));
 
     private readonly IEmotionRuleEngine _emotionRuleEngine = emotionRuleEngine
         ?? throw new ArgumentNullException(nameof(emotionRuleEngine));
+
+    private readonly IAllSessionsReader _sessionsReader = sessionsReader
+        ?? throw new ArgumentNullException(nameof(sessionsReader));
 
     /// <inheritdoc/>
     public async Task LinkAsync(PainMemory memory, CancellationToken ct = default)
@@ -39,8 +45,16 @@ public sealed class PainEmotionLinker(
             ? EmotionEventType.PainOccurredCritical
             : EmotionEventType.PainOccurredHigh;
 
-        EmotionState current = await _emotionStore.GetCurrentAsync(memory.AgentId, ct);
-        EmotionState updated = _emotionRuleEngine.Evaluate(current, eventType);
-        await _emotionStore.SaveAsync(memory.AgentId, updated, ct);
+        // 查找与该 Agent 关联的所有 Session，逐一更新 Pet 情绪
+        var sessions = _sessionsReader.GetAll()
+            .Where(s => s.AgentId == memory.AgentId)
+            .ToList();
+
+        foreach (var session in sessions)
+        {
+            EmotionState current = await _emotionStore.GetCurrentAsync(session.Id, ct);
+            EmotionState updated = _emotionRuleEngine.Evaluate(current, eventType);
+            await _emotionStore.SaveAsync(session.Id, updated, ct);
+        }
     }
 }

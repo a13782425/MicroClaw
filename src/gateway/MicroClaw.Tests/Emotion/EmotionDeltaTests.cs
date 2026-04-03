@@ -1,5 +1,5 @@
 using FluentAssertions;
-using MicroClaw.Emotion;
+using MicroClaw.Pet.Emotion;
 
 namespace MicroClaw.Tests.Emotion;
 

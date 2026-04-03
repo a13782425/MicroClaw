@@ -110,7 +110,15 @@ export function EmbeddingDialog({ open, editing, onClose, onSaved }: EmbeddingDi
       footer={(
         <>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button colorPalette="purple" loading={saving} onClick={handleSave}>保存</Button>
+          <Button
+            loading={saving}
+            onClick={handleSave}
+            bg="var(--mc-accent)"
+            color="var(--mc-send-button-color)"
+            _hover={{ opacity: 0.92 }}
+          >
+            保存
+          </Button>
         </>
       )}
     >

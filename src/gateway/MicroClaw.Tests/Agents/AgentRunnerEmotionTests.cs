@@ -4,7 +4,7 @@ using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
-using MicroClaw.Emotion;
+using MicroClaw.Pet.Emotion;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -13,9 +13,6 @@ using MicroClaw.Configuration;
 using MicroClaw.Skills;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -65,10 +62,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
     // ── 辅助方法 ─────────────────────────────────────────────────────────────
 
     private AgentRunner BuildRunner(
-        IAgentContextProvider[]? providers = null,
-        IEmotionStore? emotionStore = null,
-        IEmotionRuleEngine? emotionRuleEngine = null,
-        IEmotionBehaviorMapper? emotionBehaviorMapper = null)
+        IAgentContextProvider[]? providers = null)
     {
         string configDir = _tempDir.Path;
         var agentStore = new AgentStore();
@@ -94,10 +88,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
             toolCollector:         new ToolCollector([], new McpServerConfigStore(configDir), NullLoggerFactory.Instance),
             devMetrics:            Substitute.For<IDevMetricsService>(),
             contentPipeline:       new MicroClaw.Agent.Streaming.AIContentPipeline([], NullLoggerFactory.Instance.CreateLogger<MicroClaw.Agent.Streaming.AIContentPipeline>()),
-            chatContentRestorers:  [],
-            emotionStore:          emotionStore,
-            emotionRuleEngine:     emotionRuleEngine,
-            emotionBehaviorMapper: emotionBehaviorMapper);
+            chatContentRestorers:  []);
     }
 
     private static ProviderClientFactory CreateNoOpClientFactory()
@@ -177,19 +168,9 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         withEmpty.Should().Be(withoutSuffix);
     }
 
-    // ── 无情绪服务（降级）测试 ──────────────────────────────────────────────
+    // 情绪服务注入与调用验证 ──────────────────────────────
 
-    [Fact]
-    public void AgentRunner_WithNullEmotionServices_ConstructsSuccessfully()
-    {
-        // Arrange & Act
-        var act = () => BuildRunner(emotionStore: null, emotionRuleEngine: null, emotionBehaviorMapper: null);
-
-        // Assert
-        act.Should().NotThrow("情绪服务均为 null 时，AgentRunner 应正常构造");
-    }
-
-    // ── 情绪服务注入与调用验证 ──────────────────────────────────────────────
+    // Note: AgentRunner 已不再直接依赖情绪服务，该验证已移至 Pet 层
 
     [Fact]
     public async Task BuildSystemPromptAsync_WithMappedCautiousProfile_AppendsCautiousSuffix()
@@ -255,38 +236,31 @@ public sealed class AgentRunnerEmotionTests : IDisposable
     [Fact]
     public async Task EmotionStoreAndRuleEngine_Integration_StateUpdatesAfterEvent()
     {
-        // Arrange: 独立临时目录（SQLite 文件锁问题，Dispose 时 try-catch 忽略）
-        string dir = Path.Combine(Path.GetTempPath(), "mc_emotion_" + Guid.NewGuid().ToString("N"));
+        // Arrange: 使用文件系统 EmotionStore（Pet 版本，per-session）
+        string dir = Path.Combine(Path.GetTempPath(), "mc_pet_emotion_" + Guid.NewGuid().ToString("N"));
         try
         {
             Directory.CreateDirectory(dir);
-            var services = new ServiceCollection();
-            services.AddDbContextFactory<GatewayDbContext>(opts =>
-                opts.UseSqlite($"Data Source={Path.Combine(dir, "microclaw.db")}"));
-            var sp = services.BuildServiceProvider();
-            var factory = sp.GetRequiredService<IDbContextFactory<GatewayDbContext>>();
-            using var ctx = factory.CreateDbContext();
-            ctx.Database.EnsureCreated();
-            var store = new EmotionStore(factory);
+            var store = new EmotionStore(dir);
             var engine = new EmotionRuleEngine();
 
             // 初始状态
-            EmotionState initial = await store.GetCurrentAsync(AgentId);
+            EmotionState initial = await store.GetCurrentAsync(SessionId);
             initial.Should().Be(EmotionState.Default);
 
             // 模拟任务完成
             EmotionState afterComplete = engine.Evaluate(initial, EmotionEventType.TaskCompleted);
-            await store.SaveAsync(AgentId, afterComplete);
+            await store.SaveAsync(SessionId, afterComplete);
 
             // 验证持久化
-            EmotionState persisted = await store.GetCurrentAsync(AgentId);
+            EmotionState persisted = await store.GetCurrentAsync(SessionId);
             persisted.Mood.Should().BeGreaterThan(initial.Mood, "任务完成后心情应提升");
             persisted.Confidence.Should().BeGreaterThan(initial.Confidence, "任务完成后信心应提升");
             persisted.Alertness.Should().BeLessThan(initial.Alertness, "任务完成后警觉度应降低");
         }
         finally
         {
-            try { Directory.Delete(dir, recursive: true); } catch { /* SQLite 文件锁，忽略 */ }
+            try { Directory.Delete(dir, recursive: true); } catch { /* 忽略 清理错误 */ }
         }
     }
 }

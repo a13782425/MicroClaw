@@ -150,15 +150,71 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
       />
 
       <Tabs.Root defaultValue="overview" flex="1" overflow="hidden" display="flex" flexDirection="column">
-        <Tabs.List px="3">
-          <Tabs.Trigger value="overview">概览</Tabs.Trigger>
-          <Tabs.Trigger value="dna">🧬 DNA</Tabs.Trigger>
-          <Tabs.Trigger value="sub-agents">子代理</Tabs.Trigger>
-          <Tabs.Trigger value="tools">工具</Tabs.Trigger>
-          <Tabs.Trigger value="mcp">MCP</Tabs.Trigger>
-          <Tabs.Trigger value="skills">技能</Tabs.Trigger>
-          <Tabs.Trigger value="emotion">🧠 情绪</Tabs.Trigger>
-          <Tabs.Trigger value="safety">🔴 安全记忆</Tabs.Trigger>
+        <Tabs.List px="3" bg="var(--mc-input)" borderBottomWidth="1px" borderColor="var(--mc-border)">
+          <Tabs.Trigger
+            value="overview"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            概览
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="dna"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            🧬 DNA
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="sub-agents"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            子代理
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="tools"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            工具
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="mcp"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            MCP
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="skills"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            技能
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="emotion"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            🧠 情绪
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="safety"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
+            🔴 安全记忆
+          </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="overview" flex="1" overflowY="auto">

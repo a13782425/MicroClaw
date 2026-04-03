@@ -145,7 +145,7 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
   return (
     <Box>
       <HStack mb="4" justify="flex-end">
-        <Button size="sm" variant="outline" onClick={handleReload}>
+        <Button size="sm" variant="outline" data-mc-refresh="true" onClick={handleReload}>
           <RefreshCw size={14} /> 重新加载
         </Button>
       </HStack>
@@ -449,7 +449,7 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
           {currentMp && (
             <Badge colorPalette="teal" size="sm">{currentMp.marketplaceType}</Badge>
           )}
-          <Button size="xs" variant="ghost" onClick={handleUpdate} title="更新市场索引">
+          <Button size="xs" variant="ghost" data-mc-refresh="true" onClick={handleUpdate} title="更新市场索引">
             <RefreshCw size={14} />
           </Button>
           <Button size="xs" variant="ghost" colorPalette="red" onClick={handleRemove} title="移除市场">

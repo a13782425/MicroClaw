@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
+    <ProjectReference Include="..\MicroClaw.Agent\MicroClaw.Agent.csproj" />
+    <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
+    <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
+    <ProjectReference Include="..\MicroClaw.Jobs\MicroClaw.Jobs.csproj" />
+    <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
+    <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
+    <ProjectReference Include="..\MicroClaw.Safety\MicroClaw.Safety.csproj" />
+  </ItemGroup>
+
+</Project>

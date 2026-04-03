@@ -90,7 +90,7 @@ export function ToolsTab({ agent }: { agent: AgentConfig }) {
               保存工具设置
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={load} loading={loading}>刷新</Button>
+          <Button size="sm" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}>刷新</Button>
         </HStack>
       </HStack>
       {groups.length === 0 && (
@@ -368,7 +368,7 @@ export function DnaTab({ agent }: { agent: AgentConfig }) {
             <Button size="sm" colorPalette="blue" loading={saving} onClick={() => save(currentFile.fileName)}>
               保存
             </Button>
-            <Button size="sm" variant="outline" onClick={load} loading={loading}>刷新</Button>
+            <Button size="sm" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}>刷新</Button>
           </HStack>
         </Flex>
       )}

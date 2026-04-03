@@ -5,6 +5,20 @@ export const TYPE_COLORS: Record<string, string> = {
   feishu: 'cyan', wecom: 'green', wechat: 'teal', web: 'blue',
 }
 
+export const TYPE_BADGE_BG: Record<string, string> = {
+  feishu: 'var(--mc-info-soft)',
+  wecom: 'var(--mc-success-soft)',
+  wechat: 'var(--mc-accent-soft)',
+  web: 'var(--mc-primary-soft)',
+}
+
+export const TYPE_BADGE_FG: Record<string, string> = {
+  feishu: 'var(--mc-info)',
+  wecom: 'var(--mc-success)',
+  wechat: 'var(--mc-accent)',
+  web: 'var(--mc-primary)',
+}
+
 export const TYPE_LABELS: Record<string, string> = {
   feishu: '飞书', wecom: '企业微信', wechat: '微信', web: 'Web',
 }

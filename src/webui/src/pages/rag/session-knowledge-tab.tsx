@@ -77,6 +77,7 @@ export function SessionKnowledgeTab() {
         <Button
           size="sm"
           variant="outline"
+          data-mc-refresh="true"
           onClick={() => selectedSessionId && loadStatus(selectedSessionId)}
           loading={statusLoading}
           disabled={!selectedSessionId}

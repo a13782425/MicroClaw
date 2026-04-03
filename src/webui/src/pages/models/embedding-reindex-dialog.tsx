@@ -78,7 +78,7 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
         footer={(
           <>
             <Button variant="ghost" onClick={onClose}>跳过</Button>
-            <Button colorPalette="purple" loading={starting} onClick={handleStart}>
+            <Button bg="var(--mc-accent)" color="var(--mc-send-button-color)" _hover={{ opacity: 0.92 }} loading={starting} onClick={handleStart}>
               开始重索引
             </Button>
           </>
@@ -108,7 +108,7 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
       </Text>
       {isRunning && (
         <Flex align="center" gap="3">
-          <Spinner size="sm" color="purple.400" />
+          <Spinner size="sm" color="var(--mc-accent)" />
           <Box>
             <Text fontSize="sm" fontWeight="medium">正在重索引中…</Text>
             {status && (
@@ -121,12 +121,12 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
         </Flex>
       )}
       {isDone && (
-        <Text color="green.400" fontSize="sm" fontWeight="medium">
+        <Text color="var(--mc-success)" fontSize="sm" fontWeight="medium">
           重索引完成！共处理 {status?.total ?? 0} 个项目。
         </Text>
       )}
       {isError && (
-        <Text color="red.400" fontSize="sm">
+        <Text color="var(--mc-danger)" fontSize="sm">
           重索引失败：{status?.error ?? '未知错误'}
         </Text>
       )}

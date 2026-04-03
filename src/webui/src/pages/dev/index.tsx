@@ -87,7 +87,7 @@ export default function DevPage() {
       : '—'
 
   return (
-    <Box p={6} maxW="1400px" mx="auto">
+    <Box p={6} maxW="1400px" mx="auto" color="var(--mc-text)">
       {/* 页头 */}
       <HStack mb={6} justify="space-between">
         <VStack align="start" gap={0}>
@@ -103,6 +103,7 @@ export default function DevPage() {
         <Button
           size="sm"
           variant="outline"
+          data-mc-refresh="true"
           onClick={load}
           loading={loading}
           color="var(--mc-text)"

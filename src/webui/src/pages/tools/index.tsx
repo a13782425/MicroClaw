@@ -89,7 +89,7 @@ export default function ToolsPage() {
     <Box p="6">
       <HStack mb="4" justify="space-between">
         <Text fontWeight="semibold" fontSize="lg">工具总览</Text>
-        <Button size="sm" variant="outline" onClick={load} loading={loading}><RefreshCw size={14} />刷新</Button>
+        <Button size="sm" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}><RefreshCw size={14} />刷新</Button>
       </HStack>
       {loading
         ? <Box py="8" textAlign="center"><Spinner /></Box>

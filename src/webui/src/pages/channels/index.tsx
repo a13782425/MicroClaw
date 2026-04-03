@@ -21,7 +21,7 @@ import {
 } from '@/api/gateway'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { TYPE_COLORS, TYPE_LABELS } from './channel-constants'
+import { TYPE_BADGE_BG, TYPE_BADGE_FG, TYPE_LABELS } from './channel-constants'
 import { ChannelDialog } from './channel-dialog'
 import { PublishDialog } from './publish-dialog'
 
@@ -153,17 +153,18 @@ export default function ChannelsPage() {
                   align="center"
                   gap="2"
                   cursor="pointer"
-                  bg={isActive ? 'blue.50' : undefined}
-                 
-                  _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.700' } }}
+                  bg={isActive ? 'var(--mc-selected-bg)' : 'transparent'}
+                  borderLeftWidth="2px"
+                  borderLeftColor={isActive ? 'var(--mc-sidebar-active-border)' : 'transparent'}
+                  _hover={{ bg: isActive ? 'var(--mc-selected-hover-bg)' : 'var(--mc-card-hover)' }}
                   onClick={() => setSelectedType(typeInfo.type as ChannelType)}
                 >
-                  <Badge colorPalette={TYPE_COLORS[typeInfo.type] ?? 'gray'} size="sm">
+                  <Badge size="sm" bg={TYPE_BADGE_BG[typeInfo.type] ?? 'var(--mc-card-hover)'} color={TYPE_BADGE_FG[typeInfo.type] ?? 'var(--mc-text-muted)'}>
                     {TYPE_LABELS[typeInfo.type] ?? typeInfo.type}
                   </Badge>
-                  <Text fontSize="sm" flex="1" color={isActive ? 'blue.600' : undefined}>{typeInfo.displayName}</Text>
+                  <Text fontSize="sm" flex="1" color={isActive ? 'var(--mc-primary)' : 'var(--mc-text)'}>{typeInfo.displayName}</Text>
                   {count > 0 && (
-                    <Badge size="sm" colorPalette="blue" variant="solid">{count}</Badge>
+                    <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)" borderRadius="var(--mc-badge-radius)">{count}</Badge>
                   )}
                 </Flex>
               )
@@ -179,11 +180,17 @@ export default function ChannelsPage() {
             <Text fontSize="xs" color="var(--mc-text-muted)">已配置的渠道实例</Text>
           </Box>
           <Flex gap="2">
-            <Button size="sm" variant="ghost" onClick={() => loadChannels(selectedType)}>
+            <Button size="sm" variant="ghost" data-mc-refresh="true" onClick={() => loadChannels(selectedType)}>
               <RefreshCw size={14} />
             </Button>
             {selectedTypeInfo?.canCreate && (
-              <Button size="sm" colorPalette="blue" onClick={() => { setEditing(null); setDialogOpen(true) }}>
+              <Button
+                size="sm"
+                bg="var(--mc-send-button-bg)"
+                color="var(--mc-send-button-color)"
+                _hover={{ opacity: 0.92 }}
+                onClick={() => { setEditing(null); setDialogOpen(true) }}
+              >
                 <Plus size={14} /> 添加渠道
               </Button>
             )}
@@ -197,7 +204,13 @@ export default function ChannelsPage() {
             <Radio size={40} />
             <Text>暂无渠道配置</Text>
             {selectedTypeInfo?.canCreate && (
-              <Button colorPalette="blue" size="sm" onClick={() => { setEditing(null); setDialogOpen(true) }}>
+              <Button
+                size="sm"
+                bg="var(--mc-send-button-bg)"
+                color="var(--mc-send-button-color)"
+                _hover={{ opacity: 0.92 }}
+                onClick={() => { setEditing(null); setDialogOpen(true) }}
+              >
                 <Plus size={14} /> 添加渠道
               </Button>
             )}
@@ -210,23 +223,23 @@ export default function ChannelsPage() {
               const connectionOk = health ? health.connectionStatus === 'connected' : null
 
               return (
-                <Card.Root key={channel.id} opacity={channel.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline">
+                <Card.Root key={channel.id} opacity={channel.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
                   <Card.Body p="4">
                     <Flex align="center" gap="2" mb="2">
                       <Text fontWeight="semibold" flex="1">{channel.displayName}</Text>
                       {channel.channelType === 'feishu' && connectionOk !== null && (
-                        <Box w="8px" h="8px" borderRadius="full" bg={connectionOk ? 'green.400' : 'red.400'} title={connectionOk ? '连接正常' : '连接异常'} />
+                        <Box w="8px" h="8px" borderRadius="full" bg={connectionOk ? 'var(--mc-success)' : 'var(--mc-danger)'} title={connectionOk ? '连接正常' : '连接异常'} />
                       )}
-                      <Badge colorPalette={TYPE_COLORS[channel.channelType] ?? 'gray'} size="sm">
+                      <Badge size="sm" bg={TYPE_BADGE_BG[channel.channelType] ?? 'var(--mc-card-hover)'} color={TYPE_BADGE_FG[channel.channelType] ?? 'var(--mc-text-muted)'}>
                         {TYPE_LABELS[channel.channelType] ?? channel.channelType}
                       </Badge>
                     </Flex>
 
                     {stats && (
                       <Flex gap="4" mb="2" fontSize="xs" color="var(--mc-text-muted)">
-                        <Text color={stats.signatureFailures > 0 ? 'red.500' : undefined}>签名失败: {stats.signatureFailures}</Text>
-                        <Text color={stats.aiCallFailures > 0 ? 'red.500' : undefined}>AI失败: {stats.aiCallFailures}</Text>
-                        <Text color={stats.replyFailures > 0 ? 'red.500' : undefined}>回复失败: {stats.replyFailures}</Text>
+                        <Text color={stats.signatureFailures > 0 ? 'var(--mc-danger)' : undefined}>签名失败: {stats.signatureFailures}</Text>
+                        <Text color={stats.aiCallFailures > 0 ? 'var(--mc-danger)' : undefined}>AI失败: {stats.aiCallFailures}</Text>
+                        <Text color={stats.replyFailures > 0 ? 'var(--mc-danger)' : undefined}>回复失败: {stats.replyFailures}</Text>
                       </Flex>
                     )}
 
@@ -242,14 +255,14 @@ export default function ChannelsPage() {
                           测试
                         </Button>
                         {channel.channelType === 'feishu' && (
-                          <Button size="xs" variant="ghost" colorPalette="green" onClick={() => setPublishChannel(channel)}>
+                          <Button size="xs" variant="ghost" color="var(--mc-success)" _hover={{ bg: 'var(--mc-success-soft)' }} onClick={() => setPublishChannel(channel)}>
                             <Send size={11} /> 发送
                           </Button>
                         )}
-                        <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => { setEditing(channel); setDialogOpen(true) }}>
+                        <Button size="xs" variant="ghost" color="var(--mc-primary)" _hover={{ bg: 'var(--mc-primary-soft)' }} onClick={() => { setEditing(channel); setDialogOpen(true) }}>
                           <Edit size={11} /> 编辑
                         </Button>
-                        <Button size="xs" variant="ghost" colorPalette="red" aria-label={`删除渠道 ${channel.displayName}`} onClick={() => setDeleteTarget(channel)}>
+                        <Button size="xs" variant="ghost" color="var(--mc-danger)" _hover={{ bg: 'var(--mc-danger-soft)' }} aria-label={`删除渠道 ${channel.displayName}`} onClick={() => setDeleteTarget(channel)}>
                           <Trash2 size={11} />
                         </Button>
                       </Flex>

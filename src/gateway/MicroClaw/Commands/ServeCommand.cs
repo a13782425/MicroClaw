@@ -27,7 +27,8 @@ using MicroClaw.Jobs;
 using MicroClaw.Providers;
 using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
-using MicroClaw.Emotion;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
 using MicroClaw.Safety;
 using MicroClaw.Plugins;
 using MicroClaw.Plugins.Hooks;
@@ -230,12 +231,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IRagUsageAuditor, RagUsageAuditor>();
 		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
 		builder.Services.AddSingleton<ISessionMessageRemover>(sp => sp.GetRequiredService<SessionStore>());
-		// 情绪系统服务
-		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
-		builder.Services.AddSingleton<IEmotionRuleEngine>(_ =>
-			new EmotionRuleEngine(EmotionRuleEngineOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));
-		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ =>
-			new EmotionBehaviorMapper(EmotionBehaviorMapperOptions.FromEmotionOptions(MicroClawConfig.Get<EmotionOptions>())));
+		// Pet 情绪系统服务（基于 Session 隔离，替代原 Agent 级 Emotion 系统）
+		builder.Services.AddSingleton<IEmotionStore>(_ => new EmotionStore(MicroClawConfig.Env));
+		builder.Services.AddSingleton<IEmotionRuleEngine>(_ => new EmotionRuleEngine(new EmotionRuleEngineOptions()));
+		builder.Services.AddSingleton<IEmotionBehaviorMapper>(_ => new EmotionBehaviorMapper(new EmotionBehaviorMapperOptions()));
 		// 安全/痛觉系统服务
 		builder.Services.AddSingleton<IPainMemoryStore, PainMemoryStore>();
 		builder.Services.AddSingleton<IToolRiskRegistry>(_ => new DefaultToolRiskRegistry());
@@ -250,8 +249,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IToolRiskInterceptor, ListBasedToolRiskInterceptor>();
 		// Provider 路由器
 		builder.Services.AddSingleton<IProviderRouter, ProviderRouter>();
-		// 痛觉-情绪联动服务（依赖 IEmotionStore + IEmotionRuleEngine，需在两者之后注册）
-		builder.Services.AddSingleton<IPainEmotionLinker, PainEmotionLinker>();
+		// 会话全局读取接口（IAllSessionsReader → PainEmotionLinker 通过 AgentId 查 Session）
+		builder.Services.AddSingleton<IAllSessionsReader>(sp => sp.GetRequiredService<SessionStore>());
+		// 痛觉-Pet 情绪联动服务（基于 Session 隔离，Pet 版本替代旧 Agent 级 IPainEmotionLinker）
+		builder.Services.AddSingleton<IPainEmotionLinker, MicroClaw.Pet.PainEmotionLinker>();
 		// Context Providers（按 Order 聚合 System Prompt）
 		builder.Services.AddSingleton<IAgentContextProvider, ServerTimeContextProvider>();  // Order 5：服务器时间层
 		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();
@@ -382,8 +383,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IScheduledJob, ChannelRetryJob>();
 		// 2-A-11: RAG 定期容量清理（每日 UTC 01:00，早于记忆总结和做梦模式）
 		builder.Services.AddSingleton<IScheduledJob, RagPruneJob>();
-		// B-03: 情绪自然衰减（每小时向默认值 50 靠近，防止单次事件永久影响行为模式）
-		builder.Services.AddSingleton<IScheduledJob, EmotionDecayJob>();
+		// P-B-7: Pet 情绪自然衰减（每小时向默认值 50 靠近，每 Session 独立衰减）
+		builder.Services.AddSingleton<IScheduledJob, PetEmotionDecayJob>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>

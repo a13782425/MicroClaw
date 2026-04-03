@@ -9,7 +9,6 @@ using MicroClaw.Agent.Middleware;
 using MicroClaw.Agent.Streaming;
 using MicroClaw.Agent.Streaming.Handlers;
 using MicroClaw.Agent.Restorers;
-using MicroClaw.Emotion;
 using MicroClaw.RAG;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
@@ -47,9 +46,6 @@ public sealed class AgentRunner(
     IDevMetricsService devMetrics,
     AIContentPipeline contentPipeline,
     IEnumerable<IChatContentRestorer> chatContentRestorers,
-    IEmotionStore? emotionStore = null,
-    IEmotionRuleEngine? emotionRuleEngine = null,
-    IEmotionBehaviorMapper? emotionBehaviorMapper = null,
     IToolRiskRegistry? toolRiskRegistry = null,
     IToolRiskInterceptor? toolRiskInterceptor = null,
     IProviderRouter? providerRouter = null,
@@ -63,9 +59,6 @@ public sealed class AgentRunner(
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
     private readonly IReadOnlyList<IChatContentRestorer> _restorers =
         chatContentRestorers.ToList().AsReadOnly();
-    private readonly IEmotionStore? _emotionStore = emotionStore;
-    private readonly IEmotionRuleEngine? _emotionRuleEngine = emotionRuleEngine;
-    private readonly IEmotionBehaviorMapper? _emotionBehaviorMapper = emotionBehaviorMapper;
     private readonly IToolRiskRegistry? _toolRiskRegistry = toolRiskRegistry;
     private readonly IToolRiskInterceptor? _toolRiskInterceptor = toolRiskInterceptor;
     private readonly IProviderRouter? _providerRouter = providerRouter;
@@ -197,9 +190,7 @@ public sealed class AgentRunner(
                     chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
             }
 
-            // 情绪状态（在 finally 中需要访问，故在 try 外声明）
-            EmotionState emotionState = EmotionState.Default;
-            BehaviorProfile? behaviorProfile = null;
+            // 执行状态标志
             bool succeeded = false;
             Exception? streamingException = null;
 
@@ -209,14 +200,9 @@ public sealed class AgentRunner(
                 IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
                 SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
 
-                // 情绪：执行前读取状态，映射行为模式
-                if (_emotionStore is not null)
-                    emotionState = await _emotionStore.GetCurrentAsync(agent.Id, ct);
-                behaviorProfile = _emotionBehaviorMapper?.GetProfile(emotionState);
-
                 List<ChatMessage> messages = await BuildChatMessagesAsync(
                     agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
-                    behaviorSuffix: behaviorProfile?.SystemPromptSuffix,
+                    behaviorSuffix: null,
                     providerId: provider.Id, ct);
 
                 // 工具收集
@@ -254,8 +240,8 @@ public sealed class AgentRunner(
                 // AgentFactory：创建 ChatClientAgent + 事件 Channel
                 ChatOptions chatOptions = BuildChatOptions(
                     toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
-                    temperatureOverride: behaviorProfile?.Temperature,
-                    topPOverride: behaviorProfile?.TopP);
+                    temperatureOverride: null,
+                    topPOverride: null);
                 IChatClient rawClient = clientFactory.Create(provider);
                 var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
                     rawClient, agent.Name, chatOptions, loggerFactory,
@@ -378,18 +364,6 @@ public sealed class AgentRunner(
                     if (!string.IsNullOrWhiteSpace(sessionId))
                         await agentStatusNotifier.NotifyAsync(
                             sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
-
-                    // 情绪：执行后更新情绪状态
-                    if (_emotionStore is not null && _emotionRuleEngine is not null)
-                    {
-                        EmotionEventType emotionEvent = succeeded
-                            ? EmotionEventType.TaskCompleted
-                            : EmotionEventType.TaskFailed;
-                        EmotionState newState = _emotionRuleEngine.Evaluate(emotionState, emotionEvent);
-                        await _emotionStore.SaveAsync(agent.Id, newState, CancellationToken.None);
-                        _logger.LogDebug("情绪更新：AgentId={AgentId} 事件={Event} 模式={Mode}",
-                            agent.Id, emotionEvent, behaviorProfile?.Mode);
-                    }
                 }
 
                 // streamingException 被内层 catch 捕获 → 尝试下一个 Provider

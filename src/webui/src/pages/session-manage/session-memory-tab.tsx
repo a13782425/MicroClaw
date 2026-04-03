@@ -74,7 +74,7 @@ export function SessionMemoryTab({ session }: { session: SessionInfo }) {
       <Box>
         <HStack justify="space-between" mb="1">
           <Text fontSize="xs" color="var(--mc-text-muted)">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
-          <IconButton aria-label="刷新" size="xs" variant="ghost" onClick={loadData}>
+          <IconButton aria-label="刷新" size="xs" variant="ghost" data-mc-refresh="true" onClick={loadData}>
             <RefreshCw size={14} />
           </IconButton>
         </HStack>

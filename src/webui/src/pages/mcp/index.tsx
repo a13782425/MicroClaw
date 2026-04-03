@@ -410,7 +410,7 @@ export default function McpPage() {
       <HStack mb="4" justify="space-between">
         <Text fontWeight="semibold" fontSize="lg">MCP 服务器</Text>
         <HStack>
-          <Button size="sm" variant="outline" onClick={load} loading={loading}><RefreshCw size={14} /></Button>
+          <Button size="sm" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}><RefreshCw size={14} /></Button>
           <Button size="sm" colorPalette="blue" onClick={openCreate}><Plus size={14} />新建</Button>
         </HStack>
       </HStack>

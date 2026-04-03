@@ -14,7 +14,7 @@ namespace MicroClaw.Sessions;
 /// 会话元数据存储在 sessions.yaml（通过 MicroClawConfig），消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// </summary>
 public sealed class SessionStore(string sessionsDir)
-    : ISessionReader, ISessionMessageRemover
+    : ISessionReader, ISessionMessageRemover, IAllSessionsReader
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
@@ -61,7 +61,7 @@ public sealed class SessionStore(string sessionsDir)
             try
             {
                 return GetItems()
-                    .Where(e => e.ParentSessionId == null)
+                    .Where(e => string.IsNullOrWhiteSpace(e.ParentSessionId))
                     .OrderByDescending(e => e.CreatedAtMs)
                     .Select(ToInfo)
                     .ToList().AsReadOnly();
@@ -284,6 +284,9 @@ public sealed class SessionStore(string sessionsDir)
         }
         finally { _lock.ExitWriteLock(); }
     }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<SessionInfo> GetAll() => All;
 
     private static SessionInfo ToInfo(SessionEntity e) =>
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,

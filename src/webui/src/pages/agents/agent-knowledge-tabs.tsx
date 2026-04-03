@@ -73,7 +73,7 @@ export function SafetyMemoryTab({ agent }: { agent: AgentConfig }) {
     <Box p="3">
       <HStack mb="3" justify="space-between">
         <Text fontSize="sm" fontWeight="medium">安全记忆</Text>
-        <Button size="xs" variant="outline" onClick={load} loading={loading}>刷新</Button>
+        <Button size="xs" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}>刷新</Button>
       </HStack>
 
       {loading && <Spinner size="sm" />}
@@ -190,7 +190,7 @@ export function EmotionTab({ agent }: { agent: AgentConfig }) {
               {day}天
             </Button>
           ))}
-          <Button size="xs" variant="outline" onClick={load} loading={loading}>刷新</Button>
+          <Button size="xs" variant="outline" data-mc-refresh="true" onClick={load} loading={loading}>刷新</Button>
         </HStack>
       </HStack>
 

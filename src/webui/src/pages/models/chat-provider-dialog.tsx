@@ -137,7 +137,15 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
       footer={(
         <>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button colorPalette="blue" loading={saving} onClick={handleSave}>保存</Button>
+          <Button
+            loading={saving}
+            onClick={handleSave}
+            bg="var(--mc-send-button-bg)"
+            color="var(--mc-send-button-color)"
+            _hover={{ opacity: 0.92 }}
+          >
+            保存
+          </Button>
         </>
       )}
     >
@@ -218,7 +226,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                   key={modality.key}
                   variant="subtle"
                   size="sm"
-                  colorPalette="teal"
+                  colorPalette="blue"
                   checked={form[modality.key as keyof ChatFormState] as boolean}
                   onCheckedChange={(e) => set(modality.key as keyof ChatFormState, !!e.checked)}
                 >
@@ -238,7 +246,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                   key={modality.key}
                   variant="subtle"
                   size="sm"
-                  colorPalette="teal"
+                  colorPalette="blue"
                   checked={form[modality.key as keyof ChatFormState] as boolean}
                   onCheckedChange={(e) => set(modality.key as keyof ChatFormState, !!e.checked)}
                 >

@@ -57,7 +57,7 @@ export function RagStatsTab() {
             <NativeSelect.Indicator />
           </NativeSelect.Root>
         </HStack>
-        <Button size="sm" variant="outline" onClick={fetchStats} loading={loading}>
+        <Button size="sm" variant="outline" data-mc-refresh="true" onClick={fetchStats} loading={loading}>
           <RefreshCw size={14} />
           刷新
         </Button>

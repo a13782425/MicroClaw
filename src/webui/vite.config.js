@@ -12,8 +12,11 @@ export default defineConfig(({ mode }) => {
         if (!normalizedId.includes('/node_modules/')) {
             return undefined;
         }
-        if (normalizedId.includes('/recharts/')
-            || normalizedId.includes('/@chakra-ui/charts/')) {
+        // recharts 体积大 (500+ kB)，单独分组以减小单个 chunk 大小
+        if (normalizedId.includes('/recharts/')) {
+            return 'vendor-recharts';
+        }
+        if (normalizedId.includes('/@chakra-ui/charts/')) {
             return 'vendor-charts';
         }
         if (normalizedId.includes('/marked/')

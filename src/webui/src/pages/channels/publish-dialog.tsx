@@ -59,7 +59,7 @@ export function PublishDialog({ open, channel, sessions, onClose }: PublishDialo
       footer={(
         <>
           <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button colorPalette="green" loading={sending} disabled={!content.trim()} onClick={handleSend}>
+          <Button bg="var(--mc-success)" color="var(--mc-send-button-color)" _hover={{ opacity: 0.92 }} loading={sending} disabled={!content.trim()} onClick={handleSend}>
             <Send size={14} /> 发送
           </Button>
         </>

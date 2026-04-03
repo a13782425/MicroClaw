@@ -96,20 +96,36 @@ export default function ModelsPage() {
           <Text fontSize="xl" fontWeight="bold">模型</Text>
           <Text color="var(--mc-text-muted)" fontSize="sm" mt="1">管理 AI 模型提供方，支持聊天模型与嵌入模型</Text>
         </Box>
-        <Button colorPalette={activeTab === 'embedding' ? 'purple' : 'blue'} onClick={openAdd} aria-label="添加提供方">
+        <Button
+          onClick={openAdd}
+          aria-label="添加提供方"
+          bg={activeTab === 'embedding' ? 'var(--mc-accent)' : 'var(--mc-send-button-bg)'}
+          color="var(--mc-send-button-color)"
+          _hover={{ opacity: 0.92 }}
+        >
           <Plus size={16} /> 添加提供方
         </Button>
       </Flex>
 
       <Tabs.Root value={activeTab} onValueChange={(details) => setActiveTab(details.value as ModelType)}>
-        <Tabs.List mb="4">
-          <Tabs.Trigger value="chat">
+        <Tabs.List mb="4" bg="var(--mc-input)" borderWidth="1px" borderColor="var(--mc-border)" borderRadius="md" p="1">
+          <Tabs.Trigger
+            value="chat"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
             聊天模型
-            {chatProviders.length > 0 && <Badge ml="2" size="sm" colorPalette="blue" variant="subtle">{chatProviders.length}</Badge>}
+            {chatProviders.length > 0 && <Badge ml="2" size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">{chatProviders.length}</Badge>}
           </Tabs.Trigger>
-          <Tabs.Trigger value="embedding">
+          <Tabs.Trigger
+            value="embedding"
+            color="var(--mc-text-muted)"
+            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
+            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
+          >
             嵌入模型
-            {embeddingProviders.length > 0 && <Badge ml="2" size="sm" colorPalette="purple" variant="subtle">{embeddingProviders.length}</Badge>}
+            {embeddingProviders.length > 0 && <Badge ml="2" size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">{embeddingProviders.length}</Badge>}
           </Tabs.Trigger>
         </Tabs.List>
 

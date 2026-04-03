@@ -72,7 +72,7 @@ function DateRangeFilter({
         onChange={onEndDateChange}
         placeholder="结束日期"
       />
-      <Button size="sm" colorPalette="blue" loading={loading} onClick={onSearch}>
+      <Button size="sm" variant="outline" data-mc-refresh="true" loading={loading} onClick={onSearch}>
         <RefreshCw size={14} />查询
       </Button>
     </HStack>

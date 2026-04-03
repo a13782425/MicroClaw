@@ -281,7 +281,7 @@ export default function SandboxPanel({ sessionId, onClose }: SandboxPanelProps) 
         <Text fontSize="xs" fontWeight="semibold" flex="1" color="var(--mc-text-muted)">
           沙盒文件{totalFiles > 0 ? ` (${totalFiles})` : ''}
         </Text>
-        <IconButton aria-label="刷新" title="刷新" size="xs" variant="ghost" onClick={load} loading={loading}>
+        <IconButton aria-label="刷新" title="刷新" size="xs" variant="ghost" data-mc-refresh="true" onClick={load} loading={loading}>
           <RefreshCw size={13} />
         </IconButton>
         <IconButton aria-label="关闭" title="关闭" size="xs" variant="ghost" onClick={onClose}>

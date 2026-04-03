@@ -99,7 +99,7 @@ export function GlobalKnowledgeTab() {
           已上传 {docs.length} 个文档，分块后嵌入向量库，供 Agent 语义检索使用。
         </Text>
         <HStack>
-          <Button size="sm" variant="outline" onClick={fetchDocs} loading={loading}>
+          <Button size="sm" variant="outline" data-mc-refresh="true" onClick={fetchDocs} loading={loading}>
             <RefreshCw size={14} />
             刷新
           </Button>
@@ -161,6 +161,7 @@ export function GlobalKnowledgeTab() {
                     <Button
                       size="xs"
                       variant="ghost"
+                      data-mc-refresh="true"
                       colorPalette="blue"
                       onClick={() => openConfirm(doc, 'reindex')}
                     >

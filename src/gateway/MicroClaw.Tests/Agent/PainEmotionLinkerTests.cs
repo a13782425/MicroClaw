@@ -1,7 +1,9 @@
 using FluentAssertions;
-using MicroClaw.Agent;
-using MicroClaw.Emotion;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
 using MicroClaw.Safety;
 using NSubstitute;
 
@@ -9,8 +11,22 @@ namespace MicroClaw.Tests.Agent;
 
 public class PainEmotionLinkerTests
 {
-    private static PainMemory MakePain(PainSeverity severity, string agentId = "agent-1")
+    private const string AgentId = "agent-1";
+    private const string SessionId = "session-1";
+
+    private static PainMemory MakePain(PainSeverity severity, string agentId = AgentId)
         => PainMemory.Create(agentId, "trigger", "consequence", "strategy", severity);
+
+    private static SessionInfo MakeSession(string sessionId, string agentId) =>
+        new SessionInfo(
+            Id: sessionId,
+            Title: "test",
+            ProviderId: "test",
+            IsApproved: true,
+            ChannelType: ChannelType.Web,
+            ChannelId: "web",
+            CreatedAt: DateTimeOffset.UtcNow,
+            AgentId: agentId);
 
     // ── 构造参数校验 ──────────────────────────────────────────────────────────
 
@@ -18,7 +34,8 @@ public class PainEmotionLinkerTests
     public void Constructor_NullEmotionStore_Throws()
     {
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var act = () => new PainEmotionLinker(null!, engine);
+        var reader = Substitute.For<IAllSessionsReader>();
+        var act = () => new PainEmotionLinker(null!, engine, reader);
         act.Should().Throw<ArgumentNullException>();
     }
 
@@ -26,7 +43,17 @@ public class PainEmotionLinkerTests
     public void Constructor_NullRuleEngine_Throws()
     {
         var store = Substitute.For<IEmotionStore>();
-        var act = () => new PainEmotionLinker(store, null!);
+        var reader = Substitute.For<IAllSessionsReader>();
+        var act = () => new PainEmotionLinker(store, null!, reader);
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Constructor_NullSessionsReader_Throws()
+    {
+        var store = Substitute.For<IEmotionStore>();
+        var engine = Substitute.For<IEmotionRuleEngine>();
+        var act = () => new PainEmotionLinker(store, engine, null!);
         act.Should().Throw<ArgumentNullException>();
     }
 
@@ -37,10 +64,12 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var linker = new PainEmotionLinker(store, engine);
+        var reader = Substitute.For<IAllSessionsReader>();
+        var linker = new PainEmotionLinker(store, engine, reader);
 
         await linker.LinkAsync(MakePain(PainSeverity.Low));
 
+        reader.DidNotReceive().GetAll();
         await store.DidNotReceive().GetCurrentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await store.DidNotReceive().SaveAsync(Arg.Any<string>(), Arg.Any<EmotionState>(), Arg.Any<CancellationToken>());
     }
@@ -50,10 +79,12 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var linker = new PainEmotionLinker(store, engine);
+        var reader = Substitute.For<IAllSessionsReader>();
+        var linker = new PainEmotionLinker(store, engine, reader);
 
         await linker.LinkAsync(MakePain(PainSeverity.Medium));
 
+        reader.DidNotReceive().GetAll();
         await store.DidNotReceive().GetCurrentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await store.DidNotReceive().SaveAsync(Arg.Any<string>(), Arg.Any<EmotionState>(), Arg.Any<CancellationToken>());
     }
@@ -63,16 +94,19 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
+        var reader = Substitute.For<IAllSessionsReader>();
         var current = EmotionState.Default;
         var updated = EmotionState.Default with { Alertness = 72 };
-        store.GetCurrentAsync("agent-1", Arg.Any<CancellationToken>()).Returns(current);
+
+        reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
+        store.GetCurrentAsync(SessionId, Arg.Any<CancellationToken>()).Returns(current);
         engine.Evaluate(current, EmotionEventType.PainOccurredHigh).Returns(updated);
 
-        var linker = new PainEmotionLinker(store, engine);
+        var linker = new PainEmotionLinker(store, engine, reader);
         await linker.LinkAsync(MakePain(PainSeverity.High));
 
         engine.Received(1).Evaluate(current, EmotionEventType.PainOccurredHigh);
-        await store.Received(1).SaveAsync("agent-1", updated, Arg.Any<CancellationToken>());
+        await store.Received(1).SaveAsync(SessionId, updated, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -80,16 +114,19 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
+        var reader = Substitute.For<IAllSessionsReader>();
         var current = EmotionState.Default;
         var updated = EmotionState.Default with { Alertness = 82, Confidence = 22 };
-        store.GetCurrentAsync("agent-1", Arg.Any<CancellationToken>()).Returns(current);
+
+        reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
+        store.GetCurrentAsync(SessionId, Arg.Any<CancellationToken>()).Returns(current);
         engine.Evaluate(current, EmotionEventType.PainOccurredCritical).Returns(updated);
 
-        var linker = new PainEmotionLinker(store, engine);
+        var linker = new PainEmotionLinker(store, engine, reader);
         await linker.LinkAsync(MakePain(PainSeverity.Critical));
 
         engine.Received(1).Evaluate(current, EmotionEventType.PainOccurredCritical);
-        await store.Received(1).SaveAsync("agent-1", updated, Arg.Any<CancellationToken>());
+        await store.Received(1).SaveAsync(SessionId, updated, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -97,7 +134,8 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var linker = new PainEmotionLinker(store, engine);
+        var reader = Substitute.For<IAllSessionsReader>();
+        var linker = new PainEmotionLinker(store, engine, reader);
 
         var act = () => linker.LinkAsync(null!);
         await act.Should().ThrowAsync<ArgumentNullException>();
@@ -106,17 +144,39 @@ public class PainEmotionLinkerTests
     [Fact]
     public async Task LinkAsync_HighSeverity_UsesAgentIdFromMemory()
     {
-        const string agentId = "my-special-agent";
+        const string myAgentId = "my-special-agent";
+        const string mySessionId = "my-special-session";
+
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        store.GetCurrentAsync(agentId, Arg.Any<CancellationToken>()).Returns(EmotionState.Default);
+        var reader = Substitute.For<IAllSessionsReader>();
+
+        reader.GetAll().Returns(new[] { MakeSession(mySessionId, myAgentId) }.ToList().AsReadOnly());
+        store.GetCurrentAsync(mySessionId, Arg.Any<CancellationToken>()).Returns(EmotionState.Default);
         engine.Evaluate(Arg.Any<EmotionState>(), Arg.Any<EmotionEventType>()).Returns(EmotionState.Default);
 
-        var linker = new PainEmotionLinker(store, engine);
-        await linker.LinkAsync(MakePain(PainSeverity.High, agentId));
+        var linker = new PainEmotionLinker(store, engine, reader);
+        await linker.LinkAsync(MakePain(PainSeverity.High, myAgentId));
 
-        await store.Received(1).GetCurrentAsync(agentId, Arg.Any<CancellationToken>());
-        await store.Received(1).SaveAsync(agentId, Arg.Any<EmotionState>(), Arg.Any<CancellationToken>());
+        await store.Received(1).GetCurrentAsync(mySessionId, Arg.Any<CancellationToken>());
+        await store.Received(1).SaveAsync(mySessionId, Arg.Any<EmotionState>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LinkAsync_NoSessionForAgent_DoesNotCallStore()
+    {
+        var store = Substitute.For<IEmotionStore>();
+        var engine = Substitute.For<IEmotionRuleEngine>();
+        var reader = Substitute.For<IAllSessionsReader>();
+
+        // 没有任何 session 匹配该 agentId
+        reader.GetAll().Returns(new[] { MakeSession("other-session", "other-agent") }.ToList().AsReadOnly());
+
+        var linker = new PainEmotionLinker(store, engine, reader);
+        await linker.LinkAsync(MakePain(PainSeverity.High));
+
+        await store.DidNotReceive().GetCurrentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().SaveAsync(Arg.Any<string>(), Arg.Any<EmotionState>(), Arg.Any<CancellationToken>());
     }
 
     // ── 端到端：规则引擎真实实例 ────────────────────────────────────────────────
@@ -126,7 +186,10 @@ public class PainEmotionLinkerTests
     {
         var emotionStoreSubstitute = Substitute.For<IEmotionStore>();
         var ruleEngine = new EmotionRuleEngine();
-        EmotionState initial = EmotionState.Default; // alertness=50
+        var reader = Substitute.For<IAllSessionsReader>();
+        EmotionState initial = EmotionState.Default;
+
+        reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
         emotionStoreSubstitute.GetCurrentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(initial);
 
@@ -135,7 +198,7 @@ public class PainEmotionLinkerTests
             .SaveAsync(Arg.Any<string>(), Arg.Do<EmotionState>(s => saved = s), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
-        var linker = new PainEmotionLinker(emotionStoreSubstitute, ruleEngine);
+        var linker = new PainEmotionLinker(emotionStoreSubstitute, ruleEngine, reader);
         await linker.LinkAsync(MakePain(PainSeverity.High));
 
         saved.Should().NotBeNull();
@@ -151,7 +214,10 @@ public class PainEmotionLinkerTests
         var emotionStoreSubstitute = Substitute.For<IEmotionStore>();
         var ruleEngine = new EmotionRuleEngine();
         var mapper = new EmotionBehaviorMapper();
+        var reader = Substitute.For<IAllSessionsReader>();
         EmotionState initial = EmotionState.Default;
+
+        reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
         emotionStoreSubstitute.GetCurrentAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(initial);
 
@@ -160,7 +226,7 @@ public class PainEmotionLinkerTests
             .SaveAsync(Arg.Any<string>(), Arg.Do<EmotionState>(s => saved = s), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
-        var linker = new PainEmotionLinker(emotionStoreSubstitute, ruleEngine);
+        var linker = new PainEmotionLinker(emotionStoreSubstitute, ruleEngine, reader);
         await linker.LinkAsync(MakePain(PainSeverity.Critical));
 
         saved.Should().NotBeNull();
