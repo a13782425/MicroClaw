@@ -406,7 +406,7 @@ export default function SessionsPage() {
         {/* 会话列表（树形） */}
         <Box flex="1" overflowY="auto" py="1">
           {sessions.length === 0 && (
-            <Flex align="center" justify="center" h="full" flexDir="column" gap="2" color="gray.400">
+            <Flex align="center" justify="center" h="full" flexDir="column" gap="2" color="var(--mc-text-muted)">
               <MessageCircle size={32} />
               <Text fontSize="sm">暂无会话</Text>
               <Button size="sm" onClick={() => setShowCreate(true)}>新建会话</Button>
@@ -429,7 +429,7 @@ export default function SessionsPage() {
       {/* ── 右侧聊天区 ── */}
       <Flex flex="1" flexDir="column" overflow="hidden">
         {!store.currentSessionId ? (
-          <Flex align="center" justify="center" flex="1" flexDir="column" gap="3" color="gray.400">
+          <Flex align="center" justify="center" flex="1" flexDir="column" gap="3" color="var(--mc-text-muted)">
             <MessageCircle size={48} />
             <Text>选择或创建一个会话开始对话</Text>
             <Button colorPalette="blue" onClick={() => setShowCreate(true)}>
@@ -563,22 +563,22 @@ export default function SessionsPage() {
                     <Flex align="center" gap="2" px="4" py="3" mb="2">
                       <Flex gap="1" align="center">
                         <Box
-                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          w="6px" h="6px" borderRadius="full" bg="var(--mc-info)"
                           animation="bounce 1.4s infinite ease-in-out"
                           css={{ animationDelay: '0s' }}
                         />
                         <Box
-                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          w="6px" h="6px" borderRadius="full" bg="var(--mc-info)"
                           animation="bounce 1.4s infinite ease-in-out"
                           css={{ animationDelay: '0.2s' }}
                         />
                         <Box
-                          w="6px" h="6px" borderRadius="full" bg="blue.400"
+                          w="6px" h="6px" borderRadius="full" bg="var(--mc-info)"
                           animation="bounce 1.4s infinite ease-in-out"
                           css={{ animationDelay: '0.4s' }}
                         />
                       </Flex>
-                      <Text fontSize="xs" color="gray.400">AI 正在思考…</Text>
+                      <Text fontSize="xs" color="var(--mc-text-muted)">AI 正在思考…</Text>
                     </Flex>
                   )}
                 </>
@@ -599,7 +599,7 @@ export default function SessionsPage() {
               <Flex
                 borderTopWidth="1px" px="4" py="3" flexShrink={0}
                 align="center" justify="center" gap="2"
-                color="gray.400" bg="gray.50" _dark={{ bg: 'gray.800' }}
+                color="var(--mc-text-muted)" bg="var(--mc-surface-muted)"
               >
                 <EyeOff size={14} />
                 <Text fontSize="sm">子代理会话，仅供查看</Text>
@@ -613,7 +613,7 @@ export default function SessionsPage() {
                       <Flex
                         key={i} align="center" gap="1"
                         px="2" py="1" borderRadius="md"
-                        bg="gray.100" _dark={{ bg: 'gray.700' }}
+                        bg="var(--mc-surface-muted)"
                         fontSize="xs"
                       >
                         {att.mimeType.startsWith('image/') ? (

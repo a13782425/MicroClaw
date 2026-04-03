@@ -95,9 +95,9 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
     >
       <Dialog.Backdrop />
       <Dialog.Positioner>
-        <Dialog.Content maxW="420px" bg="white" _dark={{ bg: 'gray.900', borderColor: 'gray.700' }} borderWidth="1px" borderColor="gray.200">
-          <Dialog.Header borderBottomWidth="1px" borderColor="gray.200" _dark={{ borderColor: 'gray.700' }} pb="3">
-            <Dialog.Title color="gray.900" _dark={{ color: 'gray.100' }} fontSize="md">
+        <Dialog.Content maxW="420px" bg="white" borderWidth="1px" borderColor="var(--mc-border)">
+          <Dialog.Header borderBottomWidth="1px" borderColor="var(--mc-border)" pb="3">
+            <Dialog.Title color="var(--mc-text)" fontSize="md">
               节点属性
             </Dialog.Title>
           </Dialog.Header>
@@ -105,15 +105,15 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
             <VStack gap="4" align="stretch">
               {/* 节点类型 */}
               <Box>
-                <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">节点类型</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">节点类型</Text>
                 <NativeSelect.Root size="sm">
                   <NativeSelect.Field
                     value={type}
                     onChange={(e) => setType(e.target.value as WorkflowNodeConfig['type'])}
-                    bg="gray.50"
-                    _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                    borderColor="gray.300"
-                    color="gray.900"
+                    bg="var(--mc-surface-muted)"
+                   
+                    borderColor="var(--mc-border)"
+                    color="var(--mc-text)"
                   >
                     {NODE_TYPES.map((t) => (
                       <option key={t} value={t}>{t}</option>
@@ -125,7 +125,7 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
 
               {/* 节点标签 */}
               <Box>
-                <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">
+                <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">
                   标签 <Text as="span" color="red.500">*</Text>
                 </Text>
                 <Input
@@ -133,25 +133,25 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="节点显示名称"
-                  bg="gray.50"
-                  _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                  borderColor="gray.300"
-                  color="gray.900"
+                  bg="var(--mc-surface-muted)"
+                 
+                  borderColor="var(--mc-border)"
+                  color="var(--mc-text)"
                 />
               </Box>
 
               {/* Agent 选择（仅 type=Agent 时） */}
               {type === 'Agent' && (
                 <Box>
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">绑定 Agent</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">绑定 Agent</Text>
                   <NativeSelect.Root size="sm">
                     <NativeSelect.Field
                       value={agentId}
                       onChange={(e) => setAgentId(e.target.value)}
-                      bg="gray.50"
-                      _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                      borderColor="gray.300"
-                      color="gray.900"
+                      bg="var(--mc-surface-muted)"
+                     
+                      borderColor="var(--mc-border)"
+                      color="var(--mc-text)"
                     >
                       <option value="">（未绑定）</option>
                       {agents.map((a) => (
@@ -163,7 +163,7 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                     <NativeSelect.Indicator />
                   </NativeSelect.Root>
                   {agents.length === 0 && (
-                    <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} mt="1">
+                    <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
                       暂无可用 Agent，请先在 Agent 页面创建
                     </Text>
                   )}
@@ -173,15 +173,15 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
               {/* Function 配置（仅 type=Function 时）— 仅内置函数 */}
               {type === 'Function' && (
                 <Box>
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">函数名称</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">函数名称</Text>
                   <NativeSelect.Root size="sm">
                     <NativeSelect.Field
                       value={functionName}
                       onChange={(e) => setFunctionName(e.target.value)}
-                      bg="gray.50"
-                      _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                      borderColor="gray.300"
-                      color="gray.900"
+                      bg="var(--mc-surface-muted)"
+                     
+                      borderColor="var(--mc-border)"
+                      color="var(--mc-text)"
                     >
                       <option value="">（选择函数）</option>
                       <option value="uppercase">uppercase — 转大写</option>
@@ -197,15 +197,15 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
               {type === 'Tool' && (
                 <>
                   <Box>
-                    <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择 Agent</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">选择 Agent</Text>
                     <NativeSelect.Root size="sm">
                       <NativeSelect.Field
                         value={toolAgentId}
                         onChange={(e) => { setToolAgentId(e.target.value); setFunctionName('') }}
-                        bg="gray.50"
-                        _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                        borderColor="gray.300"
-                        color="gray.900"
+                        bg="var(--mc-surface-muted)"
+                       
+                        borderColor="var(--mc-border)"
+                        color="var(--mc-text)"
                       >
                         <option value="">（选择 Agent）</option>
                         {agents.map((a) => (
@@ -219,15 +219,15 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                   </Box>
                   {toolAgentId && (
                     <Box>
-                      <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择工具</Text>
+                      <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">选择工具</Text>
                       <NativeSelect.Root size="sm">
                         <NativeSelect.Field
                           value={functionName}
                           onChange={(e) => setFunctionName(e.target.value)}
-                          bg="gray.50"
-                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                          borderColor="gray.300"
-                          color="gray.900"
+                          bg="var(--mc-surface-muted)"
+                         
+                          borderColor="var(--mc-border)"
+                          color="var(--mc-text)"
                         >
                           <option value="">（选择工具）</option>
                           {mcpTools.map((t) => (
@@ -239,7 +239,7 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                         <NativeSelect.Indicator />
                       </NativeSelect.Root>
                       {mcpTools.length === 0 && (
-                        <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} mt="1">
+                        <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
                           该 Agent 无可用工具
                         </Text>
                       )}
@@ -251,15 +251,15 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
               {/* SwitchModel 配置（仅 type=SwitchModel 时） */}
               {type === 'SwitchModel' && (
                 <Box>
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">选择 Provider</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">选择 Provider</Text>
                   <NativeSelect.Root size="sm">
                     <NativeSelect.Field
                       value={providerId}
                       onChange={(e) => setProviderId(e.target.value)}
-                      bg="gray.50"
-                      _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                      borderColor="gray.300"
-                      color="gray.900"
+                      bg="var(--mc-surface-muted)"
+                     
+                      borderColor="var(--mc-border)"
+                      color="var(--mc-text)"
                     >
                       <option value="">（选择 Provider）</option>
                       {providers.map((p) => (
@@ -271,7 +271,7 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                     <NativeSelect.Indicator />
                   </NativeSelect.Root>
                   {providers.length === 0 && (
-                    <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} mt="1">
+                    <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
                       暂无可用 Provider，请先在模型页面配置
                     </Text>
                   )}
@@ -281,17 +281,17 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
               {/* 路由条件（type=Router 时提示） */}
               {type === 'Router' && (
                 <Box>
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} mb="1" fontWeight="medium">路由说明</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mb="1" fontWeight="medium">路由说明</Text>
                   <Textarea
                     size="sm"
                     value={condition}
                     onChange={(e) => setCondition(e.target.value)}
                     placeholder="描述路由判断逻辑（仅供参考，在连线上配置实际条件）"
                     rows={2}
-                    bg="gray.50"
-                    _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                    borderColor="gray.300"
-                    color="gray.900"
+                    bg="var(--mc-surface-muted)"
+                   
+                    borderColor="var(--mc-border)"
+                    color="var(--mc-text)"
                     fontSize="sm"
                   />
                 </Box>
@@ -299,19 +299,19 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
 
               {/* 节点 ID（只读，供调试） */}
               <Box>
-                <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.600' }} mb="1">节点 ID（只读）</Text>
-                <Text fontSize="xs" color="gray.500" fontFamily="mono">
+                <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">节点 ID（只读）</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" fontFamily="mono">
                   {node?.nodeId}
                 </Text>
               </Box>
 
               {/* 扩展配置键值对 */}
-              <Box borderTopWidth="1px" borderColor="gray.200" _dark={{ borderColor: 'gray.700' }} pt="3">
+              <Box borderTopWidth="1px" borderColor="var(--mc-border)" pt="3">
                 <HStack justify="space-between" mb="2">
-                  <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.400' }} fontWeight="medium">
+                  <Text fontSize="xs" color="var(--mc-text-muted)" fontWeight="medium">
                     扩展配置
                     {configEntries.length > 0 && (
-                      <Text as="span" color="blue.500" ml="1">({configEntries.length})</Text>
+                      <Text as="span" color="var(--mc-info)" ml="1">({configEntries.length})</Text>
                     )}
                   </Text>
                   <Button
@@ -339,9 +339,9 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                           }}
                           placeholder="键"
                           fontFamily="mono"
-                          bg="gray.50"
-                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                          borderColor="gray.300"
+                          bg="var(--mc-surface-muted)"
+                         
+                          borderColor="var(--mc-border)"
                         />
                         <Input
                           size="xs"
@@ -353,9 +353,9 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
                             setConfigEntries(updated)
                           }}
                           placeholder="值"
-                          bg="gray.50"
-                          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                          borderColor="gray.300"
+                          bg="var(--mc-surface-muted)"
+                         
+                          borderColor="var(--mc-border)"
                         />
                         <Button
                           size="xs"
@@ -381,7 +381,7 @@ export function NodeConfigDialog({ node, agents, providers, onClose, onSave }: N
               </Box>
             </VStack>
           </Dialog.Body>
-          <Dialog.Footer borderTopWidth="1px" borderColor="gray.200" _dark={{ borderColor: 'gray.700' }} pt="3">
+          <Dialog.Footer borderTopWidth="1px" borderColor="var(--mc-border)" pt="3">
             <HStack gap="2" justify="flex-end">
               <Button
                 size="sm"

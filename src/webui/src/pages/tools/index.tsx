@@ -18,11 +18,11 @@ function ToolGroupCard({ group }: { group: GlobalToolGroup }) {
   const badge = TYPE_LABELS[group.type] ?? { label: group.type, color: 'gray' }
   return (
     <Box borderWidth="1px" rounded="md" overflow="hidden">
-      <HStack px="4" py="3" bg="gray.50" _dark={{ bg: 'gray.800' }}>
+      <HStack px="4" py="3" bg="var(--mc-surface-muted)">
         <Wrench size={14} />
         <Text fontWeight="medium" fontSize="sm" flex="1">{group.name}</Text>
         <Badge size="sm" colorPalette={badge.color}>{badge.label}</Badge>
-        <Text fontSize="xs" color="gray.500">{group.tools.length} 个工具</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)">{group.tools.length} 个工具</Text>
         {group.loadError && <Badge size="sm" colorPalette="red">加载错误</Badge>}
       </HStack>
       <Table.Root size="sm">
@@ -30,7 +30,7 @@ function ToolGroupCard({ group }: { group: GlobalToolGroup }) {
           {group.tools.map((t) => (
             <Table.Row key={t.name}>
               <Table.Cell w="200px" fontWeight="medium" fontSize="xs">{t.name}</Table.Cell>
-              <Table.Cell fontSize="xs" color="gray.500">{t.description}</Table.Cell>
+              <Table.Cell fontSize="xs" color="var(--mc-text-muted)">{t.description}</Table.Cell>
             </Table.Row>
           ))}
         </Table.Body>
@@ -48,12 +48,12 @@ function ToolGroupList({ groups, type }: { groups: GlobalToolGroup[]; type: stri
   )
 
   if (filtered.length === 0) {
-    return <Text color="gray.400" textAlign="center" py="8">暂无工具</Text>
+    return <Text color="var(--mc-text-muted)" textAlign="center" py="8">暂无工具</Text>
   }
 
   return (
     <VStack gap="4" align="stretch">
-      <Text fontSize="sm" color="gray.500">{filtered.length} 个工具分组</Text>
+      <Text fontSize="sm" color="var(--mc-text-muted)">{filtered.length} 个工具分组</Text>
       {filtered.map((g) => <ToolGroupCard key={g.id} group={g} />)}
     </VStack>
   )

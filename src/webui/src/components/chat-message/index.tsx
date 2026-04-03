@@ -124,8 +124,7 @@ function ThinkBlock({ content }: { content: string }) {
     <Box
       borderWidth="1px"
       borderRadius="md"
-      borderColor="purple.200"
-      _dark={{ borderColor: 'purple.700' }}
+      borderColor="var(--mc-thinking-border)"
       mb="2"
       overflow="hidden"
     >
@@ -134,14 +133,13 @@ function ThinkBlock({ content }: { content: string }) {
         gap="1"
         px="3"
         py="1"
-        bg="purple.50"
-        _dark={{ bg: 'purple.900' }}
+        bg="var(--mc-thinking-bg)"
         cursor="pointer"
         onClick={() => setOpen(!open)}
         userSelect="none"
       >
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <Text fontSize="xs" color="purple.600" _dark={{ color: 'purple.300' }}>
+        <Text fontSize="xs" color="var(--mc-thinking-label)">
           思考过程
         </Text>
       </Flex>
@@ -150,11 +148,10 @@ function ThinkBlock({ content }: { content: string }) {
           px="3"
           py="2"
           fontSize="xs"
-          color="gray.600"
-          _dark={{ color: 'gray.400', bg: 'purple.950' }}
+          color="var(--mc-text-muted)"
           whiteSpace="pre-wrap"
           fontFamily="mono"
-          bg="purple.50"
+          bg="var(--mc-thinking-bg)"
         >
           {content}
         </Box>
@@ -238,13 +235,13 @@ function MarkdownContent({ content }: { content: string }) {
       css={{
         '& p': { marginBottom: '0.5em' },
         '& p:last-child': { marginBottom: 0 },
-        '& pre': { borderRadius: '6px', overflow: 'auto', padding: '12px', background: '#1e1e1e', color: '#d4d4d4', fontSize: '0.85em', marginBottom: '0.5em' },
-        '& code:not(pre > code)': { background: 'rgba(0,0,0,0.08)', borderRadius: '3px', padding: '1px 4px', fontSize: '0.85em', fontFamily: 'monospace' },
+        '& pre': { borderRadius: '6px', overflow: 'auto', padding: '12px', background: 'var(--mc-code-bg)', color: 'var(--mc-code-text)', fontSize: '0.85em', marginBottom: '0.5em' },
+        '& code:not(pre > code)': { background: 'var(--mc-inline-code-bg)', borderRadius: '3px', padding: '1px 4px', fontSize: '0.85em', fontFamily: 'monospace' },
         '& ul, & ol': { paddingLeft: '1.5em', marginBottom: '0.5em' },
-        '& blockquote': { borderLeft: '3px solid', borderColor: 'gray.300', paddingLeft: '0.75em', color: 'gray.500', marginBottom: '0.5em' },
+        '& blockquote': { borderLeft: '3px solid', borderColor: 'var(--mc-blockquote-border)', paddingLeft: '0.75em', color: 'var(--mc-blockquote-text)', marginBottom: '0.5em' },
         '& table': { borderCollapse: 'collapse', width: '100%', marginBottom: '0.5em' },
-        '& th, & td': { border: '1px solid', borderColor: 'gray.200', padding: '4px 8px' },
-        '& a': { color: 'blue.400', textDecoration: 'underline' },
+        '& th, & td': { border: '1px solid', borderColor: 'var(--mc-table-border)', padding: '4px 8px' },
+        '& a': { color: 'var(--mc-link-color)', textDecoration: 'underline' },
         '& h1, & h2, & h3': { fontWeight: 'bold', marginBottom: '0.3em' },
       }}
     />
@@ -295,12 +292,10 @@ export default function ChatMessage({ message, isStreaming, resultMessage, progr
     >
       <Box
         maxW="80%"
-        bg={isUser ? 'blue.500' : 'white'}
-        color={isUser ? 'white' : 'gray.800'}
-        _dark={{
-          bg: isUser ? 'blue.600' : 'gray.700',
-          color: isUser ? 'white' : 'gray.100',
-        }}
+        bg={isUser ? 'var(--mc-user-bubble)' : 'var(--mc-ai-bubble-bg)'}
+        color={isUser ? 'var(--mc-user-bubble-text)' : 'var(--mc-text)'}
+        borderWidth={isUser ? '0' : '1px'}
+        borderColor={isUser ? undefined : 'var(--mc-ai-bubble-border)'}
         borderRadius="lg"
         px="4"
         py="3"

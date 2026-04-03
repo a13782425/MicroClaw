@@ -43,7 +43,7 @@ function SessionList({
       <Box flex="1" overflowY="auto">
         {filtered.length === 0 && (
           <Box p="6" textAlign="center">
-            <Text color="gray.500" fontSize="sm">暂无会话</Text>
+            <Text color="var(--mc-text-muted)" fontSize="sm">暂无会话</Text>
           </Box>
         )}
         <For each={filtered}>
@@ -56,7 +56,7 @@ function SessionList({
                 cursor="pointer"
                 borderBottomWidth="1px"
                 bg={isActive ? 'blue.50' : undefined}
-                _dark={{ bg: isActive ? 'blue.900' : undefined }}
+               
                 _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.800' } }}
                 onClick={() => onSelect(s)}
               >
@@ -134,7 +134,7 @@ function DnaTab({ session }: { session: SessionInfo }) {
   }
 
   if (loading) return <Box p="4"><Spinner /></Box>
-  if (files.length === 0) return <Box p="4"><Text color="gray.500" fontSize="sm">暂无 DNA 文件</Text></Box>
+  if (files.length === 0) return <Box p="4"><Text color="var(--mc-text-muted)" fontSize="sm">暂无 DNA 文件</Text></Box>
 
   const currentFile = files.find((f) => f.fileName === activeFile)
 
@@ -158,7 +158,7 @@ function DnaTab({ session }: { session: SessionInfo }) {
       {currentFile && (
         <Flex direction="column" flex="1" p="3" gap="2" overflow="hidden">
           {currentFile.description && (
-            <Text fontSize="xs" color="gray.500">{currentFile.description}</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">{currentFile.description}</Text>
           )}
           <Textarea
             flex="1"
@@ -256,7 +256,7 @@ function MemoryTab({ session }: { session: SessionInfo }) {
       {/* 长期记忆（只读） */}
       <Box>
         <HStack justify="space-between" mb="1">
-          <Text fontSize="xs" color="gray.500">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
           <IconButton aria-label="刷新" size="xs" variant="ghost" onClick={loadData}>
             <RefreshCw size={14} />
           </IconButton>
@@ -270,18 +270,18 @@ function MemoryTab({ session }: { session: SessionInfo }) {
           readOnly
           value={memoryContent}
           spellCheck={false}
-          bg="gray.50"
-          _dark={{ bg: 'gray.800' }}
+          bg="var(--mc-surface-muted)"
+         
         />
       </Box>
 
       {/* RAG Chunks 管理 */}
       <Box flex="1" overflow="auto">
-        <Text fontSize="xs" color="gray.500" mb="1">
+        <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">
           RAG 知识片段（{chunks.length} 个）— 可删除或修改命中次数
         </Text>
         {chunks.length === 0 ? (
-          <Text fontSize="sm" color="gray.400" p="4" textAlign="center">暂无 RAG 知识片段</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)" p="4" textAlign="center">暂无 RAG 知识片段</Text>
         ) : (
           <Table.Root size="sm" variant="outline">
             <Table.Header>
@@ -302,7 +302,7 @@ function MemoryTab({ session }: { session: SessionInfo }) {
                     </Text>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text fontSize="xs" color="gray.500">{chunk.sourceId}</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)">{chunk.sourceId}</Text>
                   </Table.Cell>
                   <Table.Cell>
                     <HStack gap="1">
@@ -334,7 +334,7 @@ function MemoryTab({ session }: { session: SessionInfo }) {
                     </HStack>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="var(--mc-text-muted)">
                       {new Date(chunk.createdAtMs).toLocaleDateString()}
                     </Text>
                   </Table.Cell>
@@ -399,7 +399,7 @@ function ApprovalTab({
   return (
     <VStack align="start" p="4" gap="4">
       <HStack>
-        <Text fontSize="sm" color="gray.600">当前状态：</Text>
+        <Text fontSize="sm" color="var(--mc-text-muted)">当前状态：</Text>
         {session.isApproved
           ? <Badge colorPalette="green" size="md">已批准</Badge>
           : <Badge colorPalette="orange" size="md">待审批</Badge>
@@ -407,7 +407,7 @@ function ApprovalTab({
       </HStack>
       {session.approvalReason && (
         <Box>
-          <Text fontSize="xs" color="gray.500">审批原因：{session.approvalReason}</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">审批原因：{session.approvalReason}</Text>
         </Box>
       )}
       <HStack>
@@ -514,7 +514,7 @@ export default function SessionManagePage() {
       <Flex flex="1" direction="column" overflow="hidden">
         {!selected ? (
           <Flex flex="1" align="center" justify="center">
-            <Em color="gray.400">从左侧选择一个会话</Em>
+            <Em color="var(--mc-text-muted)">从左侧选择一个会话</Em>
           </Flex>
         ) : (
           <>

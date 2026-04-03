@@ -73,7 +73,7 @@ export function SessionMemoryTab({ session }: { session: SessionInfo }) {
     <Flex direction="column" h="100%" p="3" gap="3" overflow="auto">
       <Box>
         <HStack justify="space-between" mb="1">
-          <Text fontSize="xs" color="gray.500">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">长期记忆（MEMORY.md）— 只读，由 AI 自动维护</Text>
           <IconButton aria-label="刷新" size="xs" variant="ghost" onClick={loadData}>
             <RefreshCw size={14} />
           </IconButton>
@@ -87,17 +87,17 @@ export function SessionMemoryTab({ session }: { session: SessionInfo }) {
           readOnly
           value={memoryContent}
           spellCheck={false}
-          bg="gray.50"
-          _dark={{ bg: 'gray.800' }}
+          bg="var(--mc-surface-muted)"
+         
         />
       </Box>
 
       <Box flex="1" overflow="auto">
-        <Text fontSize="xs" color="gray.500" mb="1">
+        <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">
           RAG 知识片段（{chunks.length} 个）— 可删除或修改命中次数
         </Text>
         {chunks.length === 0 ? (
-          <Text fontSize="sm" color="gray.400" p="4" textAlign="center">暂无 RAG 知识片段</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)" p="4" textAlign="center">暂无 RAG 知识片段</Text>
         ) : (
           <Table.Root size="sm" variant="outline">
             <Table.Header>
@@ -118,7 +118,7 @@ export function SessionMemoryTab({ session }: { session: SessionInfo }) {
                     </Text>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text fontSize="xs" color="gray.500">{chunk.sourceId}</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)">{chunk.sourceId}</Text>
                   </Table.Cell>
                   <Table.Cell>
                     <HStack gap="1">
@@ -150,7 +150,7 @@ export function SessionMemoryTab({ session }: { session: SessionInfo }) {
                     </HStack>
                   </Table.Cell>
                   <Table.Cell>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="var(--mc-text-muted)">
                       {new Date(chunk.createdAtMs).toLocaleDateString()}
                     </Text>
                   </Table.Cell>

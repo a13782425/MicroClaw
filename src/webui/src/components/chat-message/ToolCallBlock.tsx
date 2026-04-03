@@ -26,16 +26,15 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
     <Box
       borderWidth="1px"
       borderRadius="md"
-      borderColor={hasResult ? 'blue.200' : 'blue.300'}
-      _dark={{ borderColor: hasResult ? 'blue.700' : 'blue.500' }}
+      borderColor="var(--mc-tool-call-border)"
       overflow="hidden"
       mb="2"
       maxW="80%"
       css={!hasResult ? {
         animation: 'pulse-border 2s ease-in-out infinite',
         '@keyframes pulse-border': {
-          '0%, 100%': { borderColor: 'var(--chakra-colors-blue-200)' },
-          '50%': { borderColor: 'var(--chakra-colors-blue-400)' },
+          '0%, 100%': { borderColor: 'var(--mc-tool-call-border)' },
+          '50%': { opacity: 0.6 },
         },
       } : undefined}
     >
@@ -45,8 +44,8 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
         gap="2"
         px="3"
         py="1.5"
-        bg="blue.50"
-        _dark={{ bg: 'blue.900' }}
+        bg="var(--mc-tool-call-bg)"
+        color="var(--mc-text)"
       >
         <Wrench size={14} />
         <Text fontSize="xs" fontWeight="medium" flex="1">
@@ -79,11 +78,10 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
             onClick={() => setArgsOpen(!argsOpen)}
             userSelect="none"
             borderTopWidth="1px"
-            borderColor="blue.100"
-            _dark={{ borderColor: 'blue.800' }}
+            borderColor="var(--mc-tool-call-border)"
           >
             {argsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="var(--mc-text-muted)">
               参数
             </Text>
           </Flex>
@@ -93,8 +91,8 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
               py="2"
               fontSize="xs"
               fontFamily="mono"
-              bg="gray.50"
-              _dark={{ bg: 'gray.800' }}
+              bg="var(--mc-card)"
+              color="var(--mc-text)"
               whiteSpace="pre-wrap"
               overflowX="auto"
             >
@@ -116,11 +114,10 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
             onClick={() => setResultOpen(!resultOpen)}
             userSelect="none"
             borderTopWidth="1px"
-            borderColor="blue.100"
-            _dark={{ borderColor: 'blue.800' }}
+            borderColor="var(--mc-tool-call-border)"
           >
             {resultOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="var(--mc-text-muted)">
               结果
             </Text>
           </Flex>
@@ -130,8 +127,8 @@ export default function ToolCallBlock({ message, resultMessage }: ToolCallBlockP
               py="2"
               fontSize="xs"
               fontFamily="mono"
-              bg="gray.50"
-              _dark={{ bg: 'gray.800' }}
+              bg="var(--mc-card)"
+              color="var(--mc-text)"
               whiteSpace="pre-wrap"
               overflowX="auto"
               maxH="300px"

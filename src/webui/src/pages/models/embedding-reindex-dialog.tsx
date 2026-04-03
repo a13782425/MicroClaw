@@ -84,10 +84,10 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
           </>
         )}
       >
-        <Text color="gray.500" fontSize="sm" mb="4">
+        <Text color="var(--mc-text-muted)" fontSize="sm" mb="4">
           切换嵌入模型后，旧向量维度与新模型不兼容。建议立即对所有知识库进行重索引以确保搜索正常。
         </Text>
-        <Text color="gray.400" fontSize="sm">点击「开始重索引」以自动处理全局文档与所有会话知识库。</Text>
+        <Text color="var(--mc-text-muted)" fontSize="sm">点击「开始重索引」以自动处理全局文档与所有会话知识库。</Text>
       </AppDialog>
     )
   }
@@ -103,7 +103,7 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
         </Button>
       ) : undefined}
     >
-      <Text color="gray.500" fontSize="sm" mb="4">
+      <Text color="var(--mc-text-muted)" fontSize="sm" mb="4">
         切换嵌入模型后，旧向量维度与新模型不兼容。建议立即对所有知识库进行重索引以确保搜索正常。
       </Text>
       {isRunning && (
@@ -112,7 +112,7 @@ export function EmbeddingReindexDialog({ open, onClose }: { open: boolean; onClo
           <Box>
             <Text fontSize="sm" fontWeight="medium">正在重索引中…</Text>
             {status && (
-              <Text fontSize="xs" color="gray.500" mt="1">
+              <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
                 已完成 {status.completed} / {status.total}
                 {status.currentItem && `（当前：${status.currentItem}）`}
               </Text>

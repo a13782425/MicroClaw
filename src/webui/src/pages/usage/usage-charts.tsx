@@ -283,7 +283,7 @@ export function AgentUsageTable({
   }, [agents])
 
   if (data.length === 0) {
-    return <Box py="4" color="gray.400" textAlign="center">暂无按 Agent 分组的数据（需重新查询启用 agentId 追踪后的数据）</Box>
+    return <Box py="4" color="var(--mc-text-muted)" textAlign="center">暂无按 Agent 分组的数据（需重新查询启用 agentId 追踪后的数据）</Box>
   }
 
   return (
@@ -316,7 +316,7 @@ export function AgentUsageTable({
                   {pct !== null ? (
                     <Box>
                       <HStack mb="1" justify="space-between">
-                        <Text fontSize="xs" color="gray.500">${row.estimatedCostUsd.toFixed(4)} / ${budget!.toFixed(2)}</Text>
+                        <Text fontSize="xs" color="var(--mc-text-muted)">${row.estimatedCostUsd.toFixed(4)} / ${budget!.toFixed(2)}</Text>
                         <Text fontSize="xs" color={`${budgetColor}.500`} fontWeight="medium">{pct.toFixed(1)}%</Text>
                       </HStack>
                       <Progress.Root value={pct} colorPalette={budgetColor} size="sm">
@@ -324,7 +324,7 @@ export function AgentUsageTable({
                       </Progress.Root>
                     </Box>
                   ) : (
-                    <Text fontSize="xs" color="gray.400">未设置预算</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)">未设置预算</Text>
                   )}
                 </Table.Cell>
               </Table.Row>

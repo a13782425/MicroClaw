@@ -22,13 +22,13 @@ function EnvVarPills({ vars }: { vars: McpEnvVarInfo[] }) {
           borderWidth="1px"
           borderColor={v.isSet ? 'green.300' : 'orange.300'}
           bg={v.isSet ? 'green.50' : 'orange.50'}
-          _dark={{ bg: v.isSet ? 'green.900' : 'orange.900', borderColor: v.isSet ? 'green.600' : 'orange.600' }}
+         
           fontSize="xs"
         >
           {v.isSet
             ? <CheckCircle size={10} color="var(--chakra-colors-green-500)" />
             : <XCircle size={10} color="var(--chakra-colors-orange-500)" />}
-          <Text fontFamily="mono" color={v.isSet ? 'green.700' : 'orange.700'} _dark={{ color: v.isSet ? 'green.300' : 'orange.300' }}>
+          <Text fontFamily="mono" color={v.isSet ? 'green.700' : 'orange.700'}>
             ${`{${v.name}}`}
           </Text>
         </HStack>
@@ -125,7 +125,7 @@ export function McpServerCard({ server: s, expanded, tools, toolsLoading, onExpa
 
         {/* Command / URL line */}
         {cmdOrUrl && (
-          <Text fontSize="xs" fontFamily="mono" color="gray.500" mt="1.5" truncate title={cmdOrUrl}>
+          <Text fontSize="xs" fontFamily="mono" color="var(--mc-text-muted)" mt="1.5" truncate title={cmdOrUrl}>
             {cmdOrUrl}
           </Text>
         )}
@@ -139,7 +139,7 @@ export function McpServerCard({ server: s, expanded, tools, toolsLoading, onExpa
           gap="1"
           mt="2"
           cursor="pointer"
-          color="gray.500"
+          color="var(--mc-text-muted)"
           _hover={{ color: 'gray.700' }}
           onClick={() => onExpand(s.id)}
           userSelect="none"
@@ -151,15 +151,15 @@ export function McpServerCard({ server: s, expanded, tools, toolsLoading, onExpa
 
         {/* Tools list */}
         {expanded && (
-          <Box mt="1.5" pl="3" borderLeftWidth="2px" borderLeftColor="gray.200" _dark={{ borderLeftColor: 'gray.700' }}>
+          <Box mt="1.5" pl="3" borderLeftWidth="2px" borderLeftColor="var(--mc-border)">
             {toolsLoading && <Spinner size="sm" />}
             {!toolsLoading && (tools ?? []).length === 0 && (
-              <Text fontSize="xs" color="gray.400">无工具（或尚未加载）</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">无工具（或尚未加载）</Text>
             )}
             {!toolsLoading && (tools ?? []).map((t) => (
               <HStack key={t.name} py="0.5">
                 <Text fontSize="xs" fontWeight="medium" w="160px" truncate>{t.name}</Text>
-                <Text fontSize="xs" color="gray.500" truncate>{t.description}</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" truncate>{t.description}</Text>
               </HStack>
             ))}
           </Box>

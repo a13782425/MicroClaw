@@ -35,7 +35,13 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={onClose} disabled={loading}>
             {cancelText}
           </Button>
-          <Button colorPalette={colorPalette} onClick={onConfirm} loading={loading}>
+          <Button
+            colorPalette={colorPalette === 'red' ? undefined : colorPalette}
+            bg={colorPalette === 'red' ? 'var(--mc-danger)' : undefined}
+            color={colorPalette === 'red' ? 'var(--mc-send-button-color)' : undefined}
+            onClick={onConfirm}
+            loading={loading}
+          >
             {confirmText}
           </Button>
         </>

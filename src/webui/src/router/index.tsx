@@ -28,7 +28,7 @@ function RouteFallback() {
         minHeight: '40vh',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#64748b',
+        color: 'var(--mc-text-muted)',
         fontSize: '14px',
       }}
     >

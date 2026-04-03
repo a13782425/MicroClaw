@@ -27,7 +27,7 @@ export function DateRangeFilter({
         onChange={onStartDateChange}
         placeholder="开始日期"
       />
-      <Text fontSize="sm" color="gray.400">—</Text>
+      <Text fontSize="sm" color="var(--mc-text-muted)">—</Text>
       <DateInput
         ariaLabel="结束日期"
         value={endDate}

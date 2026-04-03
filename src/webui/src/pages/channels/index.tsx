@@ -154,7 +154,7 @@ export default function ChannelsPage() {
                   gap="2"
                   cursor="pointer"
                   bg={isActive ? 'blue.50' : undefined}
-                  _dark={{ bg: isActive ? 'blue.900' : undefined }}
+                 
                   _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.700' } }}
                   onClick={() => setSelectedType(typeInfo.type as ChannelType)}
                 >
@@ -176,7 +176,7 @@ export default function ChannelsPage() {
         <Flex align="center" justify="space-between" mb="4">
           <Box>
             <Text fontWeight="semibold">{selectedTypeInfo?.displayName ?? selectedType} 渠道</Text>
-            <Text fontSize="xs" color="gray.500">已配置的渠道实例</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">已配置的渠道实例</Text>
           </Box>
           <Flex gap="2">
             <Button size="sm" variant="ghost" onClick={() => loadChannels(selectedType)}>
@@ -193,7 +193,7 @@ export default function ChannelsPage() {
         {loading ? (
           <Flex justify="center" py="8"><Spinner /></Flex>
         ) : channels.length === 0 ? (
-          <Flex align="center" justify="center" py="12" flexDir="column" gap="3" color="gray.400">
+          <Flex align="center" justify="center" py="12" flexDir="column" gap="3" color="var(--mc-text-muted)">
             <Radio size={40} />
             <Text>暂无渠道配置</Text>
             {selectedTypeInfo?.canCreate && (
@@ -223,7 +223,7 @@ export default function ChannelsPage() {
                     </Flex>
 
                     {stats && (
-                      <Flex gap="4" mb="2" fontSize="xs" color="gray.500">
+                      <Flex gap="4" mb="2" fontSize="xs" color="var(--mc-text-muted)">
                         <Text color={stats.signatureFailures > 0 ? 'red.500' : undefined}>签名失败: {stats.signatureFailures}</Text>
                         <Text color={stats.aiCallFailures > 0 ? 'red.500' : undefined}>AI失败: {stats.aiCallFailures}</Text>
                         <Text color={stats.replyFailures > 0 ? 'red.500' : undefined}>回复失败: {stats.replyFailures}</Text>

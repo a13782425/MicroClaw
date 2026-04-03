@@ -29,7 +29,7 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
       <Box flex="1" overflowY="auto">
         {filtered.length === 0 && (
           <Box p="6" textAlign="center">
-            <Text color="gray.500" fontSize="sm">暂无会话</Text>
+            <Text color="var(--mc-text-muted)" fontSize="sm">暂无会话</Text>
           </Box>
         )}
         <For each={filtered}>
@@ -42,7 +42,7 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
                 cursor="pointer"
                 borderBottomWidth="1px"
                 bg={isActive ? 'blue.50' : undefined}
-                _dark={{ bg: isActive ? 'blue.900' : undefined }}
+               
                 _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.800' } }}
                 onClick={() => onSelect(session)}
               >

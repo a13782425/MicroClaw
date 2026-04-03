@@ -50,11 +50,11 @@ function ContextMenu({ x, y, onDownload, onCopy, onClose }: CtxMenuProps) {
         left={`${x}px`}
         top={`${y}px`}
         bg="white"
-        _dark={{ bg: 'gray.800' }}
+       
         boxShadow="md"
         rounded="md"
         borderWidth="1px"
-        borderColor="gray.200"
+        borderColor="var(--mc-border)"
         zIndex={9999}
         py="1"
         minW="140px"
@@ -194,7 +194,7 @@ function TreeNode({
         <FileText size={14} style={{ flexShrink: 0, opacity: 0.4 }} />
         <Box flex="1" minW={0}>
           <Text fontSize="xs" truncate title={node.relativePath}>{node.name}</Text>
-          <Text fontSize="xs" color="gray.400">{formatSize(node.size)}</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">{formatSize(node.size)}</Text>
         </Box>
         <Flex gap="1" opacity={0} _groupHover={{ opacity: 1 }} transition="opacity 0.15s">
           <IconButton
@@ -278,7 +278,7 @@ export default function SandboxPanel({ sessionId, onClose }: SandboxPanelProps) 
         borderBottomWidth="1px"
         gap="1"
       >
-        <Text fontSize="xs" fontWeight="semibold" flex="1" color="gray.600" _dark={{ color: 'gray.300' }}>
+        <Text fontSize="xs" fontWeight="semibold" flex="1" color="var(--mc-text-muted)">
           沙盒文件{totalFiles > 0 ? ` (${totalFiles})` : ''}
         </Text>
         <IconButton aria-label="刷新" title="刷新" size="xs" variant="ghost" onClick={load} loading={loading}>
@@ -297,7 +297,7 @@ export default function SandboxPanel({ sessionId, onClose }: SandboxPanelProps) 
           </Flex>
         ) : nodes.length === 0 ? (
           <Box p="4" textAlign="center">
-            <Text fontSize="xs" color="gray.400">沙盒为空</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">沙盒为空</Text>
           </Box>
         ) : (
           nodes.map(node => (

@@ -94,12 +94,12 @@ export function ToolsTab({ agent }: { agent: AgentConfig }) {
         </HStack>
       </HStack>
       {groups.length === 0 && (
-        <Text color="gray.500" fontSize="sm">点击「刷新」加载工具列表</Text>
+        <Text color="var(--mc-text-muted)" fontSize="sm">点击「刷新」加载工具列表</Text>
       )}
       <VStack gap="2" align="stretch">
         {groups.map((group) => (
           <Box key={group.id} borderWidth="1px" rounded="md" overflow="hidden">
-            <HStack px="3" py="2" bg="gray.50" _dark={{ bg: 'gray.800' }}>
+            <HStack px="3" py="2" bg="var(--mc-surface-muted)">
               <Switch.Root size="sm" checked={group.isEnabled} onCheckedChange={(e) => toggleGroup(group.id, e.checked)}>
                 <Switch.HiddenInput />
                 <Switch.Control><Switch.Thumb /></Switch.Control>
@@ -108,7 +108,7 @@ export function ToolsTab({ agent }: { agent: AgentConfig }) {
               <Badge size="xs" colorPalette={group.type === 'builtin' ? 'orange' : 'blue'}>
                 {group.type === 'builtin' ? '内置' : 'MCP'}
               </Badge>
-              <Text fontSize="xs" color="gray.500">{group.tools.length} 个工具</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">{group.tools.length} 个工具</Text>
             </HStack>
             <VStack gap="0" divideY="1px" align="stretch" px="3">
               {group.tools.map((tool) => (
@@ -124,7 +124,7 @@ export function ToolsTab({ agent }: { agent: AgentConfig }) {
                   </Switch.Root>
                   <Box flex="1">
                     <Text fontSize="xs" fontWeight="medium">{tool.name}</Text>
-                    {tool.description && <Text fontSize="xs" color="gray.500" truncate>{tool.description}</Text>}
+                    {tool.description && <Text fontSize="xs" color="var(--mc-text-muted)" truncate>{tool.description}</Text>}
                   </Box>
                 </HStack>
               ))}
@@ -181,7 +181,7 @@ export function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a
         <Badge size="sm" colorPalette="blue">{servers.length - disabledIds.length} 个已启用</Badge>
       </HStack>
       {servers.length === 0 && (
-        <Text color="gray.500" fontSize="sm">暂无全局 MCP Server，请先在 MCP 管理页创建</Text>
+        <Text color="var(--mc-text-muted)" fontSize="sm">暂无全局 MCP Server，请先在 MCP 管理页创建</Text>
       )}
       <VStack gap="2" align="stretch">
         {servers.map((server) => (
@@ -192,7 +192,7 @@ export function McpTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated: (a
             </Switch.Root>
             <Badge size="xs" colorPalette="gray">{server.transportType}</Badge>
             <Text fontSize="sm" flex="1">{server.name}</Text>
-            <Text fontSize="xs" color="gray.500" truncate maxW="200px">
+            <Text fontSize="xs" color="var(--mc-text-muted)" truncate maxW="200px">
               {server.transportType === 'stdio'
                 ? [server.command, ...(server.args ?? [])].join(' ')
                 : server.url}
@@ -259,7 +259,7 @@ export function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated:
         )}
       </HStack>
       {skills.length === 0 && (
-        <Text color="gray.500" fontSize="sm">暂无可用技能</Text>
+        <Text color="var(--mc-text-muted)" fontSize="sm">暂无可用技能</Text>
       )}
       <VStack gap="2" align="stretch">
         {skills.map((skill) => (
@@ -272,7 +272,7 @@ export function SkillsTab({ agent, onUpdated }: { agent: AgentConfig; onUpdated:
             />
             <Box flex="1">
               <Text fontSize="sm" fontWeight="medium">{skill.name}</Text>
-              {skill.description && <Text fontSize="xs" color="gray.500">{skill.description}</Text>}
+              {skill.description && <Text fontSize="xs" color="var(--mc-text-muted)">{skill.description}</Text>}
             </Box>
           </HStack>
         ))}
@@ -330,7 +330,7 @@ export function DnaTab({ agent }: { agent: AgentConfig }) {
   }
 
   if (loading) return <Box p="4"><Spinner /></Box>
-  if (files.length === 0) return <Box p="4"><Text color="gray.500" fontSize="sm">暂无 DNA 文件</Text></Box>
+  if (files.length === 0) return <Box p="4"><Text color="var(--mc-text-muted)" fontSize="sm">暂无 DNA 文件</Text></Box>
 
   const currentFile = files.find((file) => file.fileName === activeFile)
 
@@ -353,7 +353,7 @@ export function DnaTab({ agent }: { agent: AgentConfig }) {
       {currentFile && (
         <Flex direction="column" flex="1" p="3" gap="2" overflow="hidden">
           {currentFile.description && (
-            <Text fontSize="xs" color="gray.500">{currentFile.description}</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">{currentFile.description}</Text>
           )}
           <Textarea
             flex="1"
@@ -447,7 +447,7 @@ export function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConf
             rounded="md"
             cursor="pointer"
             bg={mode === item ? 'blue.50' : undefined}
-            _dark={{ bg: mode === item ? 'blue.900' : undefined }}
+           
             onClick={() => setMode(item)}
           >
             <input type="radio" checked={mode === item} readOnly style={{ cursor: 'pointer' }} />
@@ -460,9 +460,9 @@ export function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConf
 
       {mode === 'select' && (
         <Box>
-          <Text fontSize="xs" color="gray.500" mb="2">选择允许调用的子代理：</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">选择允许调用的子代理：</Text>
           {candidates.length === 0 ? (
-            <Text fontSize="sm" color="gray.400">暂无其他已启用代理</Text>
+            <Text fontSize="sm" color="var(--mc-text-muted)">暂无其他已启用代理</Text>
           ) : (
             <VStack gap="1" align="stretch">
               {candidates.map((candidate) => (
@@ -478,7 +478,7 @@ export function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConf
                       <Text fontSize="sm" fontWeight="medium">{candidate.name}</Text>
                       {candidate.isDefault && <Badge size="xs" colorPalette="yellow">DEFAULT</Badge>}
                     </HStack>
-                    {candidate.description && <Text fontSize="xs" color="gray.500">{candidate.description}</Text>}
+                    {candidate.description && <Text fontSize="xs" color="var(--mc-text-muted)">{candidate.description}</Text>}
                   </Box>
                 </HStack>
               ))}
@@ -491,9 +491,9 @@ export function SubAgentsTab({ agent, allAgents, onUpdated }: { agent: AgentConf
         <Box mt="4"><Spinner size="sm" /></Box>
       ) : (
         <Box mt="4">
-          <Text fontSize="xs" color="gray.500" mb="1">当前实际可调用的子代理 ({available.length} 个)</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">当前实际可调用的子代理 ({available.length} 个)</Text>
           {available.length === 0 ? (
-            <Text fontSize="sm" color="gray.400">无可调用子代理</Text>
+            <Text fontSize="sm" color="var(--mc-text-muted)">无可调用子代理</Text>
           ) : (
             <HStack gap="1" flexWrap="wrap">
               {available.map((subAgent) => (

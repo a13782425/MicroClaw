@@ -95,7 +95,7 @@ export function GlobalKnowledgeTab() {
   return (
     <Box>
       <HStack justify="space-between" mb="4">
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="var(--mc-text-muted)">
           已上传 {docs.length} 个文档，分块后嵌入向量库，供 Agent 语义检索使用。
         </Text>
         <HStack>
@@ -119,21 +119,21 @@ export function GlobalKnowledgeTab() {
 
       {loading && docs.length === 0 ? (
         <Box py="12" textAlign="center">
-          <Spinner size="lg" color="blue.500" />
-          <Text mt="3" color="gray.500">加载中…</Text>
+          <Spinner size="lg" color="var(--mc-info)" />
+          <Text mt="3" color="var(--mc-text-muted)">加载中…</Text>
         </Box>
       ) : docs.length === 0 ? (
-        <Box py="16" textAlign="center" border="1px dashed" borderColor="gray.200" borderRadius="lg">
+        <Box py="16" textAlign="center" border="1px dashed" borderColor="var(--mc-border)" borderRadius="lg">
           <FileText size={40} color="var(--chakra-colors-gray-300)" style={{ margin: '0 auto 12px' }} />
-          <Text color="gray.500" fontWeight="medium">暂无已索引文档</Text>
-          <Text fontSize="sm" color="gray.400" mt="1">
+          <Text color="var(--mc-text-muted)" fontWeight="medium">暂无已索引文档</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)" mt="1">
             点击「上传文档」添加 .txt 或 .md 文件
           </Text>
         </Box>
       ) : (
         <Table.Root size="sm" variant="outline" borderRadius="md" overflow="hidden">
           <Table.Header>
-            <Table.Row bg="gray.50">
+            <Table.Row bg="var(--mc-surface-muted)">
               <Table.ColumnHeader>文件名</Table.ColumnHeader>
               <Table.ColumnHeader width="100px" textAlign="center">分块数</Table.ColumnHeader>
               <Table.ColumnHeader width="180px">索引时间</Table.ColumnHeader>
@@ -154,7 +154,7 @@ export function GlobalKnowledgeTab() {
                   <Text fontSize="sm">{doc.chunkCount}</Text>
                 </Table.Cell>
                 <Table.Cell>
-                  <Text fontSize="sm" color="gray.500">{formatDate(doc.indexedAtMs)}</Text>
+                  <Text fontSize="sm" color="var(--mc-text-muted)">{formatDate(doc.indexedAtMs)}</Text>
                 </Table.Cell>
                 <Table.Cell textAlign="right">
                   <HStack gap="1" justify="flex-end">

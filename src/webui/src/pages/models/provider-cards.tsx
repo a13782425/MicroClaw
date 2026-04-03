@@ -25,16 +25,16 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
           </Badge>
         </Flex>
 
-        <Flex align="center" gap="1" color="gray.600" _dark={{ color: 'gray.400' }} fontSize="sm" mb="1">
+        <Flex align="center" gap="1" color="var(--mc-text-muted)" fontSize="sm" mb="1">
           <Cpu size={13} />
           <Text>{p.modelName}</Text>
         </Flex>
-        <Text fontSize="xs" color="gray.400" mb="1">
+        <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">
           最大输出 {p.maxOutputTokens.toLocaleString()} tokens
         </Text>
 
         {p.baseUrl && (
-          <Flex align="center" gap="1" color="gray.500" fontSize="xs" mb="2">
+          <Flex align="center" gap="1" color="var(--mc-text-muted)" fontSize="xs" mb="2">
             <LinkIcon size={11} />
             <Text truncate>{p.baseUrl}</Text>
           </Flex>
@@ -58,7 +58,7 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
         </Flex>
 
         <Flex gap="2" mb="3" align="center">
-          <Text fontSize="xs" color="gray.400">路由:</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">路由:</Text>
           <Badge size="sm" colorPalette="violet" variant="subtle">质量 {p.capabilities?.qualityScore ?? 50}</Badge>
           <Badge size="sm" colorPalette={latencyTierColor(p.capabilities?.latencyTier ?? 'Medium')} variant="subtle">
             {latencyTierLabel(p.capabilities?.latencyTier ?? 'Medium')}延迟
@@ -106,13 +106,13 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
           <Badge colorPalette="blue" size="sm">OpenAI</Badge>
         </Flex>
 
-        <Flex align="center" gap="1" color="gray.600" _dark={{ color: 'gray.400' }} fontSize="sm" mb="2">
+        <Flex align="center" gap="1" color="var(--mc-text-muted)" fontSize="sm" mb="2">
           <Cpu size={13} />
           <Text>{p.modelName}</Text>
         </Flex>
 
         {p.baseUrl && (
-          <Flex align="center" gap="1" color="gray.500" fontSize="xs" mb="2">
+          <Flex align="center" gap="1" color="var(--mc-text-muted)" fontSize="xs" mb="2">
             <LinkIcon size={11} />
             <Text truncate>{p.baseUrl}</Text>
           </Flex>

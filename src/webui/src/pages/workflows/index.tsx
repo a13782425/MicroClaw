@@ -122,7 +122,7 @@ function WorkflowItem({
       borderRadius="md"
       cursor="pointer"
       bg={selected ? 'blue.50' : 'transparent'}
-      _dark={{ bg: selected ? 'blue.900' : 'transparent', borderColor: selected ? 'blue.600' : 'transparent' }}
+     
       _hover={{ bg: selected ? 'blue.100' : 'gray.100', _dark: { bg: selected ? 'blue.900' : 'gray.800' } }}
       onClick={onClick}
       borderWidth="1px"
@@ -131,8 +131,8 @@ function WorkflowItem({
     >
       <HStack justify="space-between">
         <HStack gap="2" flex={1} minW={0}>
-          <GitBranch size={14} color={workflow.isEnabled ? '#60a5fa' : '#64748b'} />
-          <Text fontSize="sm" fontWeight="medium" color="gray.900" _dark={{ color: 'gray.100' }} truncate>
+          <GitBranch size={14} color={workflow.isEnabled ? 'var(--mc-info)' : 'var(--mc-text-muted)'} />
+          <Text fontSize="sm" fontWeight="medium" color="var(--mc-text)" truncate>
             {workflow.name}
           </Text>
         </HStack>
@@ -156,11 +156,11 @@ function WorkflowItem({
         </HStack>
       </HStack>
       {workflow.description && (
-        <Text fontSize="xs" color="gray.500" _dark={{ color: 'gray.400' }} mt="0.5" truncate>
+        <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5" truncate>
           {workflow.description}
         </Text>
       )}
-      <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.600' }} mt="0.5">
+      <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5">
         {workflow.nodes.length} 节点 · {workflow.edges.length} 连线
       </Text>
     </Box>
@@ -266,42 +266,42 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
   return (
     <Flex direction="column" h="100%" gap="3">
       {/* 顶部基本信息 */}
-      <Box bg="white" _dark={{ bg: 'gray.900', borderColor: 'gray.700' }} borderRadius="md" p="3" borderWidth="1px" borderColor="gray.200">
+      <Box bg="white" borderRadius="md" p="3" borderWidth="1px" borderColor="var(--mc-border)">
         <Flex gap="3" align="end" wrap="wrap">
           <Box flex={1} minW="160px">
-            <Text fontSize="xs" color="gray.500" _dark={{ color: 'gray.400' }} mb="1">名称</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">名称</Text>
             <Input
               size="sm"
               value={name}
               onChange={(e) => { setName(e.target.value); setDirty(true) }}
-              bg="gray.50"
-              _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-              borderColor="gray.300"
-              color="gray.900"
+              bg="var(--mc-surface-muted)"
+             
+              borderColor="var(--mc-border)"
+              color="var(--mc-text)"
             />
           </Box>
           <Box flex={2} minW="200px">
-            <Text fontSize="xs" color="gray.500" _dark={{ color: 'gray.400' }} mb="1">描述</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">描述</Text>
             <Input
               size="sm"
               value={description}
               onChange={(e) => { setDescription(e.target.value); setDirty(true) }}
-              bg="gray.50"
-              _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-              borderColor="gray.300"
-              color="gray.900"
+              bg="var(--mc-surface-muted)"
+             
+              borderColor="var(--mc-border)"
+              color="var(--mc-text)"
             />
           </Box>
           <Box minW="160px">
-            <Text fontSize="xs" color="gray.500" _dark={{ color: 'gray.400' }} mb="1">默认模型</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">默认模型</Text>
             <NativeSelect.Root size="sm">
               <NativeSelect.Field
                 value={defaultProviderId}
                 onChange={(e) => { setDefaultProviderId(e.target.value); setDirty(true) }}
-                bg="gray.50"
-                _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                borderColor="gray.300"
-                color="gray.900"
+                bg="var(--mc-surface-muted)"
+               
+                borderColor="var(--mc-border)"
+                color="var(--mc-text)"
               >
                 <option value="">（跟随全局默认）</option>
                 {providers.map((p) => (
@@ -314,7 +314,7 @@ function WorkflowDetail({ workflow }: { workflow: WorkflowConfig }) {
             </NativeSelect.Root>
           </Box>
           <HStack gap="2" alignSelf="center">
-            <Text fontSize="sm" color="gray.700" _dark={{ color: 'gray.300' }}>启用</Text>
+            <Text fontSize="sm" color="var(--mc-text)">启用</Text>
             <Switch.Root
               checked={isEnabled}
               onCheckedChange={(e) => { setIsEnabled(e.checked); setDirty(true) }}
@@ -423,14 +423,14 @@ export default function WorkflowsPage() {
         w="260px"
         flexShrink={0}
         borderRightWidth="1px"
-        borderColor="gray.200"
-        _dark={{ borderColor: 'gray.700', bg: 'gray.950' }}
+        borderColor="var(--mc-border)"
+       
         display="flex"
         flexDirection="column"
-        bg="gray.50"
+        bg="var(--mc-surface-muted)"
       >
-        <HStack px="3" py="3" borderBottomWidth="1px" borderColor="gray.200" _dark={{ borderColor: 'gray.700' }} justify="space-between">
-          <Text fontWeight="semibold" fontSize="sm" color="gray.800" _dark={{ color: 'gray.200' }}>工作流</Text>
+        <HStack px="3" py="3" borderBottomWidth="1px" borderColor="var(--mc-border)" justify="space-between">
+          <Text fontWeight="semibold" fontSize="sm" color="var(--mc-text)">工作流</Text>
           <Button size="xs" variant="ghost" colorPalette="blue" onClick={() => setCreateOpen(true)}>
             <Plus size={14} />
             新建
@@ -440,11 +440,11 @@ export default function WorkflowsPage() {
         <Box flex={1} overflowY="auto" p="2">
           {loading && (
             <Flex justify="center" py="8">
-              <Spinner size="sm" color="blue.400" />
+              <Spinner size="sm" color="var(--mc-info)" />
             </Flex>
           )}
           {!loading && workflows.length === 0 && (
-            <VStack py="8" gap="2" color="gray.500">
+            <VStack py="8" gap="2" color="var(--mc-text-muted)">
               <GitBranch size={24} />
               <Text fontSize="sm">暂无工作流</Text>
             </VStack>
@@ -464,11 +464,11 @@ export default function WorkflowsPage() {
       </Box>
 
       {/* 右侧详情 */}
-      <Box flex={1} overflow="hidden" p="3" bg="gray.50" _dark={{ bg: 'gray.950' }}>
+      <Box flex={1} overflow="hidden" p="3" bg="var(--mc-bg)">
         {currentWorkflow ? (
           <WorkflowDetail workflow={currentWorkflow} />
         ) : (
-          <Flex h="100%" align="center" justify="center" color="gray.500" direction="column" gap="3">
+          <Flex h="100%" align="center" justify="center" color="var(--mc-text-muted)" direction="column" gap="3">
             <GitBranch size={40} />
             <Text>选择一个工作流开始编辑</Text>
             <Button

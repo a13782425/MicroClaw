@@ -25,7 +25,17 @@ export function AppDialog({
       <Portal>
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content maxW="480px" maxH="86vh" display="flex" flexDirection="column" {...contentProps}>
+          <Dialog.Content
+            maxW="480px"
+            maxH="86vh"
+            display="flex"
+            flexDirection="column"
+            bg="var(--mc-card)"
+            borderColor="var(--mc-border)"
+            borderWidth="var(--mc-card-border-width)"
+            borderRadius="var(--mc-dialog-radius)"
+            {...contentProps}
+          >
             <Dialog.Header flexShrink={0}>
               <Dialog.Title>{title}</Dialog.Title>
             </Dialog.Header>

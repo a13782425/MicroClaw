@@ -10,7 +10,7 @@ export default function RagPage() {
     <Box p="6">
       <Box mb="6">
         <Text fontSize="xl" fontWeight="bold">RAG 知识库</Text>
-        <Text color="gray.500" fontSize="sm" mt="1">
+        <Text color="var(--mc-text-muted)" fontSize="sm" mt="1">
           管理全局文档、会话索引、检索统计和自动遗忘配置
         </Text>
       </Box>

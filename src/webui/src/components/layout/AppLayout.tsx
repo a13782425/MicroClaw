@@ -19,11 +19,11 @@ export default function AppLayout() {
   }, [isLoggedIn])
 
   return (
-    <Flex direction="column" h="100vh">
+    <Flex direction="column" h="100vh" bg="var(--mc-bg)">
       <Header onMenuToggle={toggleSidebar} />
       <Flex flex="1" overflow="hidden">
         <Sidebar />
-        <Box flex="1" overflow="auto">
+        <Box flex="1" overflow="auto" bg="var(--mc-bg)">
           <Outlet />
         </Box>
       </Flex>

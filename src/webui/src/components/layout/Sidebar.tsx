@@ -18,10 +18,9 @@ export default function Sidebar() {
       w={sidebarCollapsed ? '52px' : '200px'}
       minW={sidebarCollapsed ? '52px' : '200px'}
       h="100%"
-      bg="gray.50"
-      _dark={{ bg: 'gray.900' }}
+      bg="var(--mc-card)"
       borderRightWidth="1px"
-      borderColor="gray.200"
+      borderColor="var(--mc-border)"
       py="2"
       display="flex"
       flexDir="column"
@@ -42,21 +41,21 @@ export default function Sidebar() {
                 py="1"
                 cursor="pointer"
                 userSelect="none"
-                _hover={{ bg: 'gray.100', _dark: { bg: 'gray.800' } }}
+                _hover={{ bg: 'var(--mc-card-hover, var(--mc-card))' }}
                 borderRadius="sm"
                 onClick={() => toggleGroup(group.title)}
               >
                 <Text
                   fontSize="xs"
                   fontWeight="semibold"
-                  color="gray.400"
+                  color="var(--mc-text-muted)"
                   textTransform="uppercase"
                   letterSpacing="wider"
                   whiteSpace="nowrap"
                 >
                   {group.title}
                 </Text>
-                <Box color="gray.400" flexShrink={0}>
+                <Box color="var(--mc-text-muted)" flexShrink={0}>
                   {isGroupCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                 </Box>
               </Flex>
@@ -78,15 +77,12 @@ export default function Sidebar() {
                     borderRadius="md"
                     cursor="pointer"
                     justify={sidebarCollapsed ? 'center' : 'flex-start'}
-                    bg={isActive(item.path) ? 'blue.50' : 'transparent'}
-                    color={isActive(item.path) ? 'blue.600' : 'gray.700'}
+                    bg={isActive(item.path) ? 'var(--mc-sidebar-active)' : 'transparent'}
+                    color={isActive(item.path) ? 'var(--mc-primary)' : 'var(--mc-text)'}
+                    borderLeftWidth={isActive(item.path) ? '2px' : '2px'}
+                    borderLeftColor={isActive(item.path) ? 'var(--mc-sidebar-active-border)' : 'transparent'}
                     _hover={{
-                      bg: isActive(item.path) ? 'blue.50' : 'gray.100',
-                      _dark: { bg: isActive(item.path) ? 'blue.900' : 'gray.700' }
-                    }}
-                    _dark={{
-                      color: isActive(item.path) ? 'blue.300' : 'gray.300',
-                      bg: isActive(item.path) ? 'blue.900' : 'transparent',
+                      bg: isActive(item.path) ? 'var(--mc-sidebar-active)' : 'var(--mc-card-hover, var(--mc-card))',
                     }}
                     onClick={() => navigate(item.path)}
                     transition="background 0.15s"
@@ -115,14 +111,15 @@ export default function Sidebar() {
         py="2"
         mt="auto"
         borderTopWidth="1px"
-        borderColor="gray.200"
+        borderColor="var(--mc-border)"
       >
         <Box
           as="button"
           p="1"
           borderRadius="md"
           cursor="pointer"
-          _hover={{ bg: 'gray.200', _dark: { bg: 'gray.700' } }}
+          color="var(--mc-text-muted)"
+          _hover={{ bg: 'var(--mc-card-hover, var(--mc-card))' }}
           onClick={toggleSidebar}
         >
           {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

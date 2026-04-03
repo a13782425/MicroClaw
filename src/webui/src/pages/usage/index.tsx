@@ -65,7 +65,7 @@ function DateRangeFilter({
         onChange={onStartDateChange}
         placeholder="开始日期"
       />
-      <Text fontSize="sm" color="gray.400">—</Text>
+      <Text fontSize="sm" color="var(--mc-text-muted)">—</Text>
       <DateInput
         ariaLabel="结束日期"
         value={endDate}
@@ -87,7 +87,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
       <Card.Body>
         <HStack justify="space-between">
           <Box>
-            <Text fontSize="xs" color="gray.500" mb="1">{label}</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">{label}</Text>
             <Text fontSize="xl" fontWeight="bold">{value}</Text>
           </Box>
           <Box color={color} opacity={0.8}><Icon size={28} /></Box>
@@ -415,7 +415,7 @@ function AgentUsageTable({
   }, [agents])
 
   if (data.length === 0) {
-    return <Box py="4" color="gray.400" textAlign="center">暂无按 Agent 分组的数据（需重新查询启用 agentId 追踪后的数据）</Box>
+    return <Box py="4" color="var(--mc-text-muted)" textAlign="center">暂无按 Agent 分组的数据（需重新查询启用 agentId 追踪后的数据）</Box>
   }
 
   return (
@@ -448,7 +448,7 @@ function AgentUsageTable({
                   {pct !== null ? (
                     <Box>
                       <HStack mb="1" justify="space-between">
-                        <Text fontSize="xs" color="gray.500">${row.estimatedCostUsd.toFixed(4)} / ${budget!.toFixed(2)}</Text>
+                        <Text fontSize="xs" color="var(--mc-text-muted)">${row.estimatedCostUsd.toFixed(4)} / ${budget!.toFixed(2)}</Text>
                         <Text fontSize="xs" color={`${budgetColor}.500`} fontWeight="medium">{pct.toFixed(1)}%</Text>
                       </HStack>
                       <Progress.Root value={pct} colorPalette={budgetColor} size="sm">
@@ -456,7 +456,7 @@ function AgentUsageTable({
                       </Progress.Root>
                     </Box>
                   ) : (
-                    <Text fontSize="xs" color="gray.400">未设置预算</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)">未设置预算</Text>
                   )}
                 </Table.Cell>
               </Table.Row>
@@ -518,7 +518,7 @@ export default function UsagePage() {
         <>
           {/* 统计卡片 */}
           <SimpleGrid columns={{ base: 2, md: 4 }} gap="4" mb="6">
-            <StatCard label="输入 Token" value={fmtTokens(summary?.totalInputTokens ?? 0)} icon={TrendingDown} color="blue.500" />
+            <StatCard label="输入 Token" value={fmtTokens(summary?.totalInputTokens ?? 0)} icon={TrendingDown} color="var(--mc-info)" />
             <StatCard label="输出 Token" value={fmtTokens(summary?.totalOutputTokens ?? 0)} icon={TrendingUp} color="green.500" />
             <StatCard label="总 Token" value={fmtTokens((summary?.totalInputTokens ?? 0) + (summary?.totalOutputTokens ?? 0))} icon={Coins} color="orange.500" />
             <StatCard label="估算费用（USD）" value={`$${(summary?.totalCostUsd ?? 0).toFixed(4)}`} icon={DollarSign} color="purple.500" />
@@ -575,7 +575,7 @@ export default function UsagePage() {
           </Box>
 
           {data.daily.length === 0 && data.byProvider.length === 0 && data.bySource.length === 0 && (
-            <Box py="8" textAlign="center" color="gray.400">该时间段内无用量数据</Box>
+            <Box py="8" textAlign="center" color="var(--mc-text-muted)">该时间段内无用量数据</Box>
           )}
         </>
       )}

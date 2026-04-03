@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Box, Flex, Text, Badge, Button, HStack, VStack, Spinner,
   Tabs,
@@ -51,14 +51,14 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
       {/* 文件列表 */}
       <Box w="200px" borderRightWidth="1px" overflowY="auto" flexShrink={0}>
         {files.length === 0 && (
-          <Text p="3" fontSize="sm" color="gray.400">暂无文件</Text>
+          <Text p="3" fontSize="sm" color="var(--mc-text-muted)">暂无文件</Text>
         )}
         {files.map(f => (
           <Box
             key={f.path}
             px="3" py="2" cursor="pointer"
             bg={selectedFile === f.path ? 'blue.50' : 'transparent'}
-            _dark={{ bg: selectedFile === f.path ? 'blue.900' : 'transparent' }}
+           
             _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
             onClick={() => selectFile(f.path)}
           >
@@ -66,7 +66,7 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
               {f.path.endsWith('.md') ? <FileText size={14} /> : <FileCode2 size={14} />}
               <Text fontSize="xs" truncate>{f.path}</Text>
             </HStack>
-            <Text fontSize="xs" color="gray.400">{(f.sizeBytes / 1024).toFixed(1)} KB</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">{(f.sizeBytes / 1024).toFixed(1)} KB</Text>
           </Box>
         ))}
       </Box>
@@ -76,7 +76,7 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
         {selectedFile ? (
           <>
             <HStack mb="2" justify="space-between">
-              <Text fontSize="xs" color="gray.500">{selectedFile}</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">{selectedFile}</Text>
             </HStack>
             <Box
               as="pre"
@@ -87,15 +87,15 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
               p="3"
               borderWidth="1px"
               borderRadius="md"
-              bg="gray.50"
-              _dark={{ bg: 'gray.900' }}
+              bg="var(--mc-surface-muted)"
+             
               minH="200px"
             >
               {content}
             </Box>
           </>
         ) : (
-          <Text color="gray.400" fontSize="sm">请从左侧选择文件</Text>
+          <Text color="var(--mc-text-muted)" fontSize="sm">请从左侧选择文件</Text>
         )}
       </Box>
     </Flex>
@@ -107,11 +107,11 @@ function FilesTab({ skill }: { skill: SkillConfig }) {
 function InfoTab({ skill }: { skill: SkillConfig }) {
   const rows: [string, React.ReactNode][] = [
     ['ID', <Text fontFamily="mono" fontSize="xs">{skill.id}</Text>],
-    ['描述', skill.description || <Text color="gray.400">无</Text>],
+    ['描述', skill.description || <Text color="var(--mc-text-muted)">无</Text>],
     ['用户可见', skill.userInvocable ? '是' : '否'],
-    ['允许工具', skill.allowedTools || <Text color="gray.400">全部</Text>],
-    ['模型', skill.model || <Text color="gray.400">继承</Text>],
-    ['推理强度', skill.effort || <Text color="gray.400">继承</Text>],
+    ['允许工具', skill.allowedTools || <Text color="var(--mc-text-muted)">全部</Text>],
+    ['模型', skill.model || <Text color="var(--mc-text-muted)">继承</Text>],
+    ['推理强度', skill.effort || <Text color="var(--mc-text-muted)">继承</Text>],
     ['禁止模型调用', skill.disableModelInvocation ? '是' : '否'],
     ['创建时间', new Date(skill.createdAtUtc).toLocaleString()],
   ]
@@ -120,7 +120,7 @@ function InfoTab({ skill }: { skill: SkillConfig }) {
     <VStack align="stretch" gap="2" p="4">
       {rows.map(([label, value]) => (
         <Flex key={label} gap="3" align="baseline">
-          <Text fontSize="sm" color="gray.500" w="100px" flexShrink={0}>{label}</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)" w="100px" flexShrink={0}>{label}</Text>
           <Box flex="1" fontSize="sm">{value}</Box>
         </Flex>
       ))}
@@ -198,7 +198,7 @@ export default function SkillsPage() {
               key={s.id}
               px="3" py="2" cursor="pointer"
               bg={selected?.id === s.id ? 'blue.50' : 'transparent'}
-              _dark={{ bg: selected?.id === s.id ? 'blue.900' : 'transparent' }}
+             
               _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
               onClick={() => setSelected(s)}
             >
@@ -209,7 +209,7 @@ export default function SkillsPage() {
                 </HStack>
               </HStack>
               {s.description && (
-                <Text fontSize="xs" color="gray.500" truncate>{s.description}</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" truncate>{s.description}</Text>
               )}
               <HStack mt="1" gap="1">
                 {s.userInvocable && <Badge size="sm" colorPalette="blue">用户可见</Badge>}
@@ -218,7 +218,7 @@ export default function SkillsPage() {
             </Box>
           ))}
           {!loading && skills.length === 0 && (
-            <Text p="3" fontSize="sm" color="gray.400">暂无技能，请点扫描</Text>
+            <Text p="3" fontSize="sm" color="var(--mc-text-muted)">暂无技能，请点扫描</Text>
           )}
         </Box>
 
@@ -256,7 +256,7 @@ export default function SkillsPage() {
             </Flex>
           ) : (
             <Flex h="100%" align="center" justify="center">
-              <Text color="gray.400">请从左侧选择技能</Text>
+              <Text color="var(--mc-text-muted)">请从左侧选择技能</Text>
             </Flex>
           )}
         </Box>

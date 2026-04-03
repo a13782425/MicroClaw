@@ -3,13 +3,14 @@
 import { ChakraProvider, createSystem, defaultConfig, defineConfig } from '@chakra-ui/react'
 import type { ReactNode } from 'react'
 import { ColorModeProvider } from './color-mode'
+import { ThemeProvider } from '../../themes/ThemeContext'
 
 const customConfig = defineConfig({
   theme: {
     semanticTokens: {
       colors: {
         border: {
-          value: { _light: '{colors.gray.300}', _dark: '{colors.gray.600}' },
+          value: '{colors.gray.300}',
         },
       },
     },
@@ -26,7 +27,9 @@ export function Provider({ children }: ProviderProps) {
   return (
     <ChakraProvider value={system}>
       <ColorModeProvider>
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </ColorModeProvider>
     </ChakraProvider>
   )

@@ -94,7 +94,7 @@ export default function ModelsPage() {
       <Flex align="center" justify="space-between" mb="6">
         <Box>
           <Text fontSize="xl" fontWeight="bold">模型</Text>
-          <Text color="gray.500" fontSize="sm" mt="1">管理 AI 模型提供方，支持聊天模型与嵌入模型</Text>
+          <Text color="var(--mc-text-muted)" fontSize="sm" mt="1">管理 AI 模型提供方，支持聊天模型与嵌入模型</Text>
         </Box>
         <Button colorPalette={activeTab === 'embedding' ? 'purple' : 'blue'} onClick={openAdd} aria-label="添加提供方">
           <Plus size={16} /> 添加提供方
@@ -117,7 +117,7 @@ export default function ModelsPage() {
           {loading ? (
             <Box py="10" textAlign="center"><Spinner /></Box>
           ) : chatProviders.length === 0 ? (
-            <Box py="12" textAlign="center" color="gray.400">暂无聊天模型</Box>
+            <Box py="12" textAlign="center" color="var(--mc-text-muted)">暂无聊天模型</Box>
           ) : (
             <SimpleGrid columns={{ base: 1, xl: 2 }} gap="4">
               {chatProviders.map((provider) => (
@@ -138,7 +138,7 @@ export default function ModelsPage() {
           {loading ? (
             <Box py="10" textAlign="center"><Spinner /></Box>
           ) : embeddingProviders.length === 0 ? (
-            <Box py="12" textAlign="center" color="gray.400">暂无嵌入模型</Box>
+            <Box py="12" textAlign="center" color="var(--mc-text-muted)">暂无嵌入模型</Box>
           ) : (
             <SimpleGrid columns={{ base: 1, xl: 2 }} gap="4">
               {embeddingProviders.map((provider) => (

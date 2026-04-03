@@ -58,7 +58,7 @@ export function SessionKnowledgeTab() {
         {sessionsLoading ? (
           <Spinner size="sm" />
         ) : sessions.length === 0 ? (
-          <Text fontSize="sm" color="gray.400">暂无会话</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)">暂无会话</Text>
         ) : (
           <NativeSelect.Root size="sm" maxW="400px" flex="1">
             <NativeSelect.Field
@@ -112,21 +112,21 @@ export function SessionKnowledgeTab() {
       <Separator mb="5" />
 
       {!selectedSessionId ? (
-        <Box py="16" textAlign="center" border="1px dashed" borderColor="gray.200" borderRadius="lg">
+        <Box py="16" textAlign="center" border="1px dashed" borderColor="var(--mc-border)" borderRadius="lg">
           <MessageSquare size={40} color="var(--chakra-colors-gray-300)" style={{ margin: '0 auto 12px' }} />
-          <Text color="gray.500" fontWeight="medium">请先选择一个会话</Text>
-          <Text fontSize="sm" color="gray.400" mt="1">选择会话后可查看其 RAG 索引状态</Text>
+          <Text color="var(--mc-text-muted)" fontWeight="medium">请先选择一个会话</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)" mt="1">选择会话后可查看其 RAG 索引状态</Text>
         </Box>
       ) : statusLoading ? (
         <Box py="12" textAlign="center">
-          <Spinner size="lg" color="blue.500" />
-          <Text mt="3" color="gray.500">加载中…</Text>
+          <Spinner size="lg" color="var(--mc-info)" />
+          <Text mt="3" color="var(--mc-text-muted)">加载中…</Text>
         </Box>
       ) : status ? (
         <Box>
           <Box mb="4">
             <Text fontSize="sm" fontWeight="semibold">{selectedSession?.title ?? selectedSessionId}</Text>
-            <Text fontSize="xs" color="gray.400">
+            <Text fontSize="xs" color="var(--mc-text-muted)">
               渠道：{selectedSession?.channelType} · ID：{selectedSessionId.slice(0, 8)}…
             </Text>
           </Box>
@@ -135,12 +135,12 @@ export function SessionKnowledgeTab() {
             <Card.Root variant="outline">
               <Card.Body py="4" px="5">
                 <HStack gap="3">
-                  <Box color="blue.500"><MessageSquare size={22} /></Box>
+                  <Box color="var(--mc-info)"><MessageSquare size={22} /></Box>
                   <Box>
                     <Text fontSize="2xl" fontWeight="bold" lineHeight="1">
                       {status.categoryCount}
                     </Text>
-                    <Text fontSize="xs" color="gray.500" mt="0.5">已建立分类数</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5">已建立分类数</Text>
                   </Box>
                 </HStack>
               </Card.Body>
@@ -159,7 +159,7 @@ export function SessionKnowledgeTab() {
                           })
                         : '—'}
                     </Text>
-                    <Text fontSize="xs" color="gray.500" mt="0.5">最近更新时间</Text>
+                    <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5">最近更新时间</Text>
                   </Box>
                 </HStack>
               </Card.Body>

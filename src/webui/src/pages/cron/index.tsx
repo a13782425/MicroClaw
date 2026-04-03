@@ -43,7 +43,7 @@ function LogDialog({ jobId, jobName, open, onClose }: { jobId: string; jobName: 
           <Dialog.Header><Dialog.Title>执行日志 — {jobName}</Dialog.Title></Dialog.Header>
           <Dialog.Body maxH="480px" overflow="auto">
             {loading && <Spinner />}
-            {!loading && logs.length === 0 && <Text color="gray.400" textAlign="center" py="4">暂无执行记录</Text>}
+            {!loading && logs.length === 0 && <Text color="var(--mc-text-muted)" textAlign="center" py="4">暂无执行记录</Text>}
             {!loading && logs.map((log) => (
               <Box key={log.id} mb="3" p="3" borderWidth="1px" rounded="md">
                 <HStack mb="1" justify="space-between">
@@ -51,7 +51,7 @@ function LogDialog({ jobId, jobName, open, onClose }: { jobId: string; jobName: 
                     <Badge size="sm" colorPalette={log.status === 'success' ? 'green' : 'red'}>{log.status}</Badge>
                     <Badge size="sm" variant="outline">{log.source}</Badge>
                   </HStack>
-                  <Text fontSize="xs" color="gray.500">{formatDate(log.triggeredAtUtc)} · {log.durationMs}ms</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)">{formatDate(log.triggeredAtUtc)} · {log.durationMs}ms</Text>
                 </HStack>
                 {log.errorMessage && <Text fontSize="xs" color="red.500" fontFamily="mono" whiteSpace="pre-wrap">{log.errorMessage}</Text>}
               </Box>
@@ -144,12 +144,12 @@ function CronDialog({ open, editing, sessions, onClose, onSaved }: CronDialogPro
               <Box>
                 <Text fontSize="sm" mb="1" fontWeight="medium">Cron 表达式 <Text as="span" color="red.500">*</Text></Text>
                 <Input value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} placeholder="如 0 9 * * * （每天9点）" fontFamily="mono" />
-                <Text fontSize="xs" color="gray.400" mt="1">格式：秒 分 时 日 月 周（6 段）</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">格式：秒 分 时 日 月 周（6 段）</Text>
               </Box>
               <Box>
                 <Text fontSize="sm" mb="1" fontWeight="medium">目标会话 <Text as="span" color="red.500">*</Text></Text>
                 {sessions.length === 0 ? (
-                  <Text fontSize="sm" color="gray.400">暂无可用会话</Text>
+                  <Text fontSize="sm" color="var(--mc-text-muted)">暂无可用会话</Text>
                 ) : (
                   <Select.Root collection={sessionCollection} value={sessionId ? [sessionId] : []} onValueChange={(e) => setSessionId(e.value[0])}>
                     <Select.HiddenSelect />
@@ -268,7 +268,7 @@ export default function CronPage() {
 
       {loading && <Box py="8" textAlign="center"><Spinner /></Box>}
       {!loading && jobs.length === 0 && (
-        <Box py="8" textAlign="center" color="gray.400">暂无计划任务，点击「新建任务」添加</Box>
+        <Box py="8" textAlign="center" color="var(--mc-text-muted)">暂无计划任务，点击「新建任务」添加</Box>
       )}
 
       {!loading && jobs.length > 0 && (
@@ -289,12 +289,12 @@ export default function CronPage() {
                 <Table.Cell>
                   <VStack gap="0" align="start">
                     <Text fontWeight="medium" fontSize="sm">{job.name}</Text>
-                    {job.description && <Text fontSize="xs" color="gray.500" truncate maxW="180px">{job.description}</Text>}
+                    {job.description && <Text fontSize="xs" color="var(--mc-text-muted)" truncate maxW="180px">{job.description}</Text>}
                   </VStack>
                 </Table.Cell>
                 <Table.Cell fontFamily="mono" fontSize="xs">{job.cronExpression}</Table.Cell>
                 <Table.Cell fontSize="xs">{getSessionName(job.targetSessionId)}</Table.Cell>
-                <Table.Cell fontSize="xs" color="gray.500">{formatDate(job.lastRunAtUtc)}</Table.Cell>
+                <Table.Cell fontSize="xs" color="var(--mc-text-muted)">{formatDate(job.lastRunAtUtc)}</Table.Cell>
                 <Table.Cell>
                   <Switch.Root size="sm" checked={job.isEnabled} onCheckedChange={(e) => handleToggle(job, e.checked)}>
                     <Switch.HiddenInput />

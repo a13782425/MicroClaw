@@ -13,7 +13,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
       <Card.Body py="4" px="5">
         <Text fontSize="2xl" fontWeight="bold" lineHeight="1.2">{value}</Text>
         <Text fontSize="sm" fontWeight="semibold" mt="1">{label}</Text>
-        {sub && <Text fontSize="xs" color="gray.400" mt="0.5">{sub}</Text>}
+        {sub && <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5">{sub}</Text>}
       </Card.Body>
     </Card.Root>
   )
@@ -65,7 +65,7 @@ export function RagStatsTab() {
 
       {loading && !stats ? (
         <Box py="16" textAlign="center">
-          <Spinner size="lg" color="blue.500" />
+          <Spinner size="lg" color="var(--mc-info)" />
         </Box>
       ) : stats ? (
         <Box>
@@ -81,7 +81,7 @@ export function RagStatsTab() {
               <HStack justify="space-between" mb="3">
                 <Box>
                   <Text fontWeight="semibold">命中率</Text>
-                  <Text fontSize="xs" color="gray.500" mt="0.5">
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mt="0.5">
                     召回结果 &gt; 0 的查询占比（{stats.hitQueries} / {stats.totalQueries}）
                   </Text>
                 </Box>
@@ -98,8 +98,8 @@ export function RagStatsTab() {
           </Card.Root>
 
           {stats.totalQueries === 0 && (
-            <Box p="4" bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.200">
-              <Text fontSize="sm" color="blue.700">
+            <Box p="4" bg="var(--mc-info-soft)" borderRadius="md" border="1px solid" borderColor="var(--mc-border)">
+              <Text fontSize="sm" color="var(--mc-info)">
                 暂无检索记录。Agent 进行 RAG 检索后，统计数据将在此处显示。
               </Text>
             </Box>

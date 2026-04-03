@@ -94,7 +94,7 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
           <Text fontWeight="semibold">子代理配置</Text>
           <Badge colorPalette="orange" size="sm">需重启生效</Badge>
         </Flex>
-        <Text fontSize="sm" color="gray.500" mb="3">子代理最大嵌套深度（1–10，默认 3）</Text>
+        <Text fontSize="sm" color="var(--mc-text-muted)" mb="3">子代理最大嵌套深度（1–10，默认 3）</Text>
         <Flex gap="3" align="center">
           <Input
             type="number"
@@ -121,7 +121,7 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
             onClick={() => navigate(link.path)}
           >
             <Text fontWeight="semibold" fontSize="sm">{link.label}</Text>
-            <Text fontSize="xs" color="gray.500" mt="1">{link.desc}</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">{link.desc}</Text>
           </Box>
         ))}
       </SimpleGrid>
@@ -141,7 +141,7 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
             <Table.Row key={row.key}>
               <Table.Cell fontFamily="mono" fontSize="xs">{row.key}</Table.Cell>
               <Table.Cell fontSize="sm">{row.desc}</Table.Cell>
-              <Table.Cell fontSize="xs" color="gray.500">{row.default || '—'}</Table.Cell>
+              <Table.Cell fontSize="xs" color="var(--mc-text-muted)">{row.default || '—'}</Table.Cell>
             </Table.Row>
           ))}
         </Table.Body>
@@ -188,7 +188,7 @@ function SkillsPanel({ config }: { config: SystemConfigDto }) {
           <Text fontWeight="semibold">附加技能文件夹</Text>
           <Badge colorPalette="orange" size="sm">需重启生效</Badge>
         </Flex>
-        <Text fontSize="sm" color="gray.500" mb="3">附加技能文件夹（只读扫描源，不会写入新技能）</Text>
+        <Text fontSize="sm" color="var(--mc-text-muted)" mb="3">附加技能文件夹（只读扫描源，不会写入新技能）</Text>
         <Stack gap="2" mb="3">
           {folders.map((folder, i) => (
             <Flex key={i} gap="2" align="center">
@@ -255,7 +255,7 @@ function BehaviorProfileCard({
             onChange={(e) => onChange({ ...value, temperature: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
             w="90px"
           />
-          <Text fontSize="xs" color="gray.400">0.0 – 2.0</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">0.0 – 2.0</Text>
         </Flex>
         <Flex align="center" gap="3">
           <Text fontSize="sm" w="120px" flexShrink={0}>Top P</Text>
@@ -269,7 +269,7 @@ function BehaviorProfileCard({
             onChange={(e) => onChange({ ...value, topP: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
             w="90px"
           />
-          <Text fontSize="xs" color="gray.400">(0, 1]</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">(0, 1]</Text>
         </Flex>
         <Flex align="center" gap="3">
           <Text fontSize="sm" w="120px" flexShrink={0}>提示后缀</Text>
@@ -322,7 +322,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
           <Text fontWeight="semibold">模式切换阈值</Text>
           <Badge colorPalette="orange" size="sm">需重启生效</Badge>
         </Flex>
-        <Text fontSize="xs" color="gray.500" mb="4">
+        <Text fontSize="xs" color="var(--mc-text-muted)" mb="4">
           情绪值域 [0, 100]，判定优先级：谨慎 &gt; 探索 &gt; 休息 &gt; 正常
         </Text>
         <SimpleGrid columns={[1, 2]} gap="3">
@@ -337,7 +337,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
             <Flex key={key} align="center" gap="3">
               <Flex align="center" gap="2" w="150px" flexShrink={0}>
                 <Box w="9px" h="9px" borderRadius="full" bg={`${color}.500`} flexShrink={0} />
-                <Text fontSize="md" color="gray.700" _dark={{ color: 'gray.200' }}>{label}</Text>
+                <Text fontSize="md" color="var(--mc-text)">{label}</Text>
               </Flex>
               <Input
                 size="sm"
@@ -367,7 +367,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
       </SimpleGrid>
 
       <Text fontWeight="semibold" mb="3">事件加减分</Text>
-      <Text fontSize="xs" color="gray.500" mb="3">调整各事件触发时四个情绪维度的变化量（正数加分、负数减分、空表示不变）</Text>
+      <Text fontSize="xs" color="var(--mc-text-muted)" mb="3">调整各事件触发时四个情绪维度的变化量（正数加分、负数减分、空表示不变）</Text>
       <Accordion.Root multiple mb="5">
         {EVENT_DELTA_DEFS.map(({ key, label, color, desc }) => {
           const delta = emotion[key] as EmotionDeltaConfigSection
@@ -377,7 +377,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
                 <Flex align="center" gap="2" flex="1">
                   <Box w="8px" h="8px" borderRadius="full" bg={`${color}.500`} flexShrink={0} />
                   <Text fontWeight="medium" fontSize="sm">{label}</Text>
-                  <Text fontSize="xs" color="gray.400" ml="2">{desc}</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" ml="2">{desc}</Text>
                 </Flex>
                 <Accordion.ItemIndicator />
               </Accordion.ItemTrigger>
@@ -439,14 +439,14 @@ export default function ConfigPage() {
   useEffect(() => { load() }, [load])
 
   if (!config) {
-    return <Box p="6"><Text color="gray.400">加载中…</Text></Box>
+    return <Box p="6"><Text color="var(--mc-text-muted)">加载中…</Text></Box>
   }
 
   return (
     <Flex h="full" overflow="hidden">
       {/* 左侧分类导航 */}
       <Box w="180px" flexShrink={0} borderRightWidth="1px" py="4" px="2" overflowY="auto">
-        <Text fontSize="xs" color="gray.400" fontWeight="semibold" px="3" mb="2">系统配置</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)" fontWeight="semibold" px="3" mb="2">系统配置</Text>
         <Stack gap="1">
           {SECTIONS.map((sec) => (
             <Box

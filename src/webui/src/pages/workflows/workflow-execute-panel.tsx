@@ -30,26 +30,26 @@ function NodeStatusRow({ nodeId, label, state }: {
 }) {
   const status = state?.status ?? 'idle'
   return (
-    <HStack gap="2" px="3" py="1.5" borderRadius="md" bg="gray.100" _dark={{ bg: 'gray.800' }} align="start">
+    <HStack gap="2" px="3" py="1.5" borderRadius="md" bg="var(--mc-surface-muted)" align="start">
       <Badge colorPalette={STATUS_COLOR[status]} minW="60px" textAlign="center" flexShrink={0}>
         {STATUS_LABEL[status]}
       </Badge>
-      {status === 'running' && <Spinner size="xs" color="yellow.400" flexShrink={0} />}
+      {status === 'running' && <Spinner size="xs" color="var(--mc-warning)" flexShrink={0} />}
       <VStack gap="0.5" align="start" flex={1}>
-        <Text fontSize="sm" fontWeight="medium" color="gray.900" _dark={{ color: 'gray.100' }}>{label}</Text>
-        <Text fontSize="xs" color="gray.500" fontFamily="mono">{nodeId}</Text>
+        <Text fontSize="sm" fontWeight="medium" color="var(--mc-text)">{label}</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)" fontFamily="mono">{nodeId}</Text>
         {state?.warning && (
-          <Text fontSize="xs" color="yellow.600" _dark={{ color: 'yellow.300' }}>{state.warning}</Text>
+          <Text fontSize="xs" color="var(--mc-warning)">{state.warning}</Text>
         )}
         {state?.error && (
-          <Text fontSize="xs" color="red.300">{state.error}</Text>
+          <Text fontSize="xs" color="var(--mc-danger)">{state.error}</Text>
         )}
         {state?.result && status === 'completed' && (
-          <Text fontSize="xs" color="gray.600" _dark={{ color: 'gray.300' }} overflow="hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{state.result}</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)" overflow="hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{state.result}</Text>
         )}
       </VStack>
       {(state?.durationMs !== undefined) && (
-        <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.500' }} flexShrink={0}>{state.durationMs}ms</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)" flexShrink={0}>{state.durationMs}ms</Text>
       )}
     </HStack>
   )
@@ -95,16 +95,16 @@ export function WorkflowExecutePanel({ workflow }: WorkflowExecutePanelProps) {
     <VStack gap="3" align="stretch" h="100%">
       {/* 输入区 */}
       <Box>
-        <Text fontSize="sm" fontWeight="medium" color="gray.700" _dark={{ color: 'gray.300' }} mb="1.5">输入消息</Text>
+        <Text fontSize="sm" fontWeight="medium" color="var(--mc-text)" mb="1.5">输入消息</Text>
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="给工作流发送的初始消息..."
           rows={3}
-          bg="gray.50"
-          _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-          borderColor="gray.300"
-          color="gray.900"
+          bg="var(--mc-surface-muted)"
+         
+          borderColor="var(--mc-border)"
+          color="var(--mc-text)"
           resize="none"
           disabled={executionRunning}
           _placeholder={{ color: 'gray.400' }}
@@ -140,7 +140,7 @@ export function WorkflowExecutePanel({ workflow }: WorkflowExecutePanelProps) {
       {/* 节点进度 */}
       {workflow.nodes.length > 0 && (
         <Box>
-          <Text fontSize="sm" fontWeight="medium" color="gray.700" _dark={{ color: 'gray.300' }} mb="1.5">节点状态</Text>
+          <Text fontSize="sm" fontWeight="medium" color="var(--mc-text)" mb="1.5">节点状态</Text>
           <VStack gap="1.5" align="stretch">
             {workflow.nodes.map((n) => (
               <NodeStatusRow
@@ -157,17 +157,17 @@ export function WorkflowExecutePanel({ workflow }: WorkflowExecutePanelProps) {
       {/* 最终输出 */}
       {executionOutput && (
         <Box flex={1}>
-          <Text fontSize="sm" fontWeight="medium" color="gray.700" _dark={{ color: 'gray.300' }} mb="1.5">执行输出</Text>
+          <Text fontSize="sm" fontWeight="medium" color="var(--mc-text)" mb="1.5">执行输出</Text>
           <Box
-            bg="gray.100"
-            _dark={{ bg: 'gray.800', color: 'gray.200' }}
+            bg="var(--mc-surface-muted)"
+           
             borderRadius="md"
             p="3"
             maxH="200px"
             overflowY="auto"
             fontFamily="mono"
             fontSize="sm"
-            color="gray.800"
+            color="var(--mc-text)"
             whiteSpace="pre-wrap"
           >
             {executionOutput}
@@ -177,8 +177,8 @@ export function WorkflowExecutePanel({ workflow }: WorkflowExecutePanelProps) {
 
       {/* 错误提示 */}
       {error && (
-        <Box bg="red.50" _dark={{ bg: 'red.900' }} borderRadius="md" p="3">
-          <Text fontSize="sm" color="red.700" _dark={{ color: 'red.200' }}>{error}</Text>
+        <Box bg="var(--mc-danger-soft)" borderRadius="md" p="3">
+          <Text fontSize="sm" color="var(--mc-danger)">{error}</Text>
         </Box>
       )}
     </VStack>

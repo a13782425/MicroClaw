@@ -80,13 +80,13 @@ export function SafetyMemoryTab({ agent }: { agent: AgentConfig }) {
 
       {!loading && memories.length === 0 && (
         <Box py="8" textAlign="center">
-          <Text fontSize="sm" color="gray.400">暂无痛觉记忆记录</Text>
-          <Text fontSize="xs" color="gray.400" mt="1">当 Agent 执行操作失败且被记录痛觉时，将在此处显示</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)">暂无痛觉记忆记录</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">当 Agent 执行操作失败且被记录痛觉时，将在此处显示</Text>
         </Box>
       )}
 
       {memories.map((memory) => (
-        <Box key={memory.id} mb="3" p="3" borderWidth="1px" rounded="md" bg="gray.50" _dark={{ bg: 'gray.800' }}>
+        <Box key={memory.id} mb="3" p="3" borderWidth="1px" rounded="md" bg="var(--mc-surface-muted)">
           <HStack justify="space-between" mb="2" flexWrap="wrap" gap="2">
             <HStack gap="2">
               <Badge colorPalette={SEVERITY_COLORS[memory.severity] ?? 'gray'} size="sm">
@@ -107,18 +107,18 @@ export function SafetyMemoryTab({ agent }: { agent: AgentConfig }) {
 
           <VStack align="start" gap="1">
             <Box>
-              <Text fontSize="xs" color="gray.500">触发点</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">触发点</Text>
               <Text fontSize="sm">{memory.triggerDescription}</Text>
             </Box>
             <Box>
-              <Text fontSize="xs" color="gray.500">后果</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">后果</Text>
               <Text fontSize="sm">{memory.consequenceDescription}</Text>
             </Box>
             <Box>
-              <Text fontSize="xs" color="gray.500">规避策略</Text>
-              <Text fontSize="sm" color="blue.600" _dark={{ color: 'blue.300' }}>{memory.avoidanceStrategy}</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)">规避策略</Text>
+              <Text fontSize="sm" color="var(--mc-link-color)">{memory.avoidanceStrategy}</Text>
             </Box>
-            <Text fontSize="xs" color="gray.400" mt="1">
+            <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
               最近发生：{new Date(memory.lastOccurredAtMs).toLocaleString('zh-CN')}
             </Text>
           </VStack>
@@ -171,10 +171,10 @@ export function EmotionTab({ agent }: { agent: AgentConfig }) {
   useEffect(() => { load() }, [agent.id, days]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dimensionBadge = (label: string, value: number, color: string) => (
-    <VStack key={label} gap="0" align="center" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="90px">
-      <Text fontSize="xs" color="gray.500">{label}</Text>
+    <VStack key={label} gap="0" align="center" bg="var(--mc-surface-muted)" p="3" rounded="md" minW="90px">
+      <Text fontSize="xs" color="var(--mc-text-muted)">{label}</Text>
       <Text fontWeight="bold" fontSize="xl" color={color}>{value}</Text>
-      <Box w="100%" bg="gray.200" _dark={{ bg: 'gray.700' }} rounded="full" h="2" mt="1">
+      <Box w="100%" bg="var(--mc-border)" rounded="full" h="2" mt="1">
         <Box bg={color} h="2" rounded="full" style={{ width: `${value}%` }} />
       </Box>
     </VStack>
@@ -205,16 +205,16 @@ export function EmotionTab({ agent }: { agent: AgentConfig }) {
 
       {!current && !loading && (
         <Box mb="4">
-          <Text fontSize="sm" color="gray.400">暂无情绪数据（Agent 尚未运行）</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)">暂无情绪数据（Agent 尚未运行）</Text>
         </Box>
       )}
 
       {loading && <Box mb="4"><Spinner size="sm" /></Box>}
 
       <Box borderWidth="1px" rounded="md" p="3">
-        <Text fontSize="xs" color="gray.500" mb="2">过去 {days} 天情绪曲线</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">过去 {days} 天情绪曲线</Text>
         {history.length === 0 && !loading ? (
-          <Text fontSize="sm" color="gray.400">暂无历史数据</Text>
+          <Text fontSize="sm" color="var(--mc-text-muted)">暂无历史数据</Text>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={history} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>

@@ -49,7 +49,7 @@ export default function SessionTreeItem({
         align="center"
         cursor="pointer"
         bg={isActive ? 'blue.50' : undefined}
-        _dark={{ bg: isActive ? 'blue.900' : undefined }}
+       
         _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.700' } }}
         onClick={() => onSelect(session.id)}
         onKeyDown={(e) => {
@@ -67,7 +67,7 @@ export default function SessionTreeItem({
         {hasChildren ? (
           <Box
             mr="1" flexShrink={0} cursor="pointer"
-            color="gray.400"
+            color="var(--mc-text-muted)"
             onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}
           >
             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -79,7 +79,7 @@ export default function SessionTreeItem({
         {/* 图标 */}
         <Box color={isActive ? 'blue.500' : isSub ? 'teal.400' : 'gray.400'} mr="2" flexShrink={0}>
           {isRunning && !isActive
-            ? <Spinner size="xs" color="blue.400" />
+            ? <Spinner size="xs" color="var(--mc-info)" />
             : isSub ? <Bot size={14} /> : <MessageCircle size={14} />}
         </Box>
 
@@ -89,7 +89,7 @@ export default function SessionTreeItem({
             fontSize="sm"
             fontWeight={isActive ? 'medium' : 'normal'}
             color={isActive ? 'blue.600' : isSub ? 'teal.600' : undefined}
-            _dark={{ color: isActive ? 'blue.300' : isSub ? 'teal.300' : undefined }}
+           
             truncate
           >
             {session.title}

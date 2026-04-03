@@ -265,15 +265,15 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
               {/* 插件 MCP 只读展示基本信息 */}
               {isPlugin && editing && (
                 <VStack gap="2" align="stretch">
-                  <HStack><Text fontSize="sm" color="gray.500" w="80px">传输类型</Text><Badge size="sm">{transportLabel(editing.transportType)}</Badge></HStack>
+                  <HStack><Text fontSize="sm" color="var(--mc-text-muted)" w="80px">传输类型</Text><Badge size="sm">{transportLabel(editing.transportType)}</Badge></HStack>
                   {editing.transportType === 'stdio' && (
                     <>
-                      {editing.command && <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">命令</Text><Text fontSize="sm" fontFamily="mono">{editing.command}</Text></HStack>}
-                      {(editing.args ?? []).length > 0 && <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">参数</Text><Text fontSize="sm" fontFamily="mono">{(editing.args ?? []).join(' ')}</Text></HStack>}
+                      {editing.command && <HStack align="start"><Text fontSize="sm" color="var(--mc-text-muted)" w="80px">命令</Text><Text fontSize="sm" fontFamily="mono">{editing.command}</Text></HStack>}
+                      {(editing.args ?? []).length > 0 && <HStack align="start"><Text fontSize="sm" color="var(--mc-text-muted)" w="80px">参数</Text><Text fontSize="sm" fontFamily="mono">{(editing.args ?? []).join(' ')}</Text></HStack>}
                     </>
                   )}
                   {editing.transportType !== 'stdio' && editing.url && (
-                    <HStack align="start"><Text fontSize="sm" color="gray.500" w="80px">URL</Text><Text fontSize="sm" fontFamily="mono" wordBreak="break-all">{editing.url}</Text></HStack>
+                    <HStack align="start"><Text fontSize="sm" color="var(--mc-text-muted)" w="80px">URL</Text><Text fontSize="sm" fontFamily="mono" wordBreak="break-all">{editing.url}</Text></HStack>
                   )}
                 </VStack>
               )}
@@ -295,25 +295,25 @@ function McpDialog({ open, editing, onClose, onSaved }: McpDialogProps) {
                 <Box>
                   <Text fontSize="sm" mb="1" fontWeight="medium">URL <Text as="span" color="red.500">*</Text></Text>
                   <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://localhost:8000/sse" />
-                  <Text fontSize="xs" color="gray.500" mt="1">URL 支持直接输入，或使用 {"${ENV_VAR}"} 拼接运行时环境变量。</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">URL 支持直接输入，或使用 {"${ENV_VAR}"} 拼接运行时环境变量。</Text>
                 </Box>
               )}
 
               {/* 环境变量编辑 */}
               {(transport === 'stdio' || (isPlugin && editing?.transportType === 'stdio')) && (
                 <>
-                  {isPlugin && <Text fontSize="xs" color="blue.600" fontWeight="medium">覆盖插件默认环境变量（空则保持插件原始默认值）</Text>}
+                  {isPlugin && <Text fontSize="xs" color="var(--mc-link-color)" fontWeight="medium">覆盖插件默认环境变量（空则保持插件原始默认值）</Text>}
                   <KVEditor label="环境变量" entries={env} onChange={setEnv} />
-                  <Text fontSize="xs" color="gray.500" mt="-2">支持直接输入值，或使用 {"${ENV_VAR}"} 引用当前服务进程环境变量。</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mt="-2">支持直接输入值，或使用 {"${ENV_VAR}"} 引用当前服务进程环境变量。</Text>
                 </>
               )}
 
               {/* 请求头编辑 */}
               {(transport === 'sse' || transport === 'http' || (isPlugin && editing?.transportType !== 'stdio')) && (
                 <>
-                  {isPlugin && <Text fontSize="xs" color="blue.600" fontWeight="medium">覆盖插件默认请求头（空则保持插件原始默认值）</Text>}
+                  {isPlugin && <Text fontSize="xs" color="var(--mc-link-color)" fontWeight="medium">覆盖插件默认请求头（空则保持插件原始默认值）</Text>}
                   <KVEditor label="请求头" entries={headers} onChange={setHeaders} />
-                  <Text fontSize="xs" color="gray.500" mt="-2">请求头支持直接值，也支持例如 Bearer {"${TOKEN}"} 这样的环境变量引用。</Text>
+                  <Text fontSize="xs" color="var(--mc-text-muted)" mt="-2">请求头支持直接值，也支持例如 Bearer {"${TOKEN}"} 这样的环境变量引用。</Text>
                 </>
               )}
 
@@ -417,7 +417,7 @@ export default function McpPage() {
 
       {loading && <Box py="8" textAlign="center"><Spinner /></Box>}
       {!loading && servers.length === 0 && (
-        <Box py="8" textAlign="center" color="gray.400">暂无 MCP 服务器，点击「新建」添加</Box>
+        <Box py="8" textAlign="center" color="var(--mc-text-muted)">暂无 MCP 服务器，点击「新建」添加</Box>
       )}
 
       {!loading && servers.length > 0 && (

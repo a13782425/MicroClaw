@@ -61,15 +61,15 @@ export function RagSettingsTab() {
   if (loading && !config) {
     return (
       <Box py="12" textAlign="center">
-        <Spinner size="lg" color="blue.500" />
-        <Text mt="3" color="gray.500">加载中…</Text>
+        <Spinner size="lg" color="var(--mc-info)" />
+        <Text mt="3" color="var(--mc-text-muted)">加载中…</Text>
       </Box>
     )
   }
 
   return (
     <Box maxW="480px">
-      <Text fontSize="sm" color="gray.500" mb="5">
+      <Text fontSize="sm" color="var(--mc-text-muted)" mb="5">
         配置 RAG 自动遗忘机制。当单个会话 RAG 存储超过阈值时，系统将自动删除调用次数最低的向量分块以释放空间。
       </Text>
 
@@ -83,7 +83,7 @@ export function RagSettingsTab() {
             onChange={(e) => setMaxStorageSizeMb(e.target.value)}
             placeholder="50"
           />
-          <Text fontSize="xs" color="gray.400" mt="1">
+          <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
             单个会话 RAG 数据库文件的最大大小，超过后触发自动清理
           </Text>
         </Box>
@@ -97,7 +97,7 @@ export function RagSettingsTab() {
             onChange={(e) => setPruneTargetPercent(e.target.value)}
             placeholder="80"
           />
-          <Text fontSize="xs" color="gray.400" mt="1">
+          <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
             清理后的目标大小占阈值的百分比（例如 80 表示清理到阈值的 80%）
           </Text>
         </Box>

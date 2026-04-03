@@ -47,7 +47,7 @@ export function ApprovalTab({ session, onUpdated }: ApprovalTabProps) {
   return (
     <VStack align="start" p="4" gap="4">
       <HStack>
-        <Text fontSize="sm" color="gray.600">当前状态：</Text>
+        <Text fontSize="sm" color="var(--mc-text-muted)">当前状态：</Text>
         {session.isApproved
           ? <Badge colorPalette="green" size="md">已批准</Badge>
           : <Badge colorPalette="orange" size="md">待审批</Badge>
@@ -55,7 +55,7 @@ export function ApprovalTab({ session, onUpdated }: ApprovalTabProps) {
       </HStack>
       {session.approvalReason && (
         <Box>
-          <Text fontSize="xs" color="gray.500">审批原因：{session.approvalReason}</Text>
+          <Text fontSize="xs" color="var(--mc-text-muted)">审批原因：{session.approvalReason}</Text>
         </Box>
       )}
       <HStack>

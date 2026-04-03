@@ -35,10 +35,10 @@ export default function LoginPage() {
   }
 
   return (
-    <Flex h="100vh" align="center" justify="center" bg="gray.50" _dark={{ bg: 'gray.900' }}>
+    <Flex h="100vh" align="center" justify="center" bg="var(--mc-surface-muted)">
       <Box
         bg="white"
-        _dark={{ bg: 'gray.800' }}
+       
         p="8"
         borderRadius="xl"
         boxShadow="lg"

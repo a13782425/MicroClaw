@@ -169,7 +169,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
       <Box mb="3">
         <Text fontSize="sm" mb="1" fontWeight="medium">Base URL</Text>
         <Input value={form.baseUrl} onChange={(e) => set('baseUrl', e.target.value)} placeholder="留空使用官方默认端点" />
-        <Text fontSize="xs" color="gray.500" mt="1">填写可接入兼容 API 或代理</Text>
+        <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">填写可接入兼容 API 或代理</Text>
       </Box>
 
       <Box mb="3">
@@ -211,7 +211,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
         </Collapsible.Trigger>
         <Collapsible.Content>
           <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="2">输入模态</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输入模态</Text>
             <Flex gap="3" flexWrap="wrap" mb="3">
               {INPUT_MODALITIES.map((modality) => (
                 <CheckboxCard.Root
@@ -231,7 +231,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
               ))}
             </Flex>
 
-            <Text fontSize="xs" color="gray.500" mb="2">输出模态</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输出模态</Text>
             <Flex gap="3" flexWrap="wrap" mb="3">
               {OUTPUT_MODALITIES.map((modality) => (
                 <CheckboxCard.Root
@@ -251,7 +251,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
               ))}
             </Flex>
 
-            <Text fontSize="xs" color="gray.500" mb="2">特殊能力</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">特殊能力</Text>
             <Flex gap="4">
               <Switch.Root size="sm" checked={form.supportsFunctionCalling} onCheckedChange={(details) => set('supportsFunctionCalling', details.checked)}>
                 <Switch.HiddenInput />
@@ -277,7 +277,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
         </Collapsible.Trigger>
         <Collapsible.Content>
           <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="2">单价（$ / 1M tokens）</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">单价（$ / 1M tokens）</Text>
             <SimpleGrid columns={2} gap="3" mb="3">
               <Box>
                 <Text fontSize="xs" mb="1">输入</Text>
@@ -326,7 +326,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
         </Collapsible.Trigger>
         <Collapsible.Content>
           <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="gray.500" mb="3">
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="3">
               配置此 Provider 在自动路由时的优先权重。Agent 选择"质量优先"策略时按质量分排序；选择"延迟优先"策略时按延迟层级排序。
             </Text>
             <SimpleGrid columns={2} gap="3">
@@ -341,7 +341,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                   onChange={(e) => set('qualityScore', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                   placeholder="50"
                 />
-                <Text fontSize="xs" color="gray.400" mt="1">值越高"质量优先"时越优先</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">值越高"质量优先"时越优先</Text>
               </Box>
               <Box>
                 <Text fontSize="xs" mb="1">延迟层级</Text>
@@ -362,7 +362,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                     </Select.Positioner>
                   </Portal>
                 </Select.Root>
-                <Text fontSize="xs" color="gray.400" mt="1">值越低"延迟优先"时越优先</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">值越低"延迟优先"时越优先</Text>
               </Box>
             </SimpleGrid>
           </Box>

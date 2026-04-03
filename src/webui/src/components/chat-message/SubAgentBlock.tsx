@@ -24,7 +24,7 @@ function ElapsedTimer() {
   }, [])
 
   return (
-    <Text fontSize="xs" color="gray.400" fontFamily="mono">
+    <Text fontSize="xs" color="var(--mc-text-muted)" fontFamily="mono">
       {elapsed}s
     </Text>
   )
@@ -45,16 +45,15 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
     <Box
       borderWidth="1px"
       borderRadius="md"
-      borderColor={hasResult ? 'teal.200' : 'teal.300'}
-      _dark={{ borderColor: hasResult ? 'teal.700' : 'teal.500' }}
+      borderColor="var(--mc-sub-agent-border)"
       overflow="hidden"
       mb="2"
       maxW="80%"
       css={!hasResult ? {
-        animation: 'pulse-border-teal 2s ease-in-out infinite',
-        '@keyframes pulse-border-teal': {
-          '0%, 100%': { borderColor: 'var(--chakra-colors-teal-200)' },
-          '50%': { borderColor: 'var(--chakra-colors-teal-400)' },
+        animation: 'pulse-border-sub 2s ease-in-out infinite',
+        '@keyframes pulse-border-sub': {
+          '0%, 100%': { borderColor: 'var(--mc-sub-agent-border)' },
+          '50%': { opacity: 0.6 },
         },
       } : undefined}
     >
@@ -64,8 +63,8 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
         gap="2"
         px="3"
         py="1.5"
-        bg="teal.50"
-        _dark={{ bg: 'teal.900' }}
+        bg="var(--mc-sub-agent-bg)"
+        color="var(--mc-text)"
       >
         <Bot size={14} />
         <Text fontSize="xs" fontWeight="medium" flex="1">
@@ -89,10 +88,9 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
           px="3"
           py="2"
           fontSize="xs"
-          color="gray.600"
-          _dark={{ color: 'gray.400', borderColor: 'teal.800' }}
+          color="var(--mc-text-muted)"
           borderTopWidth="1px"
-          borderColor="teal.100"
+          borderColor="var(--mc-sub-agent-border)"
         >
           {task}
         </Box>
@@ -104,10 +102,9 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
           px="3"
           py="1.5"
           fontSize="xs"
-          color="gray.500"
-          _dark={{ color: 'gray.400', borderColor: 'teal.800' }}
+          color="var(--mc-text-muted)"
           borderTopWidth="1px"
-          borderColor="teal.100"
+          borderColor="var(--mc-sub-agent-border)"
           maxH="120px"
           overflowY="auto"
         >
@@ -131,11 +128,10 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
             onClick={() => setResultOpen(!resultOpen)}
             userSelect="none"
             borderTopWidth="1px"
-            borderColor="teal.100"
-            _dark={{ borderColor: 'teal.800' }}
+            borderColor="var(--mc-sub-agent-border)"
           >
             {resultOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="var(--mc-text-muted)">
               结果
             </Text>
           </Flex>
@@ -145,8 +141,8 @@ export default function SubAgentBlock({ message, resultMessage, progressSteps }:
               py="2"
               fontSize="xs"
               fontFamily="mono"
-              bg="gray.50"
-              _dark={{ bg: 'gray.800' }}
+              bg="var(--mc-card)"
+              color="var(--mc-text)"
               whiteSpace="pre-wrap"
               overflowX="auto"
               maxH="200px"

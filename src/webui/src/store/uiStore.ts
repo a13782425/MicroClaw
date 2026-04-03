@@ -7,6 +7,8 @@ interface UIState {
   toggleSidebar: () => void
   collapsedGroups: string[]
   toggleGroup: (title: string) => void
+  themeId: string
+  setThemeId: (id: string) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -22,6 +24,8 @@ export const useUIStore = create<UIState>()(
             ? s.collapsedGroups.filter((g) => g !== title)
             : [...s.collapsedGroups, title],
         })),
+      themeId: 'tailwind',
+      setThemeId: (id) => set({ themeId: id }),
     }),
     { name: 'mc-ui' },
   ),

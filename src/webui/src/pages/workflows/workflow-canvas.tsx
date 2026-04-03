@@ -26,20 +26,19 @@ import {
 } from '@xyflow/react'
 import { Box, Button, HStack, VStack } from '@chakra-ui/react'
 import { Play, Square, Bot, Code, Wrench, GitBranch, RefreshCw, Save, Settings, Trash2 } from 'lucide-react'
-import { useColorModeValue } from '@/components/ui/color-mode'
 import type { WorkflowNodeConfig, WorkflowEdgeConfig, WorkflowConfig } from '@/api/gateway'
 import type { NodeExecutionState } from '@/store/workflowStore'
 
 // ────────────────────────────── 常量与自定义节点 ──────────────────────────────
 
 const NODE_COLORS: Record<string, string> = {
-  Start: '#22c55e',
-  End: '#ef4444',
-  Agent: '#3b82f6',
-  Function: '#a855f7',
-  Tool: '#f97316',
-  Router: '#f59e0b',
-  SwitchModel: '#06b6d4',
+  Start: 'var(--mc-node-start)',
+  End: 'var(--mc-node-end)',
+  Agent: 'var(--mc-node-agent)',
+  Function: 'var(--mc-node-function)',
+  Tool: 'var(--mc-node-tool)',
+  Router: 'var(--mc-node-router)',
+  SwitchModel: 'var(--mc-node-switch-model)',
 }
 
 const NODE_TYPE_LIST = [
@@ -58,21 +57,20 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 function WorkflowNode({ data }: { data: { label: string; type: string; status?: string } }) {
-  const color = NODE_COLORS[data.type] ?? '#64748b'
+  const color = NODE_COLORS[data.type] ?? 'var(--mc-text-muted)'
   const entry = NODE_TYPE_LIST.find((n) => n.type === data.type)
   const Icon = entry?.Icon
-  const isDark = useColorModeValue(false, true)
 
   const statusColor =
-    data.status === 'running' ? '#f59e0b'
-      : data.status === 'completed' ? '#22c55e'
-        : data.status === 'error' ? '#ef4444'
+    data.status === 'running' ? 'var(--mc-warning)'
+      : data.status === 'completed' ? 'var(--mc-success)'
+        : data.status === 'error' ? 'var(--mc-danger)'
           : null
 
   const leftColor = statusColor ?? color
   const handleStyle = {
     width: 8, height: 8, borderRadius: '50%',
-    border: `2px solid ${isDark ? '#1e293b' : '#fff'}`,
+    border: '2px solid var(--mc-bg)',
     background: color,
   }
 
@@ -82,8 +80,8 @@ function WorkflowNode({ data }: { data: { label: string; type: string; status?: 
         <Handle type="target" position={Position.Top} style={handleStyle} />
       )}
       <div style={{
-        background: isDark ? '#1e293b' : '#fff',
-        border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`,
+        background: 'var(--mc-card)',
+        border: '1px solid var(--mc-border)',
         borderLeft: `3px solid ${leftColor}`,
         borderRadius: 8,
         padding: '6px 10px',
@@ -98,12 +96,12 @@ function WorkflowNode({ data }: { data: { label: string; type: string; status?: 
           <div>
             <div style={{
               fontSize: 12, fontWeight: 600, lineHeight: 1.3,
-              color: isDark ? '#f1f5f9' : '#1e293b',
+              color: 'var(--mc-text)',
             }}>
               {data.label}
             </div>
             <div style={{
-              fontSize: 10, color: '#94a3b8', marginTop: 1,
+              fontSize: 10, color: 'var(--mc-text-muted)', marginTop: 1,
             }}>
               {TYPE_LABELS[data.type] ?? data.type}
             </div>
@@ -147,8 +145,8 @@ function toFlowEdges(edges: WorkflowEdgeConfig[]): Edge[] {
     type: 'smoothstep',
     label: e.label ?? e.condition ?? undefined,
     animated: true,
-    style: { stroke: '#94a3b8', strokeWidth: 1.5 },
-    labelStyle: { fontSize: 10, fill: '#64748b', fontWeight: 500 },
+    style: { stroke: 'var(--mc-border)', strokeWidth: 1.5 },
+    labelStyle: { fontSize: 10, fill: 'var(--mc-text-muted)', fontWeight: 500 },
   }))
 }
 
@@ -220,8 +218,8 @@ function WorkflowCanvasInner({
   onRun,
 }: WorkflowCanvasProps) {
   const { screenToFlowPosition } = useReactFlow()
-  const bgLineColor = useColorModeValue('#e2e8f0', '#334155')
-  const minimapBg = useColorModeValue('#f8fafc', '#1e293b')
+  const bgLineColor = 'var(--mc-border)'
+  const minimapBg = 'var(--mc-bg)'
 
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const [edgeMenu, setEdgeMenu] = useState<{ edgeId: string; source: string; target: string; x: number; y: number } | null>(null)
@@ -273,7 +271,7 @@ function WorkflowCanvasInner({
     (params: Connection) => {
       if (readOnly) return
       const newEdges = addEdge(
-        { ...params, type: 'smoothstep', animated: true, style: { stroke: '#94a3b8', strokeWidth: 1.5 } },
+        { ...params, type: 'smoothstep', animated: true, style: { stroke: 'var(--mc-border)', strokeWidth: 1.5 } },
         edges,
       )
       setEdges(newEdges)
@@ -459,7 +457,7 @@ function WorkflowCanvasInner({
   )
 
   return (
-    <Box h="100%" w="100%" bg="gray.50" _dark={{ bg: 'gray.950' }} borderRadius="md" overflow="hidden" position="relative">
+    <Box h="100%" w="100%" bg="var(--mc-bg)" borderRadius="md" overflow="hidden" position="relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -484,20 +482,19 @@ function WorkflowCanvasInner({
         <Background color={bgLineColor} gap={20} />
         <Controls />
         <MiniMap
-          nodeColor={(n) => NODE_COLORS[(n.data as { type: string }).type] ?? '#64748b'}
+          nodeColor={(n) => NODE_COLORS[(n.data as { type: string }).type] ?? 'var(--mc-text-muted)'}
           style={{ background: minimapBg }}
         />
         {!readOnly && (
           <Panel position="top-left">
             <HStack
               gap="1.5"
-              bg="white"
-              _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
+              bg="var(--mc-card)"
               p="1.5"
               borderRadius="lg"
               shadow="sm"
               borderWidth="1px"
-              borderColor="gray.200"
+              borderColor="var(--mc-border)"
             >
               <Button
                 size="2xs"
@@ -525,12 +522,11 @@ function WorkflowCanvasInner({
           top={`${contextMenu.y}px`}
           left={`${contextMenu.x}px`}
           zIndex={9999}
-          bg="white"
-          _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
+          bg="var(--mc-card)"
           borderRadius="lg"
           shadow="lg"
           borderWidth="1px"
-          borderColor="gray.200"
+          borderColor="var(--mc-border)"
           overflow="hidden"
           minW="130px"
         >
@@ -573,12 +569,11 @@ function WorkflowCanvasInner({
           top={`${edgeMenu.y}px`}
           left={`${edgeMenu.x}px`}
           zIndex={9999}
-          bg="white"
-          _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
+          bg="var(--mc-card)"
           borderRadius="lg"
           shadow="lg"
           borderWidth="1px"
-          borderColor="gray.200"
+          borderColor="var(--mc-border)"
           overflow="hidden"
           minW="130px"
         >
@@ -621,17 +616,16 @@ function WorkflowCanvasInner({
           top={`${paneMenu.y}px`}
           left={`${paneMenu.x}px`}
           zIndex={9999}
-          bg="white"
-          _dark={{ bg: 'gray.800', borderColor: 'gray.600' }}
+          bg="var(--mc-card)"
           borderRadius="lg"
           shadow="lg"
           borderWidth="1px"
-          borderColor="gray.200"
+          borderColor="var(--mc-border)"
           overflow="hidden"
           minW="140px"
           py="1"
         >
-          <Box px="3" py="1" fontSize="xs" color="gray.400" fontWeight="medium">
+          <Box px="3" py="1" fontSize="xs" color="var(--mc-text-muted)" fontWeight="medium">
             添加节点
           </Box>
           {NODE_TYPE_LIST.map(({ type, label, Icon }) => (

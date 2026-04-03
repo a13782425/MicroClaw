@@ -110,7 +110,7 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
   return (
     <Flex direction="column" flex="1" overflow="hidden">
       <HStack px="4" py="3" borderBottomWidth="1px" gap="3" flexWrap="wrap">
-        <Box w="10" h="10" rounded="full" bg="blue.500" display="flex" alignItems="center" justifyContent="center">
+        <Box w="10" h="10" rounded="full" bg="var(--mc-info)" display="flex" alignItems="center" justifyContent="center">
           <Text color="white" fontWeight="bold" fontSize="lg">{agent.name[0]?.toUpperCase()}</Text>
         </Box>
         <Box flex="1" minW="0">
@@ -164,32 +164,32 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
         <Tabs.Content value="overview" flex="1" overflowY="auto">
           <Box p="4">
             <HStack gap="4" mb="4" flexWrap="wrap">
-              <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
-                <Text fontSize="xs" color="gray.500">禁用 MCP</Text>
+              <VStack gap="0" align="start" bg="var(--mc-surface-muted)" p="3" rounded="md" minW="100px">
+                <Text fontSize="xs" color="var(--mc-text-muted)">禁用 MCP</Text>
                 <Text fontWeight="semibold">{agent.disabledMcpServerIds.length} 个</Text>
               </VStack>
-              <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
-                <Text fontSize="xs" color="gray.500">禁用技能</Text>
+              <VStack gap="0" align="start" bg="var(--mc-surface-muted)" p="3" rounded="md" minW="100px">
+                <Text fontSize="xs" color="var(--mc-text-muted)">禁用技能</Text>
                 <Text fontWeight="semibold">{agent.disabledSkillIds.length} 个</Text>
               </VStack>
-              <VStack gap="0" align="start" bg="gray.50" _dark={{ bg: 'gray.800' }} p="3" rounded="md" minW="100px">
-                <Text fontSize="xs" color="gray.500">状态</Text>
+              <VStack gap="0" align="start" bg="var(--mc-surface-muted)" p="3" rounded="md" minW="100px">
+                <Text fontSize="xs" color="var(--mc-text-muted)">状态</Text>
                 <Badge colorPalette={agent.isEnabled ? 'green' : 'gray'} size="sm">
                   {agent.isEnabled ? '启用' : '停用'}
                 </Badge>
               </VStack>
             </HStack>
             <Box>
-              <Text fontSize="xs" color="gray.500" mb="1">描述</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">描述</Text>
               {agent.description
                 ? <Text fontSize="sm" whiteSpace="pre-wrap">{agent.description}</Text>
-                : <Text fontSize="sm" color="gray.400">（未设置）</Text>
+                : <Text fontSize="sm" color="var(--mc-text-muted)">（未设置）</Text>
               }
             </Box>
 
             <Box mt="4">
-              <Text fontSize="xs" color="gray.500" mb="1">Provider 路由策略</Text>
-              <Text fontSize="xs" color="gray.400" mb="2">当会话未绑定具体 Provider 时，按此策略从已启用的 Provider 中自动选择。</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">Provider 路由策略</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">当会话未绑定具体 Provider 时，按此策略从已启用的 Provider 中自动选择。</Text>
               <Select.Root
                 value={[agent.routingStrategy ?? 'Default']}
                 onValueChange={(value) => handleRoutingStrategyChange(value.value[0])}
@@ -197,7 +197,7 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
                 size="sm"
                 disabled={savingRouting}
               >
-                <Select.Trigger maxW="260px">
+                <Select.Trigger maxW="260px" bg="var(--mc-surface-muted)" borderColor="var(--mc-border)" color="var(--mc-text)">
                   <Select.ValueText placeholder="选择路由策略" />
                 </Select.Trigger>
                 <Portal>
@@ -210,12 +210,12 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
                   </Select.Positioner>
                 </Portal>
               </Select.Root>
-              {savingRouting && <Text fontSize="xs" color="gray.400" mt="1">保存中…</Text>}
+              {savingRouting && <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">保存中…</Text>}
             </Box>
 
             <Box mt="4">
-              <Text fontSize="xs" color="gray.500" mb="1">月度预算上限（USD）</Text>
-              <Text fontSize="xs" color="gray.400" mb="2">超过 80% 记录预警日志，超过 100% 记录超限日志。留空表示不限制。</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">月度预算上限（USD）</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">超过 80% 记录预警日志，超过 100% 记录超限日志。留空表示不限制。</Text>
               <HStack>
                 <Input size="sm" maxW="160px" type="number" min="0" step="0.01" placeholder="不限制" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} />
                 <Button size="sm" colorPalette="blue" loading={savingBudget} onClick={handleBudgetSave}>保存</Button>
@@ -223,8 +223,8 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
             </Box>
 
             <Box mt="4">
-              <Text fontSize="xs" color="gray.500" mb="1">上下文窗口（条）</Text>
-              <Text fontSize="xs" color="gray.400" mb="2">发送给 LLM 的最近消息条数。配合 RAG 使用时建议设为 20-50，留空表示全量历史（不限制）。</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">上下文窗口（条）</Text>
+              <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">发送给 LLM 的最近消息条数。配合 RAG 使用时建议设为 20-50，留空表示全量历史（不限制）。</Text>
               <HStack>
                 <Input size="sm" maxW="160px" type="number" min="1" step="1" placeholder="不限制" value={contextWindowInput} onChange={(e) => setContextWindowInput(e.target.value)} />
                 <Button size="sm" colorPalette="blue" loading={savingContextWindow} onClick={handleContextWindowSave}>保存</Button>
@@ -233,10 +233,10 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
 
             {agent.exposeAsA2A && (
               <Box mt="4">
-                <Text fontSize="xs" color="gray.500" mb="1">A2A 端点</Text>
+                <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">A2A 端点</Text>
                 <Box
-                  bg="gray.50"
-                  _dark={{ bg: 'gray.800' }}
+                  bg="var(--mc-surface-muted)"
+                 
                   p="2"
                   rounded="md"
                   fontFamily="mono"

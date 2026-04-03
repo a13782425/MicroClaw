@@ -166,7 +166,7 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
       {loading ? (
         <VStack py="12"><Spinner /><Text>加载中...</Text></VStack>
       ) : plugins.length === 0 ? (
-        <Text color="gray.400" textAlign="center" py="12">暂无已安装的插件</Text>
+        <Text color="var(--mc-text-muted)" textAlign="center" py="12">暂无已安装的插件</Text>
       ) : (
         <Table.Root size="sm">
           <Table.Header>
@@ -185,7 +185,7 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
                 <Table.Cell>
                   <VStack align="start" gap="0">
                     <Text fontWeight="medium" fontSize="sm">{p.name}</Text>
-                    {p.description && <Text fontSize="xs" color="gray.500" lineClamp={1}>{p.description}</Text>}
+                    {p.description && <Text fontSize="xs" color="var(--mc-text-muted)" lineClamp={1}>{p.description}</Text>}
                   </VStack>
                 </Table.Cell>
                 <Table.Cell>
@@ -257,12 +257,12 @@ function InstalledTab({ onMarketplaceDetected }: { onMarketplaceDetected: () => 
                       {detail.mcpConfigPath ? '.mcp.json（插件自带）' : '无'}
                     </Text>
                     {detail.mcpConfigPath && (
-                      <Text fontSize="xs" color="gray.500" mt="1">这是插件自带的 MCP 配置来源，与全局 MCP 管理页中的手工配置分开管理。</Text>
+                      <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">这是插件自带的 MCP 配置来源，与全局 MCP 管理页中的手工配置分开管理。</Text>
                     )}
                   </Box>
                 </VStack>
               ) : (
-                <Text color="gray.400">暂无详情</Text>
+                <Text color="var(--mc-text-muted)">暂无详情</Text>
               )}
             </Dialog.Body>
             <Dialog.Footer>
@@ -485,18 +485,18 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
       ) : marketplaces.length === 0 ? (
         <VStack py="12" gap="2">
           <Store size={32} color="gray" />
-          <Text color="gray.400" textAlign="center">暂无注册的插件市场</Text>
-          <Text color="gray.400" fontSize="sm" textAlign="center">输入 Git 仓库 URL 注册一个插件市场开始使用</Text>
+          <Text color="var(--mc-text-muted)" textAlign="center">暂无注册的插件市场</Text>
+          <Text color="var(--mc-text-muted)" fontSize="sm" textAlign="center">输入 Git 仓库 URL 注册一个插件市场开始使用</Text>
         </VStack>
       ) : loadingPlugins ? (
         <VStack py="12"><Spinner /><Text>加载插件列表...</Text></VStack>
       ) : mpPlugins.length === 0 ? (
-        <Text color="gray.400" textAlign="center" py="12">
+        <Text color="var(--mc-text-muted)" textAlign="center" py="12">
           {keyword ? '没有匹配的插件' : '该市场中暂无插件'}
         </Text>
       ) : (
         <>
-          <Text fontSize="xs" color="gray.500" mb="2">
+          <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">
             共 {mpPlugins.length} 个插件{keyword && `（搜索: "${keyword}"）`}
           </Text>
           <Table.Root size="sm">
@@ -519,7 +519,7 @@ function MarketplaceTab({ onInstalled }: { onInstalled: () => void }) {
                         {p.version && <Badge size="sm" variant="outline">{p.version}</Badge>}
                       </HStack>
                       {p.description && (
-                        <Text fontSize="xs" color="gray.500" lineClamp={2}>{p.description}</Text>
+                        <Text fontSize="xs" color="var(--mc-text-muted)" lineClamp={2}>{p.description}</Text>
                       )}
                       {p.tags && p.tags.length > 0 && (
                         <HStack gap="1" mt="1">

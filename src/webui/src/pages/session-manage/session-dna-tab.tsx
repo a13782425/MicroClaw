@@ -77,7 +77,7 @@ export function SessionDnaTab({ session }: { session: SessionInfo }) {
   }
 
   if (loading) return <Box p="4"><Spinner /></Box>
-  if (files.length === 0) return <Box p="4"><Text color="gray.500" fontSize="sm">暂无 DNA 文件</Text></Box>
+  if (files.length === 0) return <Box p="4"><Text color="var(--mc-text-muted)" fontSize="sm">暂无 DNA 文件</Text></Box>
 
   const currentFile = files.find((file) => file.fileName === activeFile)
 
@@ -100,7 +100,7 @@ export function SessionDnaTab({ session }: { session: SessionInfo }) {
       {currentFile && (
         <Flex direction="column" flex="1" p="3" gap="2" overflow="hidden">
           {currentFile.description && (
-            <Text fontSize="xs" color="gray.500">{currentFile.description}</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)">{currentFile.description}</Text>
           )}
           <Textarea
             flex="1"

@@ -52,17 +52,17 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
         <Dialog.Content
           maxW="420px"
           bg="white"
-          _dark={{ bg: 'gray.900', borderColor: 'gray.700' }}
+         
           borderWidth="1px"
-          borderColor="gray.200"
+          borderColor="var(--mc-border)"
         >
           <Dialog.Header
             borderBottomWidth="1px"
-            borderColor="gray.200"
-            _dark={{ borderColor: 'gray.700' }}
+            borderColor="var(--mc-border)"
+           
             pb="3"
           >
-            <Dialog.Title color="gray.900" _dark={{ color: 'gray.100' }} fontSize="md">
+            <Dialog.Title color="var(--mc-text)" fontSize="md">
               连线属性
             </Dialog.Title>
           </Dialog.Header>
@@ -72,8 +72,8 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
               <Box>
                 <Text
                   fontSize="xs"
-                  color="gray.600"
-                  _dark={{ color: 'gray.400' }}
+                  color="var(--mc-text-muted)"
+                 
                   mb="1"
                   fontWeight="medium"
                 >
@@ -85,14 +85,14 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
                   onChange={(e) => setCondition(e.target.value)}
                   placeholder="例如：status == 'success' 或自然语言描述分支条件"
                   rows={3}
-                  bg="gray.50"
-                  _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                  borderColor="gray.300"
-                  color="gray.900"
+                  bg="var(--mc-surface-muted)"
+                 
+                  borderColor="var(--mc-border)"
+                  color="var(--mc-text)"
                   fontFamily="mono"
                   fontSize="sm"
                 />
-                <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.600' }} mt="1">
+                <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">
                   Router 节点出口条件；空则为无条件连接
                 </Text>
               </Box>
@@ -101,8 +101,8 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
               <Box>
                 <Text
                   fontSize="xs"
-                  color="gray.600"
-                  _dark={{ color: 'gray.400' }}
+                  color="var(--mc-text-muted)"
+                 
                   mb="1"
                   fontWeight="medium"
                 >
@@ -113,17 +113,17 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="连线上显示的简短说明（可选，留空则显示条件）"
-                  bg="gray.50"
-                  _dark={{ bg: 'gray.800', borderColor: 'gray.600', color: 'gray.100' }}
-                  borderColor="gray.300"
-                  color="gray.900"
+                  bg="var(--mc-surface-muted)"
+                 
+                  borderColor="var(--mc-border)"
+                  color="var(--mc-text)"
                 />
               </Box>
 
               {/* 连线路径（只读） */}
               {edge && (
                 <Box>
-                  <Text fontSize="xs" color="gray.400" _dark={{ color: 'gray.600' }} fontFamily="mono">
+                  <Text fontSize="xs" color="var(--mc-text-muted)" fontFamily="mono">
                     {edge.sourceNodeId} → {edge.targetNodeId}
                   </Text>
                 </Box>
@@ -132,8 +132,8 @@ export function EdgeConfigDialog({ edge, onClose, onSave }: EdgeConfigDialogProp
           </Dialog.Body>
           <Dialog.Footer
             borderTopWidth="1px"
-            borderColor="gray.200"
-            _dark={{ borderColor: 'gray.700' }}
+            borderColor="var(--mc-border)"
+           
             pt="3"
           >
             <HStack gap="2" justify="flex-end">

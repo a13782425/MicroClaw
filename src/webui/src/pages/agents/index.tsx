@@ -60,7 +60,7 @@ export default function AgentsPage() {
         ) : (
           <Box flex="1" overflowY="auto" p="2">
             {agents.length === 0 ? (
-              <Box py="10" textAlign="center" color="gray.400">暂无 Agent</Box>
+              <Box py="10" textAlign="center" color="var(--mc-text-muted)">暂无 Agent</Box>
             ) : (
               agents.map((agent) => {
                 const isActive = selected?.id === agent.id
@@ -74,7 +74,7 @@ export default function AgentsPage() {
                     rounded="md"
                     cursor="pointer"
                     bg={isActive ? 'blue.50' : undefined}
-                    _dark={{ bg: isActive ? 'blue.900' : undefined }}
+                   
                     _hover={{ bg: isActive ? 'blue.50' : 'gray.50', _dark: { bg: isActive ? 'blue.900' : 'gray.800' } }}
                     onClick={() => setSelected(agent)}
                   >
@@ -86,7 +86,7 @@ export default function AgentsPage() {
                           {agent.isDefault && <Badge size="xs" colorPalette="yellow">DEFAULT</Badge>}
                         </HStack>
                         {agent.description && (
-                          <Text fontSize="xs" color="gray.500" lineClamp={2}>{agent.description}</Text>
+                          <Text fontSize="xs" color="var(--mc-text-muted)" lineClamp={2}>{agent.description}</Text>
                         )}
                         <HStack mt="2" gap="1" flexWrap="wrap">
                           <Badge size="xs" colorPalette={agent.isEnabled ? 'green' : 'gray'}>
@@ -108,7 +108,7 @@ export default function AgentsPage() {
         <AgentDetail key={selected.id} agent={selected} allAgents={agents} onUpdated={handleUpdated} onDeleted={handleDeleted} />
       ) : (
         <Flex flex="1" align="center" justify="center">
-          <Text color="gray.400">从左侧选择一个 Agent</Text>
+          <Text color="var(--mc-text-muted)">从左侧选择一个 Agent</Text>
         </Flex>
       )}
 
