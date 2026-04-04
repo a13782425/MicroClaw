@@ -15,7 +15,7 @@ namespace MicroClaw.Pet;
 /// </para>
 /// </summary>
 public sealed class PetEmotionDecayJob(
-    IAllSessionsReader sessionsReader,
+    ISessionRepository sessionRepo,
     IEmotionStore emotionStore,
     ILogger<PetEmotionDecayJob> logger) : IScheduledJob
 {
@@ -33,7 +33,7 @@ public sealed class PetEmotionDecayJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        var sessions = sessionsReader.GetAll();
+        var sessions = sessionRepo.GetAll();
         int decayed = 0;
 
         foreach (var session in sessions)
@@ -41,7 +41,18 @@ public sealed class PetEmotionDecayJob(
             if (ct.IsCancellationRequested) break;
             if (!session.IsApproved) continue;
 
-            EmotionState current = await emotionStore.GetCurrentAsync(session.Id, ct);
+            EmotionState current;
+
+            // 若 PetContext 已加载到内存，直接使用内存情绪快照；否则从磁盘加载
+            var petCtx = session.PetContext as PetContext;
+            if (petCtx is not null)
+            {
+                current = petCtx.Emotion;
+            }
+            else
+            {
+                current = await emotionStore.GetCurrentAsync(session.Id, ct);
+            }
 
             // 如果已全部处于默认值，跳过写入
             if (current.Alertness == DefaultValue &&
@@ -55,6 +66,10 @@ public sealed class PetEmotionDecayJob(
                 mood: Decay(current.Mood),
                 curiosity: Decay(current.Curiosity),
                 confidence: Decay(current.Confidence));
+
+            // 若 PetContext 已在内存中，通过 UpdateEmotion 同步内存快照
+            if (petCtx is not null)
+                petCtx.UpdateEmotion(next);
 
             await emotionStore.SaveAsync(session.Id, next, ct);
             decayed++;

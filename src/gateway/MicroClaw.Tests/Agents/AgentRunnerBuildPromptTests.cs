@@ -1,6 +1,7 @@
 ﻿using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
@@ -35,7 +36,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
     private readonly MemoryService _memory;
     private readonly AgentDnaService _agentDna;
     private readonly AgentRunner _runner;
-    private readonly AgentConfig _testAgent;
+    private readonly AgentEntity _testAgent;
 
     public AgentRunnerBuildPromptTests()
     {
@@ -72,7 +73,7 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             contextProviders:      contextProviders,
             providerStore:         new ProviderConfigStore(),
             clientFactory:         CreateNoOpClientFactory(),
-            sessionReader:         Substitute.For<ISessionReader>(),
+            sessionReader:         Substitute.For<ISessionRepository>(),
             skillToolFactory:      skillToolFactory,
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,
@@ -83,15 +84,15 @@ public sealed class AgentRunnerBuildPromptTests : IDisposable
             chatContentRestorers:  Array.Empty<MicroClaw.Agent.Restorers.IChatContentRestorer>());
 
         // 初始化测试 Agent
-        _testAgent = new AgentConfig(
-            Id: "test-agent-001",
-            Name: "Test Agent",
-            Description: "",
-            IsEnabled: true,
-            DisabledSkillIds: [],
-            DisabledMcpServerIds: [],
-            ToolGroupConfigs: [],
-            CreatedAtUtc: DateTimeOffset.UtcNow);
+        _testAgent = AgentEntity.Reconstitute(
+            id: "test-agent-001",
+            name: "Test Agent",
+            description: "",
+            isEnabled: true,
+            disabledSkillIds: [],
+            disabledMcpServerIds: [],
+            toolGroupConfigs: [],
+            createdAtUtc: DateTimeOffset.UtcNow);
         _agentDna.InitializeAgent(_testAgent.Id);
     }
 

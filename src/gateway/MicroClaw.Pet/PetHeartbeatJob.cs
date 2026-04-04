@@ -14,7 +14,7 @@ namespace MicroClaw.Pet;
 /// </para>
 /// </summary>
 public sealed class PetHeartbeatJob(
-    IAllSessionsReader sessionsReader,
+    ISessionRepository sessionRepo,
     PetHeartbeatExecutor heartbeatExecutor,
     ILogger<PetHeartbeatJob> logger) : IScheduledJob
 {
@@ -29,7 +29,7 @@ public sealed class PetHeartbeatJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        var sessions = sessionsReader.GetAll();
+        var sessions = sessionRepo.GetAll();
         var candidates = new List<string>();
 
         // 筛选已审批的 Session（Pet 是否启用由 HeartbeatExecutor 内部检查）
@@ -37,6 +37,8 @@ public sealed class PetHeartbeatJob(
         {
             if (ct.IsCancellationRequested) break;
             if (!session.IsApproved) continue;
+            // 若已有 PetContext 且明确禁用，提前过滤，避免创建无效任务
+            if (session.PetContext is { IsEnabled: false }) continue;
             candidates.Add(session.Id);
         }
 

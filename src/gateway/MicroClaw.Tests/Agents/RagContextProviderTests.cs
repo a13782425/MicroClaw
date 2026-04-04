@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.RAG;
 using MicroClaw.Tools;
 using Microsoft.Extensions.Logging;
@@ -17,15 +18,15 @@ public sealed class RagContextProviderTests
 {
     private static readonly ILogger<RagContextProvider> NullLog = NullLogger<RagContextProvider>.Instance;
     private static readonly RagRetrievalContext RetrievalCtx = new();
-    private static readonly AgentConfig TestAgent = new(
-        Id: "agent-rag-test",
-        Name: "RAG Test Agent",
-        Description: "",
-        IsEnabled: true,
-        DisabledSkillIds: [],
-        DisabledMcpServerIds: [],
-        ToolGroupConfigs: [],
-        CreatedAtUtc: DateTimeOffset.UtcNow);
+    private static readonly AgentEntity TestAgent = AgentEntity.Reconstitute(
+        id: "agent-rag-test",
+        name: "RAG Test Agent",
+        description: "",
+        isEnabled: true,
+        disabledSkillIds: [],
+        disabledMcpServerIds: [],
+        toolGroupConfigs: [],
+        createdAtUtc: DateTimeOffset.UtcNow);
 
     // ── 构造参数校验 ──
 

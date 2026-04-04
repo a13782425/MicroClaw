@@ -65,7 +65,7 @@ public sealed class WorkflowEngineExecutionTests : IDisposable
             },
             providerStore: _providerStore,
             clientFactory: CreateNoOpClientFactory(),
-            sessionReader: Substitute.For<ISessionReader>(),
+            sessionReader: Substitute.For<ISessionRepository>(),
             skillToolFactory: skillToolFactory,
             usageTracker: Substitute.For<IUsageTracker>(),
             loggerFactory: NullLoggerFactory.Instance,

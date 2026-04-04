@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
@@ -14,20 +15,26 @@ namespace MicroClaw.Pet;
 ///   <item>写入默认 <c>state.json</c>（Idle 状态）</item>
 ///   <item>复制默认 YAML 提示词模板（personality.yaml / dispatch-rules.yaml / knowledge-interests.yaml）</item>
 ///   <item>写入默认 <c>config.json</c>（PetConfig 默认值）</item>
+///   <item>创建 <see cref="PetContext"/> 并挂载到 Session（通过 <see cref="Session.AttachPet"/>）</item>
 /// </list>
 /// </para>
 /// </summary>
 public sealed class PetFactory(
     PetStateStore stateStore,
+    PetContextFactory contextFactory,
+    ISessionRepository sessionRepo,
     MicroClawConfigEnv env,
     ILogger<PetFactory> logger)
 {
     private readonly PetStateStore _stateStore = stateStore;
+    private readonly PetContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+    private readonly ISessionRepository _sessionRepo = sessionRepo ?? throw new ArgumentNullException(nameof(sessionRepo));
     private readonly string _sessionsDir = env.SessionsDir;
     private readonly ILogger<PetFactory> _logger = logger;
 
     /// <summary>
     /// 为指定 Session 创建 Pet，若 Pet 目录已存在则跳过。
+    /// 创建完成后构建 <see cref="PetContext"/> 并将其挂载到对应 Session。
     /// </summary>
     /// <param name="sessionId">Session 唯一标识符。</param>
     /// <param name="config">Pet 配置（可选，不提供则使用默认值）。</param>
@@ -73,6 +80,27 @@ public sealed class PetFactory(
         await WriteDefaultYamlAsync(Path.Combine(petDir, "knowledge-interests.yaml"), DefaultKnowledgeInterestsYaml, ct);
 
         _logger.LogInformation("Pet 初始化完成：SessionId={SessionId}", sessionId);
+
+        // 4. 构建 PetContext 并挂载到 Session（O-3-4）
+        // 注：由于文件刚写完，PetContextFactory 可直接从磁盘加载
+        try
+        {
+            var petCtx = await _contextFactory.LoadAsync(sessionId, ct);
+            if (petCtx is not null)
+            {
+                var session = _sessionRepo.Get(sessionId);
+                if (session is not null)
+                {
+                    session.AttachPet(petCtx);
+                    _logger.LogDebug("Pet 上下文已挂载到 Session {SessionId}", sessionId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // PetContext 挂载失败不影响 Pet 目录创建，PetRunner 会在首次使用时懒加载
+            _logger.LogWarning(ex, "Pet 上下文挂载失败，将在首次使用时懒加载：SessionId={SessionId}", sessionId);
+        }
     }
 
     private static async Task WriteDefaultYamlAsync(string path, string content, CancellationToken ct)

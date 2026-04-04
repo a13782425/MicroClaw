@@ -1,6 +1,7 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using MicroClaw.Agent;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Pet.Decision;
@@ -17,17 +18,18 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Pet;
 
 /// <summary>
-/// Pet 会话编排引擎：所有用户消息先到 Pet，由 Pet（LLM）决策选择模型/Agent/工具，
+/// Pet 会话编排引擎：所有用户消息先经 Pet，由 Pet（LLM）决策选择模型/Agent/工具，
 /// 再委派 <see cref="AgentRunner"/> 执行。
 /// <para>
 /// HandleMessageAsync 流程：
 /// <list type="number">
-///   <item>加载 PetState + PetConfig</item>
+///   <item>从 ISessionRepository 获取 Session，取 Per-Session PetContext（懒加载）</item>
 ///   <item>若 Pet 未启用，直接透传 AgentRunner</item>
+///   <item>子代理会话（ParentSessionId != null）使用根会话的 PetContext（O-3-7）</item>
 ///   <item>Pet RAG 检索（用户消息相关知识）</item>
 ///   <item>PetDecisionEngine(LLM) 调度决策</item>
 ///   <item>根据 dispatch 结果调用 AgentRunner.StreamReActAsync()（或 Pet 直接回复）</item>
-///   <item>后处理：更新情绪、记录 journal、收集习惯</item>
+///   <item>后处理：通过 PetContext 更新情绪/状态，记录 journal，收集习惯</item>
 /// </list>
 /// 实现 <see cref="IAgentMessageHandler"/> 供渠道消息处理器路由调用。
 /// </para>
@@ -35,7 +37,8 @@ namespace MicroClaw.Pet;
 public sealed class PetRunner(
     AgentRunner agentRunner,
     AgentStore agentStore,
-    ISessionReader sessionReader,
+    ISessionRepository sessionRepo,
+    PetContextFactory petContextFactory,
     ProviderConfigStore providerStore,
     PetStateStore stateStore,
     IEmotionStore emotionStore,
@@ -50,7 +53,8 @@ public sealed class PetRunner(
 {
     private readonly AgentRunner _agentRunner = agentRunner ?? throw new ArgumentNullException(nameof(agentRunner));
     private readonly AgentStore _agentStore = agentStore ?? throw new ArgumentNullException(nameof(agentStore));
-    private readonly ISessionReader _sessionReader = sessionReader ?? throw new ArgumentNullException(nameof(sessionReader));
+    private readonly ISessionRepository _sessionRepo = sessionRepo ?? throw new ArgumentNullException(nameof(sessionRepo));
+    private readonly PetContextFactory _petContextFactory = petContextFactory ?? throw new ArgumentNullException(nameof(petContextFactory));
     private readonly ProviderConfigStore _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
@@ -75,22 +79,42 @@ public sealed class PetRunner(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
-        // ── 1. 加载 Pet 状态与配置 ──
-        var petState = await _stateStore.LoadAsync(sessionId, ct);
-        var petConfig = await _stateStore.LoadConfigAsync(sessionId, ct);
+        // ── 1. 获取 Session（用于路由：ProviderId / AgentId）──
+        Session? session = _sessionRepo.Get(sessionId);
 
-        // 未启用 Pet 时直接透传 AgentRunner
-        if (petState is null || petConfig is not { Enabled: true })
+        // ── 2. 子代理会话：使用根会话的 PetContext（O-3-7）──
+        // 子代理会话不拥有独立 Pet，共享根会话的 Pet 编排上下文。
+        Session? petSession = session;
+        if (session?.ParentSessionId is not null)
+        {
+            string rootId = _sessionRepo.GetRootSessionId(sessionId);
+            petSession = _sessionRepo.Get(rootId);
+        }
+
+        // ── 3. 获取 PetContext（懒加载：服务重启后 PetContext 为 null）──
+        PetContext? petCtx = petSession?.PetContext as PetContext;
+        if (petCtx is null && petSession is { IsApproved: true })
+        {
+            var loaded = await _petContextFactory.LoadAsync(petSession.Id, ct);
+            if (loaded is not null)
+            {
+                petSession.AttachPet(loaded);
+                petCtx = loaded;
+            }
+        }
+
+        // ── 4. Pet 未启用，直接透传 AgentRunner ──
+        if (petCtx is null || !petCtx.IsEnabled)
         {
             _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner", sessionId);
-            await foreach (var item in PassthroughToAgentRunnerAsync(sessionId, history, ct, source))
+            await foreach (var item in PassthroughToAgentRunnerAsync(session, history, ct, source))
                 yield return item;
             yield break;
         }
 
-        // ── 薄迭代器：C# 不允许在含 catch 的 try 块中 yield，与 AgentRunner 相同的 Channel 解耦模式 ──
+        // ── 薄迭代器：C# 不允许在含 catch 或 try 块中 yield，通过 Channel 解耦 ──
         var outputChannel = Channel.CreateUnbounded<StreamItem>();
-        Task execution = ExecuteWithPetAsync(sessionId, history, petState, petConfig, ct, source, outputChannel);
+        Task execution = ExecuteWithPetAsync(sessionId, session, history, petCtx, ct, source, outputChannel);
 
         await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
             yield return item;
@@ -106,25 +130,24 @@ public sealed class PetRunner(
     /// </summary>
     private async Task ExecuteWithPetAsync(
         string sessionId,
+        Session? session,
         IReadOnlyList<SessionMessage> history,
-        PetState petState,
-        PetConfig petConfig,
+        PetContext petCtx,
         CancellationToken ct,
         string source,
         Channel<StreamItem> output)
     {
+        var petConfig = petCtx.Config;
         PetDispatchResult dispatch = new() { Reason = "初始化" };
         bool messageSucceeded = false;
+        // 保存进入 Dispatching 前的状态，后处理时恢复
+        PetBehaviorState previousBehaviorState = petCtx.PetState.BehaviorState;
 
         try
         {
             // ── 2. 更新 Pet 状态为 Dispatching ──
-            var dispatchingState = petState with
-            {
-                BehaviorState = PetBehaviorState.Dispatching,
-                UpdatedAt = DateTimeOffset.UtcNow,
-            };
-            await _stateStore.SaveAsync(dispatchingState, ct);
+            petCtx.UpdateBehaviorState(PetBehaviorState.Dispatching);
+            await _stateStore.SaveAsync(petCtx.PetState, ct);
 
             // ── 3. Pet RAG 检索（用户消息相关知识）──
             string? petRagKnowledge = null;
@@ -144,7 +167,8 @@ public sealed class PetRunner(
             }
 
             // ── 4. 构建决策上下文并调用 PetDecisionEngine(LLM) ──
-            var emotion = await _emotionStore.GetCurrentAsync(sessionId, ct);
+            // 直接使用 PetContext 中的内存情绪快照，避免重复 I/O
+            var emotion = petCtx.Emotion;
             var rateLimitStatus = await _rateLimiter.GetStatusAsync(sessionId, ct);
             var recentSummaries = BuildRecentSummaries(history, maxCount: 10);
             var agentSummaries = BuildAgentSummaries(petConfig);
@@ -158,7 +182,7 @@ public sealed class PetRunner(
                 AvailableAgents = agentSummaries,
                 AvailableProviders = providerSummaries,
                 AvailableToolGroups = toolGroups,
-                BehaviorState = petState.BehaviorState,
+                BehaviorState = previousBehaviorState,
                 EmotionState = emotion,
                 RateLimitStatus = rateLimitStatus,
                 PetRagKnowledge = petRagKnowledge,
@@ -182,7 +206,7 @@ public sealed class PetRunner(
             // ── 5. 根据 dispatch 结果执行 ──
             if (dispatch.ShouldPetRespond && !string.IsNullOrWhiteSpace(dispatch.PetResponse))
             {
-                // Pet 自己直接回复（不走 Agent）
+                // Pet 自己直接回复（不经 Agent）
                 output.Writer.TryWrite(new TokenItem(dispatch.PetResponse));
                 messageSucceeded = true;
             }
@@ -190,7 +214,7 @@ public sealed class PetRunner(
             {
                 // 委派 AgentRunner 执行
                 await foreach (var item in DelegateToAgentRunnerAsync(
-                    sessionId, history, dispatch, petConfig, emotion, ct, source))
+                    sessionId, session, history, dispatch, petCtx, ct, source))
                 {
                     output.Writer.TryWrite(item);
                 }
@@ -207,22 +231,22 @@ public sealed class PetRunner(
         }
         finally
         {
-            // ── 6. 后处理：更新情绪、恢复状态、记录 journal、收集习惯 ──
-            await PostProcessAsync(sessionId, petState.BehaviorState, messageSucceeded, dispatch, ct);
+            // ── 6. 后处理：通过 PetContext 更新情绪/状态，记录 journal，收集习惯 ──
+            await PostProcessAsync(sessionId, petCtx, previousBehaviorState, messageSucceeded, dispatch, ct);
         }
     }
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
-    /// <summary>所有渠道消息默认路由到主 Agent（IsDefault=true），不再按渠道绑定匹配。</summary>
+    /// <summary>所有渠道消息默认路由到�?Agent（IsDefault=true），不再按渠道绑定匹配�?/summary>
     public bool HasAgentForChannel(string channelId)
     {
-        AgentConfig? main = _agentStore.GetDefault();
+        AgentEntity? main = _agentStore.GetDefaultAgent();
         return main is { IsEnabled: true };
     }
 
     /// <summary>
-    /// 渠道消息入口：通过 PetRunner 编排，内部调用 AgentRunner。
+    /// 渠道消息入口：通过 PetRunner 编排，内部调�?AgentRunner�?
     /// </summary>
     public IAsyncEnumerable<StreamItem> HandleMessageAsync(
         string channelId,
@@ -235,37 +259,34 @@ public sealed class PetRunner(
 
     /// <summary>Pet 未启用时，直接透传 AgentRunner（保持原有 Web chat 行为）。</summary>
     private async IAsyncEnumerable<StreamItem> PassthroughToAgentRunnerAsync(
-        string sessionId,
+        Session? session,
         IReadOnlyList<SessionMessage> history,
         [EnumeratorCancellation] CancellationToken ct,
         string source)
     {
-        SessionInfo? session = _sessionReader.Get(sessionId);
         string providerId = session?.ProviderId ?? string.Empty;
 
-        AgentConfig? agent = ResolveAgent(session?.AgentId);
+        AgentEntity? agent = ResolveAgent(session?.AgentId);
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled agent found for this session.");
 
-        await foreach (var item in _agentRunner.StreamReActAsync(agent, providerId, history, sessionId, ct, source))
+        await foreach (var item in _agentRunner.StreamReActAsync(agent, providerId, history, session?.Id ?? string.Empty, ct, source))
             yield return item;
     }
 
     /// <summary>根据 PetDispatchResult 委派 AgentRunner 执行。</summary>
     private async IAsyncEnumerable<StreamItem> DelegateToAgentRunnerAsync(
         string sessionId,
+        Session? session,
         IReadOnlyList<SessionMessage> history,
         PetDispatchResult dispatch,
-        PetConfig petConfig,
-        EmotionState emotion,
+        PetContext petCtx,
         [EnumeratorCancellation] CancellationToken ct,
         string source)
     {
-        SessionInfo? session = _sessionReader.Get(sessionId);
-
         // 解析 Agent：dispatch 指定 > Session 绑定 > 默认
-        AgentConfig? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId)
-            ? _agentStore.GetById(dispatch.AgentId) ?? ResolveAgent(session?.AgentId)
+        AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId)
+            ? _agentStore.GetAgentById(dispatch.AgentId) ?? ResolveAgent(session?.AgentId)
             : ResolveAgent(session?.AgentId);
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled agent found for this session.");
@@ -275,8 +296,8 @@ public sealed class PetRunner(
             ? dispatch.ProviderId
             : session?.ProviderId ?? string.Empty;
 
-        // 构建 PetOverrides（情绪 + 工具覆盖 + Pet 知识）
-        var behaviorProfile = _emotionBehaviorMapper.GetProfile(emotion);
+        // 构建 PetOverrides（情绪参数 + 工具覆盖 + Pet 知识）
+        var behaviorProfile = _emotionBehaviorMapper.GetProfile(petCtx.Emotion);
         var petOverrides = new PetOverrides
         {
             Temperature = behaviorProfile.Temperature,
@@ -293,9 +314,10 @@ public sealed class PetRunner(
         }
     }
 
-    /// <summary>后处理：更新情绪 + 恢复 Pet 状态 + 记录 journal + 收集习惯。</summary>
+    /// <summary>后处理：通过 PetContext 更新情绪/状态 + 持久化，记录 journal，收集习惯。</summary>
     private async Task PostProcessAsync(
         string sessionId,
+        PetContext petCtx,
         PetBehaviorState previousState,
         bool messageSucceeded,
         PetDispatchResult dispatch,
@@ -303,27 +325,23 @@ public sealed class PetRunner(
     {
         try
         {
-            // 更新情绪
+            // 通过 PetContext 更新情绪（应用情绪增减量）
             var emotionEvent = messageSucceeded
                 ? EmotionEventType.MessageSuccess
                 : EmotionEventType.MessageFailed;
-            var currentEmotion = await _emotionStore.GetCurrentAsync(sessionId, ct);
-            var newEmotion = _emotionRuleEngine.Evaluate(currentEmotion, emotionEvent);
-            await _emotionStore.SaveAsync(sessionId, newEmotion, ct);
+            var delta = _emotionRuleEngine.GetDelta(emotionEvent);
+            petCtx.UpdateEmotion(delta);
+            await _emotionStore.SaveAsync(sessionId, petCtx.Emotion, ct);
 
-            // 恢复 Pet 状态（从 Dispatching 回到之前状态，通常是 Idle）
-            var petState = await _stateStore.LoadAsync(sessionId, ct);
-            if (petState is not null && petState.BehaviorState == PetBehaviorState.Dispatching)
+            // 通过 PetContext 恢复 Pet 状态（从 Dispatching 回到之前状态，通常是 Idle）
+            if (petCtx.PetState.BehaviorState == PetBehaviorState.Dispatching)
             {
-                var restoredState = petState with
-                {
-                    BehaviorState = previousState == PetBehaviorState.Dispatching
-                        ? PetBehaviorState.Idle // 避免无限 Dispatching
-                        : previousState,
-                    UpdatedAt = DateTimeOffset.UtcNow,
-                };
-                await _stateStore.SaveAsync(restoredState, ct);
+                petCtx.UpdateBehaviorState(previousState == PetBehaviorState.Dispatching
+                    ? PetBehaviorState.Idle // 避免无限 Dispatching
+                    : previousState);
             }
+            await _stateStore.SaveAsync(petCtx.PetState, ct);
+            petCtx.ClearDirty();
 
             // 记录 journal
             string detail = $"success={messageSucceeded}, agent={dispatch.AgentId ?? "default"}, " +
@@ -339,7 +357,7 @@ public sealed class PetRunner(
         }
     }
 
-    /// <summary>从消息历史提取最新用户消息内容。</summary>
+    /// <summary>从消息历史提取最新用户消息内容�?/summary>
     private static string ExtractUserMessage(IReadOnlyList<SessionMessage> history)
     {
         for (int i = history.Count - 1; i >= 0; i--)
@@ -350,7 +368,7 @@ public sealed class PetRunner(
         return string.Empty;
     }
 
-    /// <summary>构建最近消息摘要。</summary>
+    /// <summary>构建最近消息摘要�?/summary>
     private static IReadOnlyList<string> BuildRecentSummaries(IReadOnlyList<SessionMessage> history, int maxCount)
     {
         int start = Math.Max(0, history.Count - maxCount);
@@ -364,7 +382,7 @@ public sealed class PetRunner(
         return summaries;
     }
 
-    /// <summary>构建可用 Agent 摘要列表（尊重 PetConfig.AllowedAgentIds 约束）。</summary>
+    /// <summary>构建可用 Agent 摘要列表（尊�?PetConfig.AllowedAgentIds 约束）�?/summary>
     private IReadOnlyList<AgentSummary> BuildAgentSummaries(PetConfig config)
     {
         var agents = _agentStore.All.Where(a => a.IsEnabled);
@@ -376,7 +394,7 @@ public sealed class PetRunner(
         return agents.Select(a => new AgentSummary(a.Id, a.Name, a.Description, a.IsDefault)).ToList();
     }
 
-    /// <summary>构建可用 Provider 摘要列表（仅 Chat 类型）。</summary>
+    /// <summary>构建可用 Provider 摘要列表（仅 Chat 类型）�?/summary>
     private IReadOnlyList<ProviderSummary> BuildProviderSummaries()
     {
         return _providerStore.All
@@ -389,16 +407,18 @@ public sealed class PetRunner(
             .ToList();
     }
 
-    /// <summary>构建工具组名称列表。</summary>
+    /// <summary>构建工具组名称列表�?/summary>
     private static IReadOnlyList<string> BuildToolGroupNames()
     {
         // 工具组列表目前由静态类型定义，简化返回常见内置工具组
         return ["fetch", "shell", "cron", "sub-agent", "file", "skill"];
     }
 
-    /// <summary>解析 Agent：优先 agentId，回退默认。</summary>
-    private AgentConfig? ResolveAgent(string? agentId) =>
+    /// <summary>解析 Agent：优�?agentId，回退默认�?/summary>
+    private AgentEntity? ResolveAgent(string? agentId) =>
         string.IsNullOrWhiteSpace(agentId)
-            ? _agentStore.GetDefault()
-            : _agentStore.GetById(agentId) ?? _agentStore.GetDefault();
+            ? _agentStore.GetDefaultAgent()
+            : _agentStore.GetAgentById(agentId) ?? _agentStore.GetDefaultAgent();
 }
+
+

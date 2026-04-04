@@ -8,6 +8,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text;
+using MicroClaw.Agent;
+using AgentEntity = MicroClaw.Agent.Agent;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -490,10 +492,10 @@ public sealed class McpServerRegistryTests : IDisposable
             NullLoggerFactory.Instance,
             mockRegistry);
 
-        MicroClaw.Agent.AgentConfig agent = new(
-            Id: "agent1", Name: "test", Description: "", IsEnabled: true,
-            DisabledSkillIds: [], DisabledMcpServerIds: [], ToolGroupConfigs: [],
-            CreatedAtUtc: DateTimeOffset.UtcNow);
+        AgentEntity agent = AgentEntity.Reconstitute(
+            id: "agent1", name: "test", description: "", isEnabled: true,
+            disabledSkillIds: [], disabledMcpServerIds: [], toolGroupConfigs: [],
+            createdAtUtc: DateTimeOffset.UtcNow);
 
         // 使用 registry（空列表），不会连接到任何 MCP Server（无副作用）
         await using MicroClaw.Tools.ToolCollectionResult result =

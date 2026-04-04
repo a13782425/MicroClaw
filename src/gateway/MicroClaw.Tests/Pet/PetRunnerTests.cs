@@ -252,18 +252,28 @@ public sealed class PetRunnerTests : IDisposable
         var petRagScope = new PetRagScope(embeddingService, _tempDir.Path, NullLogger<PetRagScope>.Instance);
 
         // AgentRunner mock — 使用 Substitute 不可行（sealed class），创建简化版
-        var sessionReader = Substitute.For<ISessionReader>();
+        var sessionReader = Substitute.For<ISessionRepository>();
         var mockAgentRunner = CreateMockAgentRunner(agentStore, providerStore, sessionReader);
 
+        // ISessionRepository + PetContextFactory（O-3-5 新增依赖）
+        var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        // 返回已审批的 Session，与将要简单加载的 PetContext进行验证
+        sessionRepo.Get(Arg.Any<string>()).Returns(mi =>
+            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
+                mi.ArgAt<string>(0), "Test", "provider1", true,
+                MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow));
+        sessionRepo.GetRootSessionId(Arg.Any<string>()).Returns(mi => mi.ArgAt<string>(0));
+        var petContextFactory = new MicroClaw.Pet.PetContextFactory(_stateStore, _emotionStore);
+
         return new PetRunner(
-            mockAgentRunner, agentStore, sessionReader, providerStore,
+            mockAgentRunner, agentStore, sessionRepo, petContextFactory, providerStore,
             _stateStore, _emotionStore, emotionRuleEngine, behaviorMapper,
             decisionEngine, rateLimiter, petRagScope, reportBuilder, observer,
             NullLogger<PetRunner>.Instance);
     }
 
     private static AgentRunner CreateMockAgentRunner(
-        AgentStore agentStore, ProviderConfigStore providerStore, ISessionReader sessionReader)
+        AgentStore agentStore, ProviderConfigStore providerStore, ISessionRepository sessionReader)
     {
         var skillService = new MicroClaw.Skills.SkillService(Path.GetTempPath());
         var skillStore = new MicroClaw.Skills.SkillStore(skillService);

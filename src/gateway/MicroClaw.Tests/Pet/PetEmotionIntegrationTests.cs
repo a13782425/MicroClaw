@@ -350,18 +350,27 @@ public sealed class PetEmotionIntegrationTests : IDisposable
             .Returns(new ReadOnlyMemory<float>(new float[384]));
         var petRagScope = new PetRagScope(embeddingService, _tempDir.Path, NullLogger<PetRagScope>.Instance);
 
-        var sessionReader = Substitute.For<ISessionReader>();
+        var sessionReader = Substitute.For<ISessionRepository>();
         var agentRunner = CreateMockAgentRunner(agentStore, providerStore, sessionReader);
 
+        // ISessionRepository + PetContextFactory（O-3-5 新增依赖）
+        var sessionRepo = Substitute.For<ISessionRepository>();
+        sessionRepo.Get(Arg.Any<string>()).Returns(mi =>
+            Session.Reconstitute(
+                mi.ArgAt<string>(0), "Test", "provider1", true,
+                MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow));
+        sessionRepo.GetRootSessionId(Arg.Any<string>()).Returns(mi => mi.ArgAt<string>(0));
+        var petContextFactory = new PetContextFactory(_stateStore, _emotionStore);
+
         return new PetRunner(
-            agentRunner, agentStore, sessionReader, providerStore,
+            agentRunner, agentStore, sessionRepo, petContextFactory, providerStore,
             _stateStore, _emotionStore, emotionRuleEngine, behaviorMapper,
             decisionEngine, rateLimiter, petRagScope, reportBuilder, observer,
             NullLogger<PetRunner>.Instance);
     }
 
     private static AgentRunner CreateMockAgentRunner(
-        AgentStore agentStore, ProviderConfigStore providerStore, ISessionReader sessionReader)
+        AgentStore agentStore, ProviderConfigStore providerStore, ISessionRepository sessionReader)
     {
         var skillService = new SkillService(Path.GetTempPath());
         var skillStore = new SkillStore(skillService);

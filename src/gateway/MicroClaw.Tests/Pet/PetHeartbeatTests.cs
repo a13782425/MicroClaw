@@ -195,12 +195,12 @@ public sealed class PetHeartbeatTests : IDisposable
     [Fact]
     public void PetHeartbeatJob_JobMetadata_IsCorrect()
     {
-        var sessionsReader = Substitute.For<MicroClaw.Abstractions.Sessions.IAllSessionsReader>();
-        sessionsReader.GetAll().Returns([]);
+        var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.Session>());
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
-            sessionsReader,
+            sessionRepo,
             executor,
             NullLogger<PetHeartbeatJob>.Instance);
 
@@ -213,12 +213,12 @@ public sealed class PetHeartbeatTests : IDisposable
     [Fact]
     public async Task PetHeartbeatJob_NoSessions_CompletesWithoutError()
     {
-        var sessionsReader = Substitute.For<MicroClaw.Abstractions.Sessions.IAllSessionsReader>();
-        sessionsReader.GetAll().Returns([]);
+        var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.Session>());
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
-            sessionsReader,
+            sessionRepo,
             executor,
             NullLogger<PetHeartbeatJob>.Instance);
 
@@ -231,16 +231,17 @@ public sealed class PetHeartbeatTests : IDisposable
     {
         await CreateEnabledPetAsync(state: PetBehaviorState.Idle);
 
-        var sessionsReader = Substitute.For<MicroClaw.Abstractions.Sessions.IAllSessionsReader>();
-        sessionsReader.GetAll().Returns([
-            new MicroClaw.Abstractions.Sessions.SessionInfo(
+        var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        sessionRepo.GetAll().Returns(new[]
+        {
+            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
                 SessionId, "Test", "provider1", true,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow)
-        ]);
+        });
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
-            sessionsReader,
+            sessionRepo,
             executor,
             NullLogger<PetHeartbeatJob>.Instance);
 
@@ -251,16 +252,17 @@ public sealed class PetHeartbeatTests : IDisposable
     [Fact]
     public async Task PetHeartbeatJob_UnapprovedSessions_Skipped()
     {
-        var sessionsReader = Substitute.For<MicroClaw.Abstractions.Sessions.IAllSessionsReader>();
-        sessionsReader.GetAll().Returns([
-            new MicroClaw.Abstractions.Sessions.SessionInfo(
+        var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        sessionRepo.GetAll().Returns(new[]
+        {
+            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
                 "unapproved", "Test", "provider1", false,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow)
-        ]);
+        });
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
-            sessionsReader,
+            sessionRepo,
             executor,
             NullLogger<PetHeartbeatJob>.Instance);
 

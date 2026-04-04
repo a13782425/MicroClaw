@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Routing;
 namespace MicroClaw.Agent.Endpoints;
 
 /// <summary>
-/// Agent REST API 端点：Agent CRUD、MCP Server 引用管理、工具列表、流式对话。
+/// Agent REST API 端点：Agent CRUD、MCP Server 引用管理、工具列表、流式对话�?
 /// </summary>
 public static class AgentEndpoints
 {
@@ -23,13 +23,13 @@ public static class AgentEndpoints
     {
         // ── Agent CRUD ────────────────────────────────────────────────────────
 
-        endpoints.MapGet("/agents", (AgentStore store) =>
-            Results.Ok(store.All.Select(ToDto)))
+        endpoints.MapGet("/agents", (IAgentRepository agentRepo) =>
+            Results.Ok(agentRepo.GetAll().Select(ToDto)))
             .WithTags("Agents");
 
         endpoints.MapGet("/agents/{id}", (string id, AgentStore store) =>
         {
-            AgentConfig? agent = store.GetById(id);
+            Agent? agent = store.GetAgentById(id);
             return agent is null ? Results.NotFound() : Results.Ok(ToDto(agent));
         })
         .WithTags("Agents");
@@ -39,22 +39,18 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
 
-            AgentConfig config = new(
-                Id: string.Empty,
-                Name: req.Name.Trim(),
-                Description: req.Description ?? string.Empty,
-                IsEnabled: req.IsEnabled,
-                DisabledSkillIds: req.DisabledSkillIds ?? [],
-                DisabledMcpServerIds: req.DisabledMcpServerIds ?? [],
-                ToolGroupConfigs: [],
-                CreatedAtUtc: DateTimeOffset.UtcNow,
-                ContextWindowMessages: req.ContextWindowMessages,
-                ExposeAsA2A: req.ExposeAsA2A,
-                AllowedSubAgentIds: req.AllowedSubAgentIds);
-
+            Agent newAgent = Agent.Create(
+                name: req.Name.Trim(),
+                description: req.Description ?? string.Empty,
+                isEnabled: req.IsEnabled,
+                disabledSkillIds: req.DisabledSkillIds ?? [],
+                disabledMcpServerIds: req.DisabledMcpServerIds ?? [],
+                contextWindowMessages: req.ContextWindowMessages,
+                exposeAsA2A: req.ExposeAsA2A,
+                allowedSubAgentIds: req.AllowedSubAgentIds);
             try
             {
-                AgentConfig created = store.Add(config);
+                Agent created = ((IAgentRepository)store).Save(newAgent);
                 agentDna.InitializeAgent(created.Id);
                 return Results.Ok(new { created.Id });
             }
@@ -70,34 +66,29 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentConfig? existing = store.GetById(req.Id);
+            Agent? existing = store.GetAgentById(req.Id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            AgentConfig updated = existing with
-            {
-                Name = req.Name?.Trim() ?? existing.Name,
-                Description = req.Description ?? existing.Description,
-                IsEnabled = req.IsEnabled ?? existing.IsEnabled,
-                DisabledSkillIds = req.DisabledSkillIds ?? existing.DisabledSkillIds,
-                DisabledMcpServerIds = req.DisabledMcpServerIds ?? existing.DisabledMcpServerIds,
-                ContextWindowMessages = req.HasContextWindowMessages ? req.ContextWindowMessages : existing.ContextWindowMessages,
-                ExposeAsA2A = req.ExposeAsA2A ?? existing.ExposeAsA2A,
-                AllowedSubAgentIds = req.HasAllowedSubAgentIds ? req.AllowedSubAgentIds : existing.AllowedSubAgentIds,
-                RoutingStrategy = req.RoutingStrategy is not null
-                    ? (Enum.TryParse<ProviderRoutingStrategy>(req.RoutingStrategy, ignoreCase: true, out ProviderRoutingStrategy parsedStrategy)
-                        ? parsedStrategy
-                        : existing.RoutingStrategy)
-                    : existing.RoutingStrategy,
-                MonthlyBudgetUsd = req.HasMonthlyBudgetUsd ? req.MonthlyBudgetUsd : existing.MonthlyBudgetUsd,
-            };
+            // 使用 Agent 行为方法应用更新
+            if (req.Name is not null) existing.UpdateInfo(req.Name.Trim(), req.Description ?? existing.Description);
+            else if (req.Description is not null) existing.UpdateInfo(existing.Name, req.Description);
+            if (req.IsEnabled is true) existing.Enable();
+            else if (req.IsEnabled is false) existing.Disable();
+            if (req.DisabledSkillIds is not null) existing.UpdateDisabledSkillIds(req.DisabledSkillIds);
+            if (req.DisabledMcpServerIds is not null) existing.UpdateDisabledMcpServerIds(req.DisabledMcpServerIds);
+            if (req.HasContextWindowMessages) existing.UpdateContextWindow(req.ContextWindowMessages);
+            if (req.ExposeAsA2A is not null) existing.UpdateExposeAsA2A(req.ExposeAsA2A.Value);
+            if (req.HasAllowedSubAgentIds) existing.UpdateAllowedSubAgentIds(req.AllowedSubAgentIds);
+            if (req.RoutingStrategy is not null &&
+                Enum.TryParse<ProviderRoutingStrategy>(req.RoutingStrategy, ignoreCase: true, out var parsedStrategy))
+                existing.UpdateRoutingStrategy(parsedStrategy);
+            if (req.HasMonthlyBudgetUsd) existing.UpdateMonthlyBudget(req.MonthlyBudgetUsd);
 
             try
             {
-                AgentConfig? result = store.Update(req.Id, updated);
-                return result is null
-                    ? Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" })
-                    : Results.Ok(new { result.Id });
+                Agent saved = ((IAgentRepository)store).Save(existing);
+                return Results.Ok(new { saved.Id });
             }
             catch (InvalidOperationException ex)
             {
@@ -111,7 +102,7 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentConfig? agent = store.GetById(req.Id);
+            Agent? agent = store.GetAgentById(req.Id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             if (agent.IsDefault)
@@ -127,7 +118,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/mcp-servers", (string id, AgentStore store) =>
         {
-            AgentConfig? agent = store.GetById(id);
+            Agent? agent = store.GetAgentById(id);
             return agent is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
                 : Results.Ok(agent.DisabledMcpServerIds);
@@ -136,7 +127,7 @@ public static class AgentEndpoints
 
         endpoints.MapPost("/agents/{id}/mcp-servers", (string id, AgentMcpServersRequest req, AgentStore store, McpServerConfigStore mcpStore) =>
         {
-            AgentConfig? existing = store.GetById(id);
+            Agent? existing = store.GetAgentById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -150,18 +141,17 @@ public static class AgentEndpoints
                     errorCode = "MCP_SERVER_NOT_FOUND"
                 });
 
-            AgentConfig? result = store.UpdateDisabledMcpServerIds(id, mcpIds);
-            return result is null
-                ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
-                : Results.Ok(new { result.Id });
+            existing.UpdateDisabledMcpServerIds(mcpIds);
+            ((IAgentRepository)store).Save(existing);
+            return Results.Ok(new { existing.Id });
         })
         .WithTags("Agents");
 
-        // ── 工具列表（内置分组 + 渠道 + MCP 分组，含启用状态）────────────────────
+        // ── 工具列表（内置分组 + 渠道 + MCP 分组，含启用状态）────────────
 
         endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ToolCollector toolCollector, CancellationToken ct) =>
         {
-            AgentConfig? agent = store.GetById(id);
+            Agent? agent = store.GetAgentById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -174,7 +164,8 @@ public static class AgentEndpoints
 
         endpoints.MapPost("/agents/{id}/tools/settings", (string id, IReadOnlyList<ToolGroupConfigRequest> req, AgentStore store) =>
         {
-            if (store.GetById(id) is null)
+            Agent? agent = store.GetAgentById(id);
+            if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<ToolGroupConfig> configs = req
@@ -182,27 +173,28 @@ public static class AgentEndpoints
                 .ToList()
                 .AsReadOnly();
 
-            AgentConfig? updated = store.UpdateToolGroupConfigs(id, configs);
-            return updated is null ? Results.NotFound() : Results.Ok(new { updated.Id });
+            agent.UpdateToolGroupConfigs(configs);
+            ((IAgentRepository)store).Save(agent);
+            return Results.Ok(new { agent.Id });
         })
         .WithTags("Agents");
 
-        // ── 技能绑定管理 ─────────────────────────────────────────────────────
+        // ── 技能绑定管�?─────────────────────────────────────────────────────
 
         endpoints.MapGet("/agents/{id}/skills", (string id, AgentStore store) =>
         {
-            AgentConfig? agent = store.GetById(id);
+            Agent? agent = store.GetAgentById(id);
             return agent is null ? Results.NotFound() : Results.Ok(agent.DisabledSkillIds);
         })
         .WithTags("Agents");
 
         endpoints.MapPost("/agents/{id}/skills", (string id, AgentBoundSkillsRequest req, AgentStore store, SkillStore skillStore) =>
         {
-            AgentConfig? existing = store.GetById(id);
+            Agent? existing = store.GetAgentById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 0-B-6: 批量校验 SkillId 是否存在于文件系统
+            // 0-B-6: 批量校验 SkillId 是否存在于文件系�?
             IReadOnlyList<string> skillIds = req.SkillIds ?? [];
             List<string> invalidIds = skillIds.Where(sid => !skillStore.Exists(sid)).ToList();
             if (invalidIds.Count > 0)
@@ -213,28 +205,24 @@ public static class AgentEndpoints
                     errorCode = "SKILL_NOT_FOUND"
                 });
 
-            AgentConfig updated = existing with { DisabledSkillIds = skillIds };
-            AgentConfig? result = store.Update(id, updated);
-            return result is null
-                ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
-                : Results.Ok(new { result.Id });
+            existing.UpdateDisabledSkillIds(skillIds);
+            ((IAgentRepository)store).Save(existing);
+            return Results.Ok(new { existing.Id });
         })
         .WithTags("Agents");
 
         // ── Agent DNA 文件管理（SOUL.md / MEMORY.md）──────────────────────────
 
-        // ── 子代理 ACL 查询 ──────────────────────────────────────────────────
+        // ── 子代�?ACL 查询 ──────────────────────────────────────────────────
 
         endpoints.MapGet("/agents/{id}/sub-agents", (string id, AgentStore store) =>
         {
-            AgentConfig? agent = store.GetById(id);
+            Agent? agent = store.GetAgentById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 根据 ACL 过滤可调用子代理列表（排除自身）
-            IEnumerable<AgentConfig> candidates = store.All.Where(a => a.IsEnabled && a.Id != id);
-            if (agent.AllowedSubAgentIds is not null)
-                candidates = candidates.Where(a => agent.AllowedSubAgentIds.Contains(a.Id));
+            // 根据 ACL 过滤可调用子代理列表（排除自身），使用 Agent.CanCallSubAgent 行为方法
+            IEnumerable<AgentConfig> candidates = store.All.Where(a => a.IsEnabled && a.Id != id && agent.CanCallSubAgent(a.Id));
 
             var result = candidates.Select(a => new { a.Id, a.Name, a.Description }).ToList();
             return Results.Ok(result);
@@ -243,7 +231,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (store.GetAgentById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<AgentDnaFileInfo> files = agentDna.ListFiles(id);
@@ -253,7 +241,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/dna/{fileName}", (string id, string fileName, AgentStore store, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (store.GetAgentById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             AgentDnaFileInfo? file = agentDna.Read(id, fileName);
@@ -266,7 +254,7 @@ public static class AgentEndpoints
 
         endpoints.MapPost("/agents/{id}/dna", (string id, AgentDnaUpdateRequest req, AgentStore store, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (store.GetAgentById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             if (string.IsNullOrWhiteSpace(req.FileName))
@@ -289,7 +277,7 @@ public static class AgentEndpoints
         await response.Body.FlushAsync(ct);
     }
 
-    private static object ToDto(AgentConfig a) => new
+    private static object ToDto(Agent a) => new
     {
         a.Id,
         a.Name,
@@ -329,24 +317,24 @@ public sealed record AgentUpdateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
-    /// <summary>是否明确传入 ContextWindowMessages（用于区分 null=未传 vs null=清除限制）。</summary>
+    /// <summary>是否明确传入 ContextWindowMessages（用于区�?null=未传 vs null=清除限制）�?/summary>
     bool HasContextWindowMessages = false,
     bool? ExposeAsA2A = null,
     IReadOnlyList<string>? AllowedSubAgentIds = null,
     /// <summary>
-    /// 显式标记是否传入了 AllowedSubAgentIds。
-    /// 用于区分“未传”（保留原值）和“传了 null”（清除限制）。
-    /// 前端传 true + AllowedSubAgentIds = null 表示“允许所有”；传 true + [] 表示“禁止所有”。
+    /// 显式标记是否传入�?AllowedSubAgentIds�?
+    /// 用于区分“未传”（保留原值）和“传�?null”（清除限制）�?
+    /// 前端�?true + AllowedSubAgentIds = null 表示“允许所有”；�?true + [] 表示“禁止所有”�?
     /// </summary>
     bool HasAllowedSubAgentIds = false,
     /// <summary>
-    /// Provider 路由策略（Default/QualityFirst/CostFirst/LatencyFirst）。
-    /// null 表示不修改，保留原有策略。
+    /// Provider 路由策略（Default/QualityFirst/CostFirst/LatencyFirst）�?
+    /// null 表示不修改，保留原有策略�?
     /// </summary>
     string? RoutingStrategy = null,
-    /// <summary>月度预算上限（USD）。null 表示不修改，保留原有属性。</summary>
+    /// <summary>月度预算上限（USD）。null 表示不修改，保留原有属性�?/summary>
     decimal? MonthlyBudgetUsd = null,
-    /// <summary>是否明确传入 MonthlyBudgetUsd（用于区分 null=未传 vs null=清除预算）。</summary>
+    /// <summary>是否明确传入 MonthlyBudgetUsd（用于区�?null=未传 vs null=清除预算）�?/summary>
     bool HasMonthlyBudgetUsd = false);
 
 public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);
@@ -361,3 +349,5 @@ public sealed record ToolGroupConfigRequest(
     string GroupId,
     bool IsEnabled,
     IReadOnlyList<string>? DisabledToolNames = null);
+
+

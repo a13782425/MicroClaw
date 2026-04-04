@@ -4,6 +4,8 @@
 /// 允许从 Session 持久化历史中移除消息。
 /// 由 SessionStore 实现；以轻量接口形式暴露，使 MicroClaw.Agent 无需依赖主项目即可使用。
 /// </summary>
+/// <remarks>请迁移到 <see cref="ISessionRepository"/>，此接口将在后续版本中移除。</remarks>
+[Obsolete("Use ISessionRepository.RemoveMessages() instead. This interface will be removed in a future version.")]
 public interface ISessionMessageRemover
 {
     /// <summary>

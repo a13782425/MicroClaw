@@ -26,27 +26,24 @@ public sealed class ToolCollector(
     /// 调用方使用 <c>await using</c> 确保 MCP 连接释放。
     /// </summary>
     public async Task<ToolCollectionResult> CollectToolsAsync(
-        AgentConfig agent, ToolCreationContext context, CancellationToken ct = default)
+        Agent agent, ToolCreationContext context, CancellationToken ct = default)
     {
         var result = new ToolCollectionResult();
 
         // ── 1. DI 注册的 IToolProvider（builtin + channel + skill）──────────
         foreach (IToolProvider provider in providers)
         {
-            // 按 ToolGroupConfig 整体启用/禁用
-            ToolGroupConfig? cfg = agent.ToolGroupConfigs
-                .FirstOrDefault(g => g.GroupId == provider.GroupId);
-            if (cfg is not null && !cfg.IsEnabled) continue;
+            // 按 Agent 行为方法整体启用/禁用工具组
+            if (!agent.IsToolGroupEnabled(provider.GroupId)) continue;
 
             try
             {
                 ToolProviderResult providerResult = await provider.CreateToolsAsync(context, ct);
                 if (providerResult.Tools.Count == 0) continue;
 
-                // 按 DisabledToolNames 过滤单个工具
-                IEnumerable<AITool> filtered = cfg is null
-                    ? providerResult.Tools
-                    : providerResult.Tools.Where(t => !cfg.DisabledToolNames.Contains(t.Name));
+                // 按 Agent 行为方法过滤组内单个工具
+                IEnumerable<AITool> filtered = providerResult.Tools
+                    .Where(t => !agent.IsToolDisabled(provider.GroupId, t.Name));
 
                 result.AddTools(filtered);
 
@@ -70,13 +67,9 @@ public sealed class ToolCollector(
                     var mcpProvider = new McpToolProvider(srv, loggerFactory);
                     ToolProviderResult mcpResult = await mcpProvider.CreateToolsAsync(context, ct);
 
-                    // 按 ToolGroupConfig 过滤单个 MCP 工具
-                    ToolGroupConfig? srvCfg = agent.ToolGroupConfigs
-                        .FirstOrDefault(g => g.GroupId == srv.Name || g.GroupId == srv.Id);
-
-                    IEnumerable<AITool> filtered = srvCfg is null
-                        ? mcpResult.Tools
-                        : mcpResult.Tools.Where(t => !srvCfg.DisabledToolNames.Contains(t.Name));
+                    // 按 Agent 行为方法过滤单个 MCP 工具
+                    IEnumerable<AITool> filtered = mcpResult.Tools
+                        .Where(t => !agent.IsToolDisabled(srv.Name, t.Name) && !agent.IsToolDisabled(srv.Id, t.Name));
 
                     result.AddTools(filtered);
 
@@ -98,7 +91,7 @@ public sealed class ToolCollector(
     /// <paramref name="agent"/> 为 null 时返回全局视图（不做 Agent 级过滤）。
     /// </summary>
     public async Task<IReadOnlyList<ToolGroupInfo>> GetToolGroupsAsync(
-        AgentConfig? agent, CancellationToken ct = default)
+        Agent? agent, CancellationToken ct = default)
     {
         var groups = new List<ToolGroupInfo>();
 
@@ -167,7 +160,7 @@ public sealed class ToolCollector(
                         Tools: mcpResult.Tools.Select(t => new ToolInfo(
                             Name: t.Name,
                             Description: t.Description ?? string.Empty,
-                            IsEnabled: srvCfg is null || !srvCfg.DisabledToolNames.Contains(t.Name)
+                            IsEnabled: agent is null || !agent.IsToolDisabled(srv.Name, t.Name)
                         )).ToList()));
                 }
                 finally
@@ -189,26 +182,15 @@ public sealed class ToolCollector(
     }
 
     /// <summary>返回未被整体禁用的 MCP Server 配置列表（排除 Agent 级别禁用项）。</summary>
-    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentConfig agent)
+    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(Agent agent)
     {
         // 优先从进程内注册表查询（不走 DB），回退到 Store（旧行为）
         IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null
             ? mcpServerRegistry.GetAllEnabled()
             : mcpServerConfigStore.AllEnabled;
-        // 排除 Agent 级别禁用的 MCP Server
-        if (agent.DisabledMcpServerIds.Count > 0)
-        {
-            HashSet<string> disabled = agent.DisabledMcpServerIds.ToHashSet();
-            servers = servers.Where(s => !disabled.Contains(s.Id)).ToList().AsReadOnly();
-        }
-        if (agent.ToolGroupConfigs.Count == 0) return servers;
+        // 排除 Agent 级别禁用的 MCP Server（用行为方法）
         return servers
-            .Where(s =>
-            {
-                ToolGroupConfig? cfg = agent.ToolGroupConfigs
-                    .FirstOrDefault(g => g.GroupId == s.Name || g.GroupId == s.Id);
-                return cfg is null || cfg.IsEnabled;
-            })
+            .Where(s => !agent.IsMcpServerDisabled(s.Id) && agent.IsToolGroupEnabled(s.Name) && agent.IsToolGroupEnabled(s.Id))
             .ToList()
             .AsReadOnly();
     }

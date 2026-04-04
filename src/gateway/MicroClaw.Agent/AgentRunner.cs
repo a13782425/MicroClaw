@@ -37,7 +37,7 @@ public sealed class AgentRunner(
     IEnumerable<IAgentContextProvider> contextProviders,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
-    ISessionReader sessionReader,
+    ISessionRepository sessionReader,
     SkillToolFactory skillToolFactory,
     IUsageTracker usageTracker,
     ILoggerFactory loggerFactory,
@@ -72,7 +72,7 @@ public sealed class AgentRunner(
     /// <summary>所有渠道消息默认路由到主 Agent（IsDefault=true），不再按渠道绑定匹配。</summary>
     public bool HasAgentForChannel(string channelId)
     {
-        AgentConfig? main = agentStore.GetDefault();
+        Agent? main = agentStore.GetDefaultAgent();
         return main is { IsEnabled: true };
     }
 
@@ -82,12 +82,12 @@ public sealed class AgentRunner(
         IReadOnlyList<SessionMessage> history,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        AgentConfig? agent = agentStore.GetDefault();
+        Agent? agent = agentStore.GetDefaultAgent();
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled default agent found.");
 
         // 从 session 获取 providerId；若 session 未绑定模型，按 Agent 路由策略选择
-        SessionInfo? session = sessionReader.Get(sessionId);
+        Session? session = sessionReader.Get(sessionId);
         string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
             ? session.ProviderId
             : ResolveProviderByStrategy(agent.RoutingStrategy);
@@ -116,7 +116,7 @@ public sealed class AgentRunner(
     // ── 流式 ReAct 循环（AF ChatClientAgent + FunctionInvokingChatClient + Channel 事件桥接）──
 
     public async IAsyncEnumerable<StreamItem> StreamReActAsync(
-        AgentConfig agent,
+        Agent agent,
         string providerId,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
@@ -151,7 +151,7 @@ public sealed class AgentRunner(
     /// 始终通过 <paramref name="output"/> Channel 完成（正常或带异常），供迭代器包装层读取。
     /// </summary>
     private async Task ExecuteStreamingCoreAsync(
-        AgentConfig agent,
+        Agent agent,
         string primaryProviderId,
         IReadOnlyList<SessionMessage> history,
         string? sessionId,
@@ -217,10 +217,10 @@ public sealed class AgentRunner(
                 }
 
                 // 工具收集（Pet 可覆盖工具配置）
-                AgentConfig effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
-                    ? agent with { ToolGroupConfigs = petOverrides.ToolOverrides }
+                Agent effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
+                    ? agent.WithToolOverrides(petOverrides.ToolOverrides)
                     : agent;
-                SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
+                Session? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
                     ? sessionReader.Get(sessionId) : null;
 
                 var ancestorAgentIds = new List<string>();
@@ -229,7 +229,7 @@ public sealed class AgentRunner(
                     string? cursor = sessionForTools.ParentSessionId;
                     while (cursor is not null)
                     {
-                        SessionInfo? ancestor = sessionReader.Get(cursor);
+                        Session? ancestor = sessionReader.Get(cursor);
                         if (ancestor is null) break;
                         if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
                             ancestorAgentIds.Add(ancestor.AgentId);
@@ -282,9 +282,9 @@ public sealed class AgentRunner(
                 AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
                 if (!string.IsNullOrWhiteSpace(sessionId))
                 {
-                    SessionInfo? sessionInfo = sessionReader.Get(sessionId);
+                    Session? sessionInfo = sessionReader.Get(sessionId);
                     if (sessionInfo is not null)
-                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
+                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo.ToInfo());
                 }
 
                 UsageCapture usageCapture = new();
@@ -497,7 +497,7 @@ public sealed class AgentRunner(
     public async Task<string> InvokeToolAsync(
         string agentId, string toolName, IReadOnlyDictionary<string, string>? nodeConfig, string fallbackInput, CancellationToken ct)
     {
-        AgentConfig? agent = agentStore.GetById(agentId);
+        Agent? agent = agentStore.GetAgentById(agentId);
         if (agent is null || !agent.IsEnabled)
         {
             _logger.LogWarning("InvokeToolAsync: Agent '{AgentId}' not found or disabled.", agentId);
@@ -538,7 +538,7 @@ public sealed class AgentRunner(
 
     // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
-    private async Task<List<ChatMessage>> BuildChatMessagesAsync(AgentConfig agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, string? behaviorSuffix = null, string? providerId = null, CancellationToken ct = default)
+    private async Task<List<ChatMessage>> BuildChatMessagesAsync(Agent agent, IReadOnlyList<SessionMessage> history, string? sessionId = null, string? skillCatalogFragment = null, string? behaviorSuffix = null, string? providerId = null, CancellationToken ct = default)
     {
         // 提取最后一条用户消息，供 IUserAwareContextProvider（如 RagContextProvider）进行语义检索
         string? latestUserMessage = history
@@ -750,7 +750,7 @@ public sealed class AgentRunner(
     /// <param name="userMessage">当前用户消息文本，供 <see cref="IUserAwareContextProvider"/> 进行语义检索。</param>
     /// <param name="ct">取消令牌。</param>
     internal async ValueTask<string> BuildSystemPromptAsync(
-        AgentConfig agent,
+        Agent agent,
         string? sessionId,
         string? skillContext = null,
         string? userMessage = null,

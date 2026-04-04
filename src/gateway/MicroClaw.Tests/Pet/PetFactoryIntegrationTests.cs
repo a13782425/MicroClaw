@@ -5,6 +5,7 @@ using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Tests.Fixtures;
+using NSubstitute;
 
 namespace MicroClaw.Tests.Pet;
 
@@ -253,6 +254,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         Environment.SetEnvironmentVariable("MICROCLAW_HOME", _tempDir.Path);
         TestConfigFixture.EnsureInitialized();
         var env = MicroClawConfig.Env;
-        return new PetFactory(_stateStore, env, NullLogger<PetFactory>.Instance);
+        var emotionStore = new EmotionStore(_sessionsDir);
+        var contextFactory = new PetContextFactory(_stateStore, emotionStore);
+        var sessionRepo = NSubstitute.Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
+        sessionRepo.Get(Arg.Any<string>()).Returns((MicroClaw.Abstractions.Sessions.Session?)null);
+        return new PetFactory(_stateStore, contextFactory, sessionRepo, env, NullLogger<PetFactory>.Instance);
     }
 }

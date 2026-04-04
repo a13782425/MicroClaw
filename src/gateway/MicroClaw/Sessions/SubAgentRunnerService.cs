@@ -1,9 +1,10 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Agent;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -39,12 +40,12 @@ public sealed class SubAgentRunnerService(
         string parentSessionId,
         CancellationToken ct = default)
     {
-        AgentConfig? agent = agentStore.GetById(agentId);
+        AgentEntity? agent = agentStore.GetAgentById(agentId);
         if (agent is null)
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
         if (!agent.IsEnabled)
             throw new InvalidOperationException($"子代理 '{agent.Name}' 未启用。");
-
+        
         // 深度检查 + 循环调用检测：沿父会话链向上遍历
         // depth 仅统计具有 ParentSessionId 的祖先会话（即子代理会话），
         // 不计入顶层用户会话，从而允许最多 MaxSubAgentDepth 层子代理嵌套。
@@ -73,10 +74,10 @@ public sealed class SubAgentRunnerService(
         // 获取父会话 ProviderId（子会话继承同一模型）
         SessionInfo? parentSession = sessionStore.Get(parentSessionId);
         string providerId = parentSession?.ProviderId ?? string.Empty;
-
+        
         // 根会话 ID：沿祖先链找到顶层会话，子代理消息将同步写入其 jsonl 供 RAG 归并
         string rootSessionId = sessionStore.GetRootSessionId(parentSessionId);
-
+        
         // 优先复用空闲子代理会话（同一父会话 + 同一 AgentId），避免重复创建
         IReadOnlyCollection<string> activeIds = _activeSessions.Keys.ToList();
         SessionInfo? idleSession = sessionStore.FindIdleSubAgentSession(parentSessionId, agentId, activeIds);
@@ -95,7 +96,7 @@ public sealed class SubAgentRunnerService(
                 parentSessionId: parentSessionId);
             sessionStore.Approve(subSession.Id);
         }
-
+        
         // 标记为活跃，防止并发调用复用同一会话
         _activeSessions.TryAdd(subSession.Id, 0);
 
@@ -105,7 +106,7 @@ public sealed class SubAgentRunnerService(
             SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null,
                 Source: $"sub-agent:{agentId}");
             sessionStore.AddMessage(subSession.Id, userMsg);
-
+            
             // 同步写入根会话：携带 Metadata 标注来源子会话，供 UI 显示子代理信息
             // 使用 Internal 可见性：LLM 和前端均不可见，但 MemorySummarizationJob 的 role 过滤仍会包含，
             // 使子代理对话内容写入根会话的 RAG 命名空间，而不会破坏 tool_call/tool_result 的分组结构。
@@ -115,7 +116,7 @@ public sealed class SubAgentRunnerService(
                 sessionStore.AddMessage(rootSessionId,
                     userMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootUserMeta, Visibility = MessageVisibility.Internal });
             }
-
+            
             // 获取父 SSE 流的事件 Writer（如果有），用于发送进度事件
             ChannelWriter<StreamItem>? parentWriter = SubAgentEventBridge.Current;
 
@@ -123,7 +124,7 @@ public sealed class SubAgentRunnerService(
                 await parentWriter.WriteAsync(new SubAgentStartItem(agentId, agent.Name, task, subSession.Id), ct);
 
             var sw = Stopwatch.StartNew();
-
+            
             // 流式执行子 Agent ReAct 循环，同时向父 SSE 流转发进度事件
             StringBuilder textBuilder = new();
             StringBuilder thinkBuilder = new();
@@ -172,12 +173,12 @@ public sealed class SubAgentRunnerService(
                 ? attachmentsList.Select(a => new MessageAttachment(
                     a.FileName ?? "attachment", a.MimeType, Convert.ToBase64String(a.Data))).ToList()
                 : null;
-
+            
             // 保存 AI 回复到子会话
             SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", main, think,
                 DateTimeOffset.UtcNow, attachments, Source: $"sub-agent:{agentId}");
             sessionStore.AddMessage(subSession.Id, assistantMsg);
-
+            
             // 同步写入根会话：携带 Metadata 标注来源子会话
             // Internal 可见性确保不破坏根会话的 tool_call/tool_result 分组，同时让 RAG 归并流程可捕获
             if (rootSessionId != subSession.Id)
@@ -194,7 +195,7 @@ public sealed class SubAgentRunnerService(
             _activeSessions.TryRemove(subSession.Id, out _);
         }
     }
-
+    
     /// <summary>构建写入根会话时附加的子代理来源元数据。</summary>
     private static IReadOnlyDictionary<string, JsonElement> BuildSubAgentMetadata(
         string agentId, string agentName, string subSessionId)
@@ -205,3 +206,4 @@ public sealed class SubAgentRunnerService(
             ["subSessionId"] = subSessionId
         });
 }
+

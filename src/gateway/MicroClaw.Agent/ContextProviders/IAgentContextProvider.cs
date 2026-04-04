@@ -17,9 +17,9 @@ public interface IAgentContextProvider
     /// <summary>
     /// 构建并返回该 Provider 负责的上下文文本片段。
     /// </summary>
-    /// <param name="agent">当前执行的 Agent 配置。</param>
+    /// <param name="agent">当前执行的 Agent 领域对象。</param>
     /// <param name="sessionId">当前会话 ID；子代理场景下可为 <c>null</c>。</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>上下文文本；为 <c>null</c> 或空时忽略。</returns>
-    ValueTask<string?> BuildContextAsync(AgentConfig agent, string? sessionId, CancellationToken ct = default);
+    ValueTask<string?> BuildContextAsync(Agent agent, string? sessionId, CancellationToken ct = default);
 }

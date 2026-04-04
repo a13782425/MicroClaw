@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MicroClaw.Abstractions.Events;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
@@ -191,6 +192,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore());
 		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(sessionsDir));
 		builder.Services.AddSingleton<ISessionReader>(sp => sp.GetRequiredService<SessionStore>());
+		builder.Services.AddSingleton<ISessionRepository>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
@@ -202,6 +204,7 @@ public class ServeCommand : Command
 		string agentsDir = MicroClawConfig.Env.AgentsDir;
 		builder.Services.AddSingleton<AgentStore>(_ => new AgentStore());
 		builder.Services.AddSingleton<IPluginAgentRegistrar>(sp => sp.GetRequiredService<AgentStore>());
+		builder.Services.AddSingleton<IAgentRepository>(sp => sp.GetRequiredService<AgentStore>());
 		builder.Services.AddSingleton<AgentDnaService>(_ => new AgentDnaService(agentsDir));
 		builder.Services.AddSingleton<SessionDnaService>(_ => new SessionDnaService(sessionsDir));
 		builder.Services.AddSingleton<MemoryService>(_ => new MemoryService(sessionsDir));
@@ -304,9 +307,12 @@ public class ServeCommand : Command
 				sp.GetRequiredService<MicroClaw.Providers.ProviderClientFactory>(),
 				MicroClawConfig.Env,
 				sp.GetRequiredService<ILogger<MicroClaw.Pet.Prompt.PetPromptEvolver>>()));
+		builder.Services.AddSingleton<MicroClaw.Pet.PetContextFactory>();
 		builder.Services.AddSingleton<MicroClaw.Pet.PetFactory>(sp =>
 			new MicroClaw.Pet.PetFactory(
 				sp.GetRequiredService<MicroClaw.Pet.Storage.PetStateStore>(),
+				sp.GetRequiredService<MicroClaw.Pet.PetContextFactory>(),
+				sp.GetRequiredService<ISessionRepository>(),
 				MicroClawConfig.Env,
 				sp.GetRequiredService<ILogger<MicroClaw.Pet.PetFactory>>()));
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>(sp =>
@@ -427,6 +433,13 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetActionExecutor>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetHeartbeatExecutor>();
 		builder.Services.AddSingleton<IScheduledJob, PetHeartbeatJob>();
+
+		// 领域事件基础设施（O-0-3）
+		builder.Services.AddSingleton<IDomainEventDispatcher, MicroClaw.Events.DomainEventDispatcher>();
+
+		// 领域事件处理器（O-1-9, O-1-10）
+		builder.Services.AddSingleton<IDomainEventHandler<SessionApprovedEvent>, MicroClaw.Events.SessionApprovedEventHandler>();
+		builder.Services.AddSingleton<IDomainEventHandler<SessionDeletedEvent>, MicroClaw.Events.SessionDeletedEventHandler>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>

@@ -3,13 +3,13 @@ using System.Text.Json;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Events;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
-using MicroClaw.Abstractions;
-using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Pet;
-using MicroClaw.Pet.Rag;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using MicroClaw.Streaming;
@@ -60,70 +60,78 @@ public static class SessionEndpoints
             if (!string.IsNullOrWhiteSpace(req.AgentId) && agentStore.GetById(req.AgentId) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
 
-            SessionInfo created = store.Create(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
+            Session created = store.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
             sessionDna.InitializeSession(created.Id);
-            return Results.Ok(created);
+            return Results.Ok(created.ToInfo());
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, SessionDnaService sessionDna, PetRagScope petRagScope) =>
+        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionRepository repo, IDomainEventDispatcher dispatcher, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            // 先断开 Pet RAG 数据库连接，释放 SQLite 连接池，避免 Windows 文件锁
-            petRagScope.CloseDatabase(req.Id);
-
-            bool deleted = store.Delete(req.Id);
-            if (!deleted)
+            if (repo.Get(req.Id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 同步删除会话固定 DNA 文件
-            sessionDna.DeleteSessionDnaFiles(req.Id);
+            // 先分发删除事件（处理器负责关闭 RAG DB 连接、清理 DNA 文件，必须在文件删除之前执行）
+            await dispatcher.DispatchAsync(new SessionDeletedEvent(req.Id), ct);
+
+            repo.Delete(req.Id);
             return Results.Ok();
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub, PetFactory petFactory) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionRepository repo, IDomainEventDispatcher dispatcher, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            SessionInfo? updated = store.Approve(req.Id, req.Reason);
-            if (updated is null)
+            Session? session = repo.Get(req.Id);
+            if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 审批后自动为该会话创建 Pet（幂等，已存在则跳过）
-            await petFactory.CreateAsync(req.Id);
+            session.Approve(req.Reason);
+            repo.Save(session);
 
-            await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = updated.Id, title = updated.Title });
-            return Results.Ok(updated);
+            // 分发领域事件（SessionApprovedEventHandler 负责创建 Pet，幂等，已存在则跳过）
+            foreach (var evt in session.PopDomainEvents())
+            {
+                if (evt is SessionApprovedEvent approvedEvt)
+                    await dispatcher.DispatchAsync(approvedEvt, ct);
+            }
+
+            await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = session.Id, title = session.Title }, ct);
+            return Results.Ok(session.ToInfo());
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/disable — 禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
+        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionRepository repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            SessionInfo? updated = store.Disable(req.Id, req.Reason);
-            if (updated is null)
+            Session? session = repo.Get(req.Id);
+            if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
-            await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = updated.Id, title = updated.Title });
-            return Results.Ok(updated);
+            session.Disable(req.Reason);
+            repo.Save(session);
+
+            await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = session.Id, title = session.Title }, ct);
+            return Results.Ok(session.ToInfo());
         })
         .WithTags("Sessions");
 
         // POST /api/sessions/switch-provider — 切换会话绑定的 Provider
-        endpoints.MapPost("/sessions/switch-provider", (SwitchProviderRequest req, SessionStore store, ProviderConfigStore providerStore) =>
+        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionRepository repo, IDomainEventDispatcher dispatcher, ProviderConfigStore providerStore, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -136,10 +144,20 @@ public static class SessionEndpoints
             if (provider.ModelType == ModelType.Embedding)
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
 
-            SessionInfo? updated = store.UpdateProvider(req.Id, req.ProviderId);
-            return updated is null
-                ? Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" })
-                : Results.Ok(updated);
+            Session? session = repo.Get(req.Id);
+            if (session is null)
+                return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
+
+            session.UpdateProvider(req.ProviderId);
+            repo.Save(session);
+
+            foreach (var evt in session.PopDomainEvents())
+            {
+                if (evt is SessionProviderChangedEvent providerChangedEvt)
+                    await dispatcher.DispatchAsync(providerChangedEvt, ct);
+            }
+
+            return Results.Ok(session.ToInfo());
         })
         .WithTags("Sessions");
 

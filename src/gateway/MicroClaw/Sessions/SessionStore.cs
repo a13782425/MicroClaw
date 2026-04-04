@@ -14,18 +14,10 @@ namespace MicroClaw.Sessions;
 /// 会话元数据存储在 sessions.yaml（通过 MicroClawConfig），消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// </summary>
 public sealed class SessionStore(string sessionsDir)
-    : ISessionReader, ISessionMessageRemover, IAllSessionsReader
+    : ISessionReader, ISessionMessageRemover, IAllSessionsReader, ISessionRepository
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";
-
-    // 读取旧 JSON 数组时使用（兼容迁移）
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     // 写入 JSONL 单行时使用（紧凑、不换行）
     private static readonly JsonSerializerOptions JsonLinesOptions = new()
@@ -121,6 +113,10 @@ public sealed class SessionStore(string sessionsDir)
     }
 
     public SessionInfo Create(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null, string? channelId = null)
+        => CreateSession(title, providerId, channelType, id, agentId, parentSessionId, channelId).ToInfo();
+
+    /// <summary>创建新会话并返回领域对象（O-1-6）。持久化后不发布领域事件（由调用方决定）。</summary>
+    public Session CreateSession(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? parentSessionId = null, string? channelId = null)
     {
         var entity = new SessionEntity
         {
@@ -144,7 +140,7 @@ public sealed class SessionStore(string sessionsDir)
         finally { _lock.ExitWriteLock(); }
 
         Directory.CreateDirectory(GetSessionDir(entity.Id));
-        return ToInfo(entity);
+        return ToSession(entity);
     }
 
     public bool Delete(string id)
@@ -287,6 +283,137 @@ public sealed class SessionStore(string sessionsDir)
 
     /// <inheritdoc/>
     public IReadOnlyList<SessionInfo> GetAll() => All;
+
+    // ── ISessionRepository 实现 ──────────────────────────────────────────────
+
+    /// <summary>按 ID 获取 Session 领域对象。</summary>
+    Session? ISessionRepository.Get(string id)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToSession(e) : null;
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    IReadOnlyList<Session> ISessionRepository.GetAll()
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems().OrderByDescending(e => e.CreatedAtMs).Select(ToSession).ToList().AsReadOnly();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    IReadOnlyList<Session> ISessionRepository.GetTopLevel()
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(e => string.IsNullOrWhiteSpace(e.ParentSessionId))
+                .OrderByDescending(e => e.CreatedAtMs)
+                .Select(ToSession)
+                .ToList().AsReadOnly();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    string ISessionRepository.GetRootSessionId(string sessionId)
+        => GetRootSessionId(sessionId);
+
+    Session? ISessionRepository.FindIdleSubAgentSession(
+        string parentSessionId, string agentId, IReadOnlyCollection<string> activeSessionIds)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
+                .Where(e => !activeSessionIds.Contains(e.Id))
+                .OrderByDescending(e => e.CreatedAtMs)
+                .Select(ToSession)
+                .FirstOrDefault();
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    /// <summary>
+    /// 将 Session 领域对象的当前状态持久化（新增时 CreatedAtMs 为 0 则写入当前时间）。
+    /// 若已存在则全量覆盖。
+    /// </summary>
+    void ISessionRepository.Save(Session session)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<SessionsOptions>();
+            int idx = opts.Items.FindIndex(e => e.Id == session.Id);
+            List<SessionEntity> newItems;
+            if (idx >= 0)
+            {
+                // 更新：保留原有 CreatedAtMs
+                long originalCreatedAtMs = opts.Items[idx].CreatedAtMs;
+                var entity = ToEntity(session) with { CreatedAtMs = originalCreatedAtMs };
+                newItems = new List<SessionEntity>(opts.Items) { [idx] = entity };
+            }
+            else
+            {
+                // 新增：写入当前时间
+                var entity = ToEntity(session) with { CreatedAtMs = TimeBase.NowMs() };
+                Directory.CreateDirectory(GetSessionDir(entity.Id));
+                newItems = [.. opts.Items, entity];
+            }
+            MicroClawConfig.Save(new SessionsOptions { Items = newItems });
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
+
+    bool ISessionRepository.Delete(string id) => Delete(id);
+
+    void ISessionRepository.AddMessage(string sessionId, SessionMessage message)
+        => AddMessage(sessionId, message);
+
+    IReadOnlyList<SessionMessage> ISessionRepository.GetMessages(string sessionId)
+        => GetMessages(sessionId);
+
+    (IReadOnlyList<SessionMessage> Messages, int Total) ISessionRepository.GetMessagesPaged(
+        string sessionId, int skip, int limit)
+        => GetMessagesPaged(sessionId, skip, limit);
+
+    void ISessionRepository.RemoveMessages(string sessionId, IReadOnlySet<string> messageIds)
+        => RemoveMessages(sessionId, messageIds);
+
+    // ── 私有辅助：SessionInfo/Session 互转 ──────────────────────────────────
+
+    private static Session ToSession(SessionEntity e) =>
+        Session.Reconstitute(
+            id: e.Id,
+            title: e.Title,
+            providerId: e.ProviderId,
+            isApproved: e.IsApproved,
+            channelType: ChannelConfigStore.ParseChannelType(e.ChannelType),
+            channelId: string.IsNullOrEmpty(e.ChannelId) ? ChannelConfigStore.WebChannelId : e.ChannelId,
+            createdAt: TimeBase.FromMs(e.CreatedAtMs),
+            agentId: e.AgentId,
+            parentSessionId: e.ParentSessionId,
+            approvalReason: e.ApprovalReason);
+
+    private static SessionEntity ToEntity(Session s) => new()
+    {
+        Id = s.Id,
+        Title = s.Title,
+        ProviderId = s.ProviderId,
+        IsApproved = s.IsApproved,
+        ChannelType = ChannelConfigStore.SerializeChannelType(s.ChannelType),
+        ChannelId = s.ChannelId,
+        CreatedAtMs = 0,  // 新增时由调用方设置；覆盖时需由外部从原始 entity 补填
+        AgentId = s.AgentId,
+        ParentSessionId = s.ParentSessionId,
+        ApprovalReason = s.ApprovalReason,
+    };
 
     private static SessionInfo ToInfo(SessionEntity e) =>
         new(e.Id, e.Title, e.ProviderId, e.IsApproved,

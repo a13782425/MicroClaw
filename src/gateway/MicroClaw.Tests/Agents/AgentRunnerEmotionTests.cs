@@ -1,6 +1,7 @@
 ﻿using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Channels;
@@ -34,7 +35,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
 
     private readonly TempDirectoryFixture _tempDir = new();
     private readonly AgentDnaService _agentDna;
-    private readonly AgentConfig _testAgent;
+    private readonly AgentEntity _testAgent;
 
     public AgentRunnerEmotionTests()
     {
@@ -42,15 +43,15 @@ public sealed class AgentRunnerEmotionTests : IDisposable
         string agentsDir = Path.Combine(_tempDir.Path, "agents");
         _agentDna = new AgentDnaService(agentsDir);
 
-        _testAgent = new AgentConfig(
-            Id: AgentId,
-            Name: "Emotion Test Agent",
-            Description: "",
-            IsEnabled: true,
-            DisabledSkillIds: [],
-            DisabledMcpServerIds: [],
-            ToolGroupConfigs: [],
-            CreatedAtUtc: DateTimeOffset.UtcNow);
+        _testAgent = AgentEntity.Reconstitute(
+            id: AgentId,
+            name: "Emotion Test Agent",
+            description: "",
+            isEnabled: true,
+            disabledSkillIds: [],
+            disabledMcpServerIds: [],
+            toolGroupConfigs: [],
+            createdAtUtc: DateTimeOffset.UtcNow);
         _agentDna.InitializeAgent(_testAgent.Id);
     }
 
@@ -80,7 +81,7 @@ public sealed class AgentRunnerEmotionTests : IDisposable
             contextProviders:      providers ?? [new AgentDnaContextProvider(_agentDna)],
             providerStore:         new ProviderConfigStore(),
             clientFactory:         CreateNoOpClientFactory(),
-            sessionReader:         Substitute.For<ISessionReader>(),
+            sessionReader:         Substitute.For<ISessionRepository>(),
             skillToolFactory:      skillToolFactory,
             usageTracker:          Substitute.For<IUsageTracker>(),
             loggerFactory:         NullLoggerFactory.Instance,

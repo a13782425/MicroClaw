@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Agent.ContextProviders;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Tests.Fixtures;
@@ -18,7 +19,7 @@ public sealed class ContextProviderTests : IDisposable
 
     private readonly TempDirectoryFixture _tempDir = new();
 
-    private readonly AgentConfig _agent;
+    private readonly AgentEntity _agent;
     private readonly AgentDnaService _agentDna;
     private readonly SessionDnaService _sessionDna;
     private readonly MemoryService _memory;
@@ -30,15 +31,15 @@ public sealed class ContextProviderTests : IDisposable
         _sessionDna = new SessionDnaService(_tempDir.Path);
         _memory = new MemoryService(_tempDir.Path);
 
-        _agent = new AgentConfig(
-            Id: AgentId,
-            Name: "Provider Test Agent",
-            Description: "",
-            IsEnabled: true,
-            DisabledSkillIds: [],
-            DisabledMcpServerIds: [],
-            ToolGroupConfigs: [],
-            CreatedAtUtc: DateTimeOffset.UtcNow);
+        _agent = AgentEntity.Reconstitute(
+            id: AgentId,
+            name: "Provider Test Agent",
+            description: "",
+            isEnabled: true,
+            disabledSkillIds: [],
+            disabledMcpServerIds: [],
+            toolGroupConfigs: [],
+            createdAtUtc: DateTimeOffset.UtcNow);
     }
 
     public void Dispose() => _tempDir.Dispose();

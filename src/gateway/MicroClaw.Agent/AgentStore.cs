@@ -11,7 +11,7 @@ namespace MicroClaw.Agent;
 /// <summary>
 /// Agent 配置的 CRUD 存储，基于 MicroClawConfig AgentsOptions（内存 + 写时落盘到 agents.yaml）。
 /// </summary>
-public sealed class AgentStore : IPluginAgentRegistrar
+public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -337,4 +337,95 @@ public sealed class AgentStore : IPluginAgentRegistrar
         }
         return (name, description);
     }
+
+    private static Agent ToAgent(AgentConfigEntity e) =>
+        Agent.Reconstitute(
+            id: e.Id,
+            name: e.Name,
+            description: e.Description,
+            isEnabled: e.IsEnabled,
+            disabledSkillIds: DeserializeList<string>(e.DisabledSkillIdsJson),
+            disabledMcpServerIds: DeserializeList<string>(e.DisabledMcpServerIdsJson),
+            toolGroupConfigs: DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
+            createdAtUtc: TimeBase.FromMs(e.CreatedAtMs),
+            isDefault: e.IsDefault,
+            contextWindowMessages: e.ContextWindowMessages,
+            exposeAsA2A: e.ExposeAsA2A,
+            allowedSubAgentIds: DeserializeNullableList<string>(e.AllowedSubAgentIdsJson),
+            routingStrategy: ParseRoutingStrategy(e.RoutingStrategy),
+            monthlyBudgetUsd: e.MonthlyBudgetUsd);
+
+    // ── Agent 实体查询（返回领域对象）──────────────────────────────────────
+
+    /// <summary>按 ID 查找并返回 Agent 领域对象，不存在时返回 null。</summary>
+    public Agent? GetAgentById(string id)
+    {
+        _lock.EnterReadLock();
+        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToAgent(e) : null; }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    /// <summary>返回 IsDefault=true 的 Agent 领域对象，不存在时返回 null。</summary>
+    public Agent? GetDefaultAgent()
+    {
+        _lock.EnterReadLock();
+        try { return GetItems().FirstOrDefault(e => e.IsDefault) is { } e ? ToAgent(e) : null; }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    // ── IAgentRepository 显式接口实现 ─────────────────────────────────────
+
+    IReadOnlyList<Agent> IAgentRepository.GetAll()
+    {
+        _lock.EnterReadLock();
+        try { return GetItems().Select(ToAgent).ToList().AsReadOnly(); }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    Agent? IAgentRepository.GetById(string id) => GetAgentById(id);
+
+    Agent? IAgentRepository.GetDefault() => GetDefaultAgent();
+
+    Agent? IAgentRepository.GetByName(string name)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return GetItems().FirstOrDefault(e => e.Name == name && e.IsEnabled) is { } e
+                ? ToAgent(e)
+                : null;
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    Agent IAgentRepository.Save(Agent agent)
+    {
+        if (string.IsNullOrEmpty(agent.Id))
+        {
+            // 新建：通过 AgentConfig.Create 流程分配 ID
+            AgentConfig created = Add(agent.ToConfig());
+            _lock.EnterReadLock();
+            try
+            {
+                AgentConfigEntity entity = GetItems().First(e => e.Id == created.Id);
+                return ToAgent(entity);
+            }
+            finally { _lock.ExitReadLock(); }
+        }
+        else
+        {
+            // 更新
+            AgentConfig? updated = Update(agent.Id, agent.ToConfig());
+            if (updated is null) throw new KeyNotFoundException($"Agent '{agent.Id}' not found.");
+            _lock.EnterReadLock();
+            try
+            {
+                AgentConfigEntity entity = GetItems().First(e => e.Id == agent.Id);
+                return ToAgent(entity);
+            }
+            finally { _lock.ExitReadLock(); }
+        }
+    }
+
+    bool IAgentRepository.Delete(string id) => Delete(id);
 }
