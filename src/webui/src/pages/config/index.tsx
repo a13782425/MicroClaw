@@ -88,11 +88,11 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
 
   return (
     <Box>
-      <Text fontWeight="semibold" fontSize="lg" mb="4">Agent 设置</Text>
-      <Box p="5" borderWidth="1px" borderRadius="lg" mb="6">
+      <Text fontWeight="semibold" fontSize="lg" mb="4" color="var(--mc-text)">Agent 设置</Text>
+      <Box p="5" borderWidth="1px" borderRadius="lg" mb="6" bg="var(--mc-card)" borderColor="var(--mc-border)">
         <Flex justify="space-between" align="center" mb="3">
-          <Text fontWeight="semibold">子代理配置</Text>
-          <Badge colorPalette="orange" size="sm">需重启生效</Badge>
+          <Text fontWeight="semibold" color="var(--mc-text)">子代理配置</Text>
+          <Badge bg="var(--mc-warning-soft)" color="var(--mc-warning)" size="sm">需重启生效</Badge>
         </Flex>
         <Text fontSize="sm" color="var(--mc-text-muted)" mb="3">子代理最大嵌套深度（1–10，默认 3）</Text>
         <Flex gap="3" align="center">
@@ -103,12 +103,15 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
             min={1}
             max={10}
             w="80px"
+            bg="var(--mc-input)"
+            borderColor="var(--mc-border)"
+            _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
           />
-          <Button size="sm" colorPalette="blue" onClick={handleSave} loading={saving}>保存</Button>
+          <Button size="sm" bg="var(--mc-primary)" color="var(--mc-text)" onClick={handleSave} loading={saving}>保存</Button>
         </Flex>
       </Box>
 
-      <Text fontWeight="semibold" mb="3">快捷导航</Text>
+      <Text fontWeight="semibold" mb="3" color="var(--mc-text)">快捷导航</Text>
       <SimpleGrid columns={[2, 4]} gap="4" mb="8">
         {QUICK_LINKS.map((link) => (
           <Box
@@ -117,23 +120,25 @@ function AgentPanel({ config, navigate }: { config: SystemConfigDto; navigate: (
             borderWidth="1px"
             borderRadius="lg"
             cursor="pointer"
-            _hover={{ bg: 'gray.50', _dark: { bg: 'gray.700' } }}
+            bg="var(--mc-card)"
+            borderColor="var(--mc-border)"
+            _hover={{ bg: 'var(--mc-card-hover)' }}
             onClick={() => navigate(link.path)}
           >
-            <Text fontWeight="semibold" fontSize="sm">{link.label}</Text>
+            <Text fontWeight="semibold" fontSize="sm" color="var(--mc-text)">{link.label}</Text>
             <Text fontSize="xs" color="var(--mc-text-muted)" mt="1">{link.desc}</Text>
           </Box>
         ))}
       </SimpleGrid>
 
-      <Text fontWeight="semibold" mb="3">配置项参考</Text>
-      <Badge colorPalette="blue" mb="3">只读参考 — 通过环境变量或配置文件设置</Badge>
-      <Table.Root variant="outline" size="sm">
+      <Text fontWeight="semibold" mb="3" color="var(--mc-text)">配置项参考</Text>
+      <Badge bg="var(--mc-info-soft)" color="var(--mc-info)" mb="3">只读参考 — 通过环境变量或配置文件设置</Badge>
+      <Table.Root variant="outline" size="sm" borderColor="var(--mc-border)">
         <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeader>配置项</Table.ColumnHeader>
-            <Table.ColumnHeader>说明</Table.ColumnHeader>
-            <Table.ColumnHeader>默认值</Table.ColumnHeader>
+          <Table.Row bg="var(--mc-card-hover)">
+            <Table.ColumnHeader color="var(--mc-text)">配置项</Table.ColumnHeader>
+            <Table.ColumnHeader color="var(--mc-text)">说明</Table.ColumnHeader>
+            <Table.ColumnHeader color="var(--mc-text)">默认值</Table.ColumnHeader>
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -182,22 +187,23 @@ function SkillsPanel({ config }: { config: SystemConfigDto }) {
 
   return (
     <Box>
-      <Text fontWeight="semibold" fontSize="lg" mb="4">技能设置</Text>
-      <Box p="5" borderWidth="1px" borderRadius="lg">
+      <Text fontWeight="semibold" fontSize="lg" mb="4" color="var(--mc-text)">技能设置</Text>
+      <Box p="5" borderWidth="1px" borderRadius="lg" bg="var(--mc-card)" borderColor="var(--mc-border)">
         <Flex justify="space-between" align="center" mb="3">
-          <Text fontWeight="semibold">附加技能文件夹</Text>
-          <Badge colorPalette="orange" size="sm">需重启生效</Badge>
+          <Text fontWeight="semibold" color="var(--mc-text)">附加技能文件夹</Text>
+          <Badge bg="var(--mc-warning-soft)" color="var(--mc-warning)" size="sm">需重启生效</Badge>
         </Flex>
         <Text fontSize="sm" color="var(--mc-text-muted)" mb="3">附加技能文件夹（只读扫描源，不会写入新技能）</Text>
         <Stack gap="2" mb="3">
           {folders.map((folder, i) => (
             <Flex key={i} gap="2" align="center">
-              <Text fontSize="sm" fontFamily="mono" flex="1" truncate>{folder}</Text>
+              <Text fontSize="sm" fontFamily="mono" flex="1" truncate color="var(--mc-text)">{folder}</Text>
               <IconButton
                 aria-label="移除"
                 size="xs"
                 variant="ghost"
-                colorPalette="red"
+                color="var(--mc-danger)"
+                _hover={{ bg: 'var(--mc-danger-soft)' }}
                 onClick={() => setFolders(folders.filter((_, idx) => idx !== i))}
               >
                 <Trash2 size={14} />
@@ -213,13 +219,16 @@ function SkillsPanel({ config }: { config: SystemConfigDto }) {
             onChange={(e) => setNewFolder(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             flex="1"
+            bg="var(--mc-input)"
+            borderColor="var(--mc-border)"
+            _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
           />
-          <IconButton aria-label="添加" size="sm" variant="outline" onClick={handleAdd}>
+          <IconButton aria-label="添加" size="sm" variant="outline" borderColor="var(--mc-border)" color="var(--mc-primary)" onClick={handleAdd}>
             <Plus size={16} />
           </IconButton>
         </Flex>
         <Flex justify="flex-end">
-          <Button size="sm" colorPalette="blue" onClick={handleSave} loading={saving}>保存</Button>
+          <Button size="sm" bg="var(--mc-primary)" color="var(--mc-text)" onClick={handleSave} loading={saving}>保存</Button>
         </Flex>
       </Box>
     </Box>
@@ -227,6 +236,19 @@ function SkillsPanel({ config }: { config: SystemConfigDto }) {
 }
 
 // ── Behavior Profile Card ─────────────────────────────────────────────────────
+
+const BEHAVIOR_MODE_BADGE_BG: Record<string, string> = {
+  normal: 'var(--mc-info-soft)',
+  explore: 'var(--mc-success-soft)',
+  cautious: 'var(--mc-warning-soft)',
+  rest: 'var(--mc-accent-soft)',
+}
+const BEHAVIOR_MODE_BADGE_COLOR: Record<string, string> = {
+  normal: 'var(--mc-info)',
+  explore: 'var(--mc-success)',
+  cautious: 'var(--mc-warning)',
+  rest: 'var(--mc-accent)',
+}
 
 function BehaviorProfileCard({
   label,
@@ -240,11 +262,11 @@ function BehaviorProfileCard({
   onChange: (v: BehaviorProfileConfigSection) => void
 }) {
   return (
-    <Box p="4" borderWidth="1px" borderRadius="lg">
-      <Badge colorPalette={colorPalette} size="sm" mb="3">{label}</Badge>
+    <Box p="4" borderWidth="1px" borderRadius="lg" bg="var(--mc-card)" borderColor="var(--mc-border)">
+      <Badge bg={BEHAVIOR_MODE_BADGE_BG[colorPalette]} color={BEHAVIOR_MODE_BADGE_COLOR[colorPalette]} size="sm" mb="3">{label}</Badge>
       <Stack gap="3">
         <Flex align="center" gap="3">
-          <Text fontSize="sm" w="120px" flexShrink={0}>Temperature</Text>
+          <Text fontSize="sm" w="120px" flexShrink={0} color="var(--mc-text)">Temperature</Text>
           <Input
             size="sm"
             type="number"
@@ -254,11 +276,14 @@ function BehaviorProfileCard({
             value={value.temperature ?? ''}
             onChange={(e) => onChange({ ...value, temperature: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
             w="90px"
+            bg="var(--mc-input)"
+            borderColor="var(--mc-border)"
+            _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
           />
           <Text fontSize="xs" color="var(--mc-text-muted)">0.0 – 2.0</Text>
         </Flex>
         <Flex align="center" gap="3">
-          <Text fontSize="sm" w="120px" flexShrink={0}>Top P</Text>
+          <Text fontSize="sm" w="120px" flexShrink={0} color="var(--mc-text)">Top P</Text>
           <Input
             size="sm"
             type="number"
@@ -268,17 +293,23 @@ function BehaviorProfileCard({
             value={value.topP ?? ''}
             onChange={(e) => onChange({ ...value, topP: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
             w="90px"
+            bg="var(--mc-input)"
+            borderColor="var(--mc-border)"
+            _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
           />
           <Text fontSize="xs" color="var(--mc-text-muted)">(0, 1]</Text>
         </Flex>
         <Flex align="center" gap="3">
-          <Text fontSize="sm" w="120px" flexShrink={0}>提示后缀</Text>
+          <Text fontSize="sm" w="120px" flexShrink={0} color="var(--mc-text)">提示后缀</Text>
           <Input
             size="sm"
             value={value.systemPromptSuffix ?? ''}
             onChange={(e) => onChange({ ...value, systemPromptSuffix: e.target.value })}
             placeholder="追加到 System Prompt 末尾（可为空）"
             flex="1"
+            bg="var(--mc-input)"
+            borderColor="var(--mc-border)"
+            _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
           />
         </Flex>
       </Stack>
@@ -315,12 +346,12 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
 
   return (
     <Box>
-      <Text fontWeight="semibold" fontSize="lg" mb="4">情绪行为</Text>
+      <Text fontWeight="semibold" fontSize="lg" mb="4" color="var(--mc-text)">情绪行为</Text>
 
-      <Box p="5" borderWidth="1px" borderRadius="lg" mb="5">
+      <Box p="5" borderWidth="1px" borderRadius="lg" mb="5" bg="var(--mc-card)" borderColor="var(--mc-border)">
         <Flex justify="space-between" align="center" mb="4">
-          <Text fontWeight="semibold">模式切换阈值</Text>
-          <Badge colorPalette="orange" size="sm">需重启生效</Badge>
+          <Text fontWeight="semibold" color="var(--mc-text)">模式切换阈值</Text>
+          <Badge bg="var(--mc-warning-soft)" color="var(--mc-warning)" size="sm">需重启生效</Badge>
         </Flex>
         <Text fontSize="xs" color="var(--mc-text-muted)" mb="4">
           情绪值域 [0, 100]，判定优先级：谨慎 &gt; 探索 &gt; 休息 &gt; 正常
@@ -335,25 +366,28 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
             { key: 'restMaxMood', label: '休息：心情 ≤', color: 'purple' },
           ].map(({ key, label, color }) => (
             <Flex key={key} align="center" gap="3">
-              <Flex align="center" gap="2" w="150px" flexShrink={0}>
-                <Box w="9px" h="9px" borderRadius="full" bg={`${color}.500`} flexShrink={0} />
-                <Text fontSize="md" color="var(--mc-text)">{label}</Text>
+                <Flex align="center" gap="2" w="150px" flexShrink={0}>
+                  <Box w="9px" h="9px" borderRadius="full" bg={`${color}.500`} flexShrink={0} />
+                  <Text fontSize="md" color="var(--mc-text)">{label}</Text>
+                </Flex>
+                <Input
+                  size="sm"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={(emotion as Record<string, unknown>)[key] as number ?? 0}
+                  onChange={(e) => setThreshold(key, parseInt(e.target.value) || 0)}
+                  w="70px"
+                  bg="var(--mc-input)"
+                  borderColor="var(--mc-border)"
+                  _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
+                />
               </Flex>
-              <Input
-                size="sm"
-                type="number"
-                min={0}
-                max={100}
-                value={(emotion as Record<string, unknown>)[key] as number ?? 0}
-                onChange={(e) => setThreshold(key, parseInt(e.target.value) || 0)}
-                w="70px"
-              />
-            </Flex>
           ))}
         </SimpleGrid>
       </Box>
 
-      <Text fontWeight="semibold" mb="3">行为模式推理参数</Text>
+      <Text fontWeight="semibold" mb="3" color="var(--mc-text)">行为模式推理参数</Text>
       <SimpleGrid columns={[1, 2]} gap="4" mb="5">
         {BEHAVIOR_MODES.map(({ key, label, color }) => (
           <BehaviorProfileCard
@@ -366,17 +400,17 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
         ))}
       </SimpleGrid>
 
-      <Text fontWeight="semibold" mb="3">事件加减分</Text>
+      <Text fontWeight="semibold" mb="3" color="var(--mc-text)">事件加减分</Text>
       <Text fontSize="xs" color="var(--mc-text-muted)" mb="3">调整各事件触发时四个情绪维度的变化量（正数加分、负数减分、空表示不变）</Text>
       <Accordion.Root multiple mb="5">
         {EVENT_DELTA_DEFS.map(({ key, label, color, desc }) => {
           const delta = emotion[key] as EmotionDeltaConfigSection
           return (
-            <Accordion.Item key={key} value={key} borderWidth="1px" borderRadius="lg" mb="2">
+              <Accordion.Item key={key} value={key} borderWidth="1px" borderRadius="lg" mb="2" borderColor="var(--mc-border)" bg="var(--mc-card)">
               <Accordion.ItemTrigger px="4" py="3">
                 <Flex align="center" gap="2" flex="1">
                   <Box w="8px" h="8px" borderRadius="full" bg={`${color}.500`} flexShrink={0} />
-                  <Text fontWeight="medium" fontSize="sm">{label}</Text>
+                  <Text fontWeight="medium" fontSize="sm" color="var(--mc-text)">{label}</Text>
                   <Text fontSize="xs" color="var(--mc-text-muted)" ml="2">{desc}</Text>
                 </Flex>
                 <Accordion.ItemIndicator />
@@ -390,7 +424,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
                     { field: 'confidence', label: '信心' },
                   ] as { field: keyof EmotionDeltaConfigSection; label: string }[]).map(({ field, label: fl }) => (
                     <Flex key={field} align="center" gap="2">
-                      <Text fontSize="sm" w="52px" flexShrink={0}>{fl}</Text>
+                      <Text fontSize="sm" w="52px" flexShrink={0} color="var(--mc-text)">{fl}</Text>
                       <Input
                         size="sm"
                         type="number"
@@ -403,6 +437,9 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
                           ...delta,
                           [field]: e.target.value === '' ? undefined : parseInt(e.target.value),
                         })}
+                        bg="var(--mc-input)"
+                        borderColor="var(--mc-border)"
+                        _focus={{ borderColor: 'var(--mc-input-focus-border)', boxShadow: `0 0 0 1px var(--mc-input-focus-shadow)` }}
                       />
                     </Flex>
                   ))}
@@ -414,7 +451,7 @@ function EmotionPanel({ config }: { config: SystemConfigDto }) {
       </Accordion.Root>
 
       <Flex justify="flex-end">
-        <Button colorPalette="blue" onClick={handleSave} loading={saving}>保存全部</Button>
+        <Button bg="var(--mc-primary)" color="var(--mc-text)" onClick={handleSave} loading={saving}>保存全部</Button>
       </Flex>
     </Box>
   )
@@ -445,7 +482,7 @@ export default function ConfigPage() {
   return (
     <Flex h="full" overflow="hidden">
       {/* 左侧分类导航 */}
-      <Box w="180px" flexShrink={0} borderRightWidth="1px" py="4" px="2" overflowY="auto">
+      <Box w="180px" flexShrink={0} borderRightWidth="1px" borderRightColor="var(--mc-border)" py="4" px="2" overflowY="auto" bg="var(--mc-card)">
         <Text fontSize="xs" color="var(--mc-text-muted)" fontWeight="semibold" px="3" mb="2">系统配置</Text>
         <Stack gap="1">
           {SECTIONS.map((sec) => (
@@ -457,9 +494,9 @@ export default function ConfigPage() {
               cursor="pointer"
               fontSize="sm"
               fontWeight={activeSection === sec.key ? 'semibold' : 'normal'}
-              bg={activeSection === sec.key ? 'blue.500' : 'transparent'}
-              color={activeSection === sec.key ? 'white' : undefined}
-              _hover={activeSection === sec.key ? {} : { bg: 'gray.100', _dark: { bg: 'gray.700' } }}
+              bg={activeSection === sec.key ? 'var(--mc-primary)' : 'transparent'}
+              color={activeSection === sec.key ? 'white' : 'var(--mc-text)'}
+              _hover={activeSection === sec.key ? {} : { bg: 'var(--mc-card-hover)' }}
               onClick={() => setActiveSection(sec.key)}
             >
               {sec.label}
@@ -469,7 +506,7 @@ export default function ConfigPage() {
       </Box>
 
       {/* 右侧内容面板 */}
-      <Box flex="1" overflowY="auto" p="6" maxW="800px">
+      <Box flex="1" overflowY="auto" p="6" maxW="800px" bg="var(--mc-bg)" color="var(--mc-text)">
         {activeSection === 'agent' && <AgentPanel config={config} navigate={navigate} />}
         {activeSection === 'skills' && <SkillsPanel config={config} />}
         {activeSection === 'emotion' && <EmotionPanel config={config} />}

@@ -13,7 +13,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
     public DbSet<PainMemoryEntity> PainMemories => Set<PainMemoryEntity>();
     public DbSet<RagSearchStatEntity> RagSearchStats => Set<RagSearchStatEntity>();
-    public DbSet<EmotionSnapshotEntity> EmotionSnapshots => Set<EmotionSnapshotEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,20 +120,5 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_search_stats_scope");
         });
 
-        modelBuilder.Entity<EmotionSnapshotEntity>(b =>
-        {
-            b.ToTable("emotion_snapshots");
-            b.HasKey(e => e.Id);
-            b.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
-            b.Property(e => e.AgentId).HasColumnName("agent_id").HasMaxLength(128);
-            b.Property(e => e.Alertness).HasColumnName("alertness");
-            b.Property(e => e.Mood).HasColumnName("mood");
-            b.Property(e => e.Curiosity).HasColumnName("curiosity");
-            b.Property(e => e.Confidence).HasColumnName("confidence");
-            b.Property(e => e.RecordedAtMs).HasColumnName("recorded_at_ms");
-            b.HasIndex(e => e.AgentId).HasDatabaseName("ix_emotion_snapshots_agent_id");
-            b.HasIndex(e => new { e.AgentId, e.RecordedAtMs })
-                .HasDatabaseName("ix_emotion_snapshots_agent_recorded");
-        });
     }
 }

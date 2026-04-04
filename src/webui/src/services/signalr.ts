@@ -48,6 +48,23 @@ class SignalRService {
       },
     )
 
+    // ── Pet 事件 ──────────────────────────────────────────────────────
+    conn.on('petMessage', (payload: { sessionId: string; message: string }) => {
+      eventBus.emit('pet:message', payload)
+    })
+
+    conn.on('petStateChanged', (payload: { sessionId: string; newState: string; reason: string }) => {
+      eventBus.emit('pet:stateChanged', payload)
+    })
+
+    conn.on('petActionStarted', (payload: { sessionId: string; actionType: string; detail?: string }) => {
+      eventBus.emit('pet:actionStarted', payload)
+    })
+
+    conn.on('petActionCompleted', (payload: { sessionId: string; actionType: string; detail?: string }) => {
+      eventBus.emit('pet:actionCompleted', payload)
+    })
+
     conn.start().catch(() => {
       // silent - auto-reconnect handles this
     })

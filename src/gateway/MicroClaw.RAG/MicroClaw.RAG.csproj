@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="MicroClaw.Pet" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
   </ItemGroup>
 

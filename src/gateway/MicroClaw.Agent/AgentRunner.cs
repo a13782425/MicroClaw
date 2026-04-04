@@ -121,13 +121,14 @@ public sealed class AgentRunner(
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default,
-        string source = "chat")
+        string source = "chat",
+        PetOverrides? petOverrides = null)
     {
         // ── 薄迭代器：delegating to non-iterator ExecuteStreamingCoreAsync ──────────
         // C# 规则：yield return 不能置于 try-catch 块中，因此将含回退逻辑的非迭代器方法
         // 通过 Channel 与迭代器解耦，迭代器只负责从 Channel 读取并 yield。
         var outputChannel = System.Threading.Channels.Channel.CreateUnbounded<StreamItem>();
-        Task execution = ExecuteStreamingCoreAsync(agent, providerId, history, sessionId, ct, source, outputChannel);
+        Task execution = ExecuteStreamingCoreAsync(agent, providerId, history, sessionId, ct, source, outputChannel, petOverrides);
 
         try
         {
@@ -156,7 +157,8 @@ public sealed class AgentRunner(
         string? sessionId,
         CancellationToken ct,
         string source,
-        System.Threading.Channels.Channel<StreamItem> output)
+        System.Threading.Channels.Channel<StreamItem> output,
+        PetOverrides? petOverrides = null)
     {
         IReadOnlyList<ProviderConfig> chain = BuildFallbackChain(primaryProviderId, agent.RoutingStrategy);
 
@@ -202,10 +204,22 @@ public sealed class AgentRunner(
 
                 List<ChatMessage> messages = await BuildChatMessagesAsync(
                     agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
-                    behaviorSuffix: null,
+                    behaviorSuffix: petOverrides?.BehaviorSuffix,
                     providerId: provider.Id, ct);
 
-                // 工具收集
+                // Pet 知识注入：作为独立的 system 消息追加到消息列表开头之后
+                if (!string.IsNullOrWhiteSpace(petOverrides?.PetKnowledge))
+                {
+                    // 在第一条 system 消息之后插入 Pet 知识
+                    int insertIdx = messages.Count > 0 && messages[0].Role == ChatRole.System ? 1 : 0;
+                    messages.Insert(insertIdx, new ChatMessage(ChatRole.System,
+                        $"[Pet 背景知识]\n{petOverrides.PetKnowledge}"));
+                }
+
+                // 工具收集（Pet 可覆盖工具配置）
+                AgentConfig effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
+                    ? agent with { ToolGroupConfigs = petOverrides.ToolOverrides }
+                    : agent;
                 SessionInfo? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
                     ? sessionReader.Get(sessionId) : null;
 
@@ -232,7 +246,7 @@ public sealed class AgentRunner(
                     AllowedSubAgentIds: agent.AllowedSubAgentIds,
                     AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
                 await using ToolCollectionResult toolResult =
-                    await toolCollector.CollectToolsAsync(agent, toolContext, ct);
+                    await toolCollector.CollectToolsAsync(effectiveAgent, toolContext, ct);
 
                 _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}",
                     agent.Id, toolResult.AllTools.Count, provider.Id);
@@ -240,8 +254,8 @@ public sealed class AgentRunner(
                 // AgentFactory：创建 ChatClientAgent + 事件 Channel
                 ChatOptions chatOptions = BuildChatOptions(
                     toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
-                    temperatureOverride: null,
-                    topPOverride: null);
+                    temperatureOverride: petOverrides?.Temperature,
+                    topPOverride: petOverrides?.TopP);
                 IChatClient rawClient = clientFactory.Create(provider);
                 var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
                     rawClient, agent.Name, chatOptions, loggerFactory,

@@ -284,7 +284,39 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.FunctionResultRestorer>();
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.DataContentRestorer>();
 		builder.Services.AddSingleton<AgentRunner>();
-		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<AgentRunner>());
+		// P-F-5: Pet 编排层服务注册（Pet 为消息入口，AgentRunner 保留但不再作为消息入口）
+		builder.Services.AddSingleton<MicroClaw.Pet.Storage.PetStateStore>(sp =>
+			new MicroClaw.Pet.Storage.PetStateStore(MicroClawConfig.Env));
+		builder.Services.AddSingleton<MicroClaw.Pet.RateLimit.PetRateLimiter>();
+		builder.Services.AddSingleton<MicroClaw.Pet.Decision.PetModelSelector>();
+		builder.Services.AddSingleton<MicroClaw.Pet.Decision.PetDecisionEngine>();
+		builder.Services.AddPetStates();
+		builder.Services.AddSingleton<MicroClaw.Pet.StateMachine.PetStateMachine>();
+		builder.Services.AddSingleton<MicroClaw.Pet.StateMachine.PetSelfAwarenessReportBuilder>();
+		builder.Services.AddSingleton<MicroClaw.Pet.Prompt.PetPromptStore>(sp =>
+			new MicroClaw.Pet.Prompt.PetPromptStore(MicroClawConfig.Env));
+		builder.Services.AddSingleton<MicroClaw.Pet.Prompt.PetPromptEvolver>(sp =>
+			new MicroClaw.Pet.Prompt.PetPromptEvolver(
+				sp.GetRequiredService<MicroClaw.Pet.Prompt.PetPromptStore>(),
+				sp.GetRequiredService<MicroClaw.Pet.Storage.PetStateStore>(),
+				sp.GetRequiredService<MicroClaw.Pet.RateLimit.PetRateLimiter>(),
+				sp.GetRequiredService<MicroClaw.Pet.Decision.PetModelSelector>(),
+				sp.GetRequiredService<MicroClaw.Providers.ProviderClientFactory>(),
+				MicroClawConfig.Env,
+				sp.GetRequiredService<ILogger<MicroClaw.Pet.Prompt.PetPromptEvolver>>()));
+		builder.Services.AddSingleton<MicroClaw.Pet.PetFactory>(sp =>
+			new MicroClaw.Pet.PetFactory(
+				sp.GetRequiredService<MicroClaw.Pet.Storage.PetStateStore>(),
+				MicroClawConfig.Env,
+				sp.GetRequiredService<ILogger<MicroClaw.Pet.PetFactory>>()));
+		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>(sp =>
+			new MicroClaw.Pet.Observer.PetSessionObserver(
+				MicroClawConfig.Env,
+				sp.GetRequiredService<ILogger<MicroClaw.Pet.Observer.PetSessionObserver>>()));
+		builder.Services.AddSingleton<MicroClaw.Pet.PetRunner>();
+		builder.Services.AddSingleton<IPetRunner>(sp => sp.GetRequiredService<MicroClaw.Pet.PetRunner>());
+		// P-F-3: IAgentMessageHandler 指向 PetRunner，渠道消息经 Pet 编排后再委派 AgentRunner
+		builder.Services.AddSingleton<IAgentMessageHandler>(sp => sp.GetRequiredService<MicroClaw.Pet.PetRunner>());
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>(_ => new MicroClaw.Agent.Workflows.WorkflowStore(MicroClawConfig.Env.ConfigDir));
@@ -381,10 +413,20 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ChannelRetryQueueService>();
 		builder.Services.AddSingleton<IChannelRetryQueue>(sp => sp.GetRequiredService<ChannelRetryQueueService>());
 		builder.Services.AddSingleton<IScheduledJob, ChannelRetryJob>();
+		// P-E-1: Pet 私有 RAG（每 Session 独立的 knowledge.db，供 RagPruneJob 清理使用）
+		builder.Services.AddSingleton<MicroClaw.Pet.Rag.PetRagScope>(sp => new MicroClaw.Pet.Rag.PetRagScope(
+			sp.GetRequiredService<IEmbeddingService>(),
+			MicroClawConfig.Env,
+			sp.GetRequiredService<ILogger<MicroClaw.Pet.Rag.PetRagScope>>()));
 		// 2-A-11: RAG 定期容量清理（每日 UTC 01:00，早于记忆总结和做梦模式）
 		builder.Services.AddSingleton<IScheduledJob, RagPruneJob>();
 		// P-B-7: Pet 情绪自然衰减（每小时向默认值 50 靠近，每 Session 独立衰减）
 		builder.Services.AddSingleton<IScheduledJob, PetEmotionDecayJob>();
+		// P-G: Pet 心跳与自主行为
+		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.IPetNotifier, MicroClaw.Services.HubPetNotifier>();
+		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetActionExecutor>();
+		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetHeartbeatExecutor>();
+		builder.Services.AddSingleton<IScheduledJob, PetHeartbeatJob>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>

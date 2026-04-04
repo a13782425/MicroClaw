@@ -62,6 +62,28 @@ public sealed class EmotionStore : IEmotionStore
         return dto is null ? EmotionState.Default : FromDto(dto);
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<EmotionSnapshot>> GetHistoryAsync(
+        string sessionId, long fromMs, long toMs, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        string journalFile = Path.Combine(GetPetDir(sessionId), "emotion-journal.jsonl");
+        if (!File.Exists(journalFile))
+            return [];
+
+        var results = new List<EmotionSnapshot>();
+        foreach (string line in await File.ReadAllLinesAsync(journalFile, ct))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var entry = JsonSerializer.Deserialize<EmotionJournalEntry>(line, JsonOptions);
+            if (entry is null) continue;
+            if (entry.RecordedAtMs >= fromMs && entry.RecordedAtMs <= toMs)
+                results.Add(new EmotionSnapshot(FromDto(entry.State), entry.RecordedAtMs));
+        }
+        return results;
+    }
+
     private string GetPetDir(string sessionId) =>
         Path.Combine(_sessionsDir, sessionId, "pet");
 

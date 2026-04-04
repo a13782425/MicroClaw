@@ -8,6 +8,8 @@ using MicroClaw.Channels;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Rag;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using MicroClaw.Streaming;
@@ -65,10 +67,13 @@ public static class SessionEndpoints
         .WithTags("Sessions");
 
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions/delete", (DeleteSessionRequest req, SessionStore store, SessionDnaService sessionDna, PetRagScope petRagScope) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
+
+            // 先断开 Pet RAG 数据库连接，释放 SQLite 连接池，避免 Windows 文件锁
+            petRagScope.CloseDatabase(req.Id);
 
             bool deleted = store.Delete(req.Id);
             if (!deleted)
@@ -81,7 +86,7 @@ public static class SessionEndpoints
         .WithTags("Sessions");
 
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, SessionStore store, ClaimsPrincipal user, IHubContext<GatewayHub> hub, PetFactory petFactory) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -91,6 +96,9 @@ public static class SessionEndpoints
             SessionInfo? updated = store.Approve(req.Id, req.Reason);
             if (updated is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
+
+            // 审批后自动为该会话创建 Pet（幂等，已存在则跳过）
+            await petFactory.CreateAsync(req.Id);
 
             await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = updated.Id, title = updated.Title });
             return Results.Ok(updated);
@@ -162,7 +170,7 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/{id}/chat",
             async (string id, ChatRequest req, SessionStore store,
                    ProviderConfigStore providerStore,
-                   AgentStore agentStore, AgentRunner agentRunner,
+                   AgentStore agentStore, IPetRunner petRunner,
                    IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers,
                    HttpContext ctx, CancellationToken ct) =>
             {
@@ -224,7 +232,7 @@ public static class SessionEndpoints
                 try
                 {
                     await foreach (StreamItem item in
-                        agentRunner.StreamReActAsync(defaultAgent, session.ProviderId, history, id, ct))
+                        petRunner.HandleMessageAsync(id, history, ct))
                     {
                         // 持久化逻辑：通过管道分发
                         IReadOnlyList<SessionMessage> msgs = persistencePipeline.ProcessItem(item);

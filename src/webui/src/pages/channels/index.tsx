@@ -226,7 +226,7 @@ export default function ChannelsPage() {
                 <Card.Root key={channel.id} opacity={channel.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
                   <Card.Body p="4">
                     <Flex align="center" gap="2" mb="2">
-                      <Text fontWeight="semibold" flex="1">{channel.displayName}</Text>
+                      <Text fontWeight="semibold" flex="1" color="var(--mc-text)">{channel.displayName}</Text>
                       {channel.channelType === 'feishu' && connectionOk !== null && (
                         <Box w="8px" h="8px" borderRadius="full" bg={connectionOk ? 'var(--mc-success)' : 'var(--mc-danger)'} title={connectionOk ? '连接正常' : '连接异常'} />
                       )}
@@ -247,7 +247,7 @@ export default function ChannelsPage() {
                       <Switch.Root size="sm" checked={channel.isEnabled} onCheckedChange={(details) => handleToggle(channel, details.checked)}>
                         <Switch.HiddenInput />
                         <Switch.Control><Switch.Thumb /></Switch.Control>
-                        <Switch.Label fontSize="xs">{channel.isEnabled ? '启用' : '停用'}</Switch.Label>
+                        <Switch.Label fontSize="xs" color="var(--mc-text)">{channel.isEnabled ? '启用' : '停用'}</Switch.Label>
                       </Switch.Root>
 
                       <Flex gap="1">

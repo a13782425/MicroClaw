@@ -24,6 +24,13 @@ public sealed class PetStateStore
         _sessionsDir = env.SessionsDir;
     }
 
+    /// <summary>仅供测试使用：直接指定 sessions 根目录。</summary>
+    internal PetStateStore(string sessionsDir)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionsDir);
+        _sessionsDir = sessionsDir;
+    }
+
     /// <summary>
     /// 加载指定 Session 的 Pet 状态。若文件不存在，返回 null。
     /// </summary>
@@ -68,6 +75,37 @@ public sealed class PetStateStore
     }
 
     /// <summary>
+    /// 加载指定 Session 的 Pet 配置。若文件不存在，返回 null。
+    /// </summary>
+    public async Task<PetConfig?> LoadConfigAsync(string sessionId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        string configFile = Path.Combine(GetPetDir(sessionId), "config.json");
+        if (!File.Exists(configFile))
+            return null;
+
+        string json = await File.ReadAllTextAsync(configFile, ct);
+        return JsonSerializer.Deserialize<PetConfig>(json, JsonOptions);
+    }
+
+    /// <summary>
+    /// 保存 Pet 配置。
+    /// </summary>
+    public async Task SaveConfigAsync(string sessionId, PetConfig config, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        ArgumentNullException.ThrowIfNull(config);
+
+        string petDir = GetPetDir(sessionId);
+        Directory.CreateDirectory(petDir);
+
+        string configFile = Path.Combine(petDir, "config.json");
+        string json = JsonSerializer.Serialize(config, JsonOptions);
+        await File.WriteAllTextAsync(configFile, json, ct);
+    }
+
+    /// <summary>
     /// 追加一条自由格式的 journal 记录（用于事件日志）。
     /// </summary>
     public async Task AppendJournalAsync(string sessionId, string eventType, string? detail = null, CancellationToken ct = default)
@@ -82,6 +120,26 @@ public sealed class PetStateStore
         var entry = new { eventType, detail, ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
         string line = JsonSerializer.Serialize(entry, JsonOptions);
         await File.AppendAllTextAsync(journalFile, line + Environment.NewLine, ct);
+    }
+
+    /// <summary>
+    /// 读取 journal.jsonl 的最后 N 行（JSON 原文）。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ReadJournalAsync(string sessionId, int maxLines = 100, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        string journalFile = Path.Combine(GetPetDir(sessionId), "journal.jsonl");
+        if (!File.Exists(journalFile))
+            return [];
+
+        var allLines = await File.ReadAllLinesAsync(journalFile, ct);
+        var nonEmpty = allLines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+
+        if (nonEmpty.Length <= maxLines)
+            return nonEmpty;
+
+        return nonEmpty[^maxLines..];
     }
 
     private string GetPetDir(string sessionId) =>

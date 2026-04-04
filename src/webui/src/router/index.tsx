@@ -12,7 +12,6 @@ const RagPage = lazy(() => import('@/pages/rag'))
 const ToolsPage = lazy(() => import('@/pages/tools'))
 const ModelsPage = lazy(() => import('@/pages/models'))
 const ChannelsPage = lazy(() => import('@/pages/channels'))
-const SessionManagePage = lazy(() => import('@/pages/session-manage'))
 const CronPage = lazy(() => import('@/pages/cron'))
 const UsagePage = lazy(() => import('@/pages/usage'))
 const ConfigPage = lazy(() => import('@/pages/config'))
@@ -80,13 +79,13 @@ export const router = createBrowserRouter([
       { path: 'plugins',        element: withSuspense(<PluginsPage />) },
       { path: 'models',         element: withSuspense(<ModelsPage />) },
       { path: 'channels',       element: withSuspense(<ChannelsPage />) },
-      { path: 'session-manage', element: withSuspense(<SessionManagePage />) },
+      { path: 'session-manage', element: <Navigate to="/sessions" replace /> },
       { path: 'cron',           element: withSuspense(<CronPage />) },
       { path: 'usage',          element: withSuspense(<UsagePage />) },
       { path: 'config',         element: withSuspense(<ConfigPage />) },
       { path: 'workflows',      element: withSuspense(<WorkflowsPage />) },
       { path: 'dev',            element: withSuspense(<DevPage />) },
-      { path: 'dna',            element: <Navigate to="/session-manage" replace /> },
+      { path: 'dna',            element: <Navigate to="/sessions" replace /> },
     ],
   },
 ])

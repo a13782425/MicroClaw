@@ -19,4 +19,13 @@ public interface IEmotionStore
     /// <param name="sessionId">Session 唯一标识符。</param>
     /// <param name="ct">取消令牌。</param>
     Task<EmotionState> GetCurrentAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 获取指定 Session 在时间范围内的情绪历史快照列表，按时间升序排列。
+    /// </summary>
+    /// <param name="sessionId">Session 唯一标识符。</param>
+    /// <param name="fromMs">开始时间（Unix 毫秒时间戳，含）。</param>
+    /// <param name="toMs">结束时间（Unix 毫秒时间戳，含）。</param>
+    /// <param name="ct">取消令牌。</param>
+    Task<IReadOnlyList<EmotionSnapshot>> GetHistoryAsync(string sessionId, long fromMs, long toMs, CancellationToken ct = default);
 }

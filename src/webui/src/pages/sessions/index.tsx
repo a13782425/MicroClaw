@@ -3,7 +3,7 @@ import {
 } from 'react'
 import {
   Box, Flex, Text, Button, IconButton, Input, Textarea, Badge,
-  Spinner, Select, Portal, createListCollection,
+  Spinner, Select, Portal, createListCollection, Tabs,
 } from '@chakra-ui/react'
 import {
   MessageCircle, Plus, Trash2, Send, Square, Paperclip, X,
@@ -14,6 +14,7 @@ import {
   switchSessionProvider,
   type ProviderConfig, type ChannelConfig, type AgentConfig,
   type MessageAttachment, type CreateSessionRequest,
+  type SessionInfo,
   SYSTEM_SOURCES,
 } from '@/api/gateway'
 import { AppDialog } from '@/components/ui/app-dialog'
@@ -24,6 +25,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import ChatMessage from '@/components/chat-message'
 import SessionTreeItem from './session-tree-item'
 import SandboxPanel from './sandbox-panel'
+import { SessionDnaTab } from './session-dna-tab'
+import { SessionMemoryTab } from './session-memory-tab'
+import { ApprovalTab } from './approval-tab'
+import { PetTab } from './pet-tab'
 
 // ─── 新建 Session 弹窗 ────────────────────────────────────────────────────────
 interface CreateDialogProps {
@@ -364,6 +369,10 @@ export default function SessionsPage() {
     }
   }, [])
 
+  const handleApprovalUpdated = useCallback((_session: SessionInfo) => {
+    fetchSessions()
+  }, [fetchSessions])
+
   const handleSwitchProvider = async (providerId: string) => {
     const id = store.currentSessionId
     if (!id) return
@@ -429,7 +438,15 @@ export default function SessionsPage() {
             <Text>选择或创建一个会话开始对话</Text>
           </Flex>
         ) : (
-          <>
+          <Tabs.Root defaultValue="chat" flex="1" display="flex" flexDirection="column" overflow="hidden">
+            <Tabs.List px="3" flexShrink={0} borderBottomWidth="1px">
+              <Tabs.Trigger value="chat">💬 对话</Tabs.Trigger>
+              <Tabs.Trigger value="dna">🧬 DNA</Tabs.Trigger>
+              <Tabs.Trigger value="memory">🧠 记忆</Tabs.Trigger>
+              <Tabs.Trigger value="pet">🐾 Pet</Tabs.Trigger>
+              <Tabs.Trigger value="approval">✅ 审批</Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="chat" flex="1" display="flex" flexDirection="column" overflow="hidden" p="0">
             {/* 聊天头部 */}
             <Flex
               px="4" py="2.5" borderBottomWidth="1px"
@@ -682,7 +699,20 @@ export default function SessionsPage() {
                 </Flex>
               </Box>
             )}
-          </>
+            </Tabs.Content>
+            <Tabs.Content value="dna" flex="1" overflow="hidden" p="0">
+              <SessionDnaTab session={currentSession!} />
+            </Tabs.Content>
+            <Tabs.Content value="memory" flex="1" overflow="hidden" p="0">
+              <SessionMemoryTab session={currentSession!} />
+            </Tabs.Content>
+            <Tabs.Content value="pet" flex="1" overflow="hidden" p="0">
+              <PetTab session={currentSession!} />
+            </Tabs.Content>
+            <Tabs.Content value="approval" p="0">
+              <ApprovalTab session={currentSession!} onUpdated={handleApprovalUpdated} />
+            </Tabs.Content>
+          </Tabs.Root>
         )}
       </Flex>
 

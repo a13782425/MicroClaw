@@ -19,7 +19,7 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
     <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
       <Card.Body p="4">
         <Flex align="center" gap="2" mb="2">
-          <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
+          <Text fontWeight="semibold" flex="1" truncate color="var(--mc-text)">{p.displayName}</Text>
           {p.isDefault && <Badge size="sm" bg="var(--mc-warning-soft)" color="var(--mc-warning)">默认</Badge>}
           <Badge size="sm" bg={p.protocol === 'openai' ? 'var(--mc-primary-soft)' : 'var(--mc-accent-soft)'} color={p.protocol === 'openai' ? 'var(--mc-primary)' : 'var(--mc-accent)'}>
             {protocolLabel(p.protocol)}
@@ -70,7 +70,7 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
           <Switch.Root size="sm" checked={p.isEnabled} onCheckedChange={(details) => onToggle(p, details.checked)}>
             <Switch.HiddenInput />
             <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Label fontSize="xs">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
+            <Switch.Label fontSize="xs" color="var(--mc-text)">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
           </Switch.Root>
 
           <Flex gap="1">
@@ -102,7 +102,7 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
     <Card.Root opacity={p.isEnabled ? 1 : 0.6} borderWidth="1px" variant="outline" bg="var(--mc-card)" borderColor="var(--mc-border)">
       <Card.Body p="4">
         <Flex align="center" gap="2" mb="2">
-          <Text fontWeight="semibold" flex="1" truncate>{p.displayName}</Text>
+          <Text fontWeight="semibold" flex="1" truncate color="var(--mc-text)">{p.displayName}</Text>
           <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">嵌入</Badge>
           <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">OpenAI</Badge>
         </Flex>
@@ -135,7 +135,7 @@ export function EmbeddingCard({ p, onEdit, onDelete, onToggle }: {
           <Switch.Root size="sm" checked={p.isEnabled} onCheckedChange={(details) => onToggle(p, details.checked)}>
             <Switch.HiddenInput />
             <Switch.Control><Switch.Thumb /></Switch.Control>
-            <Switch.Label fontSize="xs">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
+            <Switch.Label fontSize="xs" color="var(--mc-text)">{p.isEnabled ? '启用' : '停用'}</Switch.Label>
           </Switch.Root>
 
           <Flex gap="1">

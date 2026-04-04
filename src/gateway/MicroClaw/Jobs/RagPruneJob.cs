@@ -1,3 +1,4 @@
+using MicroClaw.Pet.Rag;
 using MicroClaw.RAG;
 using Microsoft.Extensions.Logging;
 
@@ -7,10 +8,12 @@ namespace MicroClaw.Jobs;
 /// 2-A-11: RAG 定期容量清理 Job。
 /// 每天凌晨 1 点（UTC）执行，对全局 RAG 库和所有已知会话 RAG 库调用 IRagPruner.PruneIfNeededAsync，
 /// 补充仅在 ingest 时 fire-and-forget 的临时剪枝，确保长期运行后存储不会无限增长。
+/// 同时覆盖 Pet 私有 RAG 库（<c>{sessionId}/pet/knowledge.db</c>）的清理。
 /// </summary>
 public sealed class RagPruneJob(
     IRagPruner pruner,
     RagDbContextFactory dbFactory,
+    PetRagScope? petRagScope,
     ILogger<RagPruneJob> logger) : IScheduledJob
 {
     // 每天凌晨 1 点（UTC）执行，早于 MemorySummarizationJob（02:00）和 DreamingJob（03:00）
@@ -33,7 +36,29 @@ public sealed class RagPruneJob(
             await PruneScopeAsync(RagScope.Session, sessionId, ct);
         }
 
-        logger.LogInformation("RagPruneJob: 完成，共扫描 {Count} 个会话库", sessionIds.Count);
+        // 3. 所有 Pet 私有 RAG 库
+        int petCount = 0;
+        if (petRagScope is not null)
+        {
+            IReadOnlyList<string> petSessionIds = petRagScope.GetAllPetSessionIds();
+            foreach (string sessionId in petSessionIds)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    await petRagScope.PruneIfNeededAsync(sessionId, ct: ct);
+                    petCount++;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "RagPruneJob: 清理 Pet RAG/{SessionId} 失败", sessionId);
+                }
+            }
+        }
+
+        logger.LogInformation("RagPruneJob: 完成，共扫描 {Count} 个会话库 + {PetCount} 个 Pet RAG 库",
+            sessionIds.Count, petCount);
     }
 
     private async Task PruneScopeAsync(RagScope scope, string? sessionId, CancellationToken ct)

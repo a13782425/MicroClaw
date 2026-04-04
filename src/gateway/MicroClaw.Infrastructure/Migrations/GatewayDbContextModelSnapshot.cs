@@ -270,50 +270,6 @@ namespace MicroClaw.Infrastructure.Migrations
                     b.ToTable("usages", (string)null);
                 });
 
-            modelBuilder.Entity("MicroClaw.Infrastructure.EmotionSnapshotEntity", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AgentId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("agent_id");
-
-                    b.Property<int>("Alertness")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("alertness");
-
-                    b.Property<int>("Confidence")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("confidence");
-
-                    b.Property<int>("Curiosity")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("curiosity");
-
-                    b.Property<int>("Mood")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("mood");
-
-                    b.Property<long>("RecordedAtMs")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("recorded_at_ms");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgentId")
-                        .HasDatabaseName("ix_emotion_snapshots_agent_id");
-
-                    b.HasIndex("AgentId", "RecordedAtMs")
-                        .HasDatabaseName("ix_emotion_snapshots_agent_recorded");
-
-                    b.ToTable("emotion_snapshots", (string)null);
-                });
-
             modelBuilder.Entity("MicroClaw.Infrastructure.PainMemoryEntity", b =>
                 {
                     b.Property<string>("Id")
