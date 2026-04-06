@@ -191,7 +191,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ConfigService>();
 		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore());
 		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(sessionsDir));
-		builder.Services.AddSingleton<ISessionReader>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<ISessionRepository>(sp => sp.GetRequiredService<SessionStore>());
 		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
 
@@ -252,8 +251,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IToolRiskInterceptor, ListBasedToolRiskInterceptor>();
 		// Provider 路由器
 		builder.Services.AddSingleton<IProviderRouter, ProviderRouter>();
-		// 会话全局读取接口（IAllSessionsReader → PainEmotionLinker 通过 AgentId 查 Session）
-		builder.Services.AddSingleton<IAllSessionsReader>(sp => sp.GetRequiredService<SessionStore>());
 		// 痛觉-Pet 情绪联动服务（基于 Session 隔离，Pet 版本替代旧 Agent 级 IPainEmotionLinker）
 		builder.Services.AddSingleton<IPainEmotionLinker, MicroClaw.Pet.PainEmotionLinker>();
 		// Context Providers（按 Order 聚合 System Prompt）
@@ -264,7 +261,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentContextProvider, SessionMemoryContextProvider>();
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
-			sp.GetRequiredService<SessionStore>(),
+			sp.GetRequiredService<ISessionRepository>(),
 			sp.GetRequiredService<AgentStore>(),
 			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>()),
 			MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth));

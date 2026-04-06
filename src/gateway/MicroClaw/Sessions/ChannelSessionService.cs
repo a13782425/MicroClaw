@@ -14,7 +14,7 @@ namespace MicroClaw.Sessions;
 /// 渠道会话服务：按发送者管理会话生命周期，通过 SignalR 通知管理员待批准会话。
 /// </summary>
 public sealed class ChannelSessionService(
-    SessionStore store,
+    ISessionRepository repo,
     AgentStore agentStore,
     IHubContext<GatewayHub> hubContext) : IChannelSessionService
 {
@@ -27,15 +27,23 @@ public sealed class ChannelSessionService(
     {
         string sessionId = GenerateSessionId(channelType, channelId, senderId);
 
-        SessionInfo? existing = store.Get(sessionId);
-        if (existing is not null) return existing;
+        Session? existing = repo.Get(sessionId);
+        if (existing is not null) return existing.ToInfo();
 
         string channelLabel = ChannelConfigStore.SerializeChannelType(channelType);
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
 
-        SessionInfo created = store.Create(title, providerId, channelType, id: sessionId, channelId: channelId,
+        Session session = Session.Create(
+            id: sessionId,
+            title: title,
+            providerId: providerId,
+            channelType: channelType,
+            channelId: channelId,
+            createdAt: DateTimeOffset.UtcNow,
             agentId: agentStore.GetDefault()?.Id);
+        repo.Save(session);
+        SessionInfo created = session.ToInfo();
 
         // 通知前端新会话已创建（fire-and-forget）
         _ = hubContext.Clients.All.SendAsync("sessionCreated", new
@@ -49,10 +57,10 @@ public sealed class ChannelSessionService(
     }
 
     public void AddMessage(string sessionId, SessionMessage message)
-        => store.AddMessage(sessionId, message);
+        => repo.AddMessage(sessionId, message);
 
     public IReadOnlyList<SessionMessage> GetMessages(string sessionId)
-        => store.GetMessages(sessionId);
+        => repo.GetMessages(sessionId);
 
     public async Task NotifyPendingApprovalAsync(string sessionId, string sessionTitle, ChannelType channelType)
     {

@@ -2,6 +2,7 @@
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <CodePage>65001</CodePage>
   </PropertyGroup>
 
   <ItemGroup>

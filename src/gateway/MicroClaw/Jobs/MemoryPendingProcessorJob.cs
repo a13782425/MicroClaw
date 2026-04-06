@@ -18,7 +18,7 @@ namespace MicroClaw.Jobs;
 ///   4. 删除已处理的 pending 文件。
 /// </summary>
 public sealed class MemoryPendingProcessorJob(
-    SessionStore sessionStore,
+    ISessionRepository repo,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     MemoryService memoryService,
@@ -35,15 +35,15 @@ public sealed class MemoryPendingProcessorJob(
 
     internal async Task ProcessAllSessionsAsync(CancellationToken ct)
     {
-        IReadOnlyList<SessionInfo> sessions = sessionStore.All;
-        foreach (SessionInfo session in sessions)
+        IReadOnlyList<Session> sessions = repo.GetAll();
+        foreach (Session session in sessions)
         {
             if (ct.IsCancellationRequested) break;
             await ProcessSessionAsync(session, ct);
         }
     }
 
-    private async Task ProcessSessionAsync(SessionInfo session, CancellationToken ct)
+    private async Task ProcessSessionAsync(Session session, CancellationToken ct)
     {
         IReadOnlyList<string> pendingFiles = memoryService.ListPendingFiles(session.Id);
         if (pendingFiles.Count == 0) return;
@@ -71,7 +71,7 @@ public sealed class MemoryPendingProcessorJob(
     }
 
     private async Task ProcessPendingFileAsync(
-        SessionInfo session, string fileName, IChatClient client, CancellationToken ct)
+        Session session, string fileName, IChatClient client, CancellationToken ct)
     {
         try
         {

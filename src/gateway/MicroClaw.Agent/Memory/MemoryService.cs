@@ -21,8 +21,9 @@ public sealed class MemoryService(string sessionsDir)
     private const string DailySubDir = "memory";
     private const string CategoriesFile = "categories.json";
 
-    // 权重衰减策略：最近 3 天全量，3 天以上由 RAG 分类 chunk 提供
-    private const int FullWeightDays = 3;
+    // 权重衰减策略：最近 7 天全量注入，7-30 天仅取首行摘要，超过 30 天忽略
+    private const int FullWeightDays = 7;
+    private const int MaxLookbackDays = 30;
 
     // ── 路径辅助 ──────────────────────────────────────────────────────────────
 
@@ -139,14 +140,56 @@ public sealed class MemoryService(string sessionsDir)
 
     /// <summary>
     /// 构建注入 System Prompt 的记忆上下文。
-    /// 只注入 MEMORY.md（长期分类目录），近期原文已移除以减少 token 消耗，
-    /// 细节由 RAG 分类 chunk 按需检索提供。
+    /// - 长期记忆（MEMORY.md）：始终包含。
+    /// - 近期每日记忆（0-7 天）：全量注入，放入「近期记忆」节。
+    /// - 历史每日记忆（7-30 天）：仅取首行摘要，放入「历史记忆摘要」节。
+    /// - 超过 30 天的每日记忆：忽略。
     /// </summary>
     public string BuildMemoryContext(string sessionId)
     {
+        var parts = new List<string>(3);
+
         string longTerm = GetLongTermMemory(sessionId);
-        if (string.IsNullOrWhiteSpace(longTerm)) return string.Empty;
-        return $"## 长期记忆\n\n{longTerm.Trim()}";
+        if (!string.IsNullOrWhiteSpace(longTerm))
+            parts.Add($"## 长期记忆\n\n{longTerm.Trim()}");
+
+        DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var recentFull = new List<string>();
+        var historySummary = new List<string>();
+
+        foreach (string date in ListDailyMemories(sessionId))
+        {
+            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out DateOnly dateOnly))
+                continue;
+
+            int daysAgo = today.DayNumber - dateOnly.DayNumber;
+            if (daysAgo > MaxLookbackDays) break; // 列表按降序排列，可提前终止
+
+            DailyMemoryInfo? info = GetDailyMemory(sessionId, date);
+            if (info is null) continue;
+
+            if (daysAgo <= FullWeightDays)
+            {
+                recentFull.Add($"### {date}\n\n{info.Content.Trim()}");
+            }
+            else
+            {
+                string firstLine = info.Content.Split('\n')[0].Trim();
+                if (!string.IsNullOrWhiteSpace(firstLine))
+                    historySummary.Add($"{date}: {firstLine}");
+            }
+        }
+
+        if (recentFull.Count > 0)
+            parts.Add($"## 近期记忆\n\n{string.Join("\n\n", recentFull)}");
+
+        if (historySummary.Count > 0)
+            parts.Add($"## 历史记忆摘要\n\n{string.Join("\n", historySummary)}");
+
+        return string.Join("\n\n", parts);
     }
 
     // ── 待归纳消息 (pending) ──────────────────────────────────────────────────

@@ -284,7 +284,7 @@ public sealed class AgentRunner(
                 {
                     Session? sessionInfo = sessionReader.Get(sessionId);
                     if (sessionInfo is not null)
-                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo.ToInfo());
+                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
                 }
 
                 UsageCapture usageCapture = new();

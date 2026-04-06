@@ -17,7 +17,7 @@ namespace MicroClaw.Jobs;
 ///   3. 清理 3 天前的日记忆文件。
 /// </summary>
 public sealed class MemorySummarizationJob(
-    SessionStore sessionStore,
+    ISessionRepository repo,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     MemoryService memoryService,
@@ -85,8 +85,8 @@ public sealed class MemorySummarizationJob(
     /// </summary>
     internal async Task RunSummarizationAsync(DateOnly date, CancellationToken ct)
     {
-        IReadOnlyList<SessionInfo> sessions = sessionStore.All;
-        foreach (SessionInfo session in sessions)
+        IReadOnlyList<Session> sessions = repo.GetAll();
+        foreach (Session session in sessions)
         {
             if (ct.IsCancellationRequested) break;
             await SummarizeSessionAsync(session, date, ct);
@@ -94,14 +94,14 @@ public sealed class MemorySummarizationJob(
     }
 
     private async Task SummarizeSessionAsync(
-        SessionInfo session, DateOnly date, CancellationToken ct)
+        Session session, DateOnly date, CancellationToken ct)
     {
         try
         {
             string dateStr = date.ToString("yyyy-MM-dd");
 
             // 1. 每日记忆：取目标日期的 user/assistant 消息
-            IReadOnlyList<SessionMessage> allMessages = sessionStore.GetMessages(session.Id);
+            IReadOnlyList<SessionMessage> allMessages = repo.GetMessages(session.Id);
             List<SessionMessage> dayMessages = allMessages
                 .Where(m => DateOnly.FromDateTime(m.Timestamp.UtcDateTime) == date)
                 .Where(m => m.Role is "user" or "assistant")
@@ -172,7 +172,7 @@ public sealed class MemorySummarizationJob(
     /// 将日记忆内容按主题分类，更新 Session RAG 分类 chunk 和 MEMORY.md 目录。
     /// </summary>
     private async Task ClassifyToCategoriesAsync(
-        SessionInfo session, string dateStr, IChatClient client, CancellationToken ct)
+        Session session, string dateStr, IChatClient client, CancellationToken ct)
     {
         string existingJson = memoryService.GetCategoriesJson(session.Id);
         DailyMemoryInfo? daily = memoryService.GetDailyMemory(session.Id, dateStr);
@@ -223,7 +223,7 @@ public sealed class MemorySummarizationJob(
     /// <summary>
     /// 删除 3 天前的日记忆文件（不再负责 RAG cleanup，分类 chunk 由分类作业单独管理）。
     /// </summary>
-    private void CleanupOldDailyMemories(SessionInfo session, DateOnly today)
+    private void CleanupOldDailyMemories(Session session, DateOnly today)
     {
         IReadOnlyList<string> allDates = memoryService.ListDailyMemories(session.Id);
         int deletedCount = 0;

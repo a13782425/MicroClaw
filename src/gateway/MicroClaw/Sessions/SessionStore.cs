@@ -14,7 +14,7 @@ namespace MicroClaw.Sessions;
 /// 会话元数据存储在 sessions.yaml（通过 MicroClawConfig），消息历史存储在 {sessionsDir}/{id}/messages.jsonl（JSON Lines 格式）。
 /// </summary>
 public sealed class SessionStore(string sessionsDir)
-    : ISessionReader, ISessionMessageRemover, IAllSessionsReader, ISessionRepository
+    : ISessionMessageRemover, ISessionRepository
 {
     // 新格式（JSON Lines，追加写入）
     private const string JsonlFileName = "messages.jsonl";

@@ -15,7 +15,7 @@ namespace MicroClaw.Jobs;
 /// 向目标 Session 注入提示消息，调用 AI 获取回复，保存消息并通过 SignalR 通知前端。
 /// </summary>
 public sealed class SessionChatService(
-    SessionStore sessionStore,
+    ISessionRepository repo,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IHubContext<GatewayHub> hub,
@@ -24,7 +24,7 @@ public sealed class SessionChatService(
 {
     public async Task<string?> ExecuteAsync(string sessionId, string prompt, CancellationToken ct = default)
     {
-        SessionInfo? session = sessionStore.Get(sessionId);
+        Session? session = repo.Get(sessionId);
         if (session is null)
         {
             logger.LogWarning("CronJob: target session '{SessionId}' not found, skipping.", sessionId);
@@ -48,10 +48,10 @@ public sealed class SessionChatService(
             Timestamp: DateTimeOffset.UtcNow,
             Attachments: null,
             Source: "cron");
-        sessionStore.AddMessage(sessionId, userMsg);
+        repo.AddMessage(sessionId, userMsg);
 
         // 构建消息历史（含刚添加的用户消息）
-        IReadOnlyList<SessionMessage> history = sessionStore.GetMessages(sessionId);
+        IReadOnlyList<SessionMessage> history = repo.GetMessages(sessionId);
         List<ChatMessage> chatMessages = BuildChatMessages(history);
 
         IChatClient client = clientFactory.Create(provider);
@@ -67,7 +67,7 @@ public sealed class SessionChatService(
                 ThinkContent: null,
                 Timestamp: DateTimeOffset.UtcNow,
                 Attachments: null);
-            sessionStore.AddMessage(sessionId, assistantMsg);
+            repo.AddMessage(sessionId, assistantMsg);
 
             // 记录 Token 用量
             if (response.Usage is { } usage)

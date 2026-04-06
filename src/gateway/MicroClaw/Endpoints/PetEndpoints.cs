@@ -4,7 +4,7 @@ using MicroClaw.Pet.Prompt;
 using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.Storage;
-using MicroClaw.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -22,13 +22,13 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet", async (
             string id,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             IEmotionStore emotionStore,
             PetRateLimiter rateLimiter,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -58,11 +58,11 @@ public static class PetEndpoints
         endpoints.MapPost("/sessions/{id}/pet/config", async (
             string id,
             UpdatePetConfigRequest req,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -90,12 +90,12 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/journal", async (
             string id,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             int? limit,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -112,12 +112,12 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/knowledge", async (
             string id,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             PetRagScope ragScope,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -136,12 +136,12 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/prompts", async (
             string id,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             PetPromptStore promptStore,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -166,12 +166,12 @@ public static class PetEndpoints
         endpoints.MapPost("/sessions/{id}/pet/prompts", async (
             string id,
             UpdatePetPromptsRequest req,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             PetPromptStore promptStore,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);
@@ -227,12 +227,12 @@ public static class PetEndpoints
             string id,
             long? from,
             long? to,
-            SessionStore sessionStore,
+            ISessionRepository repo,
             PetStateStore stateStore,
             IEmotionStore emotionStore,
             CancellationToken ct) =>
         {
-            if (sessionStore.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             PetState? state = await stateStore.LoadAsync(id, ct);

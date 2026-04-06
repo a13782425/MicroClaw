@@ -27,8 +27,8 @@ public static class SessionEndpoints
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）
-        endpoints.MapGet("/sessions", (SessionStore store) =>
-            Results.Ok(store.AllTopLevel))
+        endpoints.MapGet("/sessions", (ISessionRepository repo) =>
+            Results.Ok(repo.GetTopLevel().Select(s => s.ToInfo()).ToList()))
             .WithTags("Sessions");
 
         // POST /api/sessions — 创建会话
@@ -163,9 +163,9 @@ public static class SessionEndpoints
 
         // GET /api/sessions/{id}/messages — 获取消息历史
         // 可选分页参数：?skip=0&limit=50（skip 从末尾计数，省略时返回全量）
-        endpoints.MapGet("/sessions/{id}/messages", (string id, SessionStore store, int? skip, int? limit) =>
+        endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionRepository repo, int? skip, int? limit) =>
         {
-            SessionInfo? session = store.Get(id);
+            Session? session = repo.Get(id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -173,12 +173,12 @@ public static class SessionEndpoints
             {
                 int actualSkip = Math.Max(0, skip ?? 0);
                 int actualLimit = Math.Clamp(limit.Value, 1, 500);
-                (IReadOnlyList<SessionMessage> messages, int total) = store.GetMessagesPaged(id, actualSkip, actualLimit);
+                (IReadOnlyList<SessionMessage> messages, int total) = repo.GetMessagesPaged(id, actualSkip, actualLimit);
                 var filtered = messages.Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
                 return Results.Ok(new { messages = filtered, total, hasMore = total > actualSkip + messages.Count });
             }
 
-            var allMessages = store.GetMessages(id)
+            var allMessages = repo.GetMessages(id)
                 .Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
             return Results.Ok(allMessages);
         })
@@ -186,13 +186,13 @@ public static class SessionEndpoints
 
         // POST /api/sessions/{id}/chat — SSE 流式对话
         endpoints.MapPost("/sessions/{id}/chat",
-            async (string id, ChatRequest req, SessionStore store,
+            async (string id, ChatRequest req, ISessionRepository repo,
                    ProviderConfigStore providerStore,
                    AgentStore agentStore, IPetRunner petRunner,
                    IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers,
                    HttpContext ctx, CancellationToken ct) =>
             {
-                SessionInfo? session = store.Get(id);
+                Session? session = repo.Get(id);
                 if (session is null)
                 {
                     ctx.Response.StatusCode = 404;
@@ -223,10 +223,10 @@ public static class SessionEndpoints
                     ThinkContent: null,
                     Timestamp: DateTimeOffset.UtcNow,
                     Attachments: req.Attachments);
-                store.AddMessage(id, userMessage);
+                repo.AddMessage(id, userMessage);
 
                 // 构建历史消息上下文
-                IReadOnlyList<SessionMessage> history = store.GetMessages(id);
+                IReadOnlyList<SessionMessage> history = repo.GetMessages(id);
 
                 // 获取 Session 绑定的 Agent（优先用绑定 AgentId，否则退到默认 Agent）
                 AgentConfig? defaultAgent = string.IsNullOrWhiteSpace(session.AgentId)
@@ -255,7 +255,7 @@ public static class SessionEndpoints
                         // 持久化逻辑：通过管道分发
                         IReadOnlyList<SessionMessage> msgs = persistencePipeline.ProcessItem(item);
                         foreach (SessionMessage msg in msgs)
-                            store.AddMessage(id, msg);
+                            repo.AddMessage(id, msg);
 
                         // 不可见于前端的事件跳过 SSE 推送（仅持久化供 LLM 使用）
                         if (!MessageVisibility.IsVisibleToFrontend(item.Visibility))
@@ -268,7 +268,7 @@ public static class SessionEndpoints
                     // 从管道获取最终聚合的 assistant 消息（含文本 + think + 附件）
                     SessionMessage? finalMessage = persistencePipeline.Finalize();
                     if (finalMessage is not null)
-                        store.AddMessage(id, finalMessage);
+                        repo.AddMessage(id, finalMessage);
 
                     // 发送完成信号
                     string doneData = JsonSerializer.Serialize(new
@@ -306,9 +306,9 @@ public static class SessionEndpoints
         // SOUL.md 已迁移至 Agent 级别（通过 /agents/{id}/dna 管理）
 
         // GET /api/sessions/{id}/dna — 列出固定 DNA 文件（USER / AGENTS）
-        endpoints.MapGet("/sessions/{id}/dna", (string id, SessionStore store, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna", (string id, ISessionRepository repo, SessionDnaService sessionDna) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             return Results.Ok(sessionDna.ListFiles(id));
@@ -316,9 +316,9 @@ public static class SessionEndpoints
         .WithTags("SessionDNA");
 
         // GET /api/sessions/{id}/dna/{fileName} — 读取指定固定 DNA 文件
-        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, SessionStore store, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, ISessionRepository repo, SessionDnaService sessionDna) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             SessionDnaFileInfo? file = sessionDna.Read(id, fileName);
@@ -329,9 +329,9 @@ public static class SessionEndpoints
         .WithTags("SessionDNA");
 
         // POST /api/sessions/{id}/dna — 更新固定 DNA 文件内容（body: fileName + content）
-        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, SessionStore store, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, ISessionRepository repo, SessionDnaService sessionDna) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
                 return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
@@ -348,9 +348,9 @@ public static class SessionEndpoints
         // ── 会话记忆端点（B-02）────────────────────────────────────────────────────
 
         // GET /api/sessions/{id}/memory — 获取长期记忆（MEMORY.md）
-        endpoints.MapGet("/sessions/{id}/memory", (string id, SessionStore store, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory", (string id, ISessionRepository repo, MemoryService memory) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             string content = memory.GetLongTermMemory(id);
@@ -365,9 +365,9 @@ public static class SessionEndpoints
         .WithTags("SessionMemory");
 
         // GET /api/sessions/{id}/memory/daily — 列出所有每日记忆（日期列表，降序）
-        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, SessionStore store, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, ISessionRepository repo, MemoryService memory) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<string> dates = memory.ListDailyMemories(id);
@@ -376,9 +376,9 @@ public static class SessionEndpoints
         .WithTags("SessionMemory");
 
         // GET /api/sessions/{id}/memory/daily/{date} — 获取指定日期记忆（YYYY-MM-DD）
-        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, SessionStore store, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, ISessionRepository repo, MemoryService memory) =>
         {
-            if (store.Get(id) is null)
+            if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             if (!MemoryService.IsValidDateFormat(date))
                 return Results.BadRequest(new { success = false, message = $"Invalid date format: '{date}'. Expected YYYY-MM-DD.", errorCode = "BAD_REQUEST" });

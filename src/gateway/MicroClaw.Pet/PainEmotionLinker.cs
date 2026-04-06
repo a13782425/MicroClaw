@@ -21,7 +21,7 @@ namespace MicroClaw.Pet;
 public sealed class PainEmotionLinker(
     IEmotionStore emotionStore,
     IEmotionRuleEngine emotionRuleEngine,
-    IAllSessionsReader sessionsReader) : IPainEmotionLinker
+    ISessionRepository sessionsReader) : IPainEmotionLinker
 {
     private readonly IEmotionStore _emotionStore = emotionStore
         ?? throw new ArgumentNullException(nameof(emotionStore));
@@ -29,7 +29,7 @@ public sealed class PainEmotionLinker(
     private readonly IEmotionRuleEngine _emotionRuleEngine = emotionRuleEngine
         ?? throw new ArgumentNullException(nameof(emotionRuleEngine));
 
-    private readonly IAllSessionsReader _sessionsReader = sessionsReader
+    private readonly ISessionRepository _sessionsReader = sessionsReader
         ?? throw new ArgumentNullException(nameof(sessionsReader));
 
     /// <inheritdoc/>

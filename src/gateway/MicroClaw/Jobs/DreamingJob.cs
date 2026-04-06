@@ -18,7 +18,7 @@ namespace MicroClaw.Jobs;
 /// </summary>
 public sealed class DreamingJob(
     AgentStore agentStore,
-    SessionStore sessionStore,
+    ISessionRepository repo,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     AgentDnaService agentDnaService,
@@ -71,7 +71,7 @@ public sealed class DreamingJob(
     internal async Task RunDreamingAsync(CancellationToken ct)
     {
         IReadOnlyList<AgentConfig> agents = agentStore.All;
-        IReadOnlyList<SessionInfo> allSessions = sessionStore.All;
+        IReadOnlyList<Session> allSessions = repo.GetAll();
 
         foreach (AgentConfig agent in agents)
         {
@@ -84,13 +84,13 @@ public sealed class DreamingJob(
 
     private async Task DreamForAgentAsync(
         AgentConfig agent,
-        IReadOnlyList<SessionInfo> allSessions,
+        IReadOnlyList<Session> allSessions,
         CancellationToken ct)
     {
         try
         {
             // 找出与该 Agent 关联的所有 Session
-            List<SessionInfo> agentSessions = allSessions
+            List<Session> agentSessions = allSessions
                 .Where(s => s.AgentId == agent.Id)
                 .ToList();
 
@@ -104,7 +104,7 @@ public sealed class DreamingJob(
             DateOnly today = DateOnly.FromDateTime(DateTime.UtcNow);
             var memoryFragments = new List<(string SessionTitle, string Content)>();
 
-            foreach (SessionInfo session in agentSessions)
+            foreach (Session session in agentSessions)
             {
                 for (int daysBack = 1; daysBack <= DailyMemoryLookbackDays; daysBack++)
                 {
@@ -157,9 +157,9 @@ public sealed class DreamingJob(
     /// 优先从该 Agent 关联会话的 ProviderId 中找已启用的 Provider，
     /// 否则 fallback 到第一个全局已启用 Provider。
     /// </summary>
-    private IChatClient? ResolveClient(IReadOnlyList<SessionInfo> agentSessions)
+    private IChatClient? ResolveClient(IReadOnlyList<Session> agentSessions)
     {
-        foreach (SessionInfo session in agentSessions)
+        foreach (Session session in agentSessions)
         {
             ProviderConfig? provider = providerStore.All
                 .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);

@@ -25,7 +25,7 @@ namespace MicroClaw.Jobs;
 /// </remarks>
 public sealed class FeishuDocSyncJob(
     ChannelConfigStore channelConfigStore,
-    SessionStore sessionStore,
+    ISessionRepository repo,
     ILogger<FeishuDocSyncJob> logger) : IScheduledJob
 {
     public string JobName => "feishu-doc-sync";
@@ -85,7 +85,7 @@ public sealed class FeishuDocSyncJob(
         CancellationToken ct)
     {
         // 取所有飞书会话（SessionEntity 未存储 channelId，故取全部 Feishu 会话）
-        IReadOnlyList<SessionInfo> feishuSessions = sessionStore.All
+        IReadOnlyList<Session> feishuSessions = repo.GetAll()
             .Where(s => s.ChannelType == ChannelType.Feishu)
             .ToList();
 
@@ -98,12 +98,12 @@ public sealed class FeishuDocSyncJob(
         int syncedCount = 0;
         int skippedCount = 0;
 
-        foreach (SessionInfo session in feishuSessions)
+        foreach (Session session in feishuSessions)
         {
             if (ct.IsCancellationRequested) break;
 
             IReadOnlyList<SessionMessage> messages =
-                sessionStore.GetMessages(session.Id);
+                repo.GetMessages(session.Id);
 
             if (messages.Count == 0) continue;
 

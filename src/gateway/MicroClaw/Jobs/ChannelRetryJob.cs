@@ -23,7 +23,7 @@ public sealed class ChannelRetryJob(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IChannelSessionService sessionService,
-    SessionStore sessionStore,
+    ISessionRepository repo,
     FeishuMessageProcessor feishuProcessor,
     IAgentMessageHandler? agentHandler,
     ILogger<ChannelRetryJob> logger) : IScheduledJob
@@ -96,7 +96,7 @@ public sealed class ChannelRetryJob(
             }
             else
             {
-                SessionInfo? session = sessionStore.Get(entry.SessionId);
+                Session? session = repo.Get(entry.SessionId);
                 string resolvedProviderId = session?.ProviderId ?? string.Empty;
                 ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
                     ? providerStore.GetDefault()

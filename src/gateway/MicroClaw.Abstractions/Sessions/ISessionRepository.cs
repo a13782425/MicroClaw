@@ -2,11 +2,6 @@ namespace MicroClaw.Abstractions.Sessions;
 
 /// <summary>
 /// Session 聚合根的完整仓储接口（CRUD + 消息操作）。
-/// <para>
-/// 统一替代原有的 <see cref="ISessionReader"/> / <see cref="IAllSessionsReader"/> /
-/// <see cref="ISessionMessageRemover"/> 三个碎片化接口。
-/// 旧接口暂时保留（由 SessionStore 继续实现），并逐步标记 <c>[Obsolete]</c>。
-/// </para>
 /// </summary>
 public interface ISessionRepository
 {

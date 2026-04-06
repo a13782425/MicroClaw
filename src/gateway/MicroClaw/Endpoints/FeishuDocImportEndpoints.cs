@@ -2,7 +2,7 @@
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Abstractions;
-using MicroClaw.Sessions;
+using MicroClaw.Abstractions.Sessions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -21,10 +21,10 @@ public static class FeishuDocImportEndpoints
 
         endpoints.MapPost("/sessions/{id}/dna/import-from-feishu",
             async (string id, FeishuDocImportRequest req, SessionDnaService sessionDna,
-                   SessionStore sessionStore, ChannelConfigStore channelStore,
+                   ISessionRepository repo, ChannelConfigStore channelStore,
                    ILoggerFactory loggerFactory, CancellationToken ct) =>
             {
-                if (sessionStore.Get(id) is null)
+                if (repo.Get(id) is null)
                     return Results.NotFound(new
                     {
                         success = false,

@@ -5,13 +5,12 @@ using Microsoft.Agents.AI;
 namespace MicroClaw.Agent.Sessions;
 
 /// <summary>
-/// 将 MicroClaw <see cref="SessionInfo"/> 的元数据写入 AF <see cref="AgentSession.StateBag"/>，
+/// 将 MicroClaw <see cref="Session"/> 的元数据写入 AF <see cref="AgentSession.StateBag"/>，
 /// 使中间件和 ContextProvider 能够通过标准 AF session 访问会话上下文。
 /// </summary>
 /// <remarks>
 /// <para>
-/// 设计原则：不替换现有的 <see cref="ISessionReader"/>/<see cref="ISessionWriter"/> 体系，
-/// 而是在 <see cref="AgentRunner"/> 调用 <c>chatAgent.CreateSessionAsync()</c> 创建 AF Session 后，
+/// 设计原则：在 <see cref="AgentRunner"/> 调用 <c>chatAgent.CreateSessionAsync()</c> 创建 AF Session 后，
 /// 通过 <see cref="PopulateStateBag"/> 将元数据注入 StateBag。
 /// </para>
 /// <para>
@@ -35,18 +34,18 @@ internal static class AgentSessionAdapter
     // ── 写入 ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 将 <see cref="SessionInfo"/> 的字段写入 <see cref="AgentSessionStateBag"/>。
+    /// 将 <see cref="Session"/> 的字段写入 <see cref="AgentSessionStateBag"/>。
     /// </summary>
-    public static void PopulateStateBag(AgentSessionStateBag bag, SessionInfo sessionInfo)
+    public static void PopulateStateBag(AgentSessionStateBag bag, Session session)
     {
-        bag.SetValue(KeySessionId, sessionInfo.Id, JsonOpts);
-        bag.SetValue(KeyProviderId, sessionInfo.ProviderId, JsonOpts);
-        bag.SetValue(KeyChannelType, sessionInfo.ChannelType.ToString(), JsonOpts);
-        bag.SetValue(KeyChannelId, sessionInfo.ChannelId, JsonOpts);
-        bag.SetValue(KeyTitle, sessionInfo.Title, JsonOpts);
+        bag.SetValue(KeySessionId, session.Id, JsonOpts);
+        bag.SetValue(KeyProviderId, session.ProviderId, JsonOpts);
+        bag.SetValue(KeyChannelType, session.ChannelType.ToString(), JsonOpts);
+        bag.SetValue(KeyChannelId, session.ChannelId, JsonOpts);
+        bag.SetValue(KeyTitle, session.Title, JsonOpts);
 
-        if (sessionInfo.AgentId is not null)
-            bag.SetValue(KeyAgentId, sessionInfo.AgentId, JsonOpts);
+        if (session.AgentId is not null)
+            bag.SetValue(KeyAgentId, session.AgentId, JsonOpts);
     }
 
     // ── 读取 ──────────────────────────────────────────────────────────────

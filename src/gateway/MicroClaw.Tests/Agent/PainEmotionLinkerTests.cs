@@ -17,16 +17,16 @@ public class PainEmotionLinkerTests
     private static PainMemory MakePain(PainSeverity severity, string agentId = AgentId)
         => PainMemory.Create(agentId, "trigger", "consequence", "strategy", severity);
 
-    private static SessionInfo MakeSession(string sessionId, string agentId) =>
-        new SessionInfo(
-            Id: sessionId,
-            Title: "test",
-            ProviderId: "test",
-            IsApproved: true,
-            ChannelType: ChannelType.Web,
-            ChannelId: "web",
-            CreatedAt: DateTimeOffset.UtcNow,
-            AgentId: agentId);
+    private static Session MakeSession(string sessionId, string agentId) =>
+        Session.Reconstitute(
+            id: sessionId,
+            title: "test",
+            providerId: "test",
+            isApproved: true,
+            channelType: ChannelType.Web,
+            channelId: "web",
+            createdAt: DateTimeOffset.UtcNow,
+            agentId: agentId);
 
     // ── 构造参数校验 ──────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ public class PainEmotionLinkerTests
     public void Constructor_NullEmotionStore_Throws()
     {
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var act = () => new PainEmotionLinker(null!, engine, reader);
         act.Should().Throw<ArgumentNullException>();
     }
@@ -43,7 +43,7 @@ public class PainEmotionLinkerTests
     public void Constructor_NullRuleEngine_Throws()
     {
         var store = Substitute.For<IEmotionStore>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var act = () => new PainEmotionLinker(store, null!, reader);
         act.Should().Throw<ArgumentNullException>();
     }
@@ -64,7 +64,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var linker = new PainEmotionLinker(store, engine, reader);
 
         await linker.LinkAsync(MakePain(PainSeverity.Low));
@@ -79,7 +79,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var linker = new PainEmotionLinker(store, engine, reader);
 
         await linker.LinkAsync(MakePain(PainSeverity.Medium));
@@ -94,7 +94,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var current = EmotionState.Default;
         var updated = EmotionState.Default with { Alertness = 72 };
 
@@ -114,7 +114,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var current = EmotionState.Default;
         var updated = EmotionState.Default with { Alertness = 82, Confidence = 22 };
 
@@ -134,7 +134,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         var linker = new PainEmotionLinker(store, engine, reader);
 
         var act = () => linker.LinkAsync(null!);
@@ -149,7 +149,7 @@ public class PainEmotionLinkerTests
 
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
 
         reader.GetAll().Returns(new[] { MakeSession(mySessionId, myAgentId) }.ToList().AsReadOnly());
         store.GetCurrentAsync(mySessionId, Arg.Any<CancellationToken>()).Returns(EmotionState.Default);
@@ -167,7 +167,7 @@ public class PainEmotionLinkerTests
     {
         var store = Substitute.For<IEmotionStore>();
         var engine = Substitute.For<IEmotionRuleEngine>();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
 
         // 没有任何 session 匹配该 agentId
         reader.GetAll().Returns(new[] { MakeSession("other-session", "other-agent") }.ToList().AsReadOnly());
@@ -186,7 +186,7 @@ public class PainEmotionLinkerTests
     {
         var emotionStoreSubstitute = Substitute.For<IEmotionStore>();
         var ruleEngine = new EmotionRuleEngine();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         EmotionState initial = EmotionState.Default;
 
         reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
@@ -214,7 +214,7 @@ public class PainEmotionLinkerTests
         var emotionStoreSubstitute = Substitute.For<IEmotionStore>();
         var ruleEngine = new EmotionRuleEngine();
         var mapper = new EmotionBehaviorMapper();
-        var reader = Substitute.For<IAllSessionsReader>();
+        var reader = Substitute.For<ISessionRepository>();
         EmotionState initial = EmotionState.Default;
 
         reader.GetAll().Returns(new[] { MakeSession(SessionId, AgentId) }.ToList().AsReadOnly());
