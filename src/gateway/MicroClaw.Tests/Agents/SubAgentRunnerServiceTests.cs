@@ -1,34 +1,46 @@
-ï»¿using FluentAssertions;
+using FluentAssertions;
 using MicroClaw.Agent;
 using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Hubs;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;
+using Microsoft.AspNetCore.SignalR;
+using NSubstitute;
 
 namespace MicroClaw.Tests.Agents;
 
 /// <summary>
-/// æµ‹è¯• SubAgentRunnerService çš„æ·±åº¦é™åˆ¶ä¸å¾ªç¯è°ƒç”¨æ£€æµ‹é€»è¾‘ã€‚
-/// æµ‹è¯•ä¸è°ƒç”¨ AgentRunnerï¼ˆæ·±åº¦/å¾ªç¯æ ¡éªŒåœ¨åˆ›å»ºå­ä¼šè¯å‰å³æŠ›å‡ºï¼‰ï¼Œ
-/// å› æ­¤ä½¿ç”¨å ä½ Lazy&lt;AgentRunner&gt;ï¼Œè‹¥è¢«æ„å¤–è®¿é—®åˆ™æŠ›å‡ºå¼‚å¸¸ã€‚
+/// ²âÊÔ SubAgentRunnerService µÄÉî¶ÈÏŞÖÆÓëÑ­»·µ÷ÓÃ¼ì²âÂß¼­¡£
+/// ²âÊÔ²»µ÷ÓÃ AgentRunner£¨Éî¶È/Ñ­»·Ğ£ÑéÔÚ´´½¨×Ó»á»°Ç°¼´Å×³ö£©£¬
+/// Òò´ËÊ¹ÓÃÕ¼Î» Lazy&lt;AgentRunner&gt;£¬Èô±»ÒâÍâ·ÃÎÊÔòÅ×³öÒì³£¡£
 /// </summary>
 public sealed class SubAgentRunnerServiceTests : IDisposable
 {
     private readonly TempDirectoryFixture _tempDir = new();
-    private readonly SessionStore _sessionStore;
+    private readonly SessionService _svc;
     private readonly AgentStore _agentStore;
     private readonly SubAgentRunnerService _service;
 
-    // æ·±åº¦/å¾ªç¯æµ‹è¯•ä¸åº”åˆ°è¾¾ AgentRunnerï¼Œè‹¥æ„å¤–è®¿é—®åˆ™æµ‹è¯•å¤±è´¥
+    // Éî¶È/Ñ­»·²âÊÔ²»Ó¦µ½´ï AgentRunner£¬ÈôÒâÍâ·ÃÎÊÔò²âÊÔÊ§°Ü
     private static readonly Lazy<AgentRunner> UnreachableRunner =
         new(() => throw new InvalidOperationException("AgentRunner should not be reached in this test."));
 
     public SubAgentRunnerServiceTests()
     {
-        _sessionStore = new SessionStore(_tempDir.Path);
+        TestConfigFixture.EnsureInitialized();
+
+        var hubContext = Substitute.For<IHubContext<GatewayHub>>();
+        var clients = Substitute.For<IHubClients>();
+        hubContext.Clients.Returns(clients);
+        clients.All.Returns(Substitute.For<IClientProxy>());
+
         _agentStore = new AgentStore();
-        _service = new SubAgentRunnerService(_sessionStore, _agentStore, UnreachableRunner);
+        var webChannel = new WebSessionChannel(hubContext);
+        _svc = new SessionService(_agentStore, hubContext, [], webChannel, _tempDir.Path);
+        _service = new SubAgentRunnerService(_svc, _agentStore, UnreachableRunner);
     }
 
     public void Dispose()
@@ -36,7 +48,7 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         _tempDir.Dispose();
     }
 
-    // â”€â”€ è¾…åŠ©æ–¹æ³• â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ ¸¨Öú·½·¨ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     private AgentConfig AddAgent(string name, bool isEnabled = true) =>
         _agentStore.Add(new AgentConfig(
@@ -50,19 +62,19 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
             CreatedAtUtc: DateTimeOffset.UtcNow));
 
     /// <summary>
-    /// åˆ›å»ºä¼šè¯é“¾ï¼šrootï¼ˆæ— çˆ¶ï¼‰â†’ level1ï¼ˆparent=rootï¼‰â†’ ... â†’ levelNã€‚
-    /// è¿”å›æœ€æ·±å±‚ä¼šè¯çš„ IDã€‚
+    /// ´´½¨»á»°Á´£ºroot£¨ÎŞ¸¸£©¡ú level1£¨parent=root£©¡ú ... ¡ú levelN¡£
+    /// ·µ»Ø×îÉî²ã»á»°µÄ ID¡£
     /// </summary>
     private string BuildSessionChain(int subAgentLevels, string agentId)
     {
-        // é¡¶å±‚ç”¨æˆ·ä¼šè¯ï¼ˆæ—  ParentSessionIdï¼‰
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
+        // ¶¥²ãÓÃ»§»á»°£¨ÎŞ ParentSessionId£©
+        var root = _svc.CreateSession("root", "provider-1");
         string current = root.Id;
 
         for (int i = 0; i < subAgentLevels; i++)
         {
-            SessionInfo sub = _sessionStore.Create(
-                $"[å­ä»£ç†] level-{i + 1}", "provider-1", ChannelType.Web,
+            var sub = _svc.CreateSession(
+                $"[×Ó´úÀí] level-{i + 1}", "provider-1", ChannelType.Web,
                 agentId: agentId,
                 parentSessionId: current);
             current = sub.Id;
@@ -71,7 +83,7 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         return current;
     }
 
-    // â”€â”€ æ·±åº¦é™åˆ¶æµ‹è¯• â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Éî¶ÈÏŞÖÆ²âÊÔ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     [Fact]
     public async Task RunSubAgentAsync_Depth1_IsAllowed()
@@ -79,10 +91,10 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         var agentA = AddAgent("AgentA");
         var agentB = AddAgent("AgentB");
 
-        // ä»é¡¶å±‚ç”¨æˆ·ä¼šè¯ï¼ˆdepth=0ï¼‰è°ƒç”¨ï¼Œåˆ›å»º depth-1 å­ä»£ç†
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
+        // ´Ó¶¥²ãÓÃ»§»á»°£¨depth=0£©µ÷ÓÃ£¬´´½¨ depth-1 ×Ó´úÀí
+        var root = _svc.CreateSession("root", "provider-1");
 
-        // æœŸå¾…è°ƒç”¨å¤±è´¥äº AgentRunnerï¼ˆå› ä¸º Lazy ä¼šæŠ›å‡ºï¼‰ï¼Œä½†ä¸åº”æå‰å› æ·±åº¦æ£€æŸ¥æŠ›å‡º
+        // ÆÚ´ıµ÷ÓÃÊ§°ÜÓÚ AgentRunner£¨ÒòÎª Lazy »áÅ×³ö£©£¬µ«²»Ó¦ÌáÇ°ÒòÉî¶È¼ì²éÅ×³ö
         Func<Task> act = () => _service.RunSubAgentAsync(agentB.Id, "task", root.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
             .WithMessage("AgentRunner should not be reached in this test.");
@@ -94,7 +106,7 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         var agentA = AddAgent("AgentA");
         var agentB = AddAgent("AgentB");
 
-        // root â†’ S1(agentA) â†’ å°è¯•åˆ›å»º S2(agentB)ï¼Œdepth-2 åº”è¢«å…è®¸
+        // root ¡ú S1(agentA) ¡ú ³¢ÊÔ´´½¨ S2(agentB)£¬depth-2 Ó¦±»ÔÊĞí
         string level1Id = BuildSessionChain(1, agentA.Id);
 
         Func<Task> act = () => _service.RunSubAgentAsync(agentB.Id, "task", level1Id);
@@ -110,7 +122,7 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         var agentC = AddAgent("AgentC");
         var agentD = AddAgent("AgentD");
 
-        // root â†’ S1(agentA) â†’ S2(agentB) â†’ å°è¯•åˆ›å»º S3(agentC)ï¼Œdepth-3 åº”è¢«å…è®¸
+        // root ¡ú S1(agentA) ¡ú S2(agentB) ¡ú ³¢ÊÔ´´½¨ S3(agentC)£¬depth-3 Ó¦±»ÔÊĞí
         string level2Id = BuildSessionChain(2, agentA.Id);
 
         Func<Task> act = () => _service.RunSubAgentAsync(agentC.Id, "task", level2Id);
@@ -124,12 +136,12 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         var agentA = AddAgent("AgentA");
         var agentB = AddAgent("AgentB");
 
-        // root â†’ S1 â†’ S2 â†’ S3ï¼Œå°è¯•åˆ›å»º S4ï¼ˆdepth-4ï¼‰ï¼Œåº”è¢«æ‹’ç»
+        // root ¡ú S1 ¡ú S2 ¡ú S3£¬³¢ÊÔ´´½¨ S4£¨depth-4£©£¬Ó¦±»¾Ü¾ø
         string level3Id = BuildSessionChain(3, agentA.Id);
 
         Func<Task> act = () => _service.RunSubAgentAsync(agentB.Id, "task", level3Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*æ·±åº¦å·²è¾¾ä¸Šé™*");
+            .WithMessage("*Éî¶ÈÒÑ´ïÉÏÏŞ*");
     }
 
     [Fact]
@@ -138,90 +150,90 @@ public sealed class SubAgentRunnerServiceTests : IDisposable
         var agentA = AddAgent("AgentA");
         var agentB = AddAgent("AgentB");
 
-        // è¶…è¿‡ä¸Šé™æ›´å¤šå±‚æ—¶åŒæ ·åº”è¢«æ‹’ç»
+        // ³¬¹ıÉÏÏŞ¸ü¶à²ãÊ±Í¬ÑùÓ¦±»¾Ü¾ø
         string level4Id = BuildSessionChain(4, agentA.Id);
 
         Func<Task> act = () => _service.RunSubAgentAsync(agentB.Id, "task", level4Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*æ·±åº¦å·²è¾¾ä¸Šé™*");
+            .WithMessage("*Éî¶ÈÒÑ´ïÉÏÏŞ*");
     }
 
-    // â”€â”€ å¾ªç¯è°ƒç”¨æ£€æµ‹æµ‹è¯• â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Ñ­»·µ÷ÓÃ¼ì²â²âÊÔ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     [Fact]
     public async Task RunSubAgentAsync_DirectCycle_ThrowsCycleDetected()
     {
-        // A æ­£åœ¨æ‰§è¡Œï¼ˆsession ä¸­ agentId=Aï¼‰ï¼ŒA å°è¯•è°ƒç”¨è‡ªèº« â†’ Aâ†’A å¾ªç¯
+        // A ÕıÔÚÖ´ĞĞ£¨session ÖĞ agentId=A£©£¬A ³¢ÊÔµ÷ÓÃ×ÔÉí ¡ú A¡úA Ñ­»·
         var agentA = AddAgent("AgentA");
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
-        SessionInfo s1 = _sessionStore.Create("[å­ä»£ç†] A", "provider-1", ChannelType.Web,
-            agentId: agentA.Id, parentSessionId: root.Id);
+        SessionInfo root = _svc.CreateSession("root", "provider-1").ToInfo();
+        SessionInfo s1 = _svc.CreateSession("[×Ó´úÀí] A", "provider-1", ChannelType.Web,
+            agentId: agentA.Id, parentSessionId: root.Id).ToInfo();
 
-        // ä» s1 å°è¯•å†æ¬¡è°ƒç”¨ agentA â†’ åº”æ£€æµ‹åˆ°å¾ªç¯
+        // ´Ó s1 ³¢ÊÔÔÙ´Îµ÷ÓÃ agentA ¡ú Ó¦¼ì²âµ½Ñ­»·
         Func<Task> act = () => _service.RunSubAgentAsync(agentA.Id, "task", s1.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*å¾ªç¯å­ä»£ç†è°ƒç”¨*");
+            .WithMessage("*Ñ­»·×Ó´úÀíµ÷ÓÃ*");
     }
 
     [Fact]
     public async Task RunSubAgentAsync_IndirectCycle_ThrowsCycleDetected()
     {
-        // A â†’ B â†’ Aï¼ˆé—´æ¥å¾ªç¯ï¼‰
+        // A ¡ú B ¡ú A£¨¼ä½ÓÑ­»·£©
         var agentA = AddAgent("AgentA");
         var agentB = AddAgent("AgentB");
 
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
-        SessionInfo s1 = _sessionStore.Create("[å­ä»£ç†] A", "provider-1", ChannelType.Web,
-            agentId: agentA.Id, parentSessionId: root.Id);
-        SessionInfo s2 = _sessionStore.Create("[å­ä»£ç†] B", "provider-1", ChannelType.Web,
+        var root2 = _svc.CreateSession("root", "provider-1");
+        var s1 = _svc.CreateSession("[×Ó´úÀí] A", "provider-1", ChannelType.Web,
+            agentId: agentA.Id, parentSessionId: root2.Id);
+        var s2 = _svc.CreateSession("[×Ó´úÀí] B", "provider-1", ChannelType.Web,
             agentId: agentB.Id, parentSessionId: s1.Id);
 
-        // ä» s2ï¼ˆagentB æ‰§è¡Œä¸­ï¼‰å°è¯•è°ƒç”¨ agentA â†’ A åœ¨ç¥–å…ˆé“¾ä¸­
+        // ´Ó s2£¨agentB Ö´ĞĞÖĞ£©³¢ÊÔµ÷ÓÃ agentA ¡ú A ÔÚ×æÏÈÁ´ÖĞ
         Func<Task> act = () => _service.RunSubAgentAsync(agentA.Id, "task", s2.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*å¾ªç¯å­ä»£ç†è°ƒç”¨*");
+            .WithMessage("*Ñ­»·×Ó´úÀíµ÷ÓÃ*");
     }
 
     [Fact]
     public async Task RunSubAgentAsync_DifferentAgentsNoOverlap_IsAllowed()
     {
-        // A â†’ B â†’ Cï¼ˆæ— å¾ªç¯ï¼‰ï¼Œä» s2 è°ƒç”¨ agentCï¼ˆæœªå‡ºç°åœ¨é“¾ä¸­ï¼‰åº”é€šè¿‡æ·±åº¦/å¾ªç¯æ£€æµ‹
-        var agentA = AddAgent("AgentA");
-        var agentB = AddAgent("AgentB");
-        var agentC = AddAgent("AgentC");
+        // A ¡ú B ¡ú C£¨ÎŞÑ­»·£©£¬´Ó s2 µ÷ÓÃ agentC£¨Î´³öÏÖÔÚÁ´ÖĞ£©Ó¦Í¨¹ıÉî¶È/Ñ­»·¼ì²â
+        var agentA2 = AddAgent("AgentA");
+        var agentB2 = AddAgent("AgentB");
+        var agentC2 = AddAgent("AgentC");
 
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
-        SessionInfo s1 = _sessionStore.Create("[å­ä»£ç†] A", "provider-1", ChannelType.Web,
-            agentId: agentA.Id, parentSessionId: root.Id);
-        SessionInfo s2 = _sessionStore.Create("[å­ä»£ç†] B", "provider-1", ChannelType.Web,
-            agentId: agentB.Id, parentSessionId: s1.Id);
+        var rootC = _svc.CreateSession("root", "provider-1");
+        var s1c = _svc.CreateSession("[×Ó´úÀí] A", "provider-1", ChannelType.Web,
+            agentId: agentA2.Id, parentSessionId: rootC.Id);
+        var s2c = _svc.CreateSession("[×Ó´úÀí] B", "provider-1", ChannelType.Web,
+            agentId: agentB2.Id, parentSessionId: s1c.Id);
 
-        // agentC ä¸åœ¨é“¾ä¸­ï¼Œåº”é€šè¿‡æ£€æµ‹ï¼ˆå¤±è´¥äº AgentRunner è€Œéæ·±åº¦/å¾ªç¯æ£€æµ‹ï¼‰
-        Func<Task> act = () => _service.RunSubAgentAsync(agentC.Id, "task", s2.Id);
+        // agentC ²»ÔÚÁ´ÖĞ£¬Ó¦Í¨¹ı¼ì²â£¨Ê§°ÜÓÚ AgentRunner ¶ø·ÇÉî¶È/Ñ­»·¼ì²â£©
+        Func<Task> act = () => _service.RunSubAgentAsync(agentC2.Id, "task", s2c.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
             .WithMessage("AgentRunner should not be reached in this test.");
     }
 
-    // â”€â”€ åŸºç¡€æ ¡éªŒæµ‹è¯• â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ »ù´¡Ğ£Ñé²âÊÔ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     [Fact]
     public async Task RunSubAgentAsync_AgentNotFound_Throws()
     {
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
+        SessionInfo root3 = _svc.CreateSession("root", "provider-1").ToInfo();
 
-        Func<Task> act = () => _service.RunSubAgentAsync("nonexistent-id", "task", root.Id);
+        Func<Task> act = () => _service.RunSubAgentAsync("nonexistent-id", "task", root3.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*ä¸å­˜åœ¨*");
+            .WithMessage("*²»´æÔÚ*");
     }
 
     [Fact]
     public async Task RunSubAgentAsync_DisabledAgent_Throws()
     {
         var disabled = AddAgent("Disabled", isEnabled: false);
-        SessionInfo root = _sessionStore.Create("root", "provider-1");
+        var root4 = _svc.CreateSession("root", "provider-1");
 
-        Func<Task> act = () => _service.RunSubAgentAsync(disabled.Id, "task", root.Id);
+        Func<Task> act = () => _service.RunSubAgentAsync(disabled.Id, "task", root4.Id);
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .WithMessage("*æœªå¯ç”¨*");
+            .WithMessage("*Î´ÆôÓÃ*");
     }
 }

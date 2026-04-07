@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Pet;
@@ -25,10 +26,10 @@ public class PainEmotionLinkerTests
             isApproved: true,
             channelType: ChannelType.Web,
             channelId: "web",
-            createdAt: DateTimeOffset.UtcNow,
+            createdAtMs: DateTimeOffset.UtcNow,
             agentId: agentId);
 
-    // ── 构造参数校验 ──────────────────────────────────────────────────────────
+    // ── 构造参数校�?──────────────────────────────────────────────────────────
 
     [Fact]
     public void Constructor_NullEmotionStore_Throws()
@@ -169,7 +170,7 @@ public class PainEmotionLinkerTests
         var engine = Substitute.For<IEmotionRuleEngine>();
         var reader = Substitute.For<ISessionRepository>();
 
-        // 没有任何 session 匹配该 agentId
+        // 没有任何 session 匹配�?agentId
         reader.GetAll().Returns(new[] { MakeSession("other-session", "other-agent") }.ToList().AsReadOnly());
 
         var linker = new PainEmotionLinker(store, engine, reader);
@@ -203,7 +204,7 @@ public class PainEmotionLinkerTests
 
         saved.Should().NotBeNull();
         saved!.Alertness.Should().BeGreaterThan(initial.Alertness,
-            "高级痛觉应使警觉度上升");
+            "高级痛觉应使警觉度上�?);
         saved.Confidence.Should().BeLessThan(initial.Confidence,
             "高级痛觉应使信心下降");
     }
@@ -232,10 +233,10 @@ public class PainEmotionLinkerTests
         saved.Should().NotBeNull();
         BehaviorProfile profile = mapper.GetProfile(saved!);
         profile.Mode.Should().Be(BehaviorMode.Cautious,
-            "Critical 痛觉后情绪应映射到「谨慎」行为模式");
+            "Critical 痛觉后情绪应映射到「谨慎」行为模�?);
     }
 
-    // ── EmotionEventType 新枚举值 ────────────────────────────────────────────
+    // ── EmotionEventType 新枚举�?────────────────────────────────────────────
 
     [Fact]
     public void EmotionEventType_PainOccurredHigh_ExistsAndIsDistinct()

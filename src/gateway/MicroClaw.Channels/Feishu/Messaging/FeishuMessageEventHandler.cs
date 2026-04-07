@@ -2,6 +2,7 @@ using FeishuNetSdk;
 using FeishuNetSdk.Im.Events;
 using FeishuNetSdk.Services;
 using MicroClaw.Channels;
+using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
@@ -47,7 +48,7 @@ public sealed class FeishuMessageEventHandler(
             return Task.CompletedTask;
 
         string? senderId = body.Sender?.SenderId?.OpenId;
-        ChannelConfig channel = channelContext.Channel;
+        ChannelEntity channel = channelContext.Channel;
         FeishuChannelSettings settings = channelContext.Settings;
 
         // F-F-1: 全链路追踪 — WebSocket 接收步骤

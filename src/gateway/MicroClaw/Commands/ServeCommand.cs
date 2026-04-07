@@ -19,6 +19,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
@@ -38,6 +39,7 @@ using MicroClaw.RAG;
 using MicroClaw.Services;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -190,9 +192,15 @@ public class ServeCommand : Command
 
 		builder.Services.AddSingleton<ConfigService>();
 		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore());
-		builder.Services.AddSingleton<SessionStore>(_ => new SessionStore(sessionsDir));
-		builder.Services.AddSingleton<ISessionRepository>(sp => sp.GetRequiredService<SessionStore>());
-		builder.Services.AddSingleton<IChannelSessionService, ChannelSessionService>();
+		builder.Services.AddSingleton<WebSessionChannel>();
+		builder.Services.AddSingleton<SessionService>(sp => new SessionService(
+			sp.GetRequiredService<AgentStore>(),
+			sp.GetRequiredService<IHubContext<GatewayHub>>(),
+			sp.GetRequiredService<IEnumerable<IChannel>>(),
+			sp.GetRequiredService<WebSessionChannel>(),
+			sessionsDir));
+		builder.Services.AddSingleton<ISessionService>(sp => sp.GetRequiredService<SessionService>());
+		builder.Services.AddSingleton<ISessionRepository>(sp => sp.GetRequiredService<SessionService>());
 
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
 		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
@@ -232,7 +240,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<RagRetrievalContext>();
 		builder.Services.AddSingleton<IRagUsageAuditor, RagUsageAuditor>();
 		builder.Services.AddSingleton<IContextOverflowSummarizer, ContextOverflowSummarizer>();
-		builder.Services.AddSingleton<ISessionMessageRemover>(sp => sp.GetRequiredService<SessionStore>());
 		// Pet 情绪系统服务（基于 Session 隔离，替代原 Agent 级 Emotion 系统）
 		builder.Services.AddSingleton<IEmotionStore>(_ => new EmotionStore(MicroClawConfig.Env));
 		builder.Services.AddSingleton<IEmotionRuleEngine>(_ => new EmotionRuleEngine(new EmotionRuleEngineOptions()));
@@ -408,6 +415,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<CronJobScheduler>();
 		builder.Services.AddSingleton<ICronJobScheduler>(sp => sp.GetRequiredService<CronJobScheduler>());
 		builder.Services.AddHostedService<CronJobStartupService>();
+		builder.Services.AddHostedService<SessionRunner>();
 
 		// Token 用量追踪
 		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();
@@ -442,7 +450,7 @@ public class ServeCommand : Command
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
-		builder.Services.AddSingleton<ChannelConfigStore>(_ => new ChannelConfigStore(MicroClawConfig.Env.ConfigDir));
+		builder.Services.AddSingleton<ChannelConfigStore>();
 
 		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
 		builder.Services.AddSingleton<FeishuTokenCache>();

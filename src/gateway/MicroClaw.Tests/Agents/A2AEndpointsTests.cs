@@ -30,6 +30,7 @@ public sealed class A2AEndpointsTests : IDisposable
 
     public A2AEndpointsTests()
     {
+        TestConfigFixture.EnsureInitialized();
         string configDir = _tempDir.Path;
         _agentStore = new AgentStore();
 

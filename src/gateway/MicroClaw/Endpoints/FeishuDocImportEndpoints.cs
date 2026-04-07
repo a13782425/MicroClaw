@@ -3,6 +3,7 @@ using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Configuration.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -66,7 +67,7 @@ public static class FeishuDocImportEndpoints
             return Results.BadRequest(new { success = false, message = "DocUrlOrToken is required.", errorCode = "BAD_REQUEST" });
 
         // 获取第一个已启用的飞书渠道配置
-        ChannelConfig? feishuConfig = channelStore
+        ChannelEntity? feishuConfig = channelStore
             .GetByType(ChannelType.Feishu)
             .FirstOrDefault(c => c.IsEnabled);
 
@@ -76,7 +77,7 @@ public static class FeishuDocImportEndpoints
                 detail: "未找到已启用的飞书渠道，请先在渠道管理中添加并启用飞书渠道配置。",
                 statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(feishuConfig.SettingsJson) ?? new();
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(feishuConfig.SettingJson) ?? new();
 
         if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
             return Results.Problem(

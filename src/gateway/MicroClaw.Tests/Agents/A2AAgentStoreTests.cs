@@ -14,6 +14,7 @@ public sealed class A2AAgentStoreTests : IDisposable
 
     public A2AAgentStoreTests()
     {
+        TestConfigFixture.EnsureInitialized();
         _store = new AgentStore();
     }
 

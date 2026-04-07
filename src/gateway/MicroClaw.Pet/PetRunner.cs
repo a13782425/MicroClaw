@@ -91,8 +91,8 @@ public sealed class PetRunner(
             petSession = _sessionRepo.Get(rootId);
         }
 
-        // ── 3. 获取 PetContext（懒加载：服务重启后 PetContext 为 null）──
-        PetContext? petCtx = petSession?.PetContext as PetContext;
+        // ── 3. 获取 Pet（懒加载：服务重启后 Pet 为 null）──
+        PetContext? petCtx = petSession?.Pet as PetContext;
         if (petCtx is null && petSession is { IsApproved: true })
         {
             var loaded = await _petContextFactory.LoadAsync(petSession.Id, ct);

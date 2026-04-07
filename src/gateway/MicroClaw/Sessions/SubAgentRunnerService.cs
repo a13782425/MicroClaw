@@ -9,6 +9,7 @@ using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Sessions;
 
@@ -97,7 +98,7 @@ public sealed class SubAgentRunnerService(
                 providerId: providerId,
                 channelType: ChannelType.Web,
                 channelId: ChannelConfigStore.WebChannelId,
-                createdAt: DateTimeOffset.UtcNow,
+                createdAtMs: DateTimeOffset.UtcNow,
                 agentId: agentId,
                 parentSessionId: parentSessionId);
             subSession.Approve();

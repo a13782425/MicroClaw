@@ -27,9 +27,9 @@ public sealed class SessionDomainObjectTests
         session.ProviderId.Should().Be("provider-1");
         session.ChannelType.Should().Be(ChannelType.Web);
         session.ChannelId.Should().Be("web");
-        session.CreatedAt.Should().Be(now);
+        session.CreatedAtMs.Should().Be(now);
         session.IsApproved.Should().BeFalse();
-        session.PetContext.Should().BeNull();
+        session.Pet.Should().BeNull();
         session.AgentId.Should().BeNull();
         session.ParentSessionId.Should().BeNull();
         session.ApprovalReason.Should().BeNull();
@@ -54,7 +54,7 @@ public sealed class SessionDomainObjectTests
         var session = Session.Reconstitute(
             id: "r1", title: "Restored", providerId: "p2",
             isApproved: true, channelType: ChannelType.WeCom, channelId: "wc",
-            createdAt: now, agentId: "a1", parentSessionId: "p0", approvalReason: "ok");
+            createdAtMs: now, agentId: "a1", parentSessionId: "p0", approvalReason: "ok");
 
         session.Id.Should().Be("r1");
         session.IsApproved.Should().BeTrue();
@@ -174,7 +174,7 @@ public sealed class SessionDomainObjectTests
 
         session.AttachPet(petCtx);
 
-        session.PetContext.Should().BeSameAs(petCtx);
+        session.Pet.Should().BeSameAs(petCtx);
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class SessionDomainObjectTests
 
         session.DetachPet();
 
-        session.PetContext.Should().BeNull();
+        session.Pet.Should().BeNull();
     }
 
     // ── Session.PopDomainEvents ────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 using MicroClaw.Abstractions.Events;
 using MicroClaw.Abstractions.Pet;
+using MicroClaw.Configuration.Options;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Abstractions.Sessions;
 
@@ -28,13 +30,16 @@ public sealed class Session
     public bool IsApproved { get; private set; }
     public ChannelType ChannelType { get; private set; }
     public string ChannelId { get; private set; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; private set; }
+    public long CreatedAtMs { get; private set; }
     public string? AgentId { get; private set; }
     public string? ParentSessionId { get; private set; }
     public string? ApprovalReason { get; private set; }
 
-    /// <summary>当前 Session 关联的 Per-Session Pet 上下文。null 表示 Pet 尚未初始化。</summary>
-    public IPetContext? PetContext { get; private set; }
+    /// <summary>当前 Session 关联的渠道对象（含发送能力）。null 表示渠道尚未附加。</summary>
+    public ISessionChannel? Channel { get; private set; }
+
+    /// <summary>当前 Session 关联的宠物对象。null 表示 Pet 尚未初始化。</summary>
+    public IPet? Pet { get; private set; }
 
     // ── 工厂方法 ────────────────────────────────────────────────────────────
 
@@ -46,7 +51,7 @@ public sealed class Session
         bool isApproved,
         ChannelType channelType,
         string channelId,
-        DateTimeOffset createdAt,
+        long createdAtMs,
         string? agentId = null,
         string? parentSessionId = null,
         string? approvalReason = null)
@@ -59,7 +64,7 @@ public sealed class Session
             IsApproved = isApproved,
             ChannelType = channelType,
             ChannelId = channelId,
-            CreatedAt = createdAt,
+            CreatedAtMs = createdAtMs,
             AgentId = agentId,
             ParentSessionId = parentSessionId,
             ApprovalReason = approvalReason,
@@ -73,7 +78,7 @@ public sealed class Session
         string providerId,
         ChannelType channelType,
         string channelId,
-        DateTimeOffset createdAt,
+        long createdAtMs,
         string? agentId = null,
         string? parentSessionId = null)
     {
@@ -85,7 +90,7 @@ public sealed class Session
             IsApproved = false,
             ChannelType = channelType,
             ChannelId = channelId,
-            CreatedAt = createdAt,
+            CreatedAtMs = createdAtMs,
             AgentId = agentId,
             ParentSessionId = parentSessionId,
         };
@@ -122,18 +127,26 @@ public sealed class Session
         Title = newTitle;
     }
 
-    // ── Pet 关联 ──────────────────────────────────────────────────────────────
+    // ── Channel 关联 ─────────────────────────────────────────────────────────────
 
-    /// <summary>附加 Pet 上下文（审批后由 PetFactory 调用）。</summary>
-    public void AttachPet(IPetContext ctx)
+    /// <summary>附加渠道对象（创建时由 SessionService 调用）。</summary>
+    public void AttachChannel(ISessionChannel channel)
     {
-        PetContext = ctx;
+        Channel = channel;
     }
 
-    /// <summary>分离 Pet 上下文（Session 删除流程中调用）。</summary>
+    // ── Pet 关联 ──────────────────────────────────────────────────────────────
+
+    /// <summary>附加 Pet 对象（审批后由 PetFactory 调用）。</summary>
+    public void AttachPet(IPet pet)
+    {
+        Pet = pet;
+    }
+
+    /// <summary>分离 Pet 对象（Session 删除流程中调用）。</summary>
     public void DetachPet()
     {
-        PetContext = null;
+        Pet = null;
     }
 
     // ── 领域事件 ──────────────────────────────────────────────────────────────
@@ -154,6 +167,6 @@ public sealed class Session
     /// <summary>将领域对象转换为 API 层 DTO（向后兼容，前端无需改动）。</summary>
     public SessionInfo ToInfo() => new(
         Id, Title, ProviderId, IsApproved,
-        ChannelType, ChannelId, CreatedAt,
+        ChannelType, ChannelId, TimeUtils.FromMs(CreatedAtMs),
         AgentId, ParentSessionId, ApprovalReason);
 }

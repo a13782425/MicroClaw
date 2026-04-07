@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using FeishuNetSdk.Services;
-using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,7 +18,7 @@ public sealed class FeishuWebSocketManager(
     ChannelConfigStore channelStore,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
-    IChannelSessionService sessionService,
+    ISessionService sessionService,
     ILoggerFactory loggerFactory,
     FeishuTokenCache? tokenCache = null,
     IAgentMessageHandler? agentHandler = null) : BackgroundService
@@ -35,16 +35,16 @@ public sealed class FeishuWebSocketManager(
     /// <summary>对比当前连接与数据库配置，启停对应渠道的 WebSocket 连接。</summary>
     public async Task SyncChannelsAsync(CancellationToken ct)
     {
-        IReadOnlyList<ChannelConfig> feishuChannels = channelStore.GetByType(ChannelType.Feishu);
+        IReadOnlyList<ChannelEntity> feishuChannels = channelStore.GetByType(ChannelType.Feishu);
 
         // 需要活跃的渠道 ID 集合
         HashSet<string> desiredIds = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (ChannelConfig channel in feishuChannels)
+        foreach (ChannelEntity channel in feishuChannels)
         {
             if (!channel.IsEnabled) continue;
 
-            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(channel.SettingsJson);
+            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(channel.SettingJson);
             if (settings is null) continue;
             if (!string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -67,7 +67,7 @@ public sealed class FeishuWebSocketManager(
         }
     }
 
-    private async Task StartConnectionAsync(ChannelConfig channel, FeishuChannelSettings settings,
+    private async Task StartConnectionAsync(ChannelEntity channel, FeishuChannelSettings settings,
         CancellationToken ct)
     {
         string maskedSecret = ChannelConfigStore.MaskSecret(settings.AppSecret);
@@ -113,7 +113,7 @@ public sealed class FeishuWebSocketManager(
     /// 若 WssService 意外停止（非主动关闭），则使用指数退避（5s→10s→20s→40s→60s 封顶）立即触发重连。
     /// </summary>
     private async Task MonitorConnectionAsync(
-        ChannelConfig channel, FeishuChannelSettings settings,
+        ChannelEntity channel, FeishuChannelSettings settings,
         IHostedService[] hostedServices, CancellationToken monitorCt)
     {
         // 找到 SDK 的 WssService（BackgroundService），监听其 ExecuteTask
@@ -179,10 +179,10 @@ public sealed class FeishuWebSocketManager(
             delaySeconds = Math.Min(delaySeconds * 2, 60);
 
             // 如果配置已变更（禁用或切换模式），不再重连
-            ChannelConfig? current = channelStore.GetByType(ChannelType.Feishu)
+            ChannelEntity? current = channelStore.GetByType(ChannelType.Feishu)
                 .FirstOrDefault(c => c.Id == channel.Id);
             if (current is null || !current.IsEnabled) return;
-            FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingsJson);
+            FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingJson);
             if (currentSettings is null ||
                 !string.Equals(currentSettings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
                 return;
@@ -205,7 +205,7 @@ public sealed class FeishuWebSocketManager(
     }
 
     /// <summary>构建渠道独立 ServiceProvider，包含 SDK、WebSocket、事件处理器。</summary>
-    private ServiceProvider BuildChannelServiceProvider(ChannelConfig channel, FeishuChannelSettings settings)
+    private ServiceProvider BuildChannelServiceProvider(ChannelEntity channel, FeishuChannelSettings settings)
     {
         ServiceCollection services = new();
 

@@ -16,6 +16,7 @@ public static class YamlSectionWriter
 
     /// <summary>
     /// 将 <paramref name="value"/> 以 <c>{sectionKey}: ...</c> 格式写入 <paramref name="filePath"/>。
+    /// 若文件被其他进程占用，最多重试 5 次（每次间隔 20ms）。
     /// </summary>
     public static void Write(string filePath, string sectionKey, object value)
     {
@@ -23,12 +24,26 @@ public static class YamlSectionWriter
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        if (File.Exists(filePath))
-            File.Copy(filePath, filePath + ".bak", overwrite: true);
-
         // Wrap in section key so the output is:  sectionKey:\n  field: value
         var wrapper = new Dictionary<string, object> { { sectionKey, value } };
         string yaml = Serializer.Serialize(wrapper);
-        File.WriteAllText(filePath, yaml);
+
+        const int maxRetries = 5;
+        const int retryDelayMs = 20;
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Copy(filePath, filePath + ".bak", overwrite: true);
+
+                File.WriteAllText(filePath, yaml);
+                return;
+            }
+            catch (IOException) when (attempt < maxRetries - 1)
+            {
+                Thread.Sleep(retryDelayMs);
+            }
+        }
     }
 }

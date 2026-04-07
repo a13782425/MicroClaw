@@ -1,11 +1,11 @@
-namespace MicroClaw.Infrastructure;
+namespace MicroClaw.Utils;
 
 /// <summary>
 /// 全局时间基准工具类。
 /// 所有数据库时间字段统一存储为相对于 BaseTime 的毫秒偏移（long）或天数偏移（int）。
 /// API 层仍返回 ISO 8601 字符串，由 Store 层负责转换。
 /// </summary>
-public static class TimeBase
+public static class TimeUtils
 {
     /// <summary>
     /// 全局基准时间：2026-01-01 00:00:00 UTC

@@ -1,3 +1,4 @@
+using MicroClaw.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -52,8 +53,8 @@ public sealed class UsageTracker(
     {
         if (inputTokens <= 0 && outputTokens <= 0) return;
 
-        int today = TimeBase.TodayDay();
-        long nowMs = TimeBase.NowMs();
+        int today = TimeUtils.TodayDay();
+        long nowMs = TimeUtils.NowMs();
 
         await using GatewayDbContext db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -114,8 +115,8 @@ public sealed class UsageTracker(
         CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        int monthStartDay = TimeBase.ToDay(new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero));
-        int todayDay = TimeBase.TodayDay();
+        int monthStartDay = TimeUtils.ToDay(new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero));
+        int todayDay = TimeUtils.TodayDay();
 
         decimal monthTotal = await db.Usages
             .Where(u => u.AgentId == agentId && u.DayNumber >= monthStartDay && u.DayNumber <= todayDay)

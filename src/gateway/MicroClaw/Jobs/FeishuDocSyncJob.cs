@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
-using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.Logging;
@@ -42,13 +42,13 @@ public sealed class FeishuDocSyncJob(
     /// <summary>扫描所有启用了 SummaryDocToken 的飞书渠道，并按各自间隔决定是否触发同步。</summary>
     private async Task SyncAllChannelsAsync(CancellationToken ct)
     {
-        foreach (ChannelConfig config in channelConfigStore.All)
+        foreach (ChannelEntity config in channelConfigStore.All)
         {
             if (ct.IsCancellationRequested) break;
 
             if (config.ChannelType != ChannelType.Feishu || !config.IsEnabled) continue;
 
-            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingsJson);
+            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingJson);
             if (settings is null
                 || string.IsNullOrWhiteSpace(settings.SummaryDocToken)
                 || settings.SummaryIntervalMinutes <= 0)
@@ -79,7 +79,7 @@ public sealed class FeishuDocSyncJob(
     /// 为指定飞书渠道同步所有飞书会话在 <paramref name="fromUtc"/> 之后的新消息到文档。
     /// </summary>
     private async Task SyncChannelAsync(
-        ChannelConfig config,
+        ChannelEntity config,
         FeishuChannelSettings settings,
         DateTimeOffset fromUtc,
         CancellationToken ct)

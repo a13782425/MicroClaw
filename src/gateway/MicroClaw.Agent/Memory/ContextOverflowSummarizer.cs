@@ -32,7 +32,7 @@ public interface IContextOverflowSummarizer
 /// </summary>
 public sealed class ContextOverflowSummarizer(
     MemoryService memoryService,
-    ISessionMessageRemover messageRemover,
+    ISessionRepository sessionRepository,
     ILogger<ContextOverflowSummarizer> logger) : IContextOverflowSummarizer
 {
     // Per-session dedup: last overflow message ID that was archived
@@ -63,7 +63,7 @@ public sealed class ContextOverflowSummarizer(
 
             // 2. Remove those messages from the active message history
             var ids = overflowMessages.Select(m => m.Id).ToHashSet();
-            messageRemover.RemoveMessages(sessionId, ids);
+            sessionRepository.RemoveMessages(sessionId, ids);
 
             // 3. Update dedup marker
             _lastArchivedMessageId[sessionId] = lastMsgId;

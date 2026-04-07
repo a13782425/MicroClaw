@@ -2,6 +2,7 @@
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Services;
@@ -22,7 +23,7 @@ public sealed class ChannelRetryJob(
     ChannelConfigStore channelConfigStore,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
-    IChannelSessionService sessionService,
+    ISessionService sessionService,
     ISessionRepository repo,
     FeishuMessageProcessor feishuProcessor,
     IAgentMessageHandler? agentHandler,
@@ -72,7 +73,7 @@ public sealed class ChannelRetryJob(
         try
         {
             // 加载渠道配置
-            ChannelConfig? channel = channelConfigStore.GetById(entry.ChannelId);
+            ChannelEntity? channel = channelConfigStore.GetById(entry.ChannelId);
             if (channel is null || !channel.IsEnabled)
             {
                 logger.LogWarning("F-D-1 渠道 {ChannelId} 不存在或已禁用，放弃重试 messageId={MessageId}",
@@ -82,7 +83,7 @@ public sealed class ChannelRetryJob(
                 return;
             }
 
-            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channel.SettingsJson) ?? new();
+            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channel.SettingJson) ?? new();
 
             // 获取会话历史
             IReadOnlyList<SessionMessage> history = sessionService.GetMessages(entry.SessionId);

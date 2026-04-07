@@ -1,64 +1,137 @@
 ﻿using System.Text.Json;
 using System.Text.RegularExpressions;
-using MicroClaw.Abstractions;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Channels;
 
-public sealed class ChannelConfigStore(string configDir)
-    : YamlFileStore<ChannelConfigEntity>(Path.Combine(configDir, "channels.yaml"), e => e.Id)
+/// <summary>
+/// 渠道配置存储，作为 <see cref="MicroClawConfig"/> 的线程安全二次封装。
+/// 所有写操作通过 <see cref="MicroClawConfig.Save{T}"/> 持久化到 channels.yaml。
+/// </summary>
+public sealed class ChannelConfigStore
 {
-    public IReadOnlyList<ChannelConfig> All
-        => GetAll().Select(ToConfig).ToList().AsReadOnly();
+    private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
 
-    public ChannelConfig? GetById(string id)
-        => GetYamlById(id) is { } e ? ToConfig(e) : null;
-
-    public IReadOnlyList<ChannelConfig> GetByType(ChannelType type)
+    public IReadOnlyList<ChannelEntity> All
     {
-        string typeStr = SerializeChannelType(type);
-        return GetAll().Where(e => e.ChannelType == typeStr).Select(ToConfig).ToList().AsReadOnly();
-    }
-
-    public ChannelConfig Add(ChannelConfig config)
-    {
-        ChannelConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
-        SetYaml(entity);
-        return ToConfig(entity);
-    }
-
-    public ChannelConfig? Update(string id, ChannelConfig incoming)
-    {
-        var updated = MutateYaml(id, e =>
+        get
         {
-            e.DisplayName = incoming.DisplayName;
-            e.ChannelType = SerializeChannelType(incoming.ChannelType);
-            e.IsEnabled = incoming.IsEnabled;
-            e.SettingsJson = MergeSettings(e.SettingsJson, incoming.SettingsJson, incoming.ChannelType);
-        });
-        return updated is null ? null : ToConfig(updated);
+            _lock.EnterReadLock();
+            try { return [.. MicroClawConfig.Get<ChannelOptions>().Channels.Select(WithResolvedEnvVars)]; }
+            finally { _lock.ExitReadLock(); }
+        }
     }
 
-    public bool Delete(string id) => RemoveYaml(id);
+    public ChannelEntity? GetById(string id)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            var e = MicroClawConfig.Get<ChannelOptions>().Channels.FirstOrDefault(c => c.Id == id);
+            return e is null ? null : WithResolvedEnvVars(e);
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    public IReadOnlyList<ChannelEntity> GetByType(ChannelType type)
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return [.. MicroClawConfig.Get<ChannelOptions>().Channels
+                .Where(c => c.ChannelType == type)
+                .Select(WithResolvedEnvVars)];
+        }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    public ChannelEntity Add(ChannelEntity channel)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<ChannelOptions>();
+            var withId = new ChannelEntity
+            {
+                Id          = MicroClawUtils.GetUniqueId(),
+                DisplayName = channel.DisplayName,
+                ChannelType = channel.ChannelType,
+                IsEnabled   = channel.IsEnabled,
+                SettingJson = channel.SettingJson,
+            };
+            MicroClawConfig.Save(new ChannelOptions { Channels = [.. opts.Channels, withId] });
+            return withId;
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
+
+    public ChannelEntity? Update(string id, ChannelEntity incoming)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<ChannelOptions>();
+            var existing = opts.Channels.FirstOrDefault(c => c.Id == id);
+            if (existing is null) return null;
+
+            var merged = new ChannelEntity
+            {
+                Id          = id,
+                DisplayName = incoming.DisplayName,
+                ChannelType = incoming.ChannelType,
+                IsEnabled   = incoming.IsEnabled,
+                SettingJson = MergeSettings(existing.SettingJson, incoming.SettingJson, incoming.ChannelType),
+            };
+            var updatedList = opts.Channels.Select(c => c.Id == id ? merged : c).ToList();
+            MicroClawConfig.Save(new ChannelOptions { Channels = updatedList });
+            return merged;
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
+
+    public bool Delete(string id)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            var opts = MicroClawConfig.Get<ChannelOptions>();
+            var newList = opts.Channels.Where(c => c.Id != id).ToList();
+            if (newList.Count == opts.Channels.Count) return false;
+            MicroClawConfig.Save(new ChannelOptions { Channels = newList });
+            return true;
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
 
     /// <summary>幂等创建内置 Web Channel。系统启动时调用，若已存在则跳过。</summary>
     public void EnsureWebChannel()
     {
-        if (ContainsYaml(WebChannelId)) return;
-        SetYaml(new ChannelConfigEntity
+        _lock.EnterWriteLock();
+        try
         {
-            Id = WebChannelId,
-            DisplayName = "Web Console",
-            ChannelType = "web",
-            IsEnabled = true,
-            SettingsJson = "{}"
-        });
+            var opts = MicroClawConfig.Get<ChannelOptions>();
+            if (opts.Channels.Any(c => c.Id == WebChannelId)) return;
+            MicroClawConfig.Save(new ChannelOptions
+            {
+                Channels = [.. opts.Channels, new ChannelEntity
+                {
+                    Id          = WebChannelId,
+                    DisplayName = "Web Console",
+                    ChannelType = ChannelType.Web,
+                    IsEnabled   = true,
+                    SettingJson = "{}",
+                }]
+            });
+        }
+        finally { _lock.ExitWriteLock(); }
     }
 
     /// <summary>内置 Web Channel 的固定 ID。</summary>
     public const string WebChannelId = "web";
 
-    private static string MergeSettings(string? existingJson, string incomingJson, ChannelType type)
+    private static string MergeSettings(string existingJson, string incomingJson, ChannelType type)
     {
         if (type != ChannelType.Feishu) return incomingJson;
 
@@ -70,13 +143,12 @@ public sealed class ChannelConfigStore(string configDir)
         string encryptKey        = IsMasked(incoming.EncryptKey)        ? existing.EncryptKey        : incoming.EncryptKey;
         string verificationToken = IsMasked(incoming.VerificationToken) ? existing.VerificationToken : incoming.VerificationToken;
 
-        FeishuChannelSettings merged = incoming with
+        return JsonSerializer.Serialize(incoming with
         {
-            AppSecret = appSecret,
-            EncryptKey = encryptKey,
-            VerificationToken = verificationToken
-        };
-        return JsonSerializer.Serialize(merged);
+            AppSecret         = appSecret,
+            EncryptKey        = encryptKey,
+            VerificationToken = verificationToken,
+        });
     }
 
     private static bool IsMasked(string value) =>
@@ -85,44 +157,24 @@ public sealed class ChannelConfigStore(string configDir)
     private static FeishuChannelSettings? DeserializeFeishuSettings(string? json) =>
         FeishuChannelSettings.TryParse(json);
 
-    private static ChannelConfig ToConfig(ChannelConfigEntity e) =>
-        new()
-        {
-            Id = e.Id,
-            DisplayName = e.DisplayName,
-            ChannelType = ParseChannelType(e.ChannelType),
-            IsEnabled = e.IsEnabled,
-            SettingsJson = ResolveEnvVars(e.SettingsJson) ?? "{}"
-        };
-
-    private static ChannelConfigEntity ToEntity(ChannelConfig c) =>
-        new()
-        {
-            Id = c.Id,
-            DisplayName = c.DisplayName,
-            ChannelType = SerializeChannelType(c.ChannelType),
-            IsEnabled = c.IsEnabled,
-            SettingsJson = c.SettingsJson
-        };
-
     public static ChannelType ParseChannelType(string? value) =>
         value?.ToLowerInvariant() switch
         {
-            "web" => ChannelType.Web,
+            "web"    => ChannelType.Web,
             "feishu" => ChannelType.Feishu,
-            "wecom" => ChannelType.WeCom,
+            "wecom"  => ChannelType.WeCom,
             "wechat" => ChannelType.WeChat,
-            _ => ChannelType.Web
+            _        => ChannelType.Web
         };
 
     public static string SerializeChannelType(ChannelType type) =>
         type switch
         {
-            ChannelType.Web => "web",
+            ChannelType.Web    => "web",
             ChannelType.Feishu => "feishu",
-            ChannelType.WeCom => "wecom",
+            ChannelType.WeCom  => "wecom",
             ChannelType.WeChat => "wechat",
-            _ => "web"
+            _                  => "web"
         };
 
     public static string MaskSettingsSecrets(string? settingsJson, ChannelType type)
@@ -134,13 +186,12 @@ public sealed class ChannelConfigStore(string configDir)
             FeishuChannelSettings? settings = DeserializeFeishuSettings(settingsJson);
             if (settings is null) return "{}";
 
-            FeishuChannelSettings masked = settings with
+            return JsonSerializer.Serialize(settings with
             {
-                AppSecret = MaskSecret(settings.AppSecret),
-                EncryptKey = MaskSecret(settings.EncryptKey),
-                VerificationToken = MaskSecret(settings.VerificationToken)
-            };
-            return JsonSerializer.Serialize(masked);
+                AppSecret         = MaskSecret(settings.AppSecret),
+                EncryptKey        = MaskSecret(settings.EncryptKey),
+                VerificationToken = MaskSecret(settings.VerificationToken),
+            });
         }
 
         return settingsJson;
@@ -152,6 +203,16 @@ public sealed class ChannelConfigStore(string configDir)
         if (secret.Length <= 8) return "***";
         return secret[..4] + "***" + secret[^4..];
     }
+
+    private static ChannelEntity WithResolvedEnvVars(ChannelEntity e) =>
+        new()
+        {
+            Id          = e.Id,
+            DisplayName = e.DisplayName,
+            ChannelType = e.ChannelType,
+            IsEnabled   = e.IsEnabled,
+            SettingJson = ResolveEnvVars(e.SettingJson) ?? "{}",
+        };
 
     private static string? ResolveEnvVars(string? value)
     {

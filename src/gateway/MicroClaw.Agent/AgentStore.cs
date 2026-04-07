@@ -5,6 +5,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure;
 using MicroClaw.Providers;
 using MicroClaw.Tools;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Agent;
 
@@ -204,7 +205,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
                 Name = name,
                 Description = description,
                 IsEnabled = true,
-                CreatedAtMs = TimeBase.ToMs(DateTimeOffset.UtcNow),
+                CreatedAtMs = TimeUtils.ToMs(DateTimeOffset.UtcNow),
                 SourcePlugin = sourceTag,
             };
             MicroClawConfig.Save(new AgentsOptions
@@ -265,7 +266,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
         DeserializeList<string>(e.DisabledSkillIdsJson),
         DeserializeList<string>(e.DisabledMcpServerIdsJson),
         DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
-        TimeBase.FromMs(e.CreatedAtMs),
+        TimeUtils.FromMs(e.CreatedAtMs),
         e.IsDefault,
         e.ContextWindowMessages,
         e.ExposeAsA2A,
@@ -285,7 +286,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
             ? JsonSerializer.Serialize(c.DisabledMcpServerIds, JsonOpts) : null,
         ToolGroupConfigsJson = c.ToolGroupConfigs.Count > 0
             ? JsonSerializer.Serialize(c.ToolGroupConfigs, JsonOpts) : null,
-        CreatedAtMs = TimeBase.ToMs(c.CreatedAtUtc),
+        CreatedAtMs = TimeUtils.ToMs(c.CreatedAtUtc),
         IsDefault = c.IsDefault,
         ContextWindowMessages = c.ContextWindowMessages,
         ExposeAsA2A = c.ExposeAsA2A,
@@ -347,7 +348,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
             disabledSkillIds: DeserializeList<string>(e.DisabledSkillIdsJson),
             disabledMcpServerIds: DeserializeList<string>(e.DisabledMcpServerIdsJson),
             toolGroupConfigs: DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
-            createdAtUtc: TimeBase.FromMs(e.CreatedAtMs),
+            createdAtUtc: TimeUtils.FromMs(e.CreatedAtMs),
             isDefault: e.IsDefault,
             contextWindowMessages: e.ContextWindowMessages,
             exposeAsA2A: e.ExposeAsA2A,

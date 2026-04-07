@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration;
 using MicroClaw.Sessions;
 using MicroClaw.Services;
@@ -12,7 +13,7 @@ public static class SandboxEndpoints
         // GET /api/sessions/{id}/sandbox — 递归列出会话沙盒文件树
         endpoints.MapGet("/sessions/{id}/sandbox", (
             string id,
-            SessionStore store,
+            ISessionRepository store,
             SandboxTokenService tokenSvc) =>
         {
             if (store.Get(id) is null)
@@ -31,7 +32,7 @@ public static class SandboxEndpoints
         endpoints.MapPost("/sessions/{id}/sandbox/token", (
             string id,
             SandboxTokenRequest req,
-            SessionStore store,
+            ISessionRepository store,
             SandboxTokenService tokenSvc) =>
         {
             if (store.Get(id) is null)

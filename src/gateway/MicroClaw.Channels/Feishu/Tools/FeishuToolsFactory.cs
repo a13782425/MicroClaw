@@ -1,4 +1,4 @@
-﻿using MicroClaw.Abstractions;
+﻿using MicroClaw.Configuration.Options;
 using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -28,7 +28,7 @@ public sealed class FeishuToolsFactory(
         if (context.ChannelType != ChannelType.Feishu || string.IsNullOrWhiteSpace(context.ChannelId))
             return Task.FromResult(ToolProviderResult.Empty);
 
-        ChannelConfig? config = channelConfigStore.GetById(context.ChannelId);
+        ChannelEntity? config = channelConfigStore.GetById(context.ChannelId);
         if (config is null)
             return Task.FromResult(ToolProviderResult.Empty);
 
@@ -38,9 +38,9 @@ public sealed class FeishuToolsFactory(
 
     // ── 内部实现 ──────────────────────────────────────────────────────────
 
-    private IReadOnlyList<AIFunction> CreateToolsFromConfig(ChannelConfig config)
+    private IReadOnlyList<AIFunction> CreateToolsFromConfig(ChannelEntity config)
     {
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingsJson) ?? new();
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
 
         if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
         {

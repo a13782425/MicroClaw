@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using FluentAssertions;
 using MicroClaw.Channels;
-using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 
 namespace MicroClaw.Tests.Models;
@@ -70,18 +70,18 @@ public sealed class ProviderConfigTests
     }
 }
 
-public sealed class ChannelConfigTests
+public sealed class ChannelEntityTests
 {
     [Fact]
     public void DefaultValues_AreCorrect()
     {
-        var config = new ChannelConfig();
+        var config = new ChannelEntity();
 
         config.Id.Should().BeEmpty();
         config.DisplayName.Should().BeEmpty();
         config.ChannelType.Should().Be(ChannelType.Web);
         config.IsEnabled.Should().BeTrue();
-        config.SettingsJson.Should().Be("{}");
+        config.SettingJson.Should().Be("{}");
     }
 
     [Fact]

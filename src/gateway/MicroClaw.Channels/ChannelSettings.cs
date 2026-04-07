@@ -1,6 +1,5 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using MicroClaw.Abstractions;
 
 namespace MicroClaw.Channels;
 
@@ -183,23 +182,3 @@ public sealed record WeChatChannelSettings
         catch { return null; }
     }
 }
-
-public sealed record ChannelConfig
-{
-    public string Id { get; init; } = string.Empty;
-    public string DisplayName { get; init; } = string.Empty;
-    public ChannelType ChannelType { get; init; }
-    public bool IsEnabled { get; init; } = true;
-    public string SettingsJson { get; init; } = "{}";
-}
-
-/// <summary>渠道连通性测试结果。</summary>
-/// <param name="ConnectivityHint">
-/// F-E-3: 可选的连通性提示（如 Webhook 模式判断为内网环境时，建议切换 WebSocket）。
-/// null 表示无额外提示。
-/// </param>
-public sealed record ChannelTestResult(
-    bool Success,
-    string Message,
-    long LatencyMs,
-    string? ConnectivityHint = null);

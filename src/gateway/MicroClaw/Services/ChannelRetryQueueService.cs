@@ -1,6 +1,7 @@
 ﻿using MicroClaw.Abstractions;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +35,7 @@ public sealed class ChannelRetryQueueService(
             return;
         }
 
-        long nowMs = TimeBase.NowMs();
+        long nowMs = TimeUtils.NowMs();
         ChannelRetryQueueEntity entity = new()
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -59,7 +60,7 @@ public sealed class ChannelRetryQueueService(
     /// <summary>获取所有 pending 且到期的条目。</summary>
     public async Task<List<ChannelRetryQueueEntity>> GetPendingAsync(CancellationToken ct = default)
     {
-        long nowMs = TimeBase.NowMs();
+        long nowMs = TimeUtils.NowMs();
         await using GatewayDbContext db = await dbFactory.CreateDbContextAsync(ct);
         return await db.ChannelRetryQueue
             .Where(e => e.Status == "pending" && e.NextRetryAtMs <= nowMs)
@@ -95,7 +96,7 @@ public sealed class ChannelRetryQueueService(
         {
             // 指数退避：60s → 120s → 240s
             int delaySeconds = 60 * (int)Math.Pow(2, newRetryCount - 1);
-            entity.NextRetryAtMs = TimeBase.ToMs(DateTimeOffset.UtcNow.AddSeconds(delaySeconds));
+            entity.NextRetryAtMs = TimeUtils.ToMs(DateTimeOffset.UtcNow.AddSeconds(delaySeconds));
         }
 
         await db.SaveChangesAsync(ct);

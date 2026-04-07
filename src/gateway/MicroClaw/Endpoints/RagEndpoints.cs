@@ -259,12 +259,12 @@ public static class RagEndpoints
 
         // POST /api/sessions/{sessionId}/rag/vectorize — 手动将会话全部消息写入 pending JSONL 等待向量化，并从活跃历史中移除
         endpoints.MapPost("/sessions/{sessionId}/rag/vectorize",
-            (string sessionId, SessionStore sessionStore, MemoryService memoryService, ISessionMessageRemover messageRemover) =>
+            (string sessionId, ISessionRepository sessionRepository, MemoryService memoryService) =>
             {
                 if (string.IsNullOrWhiteSpace(sessionId))
                     return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });
 
-                var allMessages = sessionStore.GetMessages(sessionId);
+                var allMessages = sessionRepository.GetMessages(sessionId);
                 if (allMessages.Count == 0)
                     return Results.BadRequest(new { success = false, message = "该会话暂无消息。", errorCode = "NO_MESSAGES" });
 
@@ -273,7 +273,7 @@ public static class RagEndpoints
 
                 // 2. 从 messages.jsonl 中移除已归档的消息
                 var ids = allMessages.Select(m => m.Id).ToHashSet();
-                messageRemover.RemoveMessages(sessionId, ids);
+                sessionRepository.RemoveMessages(sessionId, ids);
 
                 return Results.Ok(new { success = true, messageCount = allMessages.Count, pendingFile });
             })

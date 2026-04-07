@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Tools;
 
@@ -118,7 +119,7 @@ public sealed class McpServerConfigStore(string configDir)
             ? JsonSerializer.Deserialize<Dictionary<string, string>>(e.HeadersJson)
             : null,
         IsEnabled: e.IsEnabled,
-        CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs),
+        CreatedAtUtc: TimeUtils.FromMs(e.CreatedAtMs),
         Source: (McpServerSource)e.Source,
         PluginId: e.PluginId,
         PluginName: e.PluginName);
@@ -134,7 +135,7 @@ public sealed class McpServerConfigStore(string configDir)
         Url           = c.Url,
         HeadersJson   = c.Headers is not null ? JsonSerializer.Serialize(c.Headers, JsonOpts) : null,
         IsEnabled     = c.IsEnabled,
-        CreatedAtMs   = TimeBase.ToMs(c.CreatedAtUtc),
+        CreatedAtMs   = TimeUtils.ToMs(c.CreatedAtUtc),
         Source        = (int)c.Source,
         PluginId      = c.PluginId,
         PluginName    = c.PluginName,

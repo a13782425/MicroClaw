@@ -1,5 +1,6 @@
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Endpoints;
@@ -22,8 +23,8 @@ public static class UsageEndpoints
                 if ((endDate.ToDateTime(TimeOnly.MinValue) - startDate.ToDateTime(TimeOnly.MinValue)).TotalDays > 31)
                     return Results.BadRequest(new { success = false, message = "查询范围最多 31 天。", errorCode = "BAD_REQUEST" });
 
-                int startDay = TimeBase.ToDay(startDate);
-                int endDay = TimeBase.ToDay(endDate);
+                int startDay = TimeUtils.ToDay(startDate);
+                int endDay = TimeUtils.ToDay(endDate);
 
                 await using GatewayDbContext db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -45,7 +46,7 @@ public static class UsageEndpoints
                     .GroupBy(u => u.DayNumber)
                     .OrderBy(g => g.Key)
                     .Select(g => new DailyUsage(
-                        Date: TimeBase.FromDay(g.Key).ToString("yyyy-MM-dd"),
+                        Date: TimeUtils.FromDay(g.Key).ToString("yyyy-MM-dd"),
                         InputTokens: g.Sum(u => u.InputTokens),
                         OutputTokens: g.Sum(u => u.OutputTokens),
                         EstimatedCostUsd: CalcCost(g)))
@@ -87,7 +88,7 @@ public static class UsageEndpoints
                 var dailyByProvider = records
                     .GroupBy(u => new { u.DayNumber, u.ProviderId, u.ProviderName })
                     .Select(g => new DailyProviderUsage(
-                        Date: TimeBase.FromDay(g.Key.DayNumber).ToString("yyyy-MM-dd"),
+                        Date: TimeUtils.FromDay(g.Key.DayNumber).ToString("yyyy-MM-dd"),
                         ProviderId: g.Key.ProviderId,
                         ProviderName: g.Key.ProviderName,
                         EstimatedCostUsd: CalcCost(g)))

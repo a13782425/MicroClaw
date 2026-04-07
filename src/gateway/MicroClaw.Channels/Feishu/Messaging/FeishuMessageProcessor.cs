@@ -8,6 +8,7 @@ using FeishuNetSdk.Im.Events;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +23,7 @@ namespace MicroClaw.Channels.Feishu;
 public sealed class FeishuMessageProcessor(
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
-    IChannelSessionService sessionService,
+    ISessionService sessionService,
     ILogger<FeishuMessageProcessor> logger,
     IAgentMessageHandler? agentHandler = null,
     IChannelRetryQueue? retryQueue = null,
@@ -41,7 +42,7 @@ public sealed class FeishuMessageProcessor(
         string? senderId,
         string chatId,
         string messageId,
-        ChannelConfig channel,
+        ChannelEntity channel,
         FeishuChannelSettings settings,
         string chatType = "p2p",
         IReadOnlyList<string>? mentionedOpenIds = null,

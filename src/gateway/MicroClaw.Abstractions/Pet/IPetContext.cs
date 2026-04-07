@@ -23,7 +23,7 @@ public enum PetContextState
 /// 实现类为 <c>MicroClaw.Pet.PetContext</c>。
 /// </para>
 /// </summary>
-public interface IPetContext
+public interface IPetContext : IPet
 {
     /// <summary>当前 Pet 生命周期状态。</summary>
     PetContextState State { get; }
@@ -31,7 +31,7 @@ public interface IPetContext
     /// <summary>
     /// Pet 是否处于可编排状态（<see cref="PetContextState.Active"/> 且 PetConfig.Enabled = true）。
     /// </summary>
-    bool IsEnabled { get; }
+    new bool IsEnabled { get; }
 
     /// <summary>
     /// 将本 PetContext 标记为"脏"，提示持久化层在下次合适时机将状态回写磁盘。

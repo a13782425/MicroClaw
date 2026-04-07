@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Agent.Workflows;
 
@@ -30,7 +31,7 @@ public sealed class WorkflowStore(string configDir)
 
     public WorkflowConfig? Update(string id, WorkflowConfig config)
     {
-        long now = TimeBase.ToMs(DateTimeOffset.UtcNow);
+        long now = TimeUtils.ToMs(DateTimeOffset.UtcNow);
         var updated = MutateYaml(id, e =>
         {
             e.Name = config.Name;
@@ -70,13 +71,13 @@ public sealed class WorkflowStore(string configDir)
             Edges: edges,
             EntryNodeId: e.EntryNodeId,
             DefaultProviderId: e.DefaultProviderId,
-            CreatedAtUtc: TimeBase.FromMs(e.CreatedAtMs),
-            UpdatedAtUtc: TimeBase.FromMs(e.UpdatedAtMs));
+            CreatedAtUtc: TimeUtils.FromMs(e.CreatedAtMs),
+            UpdatedAtUtc: TimeUtils.FromMs(e.UpdatedAtMs));
     }
 
     private static WorkflowConfigEntity ToEntity(WorkflowConfig c)
     {
-        long now = TimeBase.ToMs(DateTimeOffset.UtcNow);
+        long now = TimeUtils.ToMs(DateTimeOffset.UtcNow);
         return new WorkflowConfigEntity
         {
             Id = c.Id,

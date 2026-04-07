@@ -1,7 +1,8 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
-using MicroClaw.Channels.Models;
-using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Channel;
+using MicroClaw.Configuration.Models;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Channels.WeChat;
 
@@ -18,13 +19,13 @@ public sealed class WeChatChannel : IChannel
         return Task.CompletedTask;
     }
 
-    public Task<string?> HandleWebhookAsync(string body, ChannelConfig channelConfig, CancellationToken cancellationToken = default)
+    public Task<string?> HandleWebhookAsync(string body, ChannelEntity channelEntity, CancellationToken cancellationToken = default)
     {
         // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
         return Task.FromResult<string?>(null);
     }
 
-    public Task<ChannelTestResult> TestConnectionAsync(ChannelConfig config, CancellationToken cancellationToken = default)
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity channelEntity, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new ChannelTestResult(false, "微信渠道连通性测试尚未实现", 0));
     }

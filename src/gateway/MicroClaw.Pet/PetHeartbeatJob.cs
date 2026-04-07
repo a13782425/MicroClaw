@@ -37,8 +37,8 @@ public sealed class PetHeartbeatJob(
         {
             if (ct.IsCancellationRequested) break;
             if (!session.IsApproved) continue;
-            // 若已有 PetContext 且明确禁用，提前过滤，避免创建无效任务
-            if (session.PetContext is { IsEnabled: false }) continue;
+            // 若已有 Pet 且明确禁用，提前过滤，避免创建无效任务
+            if (session.Pet is { IsEnabled: false }) continue;
             candidates.Add(session.Id);
         }
 

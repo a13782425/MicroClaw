@@ -83,7 +83,7 @@ public sealed class SessionLifecycleIntegrationTests
         {
             WasCalled = true;
             var session = repo.Get(domainEvent.SessionId);
-            if (session?.PetContext is IDisposable disposable)
+            if (session?.Pet is IDisposable disposable)
             {
                 disposable.Dispose();
                 session.DetachPet();
@@ -125,7 +125,7 @@ public sealed class SessionLifecycleIntegrationTests
             isApproved: false,
             channelType: ChannelType.Web,
             channelId: "",
-            createdAt: DateTimeOffset.UtcNow);
+            createdAtMs: DateTimeOffset.UtcNow);
         repo.Save(session);
         return session;
     }
@@ -173,8 +173,8 @@ public sealed class SessionLifecycleIntegrationTests
 
         // 4. 验证
         approvalHandler.WasCalled.Should().BeTrue("审批事件处理器应被调用");
-        session.PetContext.Should().NotBeNull("PetContext 应在审批后附加到 Session");
-        session.PetContext!.IsEnabled.Should().BeTrue("PetContext 应处于启用状态");
+        session.Pet.Should().NotBeNull("Pet 应在审批后附加到 Session");
+        session.Pet!.IsEnabled.Should().BeTrue("Pet 应处于启用状态");
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public sealed class SessionLifecycleIntegrationTests
         retrieved!.ProviderId.Should().Be("gpt4o-prod",
             "AgentRunner 依赖 ProviderId 路由到正确 LLM 提供商");
         retrieved.IsApproved.Should().BeTrue("只有已审批 Session 才能处理消息");
-        retrieved.PetContext.Should().NotBeNull("已审批 Session 应有 PetContext 可供 PetRunner 使用");
+        retrieved.Pet.Should().NotBeNull("已审批 Session 应有 Pet 可供 PetRunner 使用");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -277,7 +277,7 @@ public sealed class SessionLifecycleIntegrationTests
         // 创建
         var session = CreateAndSaveSession(repo, "完整生命周期测试", "provider-full");
         session.IsApproved.Should().BeFalse();
-        session.PetContext.Should().BeNull();
+        session.Pet.Should().BeNull();
 
         // 审批 + 事件分发（handler 会 AttachPet）
         session.Approve("admin");
@@ -287,7 +287,7 @@ public sealed class SessionLifecycleIntegrationTests
         approvalHandler.WasCalled.Should().BeTrue();
         session.IsApproved.Should().BeTrue();
         session.ProviderId.Should().Be("provider-full");
-        session.PetContext.Should().NotBeNull();
+        session.Pet.Should().NotBeNull();
         petCtx.IsEnabled.Should().BeTrue();
 
         // 删除 + 事件分发（handler 会 Dispose PetContext）

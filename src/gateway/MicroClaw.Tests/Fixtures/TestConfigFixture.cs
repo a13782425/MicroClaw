@@ -12,6 +12,18 @@ internal static class TestConfigFixture
     private static readonly object Lock = new();
 
     /// <summary>
+    /// 进程级临时目录，用于隔离测试对 yaml 配置文件的写入，避免与 bin/Debug 混淆造成文件锁。
+    /// 目录在进程生命周期内保持不变（不同测试类共享同一 configDir，但与工作目录隔离）。
+    /// </summary>
+    private static readonly string TempConfigDir = Path.Combine(
+        Path.GetTempPath(), "microclaw-test-config", Guid.NewGuid().ToString("N"));
+
+    static TestConfigFixture()
+    {
+        Directory.CreateDirectory(TempConfigDir);
+    }
+
+    /// <summary>
     /// 确保 MicroClawConfig 已用默认配置初始化。线程安全。
     /// </summary>
     public static void EnsureInitialized()
@@ -20,7 +32,7 @@ internal static class TestConfigFixture
         {
             MicroClawConfig.Reset();
             var config = new ConfigurationBuilder().Build();
-            MicroClawConfig.Initialize(config, string.Empty);
+            MicroClawConfig.Initialize(config, TempConfigDir);
         }
     }
 
@@ -35,7 +47,7 @@ internal static class TestConfigFixture
             var config = new ConfigurationBuilder()
                 .AddInMemoryCollection(values)
                 .Build();
-            MicroClawConfig.Initialize(config, string.Empty);
+            MicroClawConfig.Initialize(config, TempConfigDir);
         }
     }
 }

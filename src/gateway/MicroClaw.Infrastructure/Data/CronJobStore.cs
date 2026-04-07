@@ -1,3 +1,4 @@
+using MicroClaw.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace MicroClaw.Infrastructure.Data;
@@ -27,15 +28,15 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
     {
         CronJobEntity entity = new()
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = MicroClawUtils.GetUniqueId(),
             Name = name,
             Description = description,
             CronExpression = cronExpression,
-            RunAtMs = runAtUtc.HasValue ? TimeBase.ToMs(runAtUtc.Value) : null,
+            RunAtMs = runAtUtc.HasValue ? TimeUtils.ToMs(runAtUtc.Value) : null,
             TargetSessionId = targetSessionId,
             Prompt = prompt,
             IsEnabled = true,
-            CreatedAtMs = TimeBase.NowMs(),
+            CreatedAtMs = TimeUtils.NowMs(),
         };
 
         using GatewayDbContext db = factory.CreateDbContext();
@@ -76,7 +77,7 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         using GatewayDbContext db = factory.CreateDbContext();
         CronJobEntity? entity = db.CronJobs.Find(id);
         if (entity is null) return;
-        entity.LastRunAtMs = TimeBase.ToMs(lastRunAt);
+        entity.LastRunAtMs = TimeUtils.ToMs(lastRunAt);
         db.SaveChanges();
     }
 
@@ -85,9 +86,9 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
     {
         CronJobRunLogEntity entity = new()
         {
-            Id = Guid.NewGuid().ToString("N"),
+            Id = MicroClawUtils.GetUniqueId(),
             CronJobId = cronJobId,
-            TriggeredAtMs = TimeBase.NowMs(),
+            TriggeredAtMs = TimeUtils.NowMs(),
             Status = status,
             DurationMs = durationMs,
             ErrorMessage = errorMessage,
@@ -122,14 +123,14 @@ public sealed class CronJobStore(IDbContextFactory<GatewayDbContext> factory)
         e.TargetSessionId,
         e.Prompt,
         e.IsEnabled,
-        TimeBase.FromMs(e.CreatedAtMs),
-        e.LastRunAtMs.HasValue ? TimeBase.FromMs(e.LastRunAtMs.Value) : null,
-        e.RunAtMs.HasValue ? TimeBase.FromMs(e.RunAtMs.Value) : null);
+        TimeUtils.FromMs(e.CreatedAtMs),
+        e.LastRunAtMs.HasValue ? TimeUtils.FromMs(e.LastRunAtMs.Value) : null,
+        e.RunAtMs.HasValue ? TimeUtils.FromMs(e.RunAtMs.Value) : null);
 
     private static CronJobRunLog ToLogRecord(CronJobRunLogEntity e) => new(
         e.Id,
         e.CronJobId,
-        TimeBase.FromMs(e.TriggeredAtMs),
+        TimeUtils.FromMs(e.TriggeredAtMs),
         e.Status,
         e.DurationMs,
         e.ErrorMessage,

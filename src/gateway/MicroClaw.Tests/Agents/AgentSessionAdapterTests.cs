@@ -1,18 +1,19 @@
 ﻿using FluentAssertions;
 using MicroClaw.Agent.Sessions;
 using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
 using Microsoft.Agents.AI;
 
 namespace MicroClaw.Tests.Agents;
 
 /// <summary>
-/// AgentSessionAdapter 单元测试
-/// 覆盖 StateBag 填写、键读取、null SessionInfo 分支等场景
+/// AgentSessionAdapter ��Ԫ����
+/// ���� StateBag ��д������ȡ��null SessionInfo ��֧�ȳ���
 /// </summary>
 public sealed class AgentSessionAdapterTests
 {
-    // ── PopulateStateBag ──────────────────────────────────────────────────
+    // ���� PopulateStateBag ����������������������������������������������������������������������������������������������������
 
     [Fact]
     public void PopulateStateBag_WithFullSessionInfo_SetsAllCoreKeys()
@@ -108,12 +109,12 @@ public sealed class AgentSessionAdapterTests
             isApproved: true,
             channelType: ChannelType.Web,
             channelId: "c",
-            createdAt: DateTimeOffset.UtcNow,
+            createdAtMs: DateTimeOffset.UtcNow,
             agentId: null);
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
-        bag.Count.Should().Be(5, "agentId 为 null 时不写入 StateBag");
+        bag.Count.Should().Be(5, "agentId Ϊ null ʱ��д�� StateBag");
         bool found = bag.TryGetValue<string>(AgentSessionAdapter.KeyAgentId, out _, new());
         found.Should().BeFalse();
     }
@@ -134,7 +135,7 @@ public sealed class AgentSessionAdapterTests
             .Should().Be("Second");
     }
 
-    // ── GetStringValue ────────────────────────────────────────────────────
+    // ���� GetStringValue ��������������������������������������������������������������������������������������������������������
 
     [Fact]
     public void GetStringValue_NonExistentKey_ReturnsNull()
@@ -167,7 +168,7 @@ public sealed class AgentSessionAdapterTests
             .Should().BeNull();
     }
 
-    // ── Key 常量完整性验证 ──────────────────────────────────────────────
+    // ���� Key ������������֤ ��������������������������������������������������������������������������������������������
 
     [Fact]
     public void KeyConstants_AllHaveMcPrefix()
@@ -199,7 +200,7 @@ public sealed class AgentSessionAdapterTests
         keys.Should().OnlyHaveUniqueItems();
     }
 
-    // ── 辅助方法 ────────────────────────────────────────────────────────
+    // ���� �������� ����������������������������������������������������������������������������������������������������������������
 
     private static Session BuildSessionInfo(
         string id,
@@ -215,6 +216,6 @@ public sealed class AgentSessionAdapterTests
             isApproved: true,
             channelType: channelType,
             channelId: channelId,
-            createdAt: DateTimeOffset.UtcNow,
+            createdAtMs: DateTimeOffset.UtcNow,
             agentId: agentId);
 }

@@ -11,6 +11,7 @@ public sealed class ProviderConfigStoreTests : IDisposable
 
     public ProviderConfigStoreTests()
     {
+        TestConfigFixture.EnsureInitialized();
         _store = new ProviderConfigStore();
     }
 

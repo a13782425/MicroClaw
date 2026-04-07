@@ -13,6 +13,7 @@ public static class MicroClawConfig
     private static Dictionary<Type, object>? _options;
     private static string? _configDir;
     private static int _initialized;
+    private static readonly SemaphoreSlim SaveLock = new(1, 1);
 
     /// <summary>
     /// 已注册的 Options 类型到配置段名称的映射。
@@ -28,6 +29,7 @@ public static class MicroClawConfig
         [typeof(RagOptions)] = "rag",
         [typeof(SandboxOptions)] = "sandbox",
         [typeof(EmotionOptions)] = "emotion",
+        [typeof(ChannelOptions)] = "channel",
     };
 
     /// <summary>
@@ -42,6 +44,7 @@ public static class MicroClawConfig
         [typeof(EmotionOptions)] = "emotion.yaml",
         [typeof(SkillOptions)] = "skills.yaml",
         [typeof(RagOptions)] = "rag.yaml",
+        [typeof(ChannelOptions)] = "channels.yaml",
     };
 
     /// <summary>
@@ -91,7 +94,7 @@ public static class MicroClawConfig
 
     /// <summary>
     /// 热更新内存中的配置实例，并同步写回对应的 YAML 文件。
-    /// 需在 <see cref="Initialize"/> 之后调用；调用方负责自身的线程安全。
+    /// 需在 <see cref="Initialize"/> 之后调用；线程安全（内部序列化写操作）。
     /// </summary>
     public static void Save<T>(T value) where T : class, new()
     {
@@ -109,7 +112,15 @@ public static class MicroClawConfig
                 $"配置类型 {typeof(T).Name} 未在 SectionMap 中注册。");
 
         string filePath = Path.Combine(_configDir, fileName);
-        YamlSectionWriter.Write(filePath, sectionKey, value);
+        SaveLock.Wait();
+        try
+        {
+            YamlSectionWriter.Write(filePath, sectionKey, value);
+        }
+        finally
+        {
+            SaveLock.Release();
+        }
     }
 
     /// <summary>

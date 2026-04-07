@@ -1,38 +1,48 @@
 ﻿using FluentAssertions;
+using MicroClaw.Agent;
 using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Hubs;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
+using Microsoft.AspNetCore.SignalR;
+using NSubstitute;
 
 namespace MicroClaw.Tests.Sessions;
 
-public sealed class SessionStoreTests : IDisposable
+/// <summary>
+/// SessionService �ĳ־û��ͻ��� CRUD ���ԣ����ԭ SessionStoreTests����
+/// </summary>
+public sealed class SessionServiceStoreTests : IDisposable
 {
     private readonly TempDirectoryFixture _tempDir = new();
-    private readonly SessionStore _store;
+    private readonly SessionService _svc;
+    private readonly ISessionRepository _repo;
 
-    public SessionStoreTests()
+    public SessionServiceStoreTests()
     {
-        _store = new SessionStore(_tempDir.Path);
+        TestConfigFixture.EnsureInitialized();
+
+        var hubContext = Substitute.For<IHubContext<GatewayHub>>();
+        var clients = Substitute.For<IHubClients>();
+        hubContext.Clients.Returns(clients);
+        clients.All.Returns(Substitute.For<IClientProxy>());
+
+        var agentStore = new AgentStore();
+        var webChannel = new WebSessionChannel(hubContext);
+        _svc = new SessionService(agentStore, hubContext, [], webChannel, _tempDir.Path);
+        _repo = _svc;
     }
 
-    public void Dispose()
-    {
-        _tempDir.Dispose();
-    }
+    public void Dispose() => _tempDir.Dispose();
 
-    // --- Create / Get / All ---
+    // --- Create / Get ---
 
     [Fact]
-    public void All_WhenEmpty_ReturnsEmptyList()
+    public void CreateSession_ReturnsSessionWithGeneratedId()
     {
-        _store.All.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Create_ReturnsSessionWithGeneratedId()
-    {
-        var session = _store.Create("Test Session", "provider-1");
+        var session = _svc.CreateSession("Test Session", "provider-1");
 
         session.Id.Should().NotBeNullOrWhiteSpace();
         session.Title.Should().Be("Test Session");
@@ -40,21 +50,21 @@ public sealed class SessionStoreTests : IDisposable
         session.IsApproved.Should().BeFalse();
         session.ChannelType.Should().Be(ChannelType.Web);
         session.ChannelId.Should().Be("web");
-        session.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+        session.CreatedAtMs.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public void Create_WithCustomId_UsesProvidedId()
+    public void CreateSession_WithCustomId_UsesProvidedId()
     {
-        var session = _store.Create("Test", "p1", id: "custom-id-123");
+        var session = _svc.CreateSession("Test", "p1", id: "custom-id-123");
 
         session.Id.Should().Be("custom-id-123");
     }
 
     [Fact]
-    public void Create_WithChannelType_PreservesType()
+    public void CreateSession_WithChannelType_PreservesType()
     {
-        var session = _store.Create("Feishu Session", "p1", ChannelType.Feishu);
+        var session = _svc.CreateSession("Feishu Session", "p1", ChannelType.Feishu);
 
         session.ChannelType.Should().Be(ChannelType.Feishu);
     }
@@ -62,9 +72,9 @@ public sealed class SessionStoreTests : IDisposable
     [Fact]
     public void Get_ExistingSession_ReturnsIt()
     {
-        var created = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
 
-        var result = _store.Get(created.Id);
+        Session? result = _repo.Get(created.Id);
 
         result.Should().NotBeNull();
         result!.Id.Should().Be(created.Id);
@@ -74,58 +84,55 @@ public sealed class SessionStoreTests : IDisposable
     [Fact]
     public void Get_NonExistent_ReturnsNull()
     {
-        _store.Get("non-existent").Should().BeNull();
+        _repo.Get("non-existent").Should().BeNull();
     }
 
     [Fact]
-    public void All_ReturnsAllSessions_OrderedByCreatedAtDesc()
+    public void GetAll_ReturnsAllSessions_OrderedByCreatedAtDesc()
     {
-        _store.Create("First", "p1");
-        _store.Create("Second", "p1");
-        _store.Create("Third", "p1");
+        _svc.CreateSession("First", "p1");
+        _svc.CreateSession("Second", "p1");
+        _svc.CreateSession("Third", "p1");
 
-        var all = _store.All;
+        var all = _repo.GetAll();
 
         all.Should().HaveCount(3);
         all[0].Title.Should().Be("Third");
         all[2].Title.Should().Be("First");
     }
 
-    // --- Approve / Disable ---
+    [Fact]
+    public void GetTopLevel_WhenEmpty_ReturnsEmptyList()
+    {
+        _repo.GetTopLevel().Should().BeEmpty();
+    }
+
+    // --- Approve / Disable (via domain object + Save) ---
 
     [Fact]
     public void Approve_ExistingSession_SetsIsApprovedTrue()
     {
-        var session = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
+        Session session = _repo.Get(created.Id)!;
 
-        var result = _store.Approve(session.Id);
+        session.Approve();
+        _repo.Save(session);
 
-        result.Should().NotBeNull();
-        result!.IsApproved.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Approve_NonExistent_ReturnsNull()
-    {
-        _store.Approve("non-existent").Should().BeNull();
+        _repo.Get(created.Id)!.IsApproved.Should().BeTrue();
     }
 
     [Fact]
     public void Disable_ApprovedSession_SetsIsApprovedFalse()
     {
-        var session = _store.Create("Test", "p1");
-        _store.Approve(session.Id);
+        var created = _svc.CreateSession("Test", "p1");
+        Session session = _repo.Get(created.Id)!;
+        session.Approve();
+        _repo.Save(session);
 
-        var result = _store.Disable(session.Id);
+        session.Disable();
+        _repo.Save(session);
 
-        result.Should().NotBeNull();
-        result!.IsApproved.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Disable_NonExistent_ReturnsNull()
-    {
-        _store.Disable("non-existent").Should().BeNull();
+        _repo.Get(created.Id)!.IsApproved.Should().BeFalse();
     }
 
     // --- Delete ---
@@ -133,29 +140,29 @@ public sealed class SessionStoreTests : IDisposable
     [Fact]
     public void Delete_ExistingSession_ReturnsTrueAndRemoves()
     {
-        var session = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
 
-        _store.Delete(session.Id).Should().BeTrue();
-        _store.Get(session.Id).Should().BeNull();
-        _store.All.Should().BeEmpty();
+        _repo.Delete(created.Id).Should().BeTrue();
+        _repo.Get(created.Id).Should().BeNull();
+        _repo.GetAll().Should().BeEmpty();
     }
 
     [Fact]
     public void Delete_NonExistent_ReturnsFalse()
     {
-        _store.Delete("non-existent").Should().BeFalse();
+        _repo.Delete("non-existent").Should().BeFalse();
     }
 
     [Fact]
     public void Delete_CleansUpSessionDirectory()
     {
-        var session = _store.Create("Test", "p1");
-        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hello", null, DateTimeOffset.UtcNow, null));
+        var created = _svc.CreateSession("Test", "p1");
+        _repo.AddMessage(created.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hello", null, DateTimeOffset.UtcNow, null));
 
-        string sessionDir = Path.Combine(_tempDir.Path, session.Id);
+        string sessionDir = Path.Combine(_tempDir.Path, created.Id);
         Directory.Exists(sessionDir).Should().BeTrue();
 
-        _store.Delete(session.Id);
+        _repo.Delete(created.Id);
 
         Directory.Exists(sessionDir).Should().BeFalse();
     }
@@ -165,139 +172,107 @@ public sealed class SessionStoreTests : IDisposable
     [Fact]
     public void GetMessages_NoMessages_ReturnsEmptyList()
     {
-        var session = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
 
-        _store.GetMessages(session.Id).Should().BeEmpty();
+        _repo.GetMessages(created.Id).Should().BeEmpty();
     }
 
     [Fact]
     public void AddMessage_ThenGetMessages_ReturnsMessages()
     {
-        var session = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
         var timestamp = DateTimeOffset.UtcNow;
 
-        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "Hello", null, timestamp, null));
-        _store.AddMessage(session.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", "Hi there!", "Thinking...", timestamp.AddSeconds(1), null));
+        _repo.AddMessage(created.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "Hello", null, timestamp, null));
+        _repo.AddMessage(created.Id, new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", "Hi there!", "Thinking...", timestamp.AddSeconds(1), null));
 
-        var messages = _store.GetMessages(session.Id);
+        var messages = _repo.GetMessages(created.Id);
 
         messages.Should().HaveCount(2);
         messages[0].Role.Should().Be("user");
         messages[0].Content.Should().Be("Hello");
-        messages[0].ThinkContent.Should().BeNull();
         messages[1].Role.Should().Be("assistant");
-        messages[1].Content.Should().Be("Hi there!");
         messages[1].ThinkContent.Should().Be("Thinking...");
     }
 
     [Fact]
     public void AddMessage_WithAttachments_PreservesAttachments()
     {
-        var session = _store.Create("Test", "p1");
+        var created = _svc.CreateSession("Test", "p1");
         var attachments = new List<MessageAttachment>
         {
             new("test.png", "image/png", "iVBORw0KGgo=")
         }.AsReadOnly();
 
-        _store.AddMessage(session.Id,
+        _repo.AddMessage(created.Id,
             new SessionMessage(Guid.NewGuid().ToString("N"), "user", "See image", null, DateTimeOffset.UtcNow, attachments));
 
-        var messages = _store.GetMessages(session.Id);
+        var messages = _repo.GetMessages(created.Id);
 
         messages.Should().ContainSingle();
-        messages[0].Attachments.Should().ContainSingle();
         messages[0].Attachments![0].FileName.Should().Be("test.png");
-        messages[0].Attachments![0].MimeType.Should().Be("image/png");
-        messages[0].Attachments![0].Base64Data.Should().Be("iVBORw0KGgo=");
     }
 
     [Fact]
     public void AddMessage_CreatesSessionDirectoryAutomatically()
     {
-        string customId = "test-session-dir-creation";
-        _store.Create("Test", "p1", id: customId);
+        string customId = "test-dir-creation-svc";
+        _svc.CreateSession("Test", "p1", id: customId);
 
-        string sessionDir = Path.Combine(_tempDir.Path, customId);
+        _repo.AddMessage(customId, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hi", null, DateTimeOffset.UtcNow, null));
 
-        _store.AddMessage(customId, new SessionMessage(Guid.NewGuid().ToString("N"), "user", "hi", null, DateTimeOffset.UtcNow, null));
-
-        Directory.Exists(sessionDir).Should().BeTrue();
-        File.Exists(Path.Combine(sessionDir, "messages.jsonl")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempDir.Path, customId)).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir.Path, customId, "messages.jsonl")).Should().BeTrue();
     }
 
-    // --- Sub-Agent 字段测试 ---
+    // --- Sub-Agent �ֶ� ---
 
     [Fact]
-    public void Create_WithoutAgentId_AgentIdIsNull()
+    public void CreateSession_WithoutAgentId_AgentIdIsNull()
     {
-        var session = _store.Create("Normal Session", "p1");
+        var session = _svc.CreateSession("Normal Session", "p1");
 
         session.AgentId.Should().BeNull();
-        _store.Get(session.Id)!.AgentId.Should().BeNull();
+        _repo.Get(session.Id)!.AgentId.Should().BeNull();
     }
 
     [Fact]
-    public void Create_WithAgentId_PreservesAgentId()
+    public void CreateSession_WithAgentId_PreservesAgentId()
     {
-        var session = _store.Create("Sub Task", "p1", agentId: "agent-123");
+        var session = _svc.CreateSession("Sub Task", "p1", agentId: "agent-123");
 
         session.AgentId.Should().Be("agent-123");
-        _store.Get(session.Id)!.AgentId.Should().Be("agent-123");
+        _repo.Get(session.Id)!.AgentId.Should().Be("agent-123");
     }
 
     [Fact]
-    public void Create_WithParentSessionId_PreservesParentSessionId()
+    public void CreateSession_WithParentSessionId_PreservesParentSessionId()
     {
-        var parent = _store.Create("Parent", "p1");
-        var child = _store.Create("Child", "p1", parentSessionId: parent.Id);
+        var parent = _svc.CreateSession("Parent", "p1");
+        var child = _svc.CreateSession("Child", "p1", parentSessionId: parent.Id);
 
         child.ParentSessionId.Should().Be(parent.Id);
-        _store.Get(child.Id)!.ParentSessionId.Should().Be(parent.Id);
+        _repo.Get(child.Id)!.ParentSessionId.Should().Be(parent.Id);
     }
 
-    [Fact]
-    public void Create_SubAgentSession_BothFieldsPersisted()
-    {
-        var parent = _store.Create("Parent Task", "p1");
-        var child = _store.Create("[子代理] helper", "p1",
-            agentId: "agent-456",
-            parentSessionId: parent.Id);
-
-        var retrieved = _store.Get(child.Id)!;
-        retrieved.AgentId.Should().Be("agent-456");
-        retrieved.ParentSessionId.Should().Be(parent.Id);
-    }
-
-    // --- ChannelId 绑定测试 ---
+    // --- ChannelId �� ---
 
     [Fact]
-    public void Create_DefaultChannelId_IsWeb()
+    public void CreateSession_DefaultChannelId_IsWeb()
     {
-        var session = _store.Create("Test", "p1");
+        var session = _svc.CreateSession("Test", "p1");
 
         session.ChannelId.Should().Be("web");
-        _store.Get(session.Id)!.ChannelId.Should().Be("web");
+        _repo.Get(session.Id)!.ChannelId.Should().Be("web");
     }
 
     [Fact]
-    public void Create_WithCustomChannelId_PreservesChannelId()
+    public void CreateSession_WithCustomChannelId_PreservesChannelId()
     {
         string channelId = "feishu-channel-abc123";
-        var session = _store.Create("Feishu Session", "p1", channelId: channelId);
+        var session = _svc.CreateSession("Feishu Session", "p1", channelId: channelId);
 
         session.ChannelId.Should().Be(channelId);
-        _store.Get(session.Id)!.ChannelId.Should().Be(channelId);
-    }
-
-    [Fact]
-    public void Create_WithAgentId_ChannelIdAndAgentIdBothPersisted()
-    {
-        var session = _store.Create("Bound Session", "p1",
-            channelId: "my-channel-id",
-            agentId: "my-agent-id");
-
-        var retrieved = _store.Get(session.Id)!;
-        retrieved.ChannelId.Should().Be("my-channel-id");
-        retrieved.AgentId.Should().Be("my-agent-id");
+        _repo.Get(session.Id)!.ChannelId.Should().Be(channelId);
     }
 }

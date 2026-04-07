@@ -30,11 +30,11 @@ public sealed class SessionDeletedEventHandler(
 
         // 0. 释放 Per-Session PetContext（标记 Disabled，防止后续 PetRunner 使用已失效状态）
         var session = sessionRepo.Get(sessionId);
-        if (session?.PetContext is IDisposable disposable)
+        if (session?.Pet is IDisposable disposable)
         {
             disposable.Dispose();
             session.DetachPet();
-            logger.LogDebug("Session {SessionId} 的 PetContext 已释放", sessionId);
+            logger.LogDebug("Session {SessionId} 的 Pet 已释放", sessionId);
         }
 
         // 1. 关闭 Pet RAG SQLite 连接，释放文件锁
