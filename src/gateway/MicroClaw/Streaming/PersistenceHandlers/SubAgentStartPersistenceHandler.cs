@@ -24,7 +24,7 @@ public sealed class SubAgentStartPersistenceHandler : IStreamItemPersistenceHand
                 ["agentId"] = s.AgentId,
                 ["agentName"] = s.AgentName,
                 ["task"] = s.Task,
-                ["childSessionId"] = s.ChildSessionId
+                ["runId"] = s.RunId
             }));
     }
 }

@@ -5,7 +5,6 @@ using MicroClaw.Providers;
 using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Jobs;
 
@@ -35,29 +34,29 @@ public sealed class MemoryPendingProcessorJob(
 
     internal async Task ProcessAllSessionsAsync(CancellationToken ct)
     {
-        IReadOnlyList<SessionView> sessions = repo.GetAll();
-        foreach (SessionView session in sessions)
+        IReadOnlyList<IMicroSession> sessions = repo.GetAll();
+        foreach (IMicroSession session in sessions)
         {
             if (ct.IsCancellationRequested) break;
             await ProcessSessionAsync(session, ct);
         }
     }
 
-    private async Task ProcessSessionAsync(SessionView session, CancellationToken ct)
+    private async Task ProcessSessionAsync(IMicroSession microSession, CancellationToken ct)
     {
-        IReadOnlyList<string> pendingFiles = memoryService.ListPendingFiles(session.Id);
+        IReadOnlyList<string> pendingFiles = memoryService.ListPendingFiles(microSession.Id);
         if (pendingFiles.Count == 0) return;
 
         // 获取 LLM 客户端（Session 绑定模型，若不可用则取第一个启用的 Provider）
         ProviderConfig? provider =
-            providerStore.All.FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled)
+            providerStore.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
             ?? providerStore.All.FirstOrDefault(p => p.IsEnabled);
 
         if (provider is null)
         {
             logger.LogWarning(
                 "B-03 Session={SessionId} 无可用 Provider，跳过 pending 文件处理",
-                session.Id);
+                microSession.Id);
             return;
         }
 
@@ -66,19 +65,19 @@ public sealed class MemoryPendingProcessorJob(
         foreach (string fileName in pendingFiles)
         {
             if (ct.IsCancellationRequested) break;
-            await ProcessPendingFileAsync(session, fileName, client, ct);
+            await ProcessPendingFileAsync(microSession, fileName, client, ct);
         }
     }
 
     private async Task ProcessPendingFileAsync(
-        SessionView session, string fileName, IChatClient client, CancellationToken ct)
+        IMicroSession microSession, string fileName, IChatClient client, CancellationToken ct)
     {
         try
         {
-            IReadOnlyList<SessionMessage> messages = memoryService.ReadPendingMessages(session.Id, fileName);
+            IReadOnlyList<SessionMessage> messages = memoryService.ReadPendingMessages(microSession.Id, fileName);
             if (messages.Count == 0)
             {
-                memoryService.DeletePendingFile(session.Id, fileName);
+                memoryService.DeletePendingFile(microSession.Id, fileName);
                 return;
             }
 
@@ -88,12 +87,12 @@ public sealed class MemoryPendingProcessorJob(
             {
                 logger.LogWarning(
                     "B-03 Session={SessionId} File={File} LLM 返回空摘要，跳过",
-                    session.Id, fileName);
+                    microSession.Id, fileName);
                 return;
             }
 
             // 2. 分类归纳：合并到已有分类记忆中
-            string existingJson = memoryService.GetCategoriesJson(session.Id);
+            string existingJson = memoryService.GetCategoriesJson(microSession.Id);
             string updatedJson = await MemorySummarizationJob.BuildCategoryClassificationAsync(
                 existingJson, summary, client, ct);
 
@@ -108,7 +107,7 @@ public sealed class MemoryPendingProcessorJob(
                 {
                     logger.LogWarning(ex,
                         "B-03 Session={SessionId} File={File} 分类 JSON 解析失败",
-                        session.Id, fileName);
+                        microSession.Id, fileName);
                     categories = null;
                 }
 
@@ -119,39 +118,39 @@ public sealed class MemoryPendingProcessorJob(
                     {
                         try
                         {
-                            await ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, session.Id, ct);
-                            await ragService.IngestAsync(content, categoryName, RagScope.Session, session.Id, ct);
+                            await ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
+                            await ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
                         }
                         catch (Exception ex) when (ex is not OperationCanceledException)
                         {
                             logger.LogError(ex,
                                 "B-03 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
-                                session.Id, categoryName);
+                                microSession.Id, categoryName);
                         }
                     }
 
                     string newJson = JsonSerializer.Serialize(
                         categories, new JsonSerializerOptions { WriteIndented = true });
-                    memoryService.WriteCategoriesJson(session.Id, newJson);
-                    memoryService.UpdateLongTermMemory(session.Id, BuildCategoryIndex(categories));
+                    memoryService.WriteCategoriesJson(microSession.Id, newJson);
+                    memoryService.UpdateLongTermMemory(microSession.Id, BuildCategoryIndex(categories));
 
                     logger.LogInformation(
                         "B-03 Session={SessionId} File={File} 分类记忆已更新，共 {Count} 个分类",
-                        session.Id, fileName, categories.Count);
+                        microSession.Id, fileName, categories.Count);
                 }
             }
 
             // 4. 删除已处理的 pending 文件
-            memoryService.DeletePendingFile(session.Id, fileName);
+            memoryService.DeletePendingFile(microSession.Id, fileName);
             logger.LogInformation(
                 "B-03 Session={SessionId} 已完成 pending 文件 {File}（{Count} 条消息）",
-                session.Id, fileName, messages.Count);
+                microSession.Id, fileName, messages.Count);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex,
                 "B-03 Session={SessionId} 处理 pending 文件 {File} 异常",
-                session.Id, fileName);
+                microSession.Id, fileName);
         }
     }
 

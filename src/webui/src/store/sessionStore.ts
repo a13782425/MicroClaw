@@ -56,7 +56,7 @@ interface SessionState {
   chatting: boolean
   streamingContent: string
   streamingThink: string
-  /** 子代理执行进度步骤，按 agentId 分组 */
+  /** 子代理执行进度步骤，按 runId 分组 */
   subAgentProgress: Record<string, string[]>
   messagesTotal: number
   messagesHasMore: boolean
@@ -213,7 +213,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           content: `子代理 ${chunk.agentName} 开始执行`,
           timestamp: new Date().toISOString(),
           messageType: 'sub_agent_start',
-          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, task: chunk.task, childSessionId: chunk.childSessionId },
+          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, task: chunk.task, runId: chunk.runId },
         }
         set((s) => ({ messages: [...s.messages, msg] }))
       } else if (chunk.type === 'sub_agent_done') {
@@ -223,17 +223,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           content: chunk.result,
           timestamp: new Date().toISOString(),
           messageType: 'sub_agent_result',
-          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, durationMs: chunk.durationMs },
+          metadata: { agentId: chunk.agentId, agentName: chunk.agentName, durationMs: chunk.durationMs, runId: chunk.runId },
         }
         set((s) => {
-          const { [chunk.agentId]: _, ...rest } = s.subAgentProgress
+          const { [chunk.runId]: _, ...rest } = s.subAgentProgress
           return { messages: [...s.messages, msg], subAgentProgress: rest }
         })
       } else if (chunk.type === 'sub_agent_progress') {
         set((s) => ({
           subAgentProgress: {
             ...s.subAgentProgress,
-            [chunk.agentId]: [...(s.subAgentProgress[chunk.agentId] ?? []), chunk.step],
+            [chunk.runId]: [...(s.subAgentProgress[chunk.runId] ?? []), chunk.step],
           },
         }))
       }

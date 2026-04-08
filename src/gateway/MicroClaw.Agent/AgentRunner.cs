@@ -87,7 +87,7 @@ public sealed class AgentRunner(
             throw new InvalidOperationException("No enabled default agent found.");
 
         // 从 session 获取 providerId；若 session 未绑定模型，按 Agent 路由策略选择
-        ISession? session = sessionReader.Get(sessionId);
+        IMicroSession? session = sessionReader.Get(sessionId);
         string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
             ? session.ProviderId
             : ResolveProviderByStrategy(agent.RoutingStrategy);
@@ -122,13 +122,15 @@ public sealed class AgentRunner(
         string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default,
         string source = "chat",
-        PetOverrides? petOverrides = null)
+        PetOverrides? petOverrides = null,
+        IReadOnlyList<string>? ancestorAgentIdsOverride = null)
     {
         // ── 薄迭代器：delegating to non-iterator ExecuteStreamingCoreAsync ──────────
         // C# 规则：yield return 不能置于 try-catch 块中，因此将含回退逻辑的非迭代器方法
         // 通过 Channel 与迭代器解耦，迭代器只负责从 Channel 读取并 yield。
         var outputChannel = System.Threading.Channels.Channel.CreateUnbounded<StreamItem>();
-        Task execution = ExecuteStreamingCoreAsync(agent, providerId, history, sessionId, ct, source, outputChannel, petOverrides);
+        Task execution = ExecuteStreamingCoreAsync(
+            agent, providerId, history, sessionId, ct, source, outputChannel, petOverrides, ancestorAgentIdsOverride);
 
         try
         {
@@ -158,7 +160,8 @@ public sealed class AgentRunner(
         CancellationToken ct,
         string source,
         System.Threading.Channels.Channel<StreamItem> output,
-        PetOverrides? petOverrides = null)
+        PetOverrides? petOverrides = null,
+        IReadOnlyList<string>? ancestorAgentIdsOverride = null)
     {
         IReadOnlyList<ProviderConfig> chain = BuildFallbackChain(primaryProviderId, agent.RoutingStrategy);
 
@@ -220,16 +223,21 @@ public sealed class AgentRunner(
                 Agent effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
                     ? agent.WithToolOverrides(petOverrides.ToolOverrides)
                     : agent;
-                ISession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
+                IMicroSession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
                     ? sessionReader.Get(sessionId) : null;
 
                 var ancestorAgentIds = new List<string>();
-                if (sessionForTools?.ParentSessionId is not null)
+                if (ancestorAgentIdsOverride is not null)
+                {
+                    ancestorAgentIds.AddRange(
+                        ancestorAgentIdsOverride.Where(static id => !string.IsNullOrWhiteSpace(id)));
+                }
+                else if (sessionForTools?.ParentSessionId is not null)
                 {
                     string? cursor = sessionForTools.ParentSessionId;
                     while (cursor is not null)
                     {
-                        ISession? ancestor = sessionReader.Get(cursor);
+                        IMicroSession? ancestor = sessionReader.Get(cursor);
                         if (ancestor is null) break;
                         if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
                             ancestorAgentIds.Add(ancestor.AgentId);
@@ -282,7 +290,7 @@ public sealed class AgentRunner(
                 AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
                 if (!string.IsNullOrWhiteSpace(sessionId))
                 {
-                    ISession? sessionInfo = sessionReader.Get(sessionId);
+                    IMicroSession? sessionInfo = sessionReader.Get(sessionId);
                     if (sessionInfo is not null)
                         AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
                 }

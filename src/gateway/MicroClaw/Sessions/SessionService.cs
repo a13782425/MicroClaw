@@ -15,7 +15,6 @@ using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Utils;
 using Microsoft.AspNetCore.SignalR;
-using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Sessions;
 
@@ -67,13 +66,13 @@ public sealed class SessionService(
     {
         string sessionId = GenerateSessionId(channelType, channelId, senderId);
 
-        SessionView? existing = ((ISessionRepository)this).Get(sessionId);
+        IMicroSession? existing = ((ISessionRepository)this).Get(sessionId);
         if (existing is not null) return existing.ToInfo();
 
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
 
-        Session session = Session.Create(
+        MicroSession microSession = MicroSession.Create(
             id: sessionId,
             title: title,
             providerId: providerId,
@@ -81,11 +80,11 @@ public sealed class SessionService(
             channelId: channelId,
             createdAt: TimeUtils.NowOffset(),
             agentId: agentStore.GetDefault()?.Id);
-        AttachRuntimeDependencies(session);
+        AttachRuntimeDependencies(microSession);
 
-        ((ISessionRepository)this).Save(session);
+        ((ISessionRepository)this).Save(microSession);
 
-        SessionInfo created = session.ToInfo();
+        SessionInfo created = microSession.ToInfo();
 
         _ = hubContext.Clients.All.SendAsync("sessionCreated", new
         {
@@ -125,14 +124,14 @@ public sealed class SessionService(
     }
 
     /// <inheritdoc/>
-    public Session CreateSession(string title, string providerId,
+    public MicroSession CreateSession(string title, string providerId,
         ChannelType channelType = ChannelType.Web,
         string? id = null,
         string? agentId = null,
         string? parentSessionId = null,
         string? channelId = null)
     {
-        Session session = Session.Create(
+        MicroSession microSession = MicroSession.Create(
             id: id ?? MicroClawUtils.GetUniqueId(),
             title: title,
             providerId: providerId,
@@ -141,12 +140,12 @@ public sealed class SessionService(
             createdAt: TimeUtils.NowOffset(),
             agentId: agentId,
             parentSessionId: parentSessionId);
-        AttachRuntimeDependencies(session);
-        ((ISessionRepository)this).Save(session);
-        return session;
+        AttachRuntimeDependencies(microSession);
+        ((ISessionRepository)this).Save(microSession);
+        return microSession;
     }
 
-    SessionView ISessionService.CreateSession(string title, string providerId,
+    IMicroSession ISessionService.CreateSession(string title, string providerId,
         ChannelType channelType,
         string? id,
         string? agentId,
@@ -156,7 +155,7 @@ public sealed class SessionService(
 
     // ── ISessionRepository: 查询 ───────────────────────────────────────────
 
-    SessionView? ISessionRepository.Get(string id)
+    IMicroSession? ISessionRepository.Get(string id)
     {
         SessionEntity? entity;
         _metaLock.EnterReadLock();
@@ -167,12 +166,12 @@ public sealed class SessionService(
         finally { _metaLock.ExitReadLock(); }
 
         if (entity is null) return null;
-        Session session = ReconstitueFromEntity(entity);
-        AttachRuntimeDependencies(session);
-        return session;
+        MicroSession microSession = ReconstitueFromEntity(entity);
+        AttachRuntimeDependencies(microSession);
+        return microSession;
     }
 
-    IReadOnlyList<SessionView> ISessionRepository.GetAll()
+    IReadOnlyList<IMicroSession> ISessionRepository.GetAll()
     {
         List<SessionEntity> entities;
         _metaLock.EnterReadLock();
@@ -184,13 +183,13 @@ public sealed class SessionService(
         }
         finally { _metaLock.ExitReadLock(); }
 
-        List<Session> sessions = entities.Select(ReconstitueFromEntity).ToList();
-        foreach (Session session in sessions)
+        List<MicroSession> sessions = entities.Select(ReconstitueFromEntity).ToList();
+        foreach (MicroSession session in sessions)
             AttachRuntimeDependencies(session);
-        return sessions.Cast<SessionView>().ToList().AsReadOnly();
+        return sessions.Cast<IMicroSession>().ToList().AsReadOnly();
     }
 
-    IReadOnlyList<SessionView> ISessionRepository.GetTopLevel()
+    IReadOnlyList<IMicroSession> ISessionRepository.GetTopLevel()
     {
         List<SessionEntity> entities;
         _metaLock.EnterReadLock();
@@ -203,10 +202,10 @@ public sealed class SessionService(
         }
         finally { _metaLock.ExitReadLock(); }
 
-        List<Session> sessions = entities.Select(ReconstitueFromEntity).ToList();
-        foreach (Session session in sessions)
+        List<MicroSession> sessions = entities.Select(ReconstitueFromEntity).ToList();
+        foreach (MicroSession session in sessions)
             AttachRuntimeDependencies(session);
-        return sessions.Cast<SessionView>().ToList().AsReadOnly();
+        return sessions.Cast<IMicroSession>().ToList().AsReadOnly();
     }
 
     string ISessionRepository.GetRootSessionId(string sessionId)
@@ -226,47 +225,26 @@ public sealed class SessionService(
         finally { _metaLock.ExitReadLock(); }
     }
 
-    SessionView? ISessionRepository.FindIdleSubAgentSession(
-        string parentSessionId, string agentId, IReadOnlyCollection<string> activeSessionIds)
-    {
-        SessionEntity? entity;
-        _metaLock.EnterReadLock();
-        try
-        {
-            entity = GetItems()
-                .Where(e => e.ParentSessionId == parentSessionId && e.AgentId == agentId)
-                .Where(e => !activeSessionIds.Contains(e.Id))
-                .OrderByDescending(e => e.CreatedAtMs)
-                .FirstOrDefault();
-        }
-        finally { _metaLock.ExitReadLock(); }
-
-        if (entity is null) return null;
-        Session session = ReconstitueFromEntity(entity);
-        AttachRuntimeDependencies(session);
-        return session;
-    }
-
     // ── ISessionRepository: 命令 ───────────────────────────────────────────
 
-    void ISessionRepository.Save(SessionView session)
+    void ISessionRepository.Save(IMicroSession microSession)
     {
-        Session mutableSession = RequireMutable(session);
+        MicroSession mutableMicroSession = RequireMutable(microSession);
         _metaLock.EnterWriteLock();
         try
         {
             var opts = MicroClawConfig.Get<SessionsOptions>();
-            int idx = opts.Items.FindIndex(e => e.Id == mutableSession.Id);
+            int idx = opts.Items.FindIndex(e => e.Id == mutableMicroSession.Id);
             List<SessionEntity> newItems;
             if (idx >= 0)
             {
                 long originalCreatedAtMs = opts.Items[idx].CreatedAtMs;
-                SessionEntity entity = ToEntity(mutableSession) with { CreatedAtMs = originalCreatedAtMs };
+                SessionEntity entity = ToEntity(mutableMicroSession) with { CreatedAtMs = originalCreatedAtMs };
                 newItems = new List<SessionEntity>(opts.Items) { [idx] = entity };
             }
             else
             {
-                SessionEntity entity = ToEntity(mutableSession) with { CreatedAtMs = TimeUtils.NowMs() };
+                SessionEntity entity = ToEntity(mutableMicroSession) with { CreatedAtMs = TimeUtils.NowMs() };
                 Directory.CreateDirectory(GetSessionDir(entity.Id));
                 newItems = [.. opts.Items, entity];
             }
@@ -369,8 +347,8 @@ public sealed class SessionService(
             .ToList();
     }
 
-    private Session ReconstitueFromEntity(SessionEntity e) =>
-        Session.Reconstitute(
+    private MicroSession ReconstitueFromEntity(SessionEntity e) =>
+        MicroSession.Reconstitute(
             id: e.Id,
             title: e.Title,
             providerId: e.ProviderId,
@@ -382,24 +360,24 @@ public sealed class SessionService(
             parentSessionId: e.ParentSessionId,
             approvalReason: e.ApprovalReason);
 
-    private void AttachRuntimeDependencies(Session session)
+    private void AttachRuntimeDependencies(MicroSession microSession)
     {
-        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(microSession);
 
-        session.AttachChannel(ResolveChannel(session.ChannelType));
+        microSession.AttachChannel(ResolveChannel(microSession.ChannelType));
 
-        if (session.ParentSessionId is not null)
+        if (microSession.ParentSessionId is not null)
         {
-            string rootSessionId = ((ISessionRepository)this).GetRootSessionId(session.ParentSessionId);
-            SessionView? rootSession = ((ISessionRepository)this).Get(rootSessionId);
+            string rootSessionId = ((ISessionRepository)this).GetRootSessionId(microSession.ParentSessionId);
+            IMicroSession? rootSession = ((ISessionRepository)this).Get(rootSessionId);
             if (rootSession?.Pet is not null)
-                session.AttachPet(rootSession.Pet);
+                microSession.AttachPet(rootSession.Pet);
             return;
         }
 
-        IPet? pet = _petFactory.CreateOrLoadAsync(session).GetAwaiter().GetResult();
+        IPet? pet = _petFactory.CreateOrLoadAsync(microSession).GetAwaiter().GetResult();
         if (pet is not null)
-            session.AttachPet(pet);
+            microSession.AttachPet(pet);
     }
 
     private IChannel ResolveChannel(ChannelType channelType)
@@ -413,7 +391,7 @@ public sealed class SessionService(
         throw new InvalidOperationException($"No channel is registered for type '{channelType}'.");
     }
 
-    private static SessionEntity ToEntity(SessionView s) => new()
+    private static SessionEntity ToEntity(IMicroSession s) => new()
     {
         Id = s.Id,
         Title = s.Title,
@@ -427,8 +405,8 @@ public sealed class SessionService(
         ApprovalReason = s.ApprovalReason,
     };
 
-    private static Session RequireMutable(SessionView session) =>
-        session as Session
+    private static MicroSession RequireMutable(IMicroSession microSession) =>
+        microSession as MicroSession
         ?? throw new InvalidOperationException("Session write model must be the concrete MicroClaw.Sessions.Session type.");
 
     /// <summary>生成确定性会话 ID：SHA256(channelType:channelId:senderId) 的前 32 个十六进制字符。</summary>

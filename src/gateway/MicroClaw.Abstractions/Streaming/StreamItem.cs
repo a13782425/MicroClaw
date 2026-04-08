@@ -50,10 +50,10 @@ public sealed record SubAgentStartItem(
     string AgentId,
     string AgentName,
     string Task,
-    string ChildSessionId) : StreamItem
+    string RunId) : StreamItem
 {
     public override string TypeName => "sub_agent_start";
-    public override object ToSerializablePayload() => new { agentId = AgentId, agentName = AgentName, task = Task, childSessionId = ChildSessionId, messageId = MessageId };
+    public override object ToSerializablePayload() => new { agentId = AgentId, agentName = AgentName, task = Task, runId = RunId, messageId = MessageId };
 }
 
 /// <summary>子代理执行完成。</summary>
@@ -61,19 +61,21 @@ public sealed record SubAgentResultItem(
     string AgentId,
     string AgentName,
     string Result,
-    long DurationMs) : StreamItem
+    long DurationMs,
+    string RunId) : StreamItem
 {
     public override string TypeName => "sub_agent_done";
-    public override object ToSerializablePayload() => new { agentId = AgentId, agentName = AgentName, result = Result, durationMs = DurationMs, messageId = MessageId };
+    public override object ToSerializablePayload() => new { agentId = AgentId, agentName = AgentName, result = Result, durationMs = DurationMs, runId = RunId, messageId = MessageId };
 }
 
 /// <summary>子代理执行过程中的进度步骤（不持久化，仅用于前端实时展示）。</summary>
 public sealed record SubAgentProgressItem(
     string AgentId,
-    string Step) : StreamItem
+    string Step,
+    string RunId) : StreamItem
 {
     public override string TypeName => "sub_agent_progress";
-    public override object ToSerializablePayload() => new { agentId = AgentId, step = Step, messageId = MessageId };
+    public override object ToSerializablePayload() => new { agentId = AgentId, step = Step, runId = RunId, messageId = MessageId };
 }
 
 /// <summary>AI 输出的非文本内容（图片/音频等），对应 DataContent。</summary>

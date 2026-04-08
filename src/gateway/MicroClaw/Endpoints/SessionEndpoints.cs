@@ -15,7 +15,6 @@ using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using MicroClaw.Streaming;
 using Microsoft.AspNetCore.SignalR;
-using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Endpoints;
 
@@ -62,7 +61,7 @@ public static class SessionEndpoints
             if (!string.IsNullOrWhiteSpace(req.AgentId) && agentStore.GetById(req.AgentId) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
 
-            SessionView created = sessions.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
+            IMicroSession created = sessions.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
             sessionDna.InitializeSession(created.Id);
             return Results.Ok(created.ToInfo());
         })
@@ -93,7 +92,7 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            Session? session = repo.Get(req.Id) as Session;
+            MicroSession? session = repo.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -120,7 +119,7 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            Session? session = repo.Get(req.Id) as Session;
+            MicroSession? session = repo.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -146,7 +145,7 @@ public static class SessionEndpoints
             if (provider.ModelType == ModelType.Embedding)
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
 
-            Session? session = repo.Get(req.Id) as Session;
+            MicroSession? session = repo.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -167,7 +166,7 @@ public static class SessionEndpoints
         // 可选分页参数：?skip=0&limit=50（skip 从末尾计数，省略时返回全量）
         endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionRepository repo, int? skip, int? limit) =>
         {
-            SessionView? session = repo.Get(id);
+            IMicroSession? session = repo.Get(id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -194,7 +193,7 @@ public static class SessionEndpoints
                    IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers,
                    HttpContext ctx, CancellationToken ct) =>
             {
-                SessionView? session = repo.Get(id);
+                IMicroSession? session = repo.Get(id);
                 if (session is null)
                 {
                     ctx.Response.StatusCode = 404;

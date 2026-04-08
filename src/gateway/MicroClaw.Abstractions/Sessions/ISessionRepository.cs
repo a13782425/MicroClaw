@@ -10,7 +10,7 @@ public interface ISessionRepository
     /// <summary>按 ID 获取 Session 只读视图。不存在时返回 null。</summary>
     IMicroSession? Get(string id);
 
-    /// <summary>获取所有会话（含子代理会话）的快照。</summary>
+    /// <summary>获取所有会话的快照。</summary>
     IReadOnlyList<IMicroSession> GetAll();
 
     /// <summary>仅返回顶层会话（ParentSessionId 为 null）。</summary>
@@ -21,14 +21,6 @@ public interface ISessionRepository
     /// 若 <paramref name="sessionId"/> 本身即为根会话，则直接返回它。
     /// </summary>
     string GetRootSessionId(string sessionId);
-
-    /// <summary>
-    /// 在同一父会话下查找空闲（未活跃）子代理会话，用于会话复用。
-    /// </summary>
-    IMicroSession? FindIdleSubAgentSession(
-        string parentSessionId,
-        string agentId,
-        IReadOnlyCollection<string> activeSessionIds);
 
     // ── 命令 ──────────────────────────────────────────────────────────────────
 

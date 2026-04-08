@@ -7,7 +7,7 @@ namespace MicroClaw.Abstractions.Sessions;
 /// <summary>
 /// Session runtime contract exposed across module boundaries.
 /// </summary>
-public interface ISession
+public interface IMicroSession
 {
     string Id { get; }
     string Title { get; }

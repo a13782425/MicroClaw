@@ -47,24 +47,24 @@ public sealed class PetFactory(
     /// <summary>
     /// Creates or loads the runtime Pet for the specified Session.
     /// </summary>
-    /// <param name="session">Session runtime contract.</param>
+    /// <param name="microSession">Session runtime contract.</param>
     /// <param name="config">Pet 配置（可选，不提供则使用默认值）。</param>
     /// <param name="ct">取消令牌。</param>
-    public Task<IPet?> CreateOrLoadAsync(ISession session, CancellationToken ct = default)
-        => CreateOrLoadAsync(session, config: null, ct);
+    public Task<IPet?> CreateOrLoadAsync(IMicroSession microSession, CancellationToken ct = default)
+        => CreateOrLoadAsync(microSession, config: null, ct);
 
-    public async Task<IPet?> CreateOrLoadAsync(ISession session, PetConfig? config = null, CancellationToken ct = default)
+    public async Task<IPet?> CreateOrLoadAsync(IMicroSession microSession, PetConfig? config = null, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(session);
-        ArgumentException.ThrowIfNullOrWhiteSpace(session.Id);
+        ArgumentNullException.ThrowIfNull(microSession);
+        ArgumentException.ThrowIfNullOrWhiteSpace(microSession.Id);
 
-        if (session.ParentSessionId is not null)
+        if (microSession.ParentSessionId is not null)
         {
-            _logger.LogDebug("子会话不创建独立 Pet：SessionId={SessionId}", session.Id);
-            return session.Pet;
+            _logger.LogDebug("子会话不创建独立 Pet：SessionId={SessionId}", microSession.Id);
+            return microSession.Pet;
         }
 
-        string sessionId = session.Id;
+        string sessionId = microSession.Id;
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
 
         // 幂等：目录已存在时跳过
@@ -97,11 +97,11 @@ public sealed class PetFactory(
             _logger.LogInformation("Pet 初始化完成：SessionId={SessionId}", sessionId);
         }
 
-        PetContext? petCtx = await _contextFactory.LoadAsync(session, ct);
+        PetContext? petCtx = await _contextFactory.LoadAsync(microSession, ct);
         if (petCtx is null)
             return null;
 
-        if (session.IsApproved)
+        if (microSession.IsApproved)
             petCtx.Activate();
         return petCtx;
     }
@@ -109,9 +109,9 @@ public sealed class PetFactory(
     /// <summary>
     /// Activates the runtime Pet for an approved Session.
     /// </summary>
-    public async Task<IPet?> ActivateAsync(ISession session, CancellationToken ct = default)
+    public async Task<IPet?> ActivateAsync(IMicroSession microSession, CancellationToken ct = default)
     {
-        IPet? pet = await CreateOrLoadAsync(session, ct);
+        IPet? pet = await CreateOrLoadAsync(microSession, ct);
         if (pet is PetContext petContext)
             petContext.Activate();
         return pet;

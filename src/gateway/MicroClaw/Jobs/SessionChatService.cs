@@ -6,7 +6,6 @@ using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Jobs;
 
@@ -24,7 +23,7 @@ public sealed class SessionChatService(
 {
     public async Task<string?> ExecuteAsync(string sessionId, string prompt, CancellationToken ct = default)
     {
-        SessionView? session = repo.Get(sessionId);
+        IMicroSession? session = repo.Get(sessionId);
         if (session is null)
         {
             logger.LogWarning("CronJob: target session '{SessionId}' not found, skipping.", sessionId);

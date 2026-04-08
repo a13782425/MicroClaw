@@ -537,13 +537,25 @@ export default function SessionsPage() {
                         ? displayMessages.find(m => m.messageType === 'tool_result' && m.metadata?.callId === callId)
                         : undefined
                     } else if (msg.messageType === 'sub_agent_start') {
-                      const agentId = msg.metadata?.agentId
-                      resultMessage = agentId
-                        ? displayMessages.find(m => m.messageType === 'sub_agent_result' && m.metadata?.agentId === agentId)
-                        : undefined
+                      const runId = msg.metadata?.runId as string | undefined
+                      const agentId = msg.metadata?.agentId as string | undefined
+                      resultMessage = runId
+                        ? displayMessages.find(m => m.messageType === 'sub_agent_result' && m.metadata?.runId === runId)
+                        : agentId
+                          ? displayMessages.find(m => m.messageType === 'sub_agent_result' && m.metadata?.agentId === agentId)
+                          : undefined
                     }
-                    const agentId = msg.messageType === 'sub_agent_start' ? (msg.metadata?.agentId as string) : undefined
-                    const steps = agentId ? subAgentProgress[agentId] : undefined
+                    const subAgentRunId = msg.messageType === 'sub_agent_start'
+                      ? (msg.metadata?.runId as string | undefined)
+                      : undefined
+                    const agentId = msg.messageType === 'sub_agent_start'
+                      ? (msg.metadata?.agentId as string | undefined)
+                        : undefined
+                    const steps = subAgentRunId
+                      ? subAgentProgress[subAgentRunId]
+                      : agentId
+                        ? subAgentProgress[agentId]
+                        : undefined
                     return (
                       <ChatMessage
                         key={idx}

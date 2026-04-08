@@ -4,7 +4,6 @@ using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
-using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Sessions;
 
@@ -18,11 +17,11 @@ namespace MicroClaw.Sessions;
 /// 所有属性均为 <c>private set</c>，外部状态变更只能通过行为方法（Approve/Disable/…）进行。
 /// </para>
 /// </summary>
-public sealed class Session : SessionView
+public sealed class MicroSession : IMicroSession
 {
     private readonly List<IDomainEvent> _domainEvents = [];
 
-    private Session() { }
+    private MicroSession() { }
 
     public string Id { get; private set; } = string.Empty;
     public string Title { get; private set; } = string.Empty;
@@ -37,7 +36,7 @@ public sealed class Session : SessionView
     public IChannel? Channel { get; private set; }
     public IPet? Pet { get; private set; }
 
-    public static Session Reconstitute(
+    public static MicroSession Reconstitute(
         string id,
         string title,
         string providerId,
@@ -49,7 +48,7 @@ public sealed class Session : SessionView
         string? parentSessionId = null,
         string? approvalReason = null)
     {
-        return new Session
+        return new MicroSession
         {
             Id = id,
             Title = title,
@@ -64,7 +63,7 @@ public sealed class Session : SessionView
         };
     }
 
-    public static Session Create(
+    public static MicroSession Create(
         string id,
         string title,
         string providerId,
@@ -74,7 +73,7 @@ public sealed class Session : SessionView
         string? agentId = null,
         string? parentSessionId = null)
     {
-        return new Session
+        return new MicroSession
         {
             Id = id,
             Title = title,

@@ -175,43 +175,6 @@ public sealed class SessionRepositoryTests : IDisposable
         rootId.Should().Be(root.Id);
     }
 
-    // 鈹€鈹€ FindIdleSubAgentSession 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    [Fact]
-    public void FindIdleSubAgentSession_WithMatchingIdle_ReturnsIt()
-    {
-        var parent = _svc.CreateSession("Parent", "p1");
-        var sub = _svc.CreateSession("Sub", "p1", agentId: "agent-x", parentSessionId: parent.Id);
-
-        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-x", activeSessionIds: []) as Session;
-
-        found.Should().NotBeNull();
-        found!.Id.Should().Be(sub.Id);
-    }
-
-    [Fact]
-    public void FindIdleSubAgentSession_WhenActive_ReturnsNull()
-    {
-        var parent = _svc.CreateSession("Parent", "p1");
-        var sub = _svc.CreateSession("Sub", "p1", agentId: "agent-y", parentSessionId: parent.Id);
-
-        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-y",
-            activeSessionIds: [sub.Id]) as Session;
-
-        found.Should().BeNull();
-    }
-
-    [Fact]
-    public void FindIdleSubAgentSession_WrongAgentId_ReturnsNull()
-    {
-        var parent = _svc.CreateSession("Parent", "p1");
-        _svc.CreateSession("Sub", "p1", agentId: "agent-A", parentSessionId: parent.Id);
-
-        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-B", activeSessionIds: []) as Session;
-
-        found.Should().BeNull();
-    }
-
     // 鈹€鈹€ Messages 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     [Fact]

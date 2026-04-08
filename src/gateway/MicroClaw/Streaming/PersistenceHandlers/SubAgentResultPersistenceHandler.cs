@@ -23,7 +23,8 @@ public sealed class SubAgentResultPersistenceHandler : IStreamItemPersistenceHan
             {
                 ["agentId"] = r.AgentId,
                 ["agentName"] = r.AgentName,
-                ["durationMs"] = r.DurationMs
+                ["durationMs"] = r.DurationMs,
+                ["runId"] = r.RunId
             }));
     }
 }
