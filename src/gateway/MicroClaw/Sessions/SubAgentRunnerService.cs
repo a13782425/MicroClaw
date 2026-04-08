@@ -32,7 +32,7 @@ public sealed class SubAgentRunnerService(
     public async Task<string> RunSubAgentAsync(
         string agentId,
         string task,
-        string parentSessionId,
+        string sessionId,
         CancellationToken ct = default)
     {
         AgentEntity? agent = agentStore.GetAgentById(agentId);
@@ -51,9 +51,9 @@ public sealed class SubAgentRunnerService(
                 $"检测到循环子代理调用：代理 '{agentId}' 已存在于当前调用链中，禁止循环调用。");
 
         // 获取父会话 ProviderId（子运行默认继承当前会话模型）
-        IMicroSession? parentSession = _sessions.Get(parentSessionId);
-        string providerId = parentSession?.ProviderId ?? string.Empty;
-        string rootSessionId = currentRunContext?.RootSessionId ?? _sessions.GetRootSessionId(parentSessionId);
+        IMicroSession? session = _sessions.Get(sessionId);
+        string providerId = session?.ProviderId ?? string.Empty;
+        string rootSessionId = currentRunContext?.RootSessionId ?? sessionId;
         string runId = Guid.NewGuid().ToString("N");
         var nestedRunContext = new SubAgentRunContext(rootSessionId, [.. ancestorAgentIds, agentId]);
         SubAgentRunContext? previousRunContext = SubAgentRunScope.Current;

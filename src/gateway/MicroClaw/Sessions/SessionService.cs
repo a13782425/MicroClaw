@@ -128,7 +128,6 @@ public sealed class SessionService(
         ChannelType channelType = ChannelType.Web,
         string? id = null,
         string? agentId = null,
-        string? parentSessionId = null,
         string? channelId = null)
     {
         MicroSession microSession = MicroSession.Create(
@@ -138,8 +137,7 @@ public sealed class SessionService(
             channelType: channelType,
             channelId: channelId ?? ChannelConfigStore.WebChannelId,
             createdAt: TimeUtils.NowOffset(),
-            agentId: agentId,
-            parentSessionId: parentSessionId);
+            agentId: agentId);
         AttachRuntimeDependencies(microSession);
         ((ISessionRepository)this).Save(microSession);
         return microSession;
@@ -149,9 +147,8 @@ public sealed class SessionService(
         ChannelType channelType,
         string? id,
         string? agentId,
-        string? parentSessionId,
         string? channelId)
-        => CreateSession(title, providerId, channelType, id, agentId, parentSessionId, channelId);
+        => CreateSession(title, providerId, channelType, id, agentId, channelId);
 
     // ── ISessionRepository: 查询 ───────────────────────────────────────────
 
@@ -187,42 +184,6 @@ public sealed class SessionService(
         foreach (MicroSession session in sessions)
             AttachRuntimeDependencies(session);
         return sessions.Cast<IMicroSession>().ToList().AsReadOnly();
-    }
-
-    IReadOnlyList<IMicroSession> ISessionRepository.GetTopLevel()
-    {
-        List<SessionEntity> entities;
-        _metaLock.EnterReadLock();
-        try
-        {
-            entities = GetItems()
-                .Where(e => string.IsNullOrWhiteSpace(e.ParentSessionId))
-                .OrderByDescending(e => e.CreatedAtMs)
-                .ToList();
-        }
-        finally { _metaLock.ExitReadLock(); }
-
-        List<MicroSession> sessions = entities.Select(ReconstitueFromEntity).ToList();
-        foreach (MicroSession session in sessions)
-            AttachRuntimeDependencies(session);
-        return sessions.Cast<IMicroSession>().ToList().AsReadOnly();
-    }
-
-    string ISessionRepository.GetRootSessionId(string sessionId)
-    {
-        string current = sessionId;
-        _metaLock.EnterReadLock();
-        try
-        {
-            for (int i = 0; i < 20; i++)
-            {
-                SessionEntity? entity = GetItems().FirstOrDefault(e => e.Id == current);
-                if (entity?.ParentSessionId is null) return current;
-                current = entity.ParentSessionId;
-            }
-            return current;
-        }
-        finally { _metaLock.ExitReadLock(); }
     }
 
     // ── ISessionRepository: 命令 ───────────────────────────────────────────
@@ -357,7 +318,6 @@ public sealed class SessionService(
             channelId: string.IsNullOrEmpty(e.ChannelId) ? ChannelConfigStore.WebChannelId : e.ChannelId,
             createdAt: TimeUtils.FromMs(e.CreatedAtMs),
             agentId: e.AgentId,
-            parentSessionId: e.ParentSessionId,
             approvalReason: e.ApprovalReason);
 
     private void AttachRuntimeDependencies(MicroSession microSession)
@@ -365,15 +325,6 @@ public sealed class SessionService(
         ArgumentNullException.ThrowIfNull(microSession);
 
         microSession.AttachChannel(ResolveChannel(microSession.ChannelType));
-
-        if (microSession.ParentSessionId is not null)
-        {
-            string rootSessionId = ((ISessionRepository)this).GetRootSessionId(microSession.ParentSessionId);
-            IMicroSession? rootSession = ((ISessionRepository)this).Get(rootSessionId);
-            if (rootSession?.Pet is not null)
-                microSession.AttachPet(rootSession.Pet);
-            return;
-        }
 
         IPet? pet = _petFactory.CreateOrLoadAsync(microSession).GetAwaiter().GetResult();
         if (pet is not null)
@@ -401,7 +352,6 @@ public sealed class SessionService(
         ChannelId = s.ChannelId,
         CreatedAtMs = 0,
         AgentId = s.AgentId,
-        ParentSessionId = s.ParentSessionId,
         ApprovalReason = s.ApprovalReason,
     };
 

@@ -360,7 +360,6 @@ public sealed class PetEmotionIntegrationTests : IDisposable
             MicroSession.Reconstitute(
                 mi.ArgAt<string>(0), "Test", "provider1", true,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow));
-        sessionRepo.GetRootSessionId(Arg.Any<string>()).Returns(mi => mi.ArgAt<string>(0));
         var petContextFactory = new PetContextFactory(_stateStore, _emotionStore);
 
         return new PetRunner(

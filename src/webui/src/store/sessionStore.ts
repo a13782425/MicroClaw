@@ -26,26 +26,8 @@ export type SessionTreeNode = {
   children: SessionTreeNode[]
 }
 
-export function isSubAgentSession(session: SessionInfo): boolean {
-  return !!session.parentSessionId
-}
-
 export function buildSessionTree(sessions: readonly SessionInfo[]): SessionTreeNode[] {
-  const nodeMap = new Map<string, SessionTreeNode>()
-  for (const s of sessions) {
-    nodeMap.set(s.id, { session: s, children: [] })
-  }
-  const roots: SessionTreeNode[] = []
-  for (const s of sessions) {
-    const node = nodeMap.get(s.id)!
-    const parentId = s.parentSessionId
-    if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-  return roots
+  return sessions.map((session) => ({ session, children: [] }))
 }
 
 interface SessionState {

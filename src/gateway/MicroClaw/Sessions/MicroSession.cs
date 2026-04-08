@@ -31,7 +31,6 @@ public sealed class MicroSession : IMicroSession
     public string ChannelId { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; private set; }
     public string? AgentId { get; private set; }
-    public string? ParentSessionId { get; private set; }
     public string? ApprovalReason { get; private set; }
     public IChannel? Channel { get; private set; }
     public IPet? Pet { get; private set; }
@@ -45,7 +44,6 @@ public sealed class MicroSession : IMicroSession
         string channelId,
         DateTimeOffset createdAt,
         string? agentId = null,
-        string? parentSessionId = null,
         string? approvalReason = null)
     {
         return new MicroSession
@@ -58,7 +56,6 @@ public sealed class MicroSession : IMicroSession
             ChannelId = channelId,
             CreatedAt = createdAt,
             AgentId = agentId,
-            ParentSessionId = parentSessionId,
             ApprovalReason = approvalReason,
         };
     }
@@ -70,8 +67,7 @@ public sealed class MicroSession : IMicroSession
         ChannelType channelType,
         string channelId,
         DateTimeOffset createdAt,
-        string? agentId = null,
-        string? parentSessionId = null)
+        string? agentId = null)
     {
         return new MicroSession
         {
@@ -83,7 +79,6 @@ public sealed class MicroSession : IMicroSession
             ChannelId = channelId,
             CreatedAt = createdAt,
             AgentId = agentId,
-            ParentSessionId = parentSessionId,
         };
     }
 
@@ -140,5 +135,5 @@ public sealed class MicroSession : IMicroSession
     public SessionInfo ToInfo() => new(
         Id, Title, ProviderId, IsApproved,
         ChannelType, ChannelId, CreatedAt,
-        AgentId, ParentSessionId, ApprovalReason);
+        AgentId, ApprovalReason);
 }

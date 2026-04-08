@@ -8,17 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Pet;
 
 /// <summary>
-/// Pet 工厂：在 Session 审批时自动为新 Session 创建 Pet。
-/// <para>
-/// 职责：
-/// <list type="bullet">
-///   <item>初始化 <c>{sessionId}/pet/</c> 目录结构</item>
-///   <item>写入默认 <c>state.json</c>（Idle 状态）</item>
-///   <item>复制默认 YAML 提示词模板（personality.yaml / dispatch-rules.yaml / knowledge-interests.yaml）</item>
-///   <item>写入默认 <c>config.json</c>（PetConfig 默认值）</item>
-///   <item>创建 <see cref="PetContext"/> 并挂载到 Session（通过 <see cref="Session.AttachPet"/>）</item>
-/// </list>
-/// </para>
+/// Creates or loads the runtime Pet resources for a persisted session.
 /// </summary>
 public sealed class PetFactory(
     PetStateStore stateStore,
@@ -45,11 +35,8 @@ public sealed class PetFactory(
     }
 
     /// <summary>
-    /// Creates or loads the runtime Pet for the specified Session.
+    /// Creates or loads the runtime Pet for the specified session.
     /// </summary>
-    /// <param name="microSession">Session runtime contract.</param>
-    /// <param name="config">Pet 配置（可选，不提供则使用默认值）。</param>
-    /// <param name="ct">取消令牌。</param>
     public Task<IPet?> CreateOrLoadAsync(IMicroSession microSession, CancellationToken ct = default)
         => CreateOrLoadAsync(microSession, config: null, ct);
 
@@ -58,16 +45,9 @@ public sealed class PetFactory(
         ArgumentNullException.ThrowIfNull(microSession);
         ArgumentException.ThrowIfNullOrWhiteSpace(microSession.Id);
 
-        if (microSession.ParentSessionId is not null)
-        {
-            _logger.LogDebug("子会话不创建独立 Pet：SessionId={SessionId}", microSession.Id);
-            return microSession.Pet;
-        }
-
         string sessionId = microSession.Id;
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
 
-        // 幂等：目录已存在时跳过
         if (!Directory.Exists(petDir))
         {
             Directory.CreateDirectory(petDir);
@@ -107,7 +87,7 @@ public sealed class PetFactory(
     }
 
     /// <summary>
-    /// Activates the runtime Pet for an approved Session.
+    /// Activates the runtime Pet for an approved session.
     /// </summary>
     public async Task<IPet?> ActivateAsync(IMicroSession microSession, CancellationToken ct = default)
     {
@@ -130,8 +110,6 @@ public sealed class PetFactory(
         if (!File.Exists(path))
             await File.WriteAllTextAsync(path, content, ct);
     }
-
-    // ── 默认 YAML 模板 ──────────────────────────────────────────────────────
 
     private const string DefaultPersonalityYaml = """
 # Pet 人格提示词

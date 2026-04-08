@@ -16,20 +16,21 @@ public sealed class SessionRunner(
     ILogger<SessionRunner> logger) : BackgroundService
 {
     private readonly TimeSpan _tickInterval = TimeSpan.FromMilliseconds(100); // 10 FPS
-    protected override async Task ExecuteAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            var start = Stopwatch.GetTimestamp();
-            
-            Update(); // 你的 Tick 逻辑
-            
-            var elapsed = Stopwatch.GetElapsedTime(start);
-            var delay = _tickInterval - elapsed;
-            
-            if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, ct);
-        }
+    protected override Task ExecuteAsync(CancellationToken ct)
+    { 
+        return Task.CompletedTask;
+        // while (!ct.IsCancellationRequested)
+        // {
+        //     var start = Stopwatch.GetTimestamp();
+        //     
+        //     Update(); // 你的 Tick 逻辑
+        //     
+        //     var elapsed = Stopwatch.GetElapsedTime(start);
+        //     var delay = _tickInterval - elapsed;
+        //     
+        //     if (delay > TimeSpan.Zero)
+        //         await Task.Delay(delay, ct);
+        // }
     }
     private void Update()
     {

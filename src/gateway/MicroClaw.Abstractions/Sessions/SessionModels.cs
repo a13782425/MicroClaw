@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Abstractions.Sessions;
@@ -12,7 +12,6 @@ public sealed record SessionInfo(
     string ChannelId,
     DateTimeOffset CreatedAt,
     string? AgentId = null,
-    string? ParentSessionId = null,
     string? ApprovalReason = null);
 
 public sealed record SessionMessage(

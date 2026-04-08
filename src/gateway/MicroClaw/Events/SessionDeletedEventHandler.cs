@@ -31,7 +31,7 @@ public sealed class SessionDeletedEventHandler(
 
         // 0. 释放 Per-Session PetContext（标记 Disabled，防止后续 PetRunner 使用已失效状态）
         IMicroSession? session = sessionRepo.Get(sessionId);
-        if (session is { ParentSessionId: null } && session.Pet is IDisposable disposable)
+        if (session?.Pet is IDisposable disposable)
         {
             disposable.Dispose();
             if (session is MicroSession mutableSession)

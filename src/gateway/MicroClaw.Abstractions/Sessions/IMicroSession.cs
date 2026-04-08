@@ -17,7 +17,6 @@ public interface IMicroSession
     string ChannelId { get; }
     DateTimeOffset CreatedAt { get; }
     string? AgentId { get; }
-    string? ParentSessionId { get; }
     string? ApprovalReason { get; }
     IChannel? Channel { get; }
     IPet? Pet { get; }

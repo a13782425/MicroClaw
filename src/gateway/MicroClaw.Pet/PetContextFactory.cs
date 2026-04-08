@@ -75,7 +75,6 @@ public sealed class PetContextFactory(
         public string ChannelId { get; } = "web";
         public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
         public string? AgentId => null;
-        public string? ParentSessionId => null;
         public string? ApprovalReason => null;
         public MicroClaw.Abstractions.Channel.IChannel? Channel => null;
         public IPet? Pet => null;
@@ -91,7 +90,6 @@ public sealed class PetContextFactory(
             ChannelId,
             CreatedAt,
             AgentId,
-            ParentSessionId,
             ApprovalReason);
     }
 }

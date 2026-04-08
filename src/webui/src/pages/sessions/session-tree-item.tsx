@@ -2,9 +2,8 @@ import { useState } from 'react'
 import {
   Box, Flex, Text, IconButton, Badge, Spinner,
 } from '@chakra-ui/react'
-import { MessageCircle, Trash2, ChevronRight, ChevronDown, Bot } from 'lucide-react'
+import { MessageCircle, Trash2, ChevronRight, ChevronDown } from 'lucide-react'
 import type { SessionTreeNode } from '@/store/sessionStore'
-import { isSubAgentSession } from '@/store/sessionStore'
 
 const CHANNEL_LABELS: Record<string, string> = {
   feishu: '飞书', wecom: '企微', wechat: '微信', web: 'Web',
@@ -39,7 +38,6 @@ export default function SessionTreeItem({
   const hasChildren = node.children.length > 0
   const isActive = session.id === activeId
   const isRunning = runningSessionIds.has(session.id)
-  const isSub = isSubAgentSession(session)
 
   return (
     <>
@@ -77,10 +75,10 @@ export default function SessionTreeItem({
         )}
 
         {/* 图标 */}
-        <Box color={isActive ? 'blue.500' : isSub ? 'teal.400' : 'gray.400'} mr="2" flexShrink={0}>
+        <Box color={isActive ? 'blue.500' : 'gray.400'} mr="2" flexShrink={0}>
           {isRunning && !isActive
             ? <Spinner size="xs" color="var(--mc-info)" />
-            : isSub ? <Bot size={14} /> : <MessageCircle size={14} />}
+            : <MessageCircle size={14} />}
         </Box>
 
         {/* 标题 + badges */}
@@ -88,7 +86,7 @@ export default function SessionTreeItem({
           <Text
             fontSize="sm"
             fontWeight={isActive ? 'medium' : 'normal'}
-            color={isActive ? 'blue.600' : isSub ? 'teal.600' : undefined}
+            color={isActive ? 'blue.600' : undefined}
            
             truncate
           >
@@ -97,7 +95,7 @@ export default function SessionTreeItem({
           <Flex gap="1" mt="0.5">
             {channelBadge(session.channelType)}
             {session.agentId && (
-              <Badge size="sm" colorPalette={isSub ? 'teal' : 'orange'}>Agent</Badge>
+              <Badge size="sm" colorPalette="orange">Agent</Badge>
             )}
           </Flex>
         </Box>

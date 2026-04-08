@@ -13,6 +13,6 @@ public interface ISubAgentRunner
     Task<string> RunSubAgentAsync(
         string agentId,
         string task,
-        string parentSessionId,
+        string sessionId,
         CancellationToken ct = default);
 }

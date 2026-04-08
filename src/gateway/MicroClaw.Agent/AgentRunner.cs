@@ -46,8 +46,6 @@ public sealed class AgentRunner(
     IDevMetricsService devMetrics,
     AIContentPipeline contentPipeline,
     IEnumerable<IChatContentRestorer> chatContentRestorers,
-    IToolRiskRegistry? toolRiskRegistry = null,
-    IToolRiskInterceptor? toolRiskInterceptor = null,
     IProviderRouter? providerRouter = null,
     IContextOverflowSummarizer? contextOverflowSummarizer = null,
     IHookExecutor? hookExecutor = null,
@@ -59,8 +57,6 @@ public sealed class AgentRunner(
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
     private readonly IReadOnlyList<IChatContentRestorer> _restorers =
         chatContentRestorers.ToList().AsReadOnly();
-    private readonly IToolRiskRegistry? _toolRiskRegistry = toolRiskRegistry;
-    private readonly IToolRiskInterceptor? _toolRiskInterceptor = toolRiskInterceptor;
     private readonly IProviderRouter? _providerRouter = providerRouter;
     private readonly IContextOverflowSummarizer? _contextOverflowSummarizer = contextOverflowSummarizer;
     private readonly IHookExecutor? _hookExecutor = hookExecutor;
@@ -232,17 +228,9 @@ public sealed class AgentRunner(
                     ancestorAgentIds.AddRange(
                         ancestorAgentIdsOverride.Where(static id => !string.IsNullOrWhiteSpace(id)));
                 }
-                else if (sessionForTools?.ParentSessionId is not null)
+                else if (SubAgentRunScope.Current?.AgentChain is { Count: > 0 } currentAgentChain)
                 {
-                    string? cursor = sessionForTools.ParentSessionId;
-                    while (cursor is not null)
-                    {
-                        IMicroSession? ancestor = sessionReader.Get(cursor);
-                        if (ancestor is null) break;
-                        if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
-                            ancestorAgentIds.Add(ancestor.AgentId);
-                        cursor = ancestor.ParentSessionId;
-                    }
+                    ancestorAgentIds.AddRange(currentAgentChain);
                 }
 
                 var toolContext = new ToolCreationContext(
@@ -268,8 +256,6 @@ public sealed class AgentRunner(
                 var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
                     rawClient, agent.Name, chatOptions, loggerFactory,
                     devMetrics: devMetrics,
-                    riskRegistry: _toolRiskRegistry,
-                    riskInterceptor: _toolRiskInterceptor,
                     hookExecutor: _hookExecutor);
 
                 if (!string.IsNullOrWhiteSpace(sessionId))

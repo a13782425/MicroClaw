@@ -1,6 +1,5 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using MicroClaw.Agent;
-using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
 using MicroClaw.Pet;
@@ -13,8 +12,6 @@ using NSubstitute;
 
 namespace MicroClaw.Tests.Sessions;
 
-/// <summary>
-/// SessionService 瀹炵幇 ISessionRepository 鐨勯泦鎴愭祴璇曘€?/// 姣忎釜娴嬭瘯浣跨敤鐙珛鐨勪复鏃剁洰褰曪紝鏂囦欢绯荤粺瀹屽叏闅旂銆?/// </summary>
 public sealed class SessionRepositoryTests : IDisposable
 {
     private readonly TempDirectoryFixture _tempDir = new();
@@ -30,7 +27,7 @@ public sealed class SessionRepositoryTests : IDisposable
         hubContext.Clients.Returns(clients);
         clients.All.Returns(Substitute.For<IClientProxy>());
 
-        AgentStore agentStore = new AgentStore();
+        AgentStore agentStore = new();
         WebChannel webChannel = new(hubContext);
         PetStateStore petStateStore = new(_tempDir.Path);
         EmotionStore emotionStore = new(_tempDir.Path);
@@ -41,8 +38,6 @@ public sealed class SessionRepositoryTests : IDisposable
     }
 
     public void Dispose() => _tempDir.Dispose();
-
-    // 鈹€鈹€ Get 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     [Fact]
     public void Get_AfterCreate_ReturnsDomainObject()
@@ -64,8 +59,6 @@ public sealed class SessionRepositoryTests : IDisposable
         _repo.Get("does-not-exist").Should().BeNull();
     }
 
-    // 鈹€鈹€ GetAll 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
     [Fact]
     public void GetAll_ReturnsAllSessionsAsDomainObjects()
     {
@@ -77,22 +70,6 @@ public sealed class SessionRepositoryTests : IDisposable
         all.Should().HaveCount(2);
         all.Should().AllBeOfType<Session>();
     }
-
-    // 鈹€鈹€ GetTopLevel 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    [Fact]
-    public void GetTopLevel_ExcludesSubAgentSessions()
-    {
-        _svc.CreateSession("Root", "p1");
-        _svc.CreateSession("Sub", "p1", parentSessionId: "some-parent-id");
-
-        var topLevel = _repo.GetTopLevel();
-
-        topLevel.Should().HaveCount(1);
-        topLevel[0].Title.Should().Be("Root");
-    }
-
-    // 鈹€鈹€ Save (update existing) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     [Fact]
     public void Save_ExistingSession_PersistsChangedFields()
@@ -123,8 +100,6 @@ public sealed class SessionRepositoryTests : IDisposable
         reloaded!.ProviderId.Should().Be("new-p");
     }
 
-    // 鈹€鈹€ Delete 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
     [Fact]
     public void Delete_ExistingSession_ReturnsTrueAndRemoves()
     {
@@ -141,41 +116,6 @@ public sealed class SessionRepositoryTests : IDisposable
     {
         _repo.Delete("no-such-id").Should().BeFalse();
     }
-
-    // 鈹€鈹€ GetRootSessionId 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-    [Fact]
-    public void GetRootSessionId_ForTopLevelSession_ReturnsSelf()
-    {
-        var created = _svc.CreateSession("Root", "p1");
-
-        _repo.GetRootSessionId(created.Id).Should().Be(created.Id);
-    }
-
-    [Fact]
-    public void GetRootSessionId_ForTwoLevelNesting_ReturnsRoot()
-    {
-        var root = _svc.CreateSession("Root", "p1");
-        var child = _svc.CreateSession("Child", "p1", parentSessionId: root.Id);
-
-        string rootId = _repo.GetRootSessionId(child.Id);
-
-        rootId.Should().Be(root.Id);
-    }
-
-    [Fact]
-    public void GetRootSessionId_ForThreeLevelNesting_ReturnsRoot()
-    {
-        var root = _svc.CreateSession("Root", "p1");
-        var child = _svc.CreateSession("Child", "p1", parentSessionId: root.Id);
-        var grandchild = _svc.CreateSession("Grandchild", "p1", parentSessionId: child.Id);
-
-        string rootId = _repo.GetRootSessionId(grandchild.Id);
-
-        rootId.Should().Be(root.Id);
-    }
-
-    // 鈹€鈹€ Messages 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     [Fact]
     public void AddMessage_ThenGetMessages_ReturnsAddedMessage()
@@ -211,5 +151,3 @@ public sealed class SessionRepositoryTests : IDisposable
         remaining[0].Id.Should().Be("id2");
     }
 }
-
-

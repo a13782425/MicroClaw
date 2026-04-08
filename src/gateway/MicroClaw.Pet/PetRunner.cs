@@ -25,7 +25,6 @@ namespace MicroClaw.Pet;
 /// <list type="number">
 ///   <item>从 ISessionRepository 获取 Session，取 Per-Session PetContext（懒加载）</item>
 ///   <item>若 Pet 未启用，直接透传 AgentRunner</item>
-///   <item>子代理会话（ParentSessionId != null）使用根会话的 PetContext（O-3-7）</item>
 ///   <item>Pet RAG 检索（用户消息相关知识）</item>
 ///   <item>PetDecisionEngine(LLM) 调度决策</item>
 ///   <item>根据 dispatch 结果调用 AgentRunner.StreamReActAsync()（或 Pet 直接回复）</item>
@@ -82,27 +81,18 @@ public sealed class PetRunner(
         // ── 1. 获取 Session（用于路由：ProviderId / AgentId）──
         IMicroSession? session = _sessionRepo.Get(sessionId);
 
-        // ── 2. 子代理会话：使用根会话的 PetContext（O-3-7）──
-        // 子代理会话不拥有独立 Pet，共享根会话的 Pet 编排上下文。
-        IMicroSession? petSession = session;
-        if (session?.ParentSessionId is not null)
+        // ── 2. 获取 Pet（懒加载：服务重启后 Pet 为 null）──
+        PetContext? petCtx = session?.Pet as PetContext;
+        if (petCtx is null && session is { IsApproved: true })
         {
-            string rootId = _sessionRepo.GetRootSessionId(sessionId);
-            petSession = _sessionRepo.Get(rootId);
-        }
-
-        // ── 3. 获取 Pet（懒加载：服务重启后 Pet 为 null）──
-        PetContext? petCtx = petSession?.Pet as PetContext;
-        if (petCtx is null && petSession is { IsApproved: true })
-        {
-            PetContext? loaded = await _petContextFactory.LoadAsync(petSession, ct);
+            PetContext? loaded = await _petContextFactory.LoadAsync(session, ct);
             if (loaded is not null)
             {
                 petCtx = loaded;
             }
         }
 
-        // ── 4. Pet 未启用，直接透传 AgentRunner ──
+        // ── 3. Pet 未启用，直接透传 AgentRunner ──
         if (petCtx is null || !petCtx.IsEnabled)
         {
             _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner", sessionId);
@@ -419,5 +409,4 @@ public sealed class PetRunner(
             ? _agentStore.GetDefaultAgent()
             : _agentStore.GetAgentById(agentId) ?? _agentStore.GetDefaultAgent();
 }
-
 

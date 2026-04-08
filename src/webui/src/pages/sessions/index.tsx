@@ -7,7 +7,7 @@ import {
 } from '@chakra-ui/react'
 import {
   MessageCircle, Plus, Trash2, Send, Square, Paperclip, X,
-  ChevronUp, EyeOff, HardDrive,
+  ChevronUp, HardDrive, EyeOff,
 } from 'lucide-react'
 import {
   listProviders, listChannels, listAgents,
@@ -18,7 +18,7 @@ import {
   SYSTEM_SOURCES,
 } from '@/api/gateway'
 import { AppDialog } from '@/components/ui/app-dialog'
-import { useSessionStore, isDisplayMessage, buildSessionTree, isSubAgentSession } from '@/store/sessionStore'
+import { useSessionStore, isDisplayMessage, buildSessionTree } from '@/store/sessionStore'
 import { eventBus } from '@/services/eventBus'
 import { toaster } from '@/components/ui/toaster'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -386,7 +386,7 @@ export default function SessionsPage() {
 
   const displayMessages = messages.filter(isDisplayMessage)
   const currentSession = store.currentSession()
-  const isReadOnly = currentSession ? isSubAgentSession(currentSession) : false
+  const isReadOnly = false
   const sessionTree = useMemo(() => buildSessionTree(sessions), [sessions])
   const enabledProviders = providers
 
@@ -460,7 +460,7 @@ export default function SessionsPage() {
                 <Select.Root
                   value={currentSession ? [currentSession.providerId] : []}
                   onValueChange={(v) => handleSwitchProvider(v.value[0] ?? '')}
-                  disabled={chatting || isReadOnly}
+                  disabled={chatting}
                   collection={createListCollection({
                     items: enabledProviders.map((p) => ({ value: p.id, label: `${p.displayName} (${p.modelName})` })),
                   })}

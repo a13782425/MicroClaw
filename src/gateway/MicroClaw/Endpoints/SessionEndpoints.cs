@@ -29,7 +29,7 @@ public static class SessionEndpoints
     {
         // GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）
         endpoints.MapGet("/sessions", (ISessionRepository repo) =>
-            Results.Ok(repo.GetTopLevel().Select(s => s.ToInfo()).ToList()))
+            Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList()))
             .WithTags("Sessions");
 
         // POST /api/sessions— 创建会话
@@ -428,4 +428,3 @@ public sealed record SessionDnaUpdateRequest(string FileName, string? Content);
 
 /// <summary>更新 Session 长期记忆的请求体。</summary>
 public sealed record UpdateMemoryRequest(string? Content);
-

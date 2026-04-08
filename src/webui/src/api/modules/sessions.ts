@@ -47,7 +47,6 @@ export type SessionInfo = {
   channelId: string
   createdAt: string
   agentId?: string | null
-  parentSessionId?: string | null
   approvalReason?: string | null
 }
 
