@@ -26,7 +26,7 @@ public class PainEmotionLinkerTests
             isApproved: true,
             channelType: ChannelType.Web,
             channelId: "web",
-            createdAtMs: DateTimeOffset.UtcNow,
+            createdAt: DateTimeOffset.UtcNow,
             agentId: agentId);
 
     // ── 构造参数校�?──────────────────────────────────────────────────────────

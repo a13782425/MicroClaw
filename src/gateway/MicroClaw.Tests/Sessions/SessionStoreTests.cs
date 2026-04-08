@@ -50,7 +50,7 @@ public sealed class SessionServiceStoreTests : IDisposable
         session.IsApproved.Should().BeFalse();
         session.ChannelType.Should().Be(ChannelType.Web);
         session.ChannelId.Should().Be("web");
-        session.CreatedAtMs.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+        session.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]

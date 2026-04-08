@@ -125,7 +125,7 @@ public sealed class SessionLifecycleIntegrationTests
             isApproved: false,
             channelType: ChannelType.Web,
             channelId: "",
-            createdAtMs: DateTimeOffset.UtcNow);
+            createdAt: DateTimeOffset.UtcNow);
         repo.Save(session);
         return session;
     }

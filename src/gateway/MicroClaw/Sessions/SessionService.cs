@@ -72,7 +72,7 @@ public sealed class SessionService(
             providerId: providerId,
             channelType: channelType,
             channelId: channelId,
-            createdAtMs: TimeUtils.NowMs(),
+            createdAt: TimeUtils.NowOffset(),
             agentId: agentStore.GetDefault()?.Id);
 
         AttachChannelToSession(session);
@@ -375,7 +375,7 @@ public sealed class SessionService(
             isApproved: e.IsApproved,
             channelType: ChannelConfigStore.ParseChannelType(e.ChannelType),
             channelId: string.IsNullOrEmpty(e.ChannelId) ? ChannelConfigStore.WebChannelId : e.ChannelId,
-            createdAtMs: e.CreatedAtMs,
+            createdAt: TimeUtils.FromMs(e.CreatedAtMs),
             agentId: e.AgentId,
             parentSessionId: e.ParentSessionId,
             approvalReason: e.ApprovalReason);

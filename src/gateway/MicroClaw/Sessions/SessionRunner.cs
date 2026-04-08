@@ -12,7 +12,7 @@ namespace MicroClaw.Sessions;
 /// </para>
 /// </summary>
 public sealed class SessionRunner(
-    ISessionService _,
+    ISessionService sessionService,
     ILogger<SessionRunner> logger) : BackgroundService
 {
     private readonly TimeSpan _tickInterval = TimeSpan.FromMilliseconds(100); // 10 FPS

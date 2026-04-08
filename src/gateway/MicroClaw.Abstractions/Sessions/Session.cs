@@ -30,7 +30,7 @@ public sealed class Session
     public bool IsApproved { get; private set; }
     public ChannelType ChannelType { get; private set; }
     public string ChannelId { get; private set; } = string.Empty;
-    public long CreatedAtMs { get; private set; }
+    public DateTimeOffset CreatedAt { get; private set; }
     public string? AgentId { get; private set; }
     public string? ParentSessionId { get; private set; }
     public string? ApprovalReason { get; private set; }
@@ -51,7 +51,7 @@ public sealed class Session
         bool isApproved,
         ChannelType channelType,
         string channelId,
-        long createdAtMs,
+        DateTimeOffset createdAt,
         string? agentId = null,
         string? parentSessionId = null,
         string? approvalReason = null)
@@ -64,7 +64,7 @@ public sealed class Session
             IsApproved = isApproved,
             ChannelType = channelType,
             ChannelId = channelId,
-            CreatedAtMs = createdAtMs,
+            CreatedAt = createdAt,
             AgentId = agentId,
             ParentSessionId = parentSessionId,
             ApprovalReason = approvalReason,
@@ -78,7 +78,7 @@ public sealed class Session
         string providerId,
         ChannelType channelType,
         string channelId,
-        long createdAtMs,
+        DateTimeOffset createdAt,
         string? agentId = null,
         string? parentSessionId = null)
     {
@@ -90,7 +90,7 @@ public sealed class Session
             IsApproved = false,
             ChannelType = channelType,
             ChannelId = channelId,
-            CreatedAtMs = createdAtMs,
+            CreatedAt = createdAt,
             AgentId = agentId,
             ParentSessionId = parentSessionId,
         };
@@ -167,6 +167,6 @@ public sealed class Session
     /// <summary>将领域对象转换为 API 层 DTO（向后兼容，前端无需改动）。</summary>
     public SessionInfo ToInfo() => new(
         Id, Title, ProviderId, IsApproved,
-        ChannelType, ChannelId, TimeUtils.FromMs(CreatedAtMs),
+        ChannelType, ChannelId, CreatedAt,
         AgentId, ParentSessionId, ApprovalReason);
 }

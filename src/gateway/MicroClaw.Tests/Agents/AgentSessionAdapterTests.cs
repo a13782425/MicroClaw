@@ -109,7 +109,7 @@ public sealed class AgentSessionAdapterTests
             isApproved: true,
             channelType: ChannelType.Web,
             channelId: "c",
-            createdAtMs: DateTimeOffset.UtcNow,
+            createdAt: DateTimeOffset.UtcNow,
             agentId: null);
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
@@ -216,6 +216,6 @@ public sealed class AgentSessionAdapterTests
             isApproved: true,
             channelType: channelType,
             channelId: channelId,
-            createdAtMs: DateTimeOffset.UtcNow,
+            createdAt: DateTimeOffset.UtcNow,
             agentId: agentId);
 }
