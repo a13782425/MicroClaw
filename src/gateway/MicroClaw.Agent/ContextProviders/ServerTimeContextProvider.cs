@@ -3,13 +3,12 @@ using MicroClaw.Infrastructure.Data;
 namespace MicroClaw.Agent.ContextProviders;
 
 /// <summary>
-/// 服务器时间上下文提供者：将当前服务器本地时间�?UTC 时间注入 System Prompt�?
-/// 避免 AI 在处理时间相关任务（如创建定时任务）时需要额外调�?get_current_time 工具�?
-/// </summary>
+/// 服务器时间上下文提供者：将当前服务器本地时间和 UTC 时间注入 System Prompt。
+/// 避免 AI 在处理时间相关任务（如创建定时任务）时需要额外调用 get_current_time 工具。
 public sealed class ServerTimeContextProvider : IAgentContextProvider
 {
     /// <inheritdoc />
-    /// <remarks>Order 5：在所有其�?Provider 之前注入，作为基础时间参考层�?/remarks>
+    /// <remarks>Order 5：在所有其他 Provider 之前注入，作为基础时间参考层。</remarks>
     public int Order => 5;
 
     /// <inheritdoc />
