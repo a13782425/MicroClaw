@@ -195,7 +195,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SessionService>(sp => new SessionService(
 			sp.GetRequiredService<AgentStore>(),
 			sp.GetRequiredService<IHubContext<GatewayHub>>(),
-			sp.GetRequiredService<IEnumerable<IChannel>>(),
+			new Lazy<IEnumerable<IChannel>>(() => sp.GetRequiredService<IEnumerable<IChannel>>()),
 			sp.GetRequiredService<MicroClaw.Abstractions.Pet.IPetFactory>(),
 			sessionsDir));
 		builder.Services.AddSingleton<ISessionService>(sp => sp.GetRequiredService<SessionService>());

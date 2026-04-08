@@ -31,7 +31,7 @@ namespace MicroClaw.Sessions;
 public sealed class SessionService(
     AgentStore agentStore,
     IHubContext<GatewayHub> hubContext,
-    IEnumerable<IChannel> channels,
+    Lazy<IEnumerable<IChannel>> channels,
     IPetFactory petFactory,
     string sessionsDir) : ISessionService
 {
@@ -53,9 +53,10 @@ public sealed class SessionService(
     private static readonly ConcurrentDictionary<string, DateTimeOffset> NotifyThrottle = new();
     private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
 
-    private readonly IReadOnlyDictionary<ChannelType, IChannel> _channels = channels
-        .GroupBy(static channel => channel.Type)
-        .ToDictionary(static group => group.Key, static group => group.Last());
+    private readonly Lazy<IReadOnlyDictionary<ChannelType, IChannel>> _channels = new(() =>
+        channels.Value
+            .GroupBy(static channel => channel.Type)
+            .ToDictionary(static group => group.Key, static group => group.Last()));
     private readonly IPetFactory _petFactory = petFactory ?? throw new ArgumentNullException(nameof(petFactory));
 
     // ── ISessionService: 渠道会话管理 ──────────────────────────────────────
@@ -333,10 +334,10 @@ public sealed class SessionService(
 
     private IChannel ResolveChannel(ChannelType channelType)
     {
-        if (_channels.TryGetValue(channelType, out IChannel? channel))
+        if (_channels.Value.TryGetValue(channelType, out IChannel? channel))
             return channel;
 
-        if (_channels.TryGetValue(ChannelType.Web, out IChannel? fallback))
+        if (_channels.Value.TryGetValue(ChannelType.Web, out IChannel? fallback))
             return fallback;
 
         throw new InvalidOperationException($"No channel is registered for type '{channelType}'.");
