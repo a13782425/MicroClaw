@@ -2,6 +2,7 @@ using MicroClaw.Abstractions.Events;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Pet.Rag;
+using MicroClaw.Sessions;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Events;
@@ -29,11 +30,12 @@ public sealed class SessionDeletedEventHandler(
         string sessionId = domainEvent.SessionId;
 
         // 0. 释放 Per-Session PetContext（标记 Disabled，防止后续 PetRunner 使用已失效状态）
-        var session = sessionRepo.Get(sessionId);
-        if (session?.Pet is IDisposable disposable)
+        IMicroSession? session = sessionRepo.Get(sessionId);
+        if (session is { ParentSessionId: null } && session.Pet is IDisposable disposable)
         {
             disposable.Dispose();
-            session.DetachPet();
+            if (session is MicroSession mutableSession)
+                mutableSession.DetachPet();
             logger.LogDebug("Session {SessionId} 的 Pet 已释放", sessionId);
         }
 

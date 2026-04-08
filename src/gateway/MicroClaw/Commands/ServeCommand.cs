@@ -192,12 +192,11 @@ public class ServeCommand : Command
 
 		builder.Services.AddSingleton<ConfigService>();
 		builder.Services.AddSingleton<ProviderConfigStore>(_ => new ProviderConfigStore());
-		builder.Services.AddSingleton<WebSessionChannel>();
 		builder.Services.AddSingleton<SessionService>(sp => new SessionService(
 			sp.GetRequiredService<AgentStore>(),
 			sp.GetRequiredService<IHubContext<GatewayHub>>(),
 			sp.GetRequiredService<IEnumerable<IChannel>>(),
-			sp.GetRequiredService<WebSessionChannel>(),
+			sp.GetRequiredService<MicroClaw.Abstractions.Pet.IPetFactory>(),
 			sessionsDir));
 		builder.Services.AddSingleton<ISessionService>(sp => sp.GetRequiredService<SessionService>());
 		builder.Services.AddSingleton<ISessionRepository>(sp => sp.GetRequiredService<SessionService>());
@@ -268,7 +267,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentContextProvider, SessionMemoryContextProvider>();
 		// 使用工厂注册 ISubAgentRunner，通过 Lazy<AgentRunner> 打破循环依赖
 		builder.Services.AddSingleton<ISubAgentRunner>(sp => new SubAgentRunnerService(
-			sp.GetRequiredService<ISessionRepository>(),
+			sp.GetRequiredService<ISessionService>(),
 			sp.GetRequiredService<AgentStore>(),
 			new Lazy<AgentRunner>(() => sp.GetRequiredService<AgentRunner>()),
 			MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth));
@@ -316,9 +315,9 @@ public class ServeCommand : Command
 			new MicroClaw.Pet.PetFactory(
 				sp.GetRequiredService<MicroClaw.Pet.Storage.PetStateStore>(),
 				sp.GetRequiredService<MicroClaw.Pet.PetContextFactory>(),
-				sp.GetRequiredService<ISessionRepository>(),
 				MicroClawConfig.Env,
 				sp.GetRequiredService<ILogger<MicroClaw.Pet.PetFactory>>()));
+		builder.Services.AddSingleton<MicroClaw.Abstractions.Pet.IPetFactory>(sp => sp.GetRequiredService<MicroClaw.Pet.PetFactory>());
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>(sp =>
 			new MicroClaw.Pet.Observer.PetSessionObserver(
 				MicroClawConfig.Env,
@@ -451,6 +450,7 @@ public class ServeCommand : Command
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
 		builder.Services.AddSingleton<ChannelConfigStore>();
+		builder.Services.AddSingleton<IChannel, WebChannel>();
 
 		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
 		builder.Services.AddSingleton<FeishuTokenCache>();

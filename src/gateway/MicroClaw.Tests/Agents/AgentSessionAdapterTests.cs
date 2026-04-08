@@ -3,6 +3,7 @@ using MicroClaw.Agent.Sessions;
 using MicroClaw.Abstractions;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Sessions;
 using Microsoft.Agents.AI;
 
 namespace MicroClaw.Tests.Agents;
@@ -19,7 +20,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_WithFullSessionInfo_SetsAllCoreKeys()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("sess-1", "agent-99", "provider-A");
+        MicroSession info = BuildSessionInfo("sess-1", "agent-99", "provider-A");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -30,7 +31,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_SessionIdKey_MatchesSessionInfoId()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("sess-abc", "agent-1", "prov-1");
+        MicroSession info = BuildSessionInfo("sess-abc", "agent-1", "prov-1");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -42,7 +43,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_ProviderIdKey_MatchesSessionInfoProviderId()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("s", "a", "my-provider");
+        MicroSession info = BuildSessionInfo("s", "a", "my-provider");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -54,7 +55,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_AgentIdKey_MatchesSessionInfoAgentId()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("s", "agent-xyz", "p");
+        MicroSession info = BuildSessionInfo("s", "agent-xyz", "p");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -66,7 +67,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_ChannelTypeKey_ContainsChannelTypeString()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("s", "a", "p", channelType: ChannelType.Web);
+        MicroSession info = BuildSessionInfo("s", "a", "p", channelType: ChannelType.Web);
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -78,7 +79,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_ChannelIdKey_MatchesSessionInfoChannelId()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("s", "a", "p", channelId: "chan-99");
+        MicroSession info = BuildSessionInfo("s", "a", "p", channelId: "chan-99");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -90,7 +91,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_TitleKey_MatchesSessionInfoTitle()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("s", "a", "p", title: "My Test Session");
+        MicroSession info = BuildSessionInfo("s", "a", "p", title: "My Test Session");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -102,7 +103,7 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_NullAgentId_DoesNotSetAgentIdKey()
     {
         var bag = new AgentSessionStateBag();
-        Session info = Session.Reconstitute(
+        MicroSession info = MicroSession.Reconstitute(
             id: "s",
             title: "t",
             providerId: "p",
@@ -123,8 +124,8 @@ public sealed class AgentSessionAdapterTests
     public void PopulateStateBag_CalledTwice_OverwritesPreviousValues()
     {
         var bag = new AgentSessionStateBag();
-        Session first = BuildSessionInfo("sess-1", "agent-A", "prov-X", title: "First");
-        Session second = BuildSessionInfo("sess-2", "agent-B", "prov-Y", title: "Second");
+        MicroSession first = BuildSessionInfo("sess-1", "agent-A", "prov-X", title: "First");
+        MicroSession second = BuildSessionInfo("sess-2", "agent-B", "prov-Y", title: "Second");
 
         AgentSessionAdapter.PopulateStateBag(bag, first);
         AgentSessionAdapter.PopulateStateBag(bag, second);
@@ -151,7 +152,7 @@ public sealed class AgentSessionAdapterTests
     public void GetStringValue_ExistingKey_ReturnsStoredValue()
     {
         var bag = new AgentSessionStateBag();
-        Session info = BuildSessionInfo("sess-read", "a", "p");
+        MicroSession info = BuildSessionInfo("sess-read", "a", "p");
 
         AgentSessionAdapter.PopulateStateBag(bag, info);
 
@@ -202,14 +203,14 @@ public sealed class AgentSessionAdapterTests
 
     // ���� �������� ����������������������������������������������������������������������������������������������������������������
 
-    private static Session BuildSessionInfo(
+    private static MicroSession BuildSessionInfo(
         string id,
         string agentId,
         string providerId,
         string channelId = "chan-1",
         string title = "Test Session",
         ChannelType channelType = ChannelType.Web)
-        => Session.Reconstitute(
+        => MicroSession.Reconstitute(
             id: id,
             title: title,
             providerId: providerId,

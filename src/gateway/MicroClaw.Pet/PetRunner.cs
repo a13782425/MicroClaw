@@ -80,11 +80,11 @@ public sealed class PetRunner(
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
         // ── 1. 获取 Session（用于路由：ProviderId / AgentId）──
-        Session? session = _sessionRepo.Get(sessionId);
+        IMicroSession? session = _sessionRepo.Get(sessionId);
 
         // ── 2. 子代理会话：使用根会话的 PetContext（O-3-7）──
         // 子代理会话不拥有独立 Pet，共享根会话的 Pet 编排上下文。
-        Session? petSession = session;
+        IMicroSession? petSession = session;
         if (session?.ParentSessionId is not null)
         {
             string rootId = _sessionRepo.GetRootSessionId(sessionId);
@@ -95,10 +95,9 @@ public sealed class PetRunner(
         PetContext? petCtx = petSession?.Pet as PetContext;
         if (petCtx is null && petSession is { IsApproved: true })
         {
-            var loaded = await _petContextFactory.LoadAsync(petSession.Id, ct);
+            PetContext? loaded = await _petContextFactory.LoadAsync(petSession, ct);
             if (loaded is not null)
             {
-                petSession.AttachPet(loaded);
                 petCtx = loaded;
             }
         }
@@ -130,7 +129,7 @@ public sealed class PetRunner(
     /// </summary>
     private async Task ExecuteWithPetAsync(
         string sessionId,
-        Session? session,
+        IMicroSession? session,
         IReadOnlyList<SessionMessage> history,
         PetContext petCtx,
         CancellationToken ct,
@@ -259,7 +258,7 @@ public sealed class PetRunner(
 
     /// <summary>Pet 未启用时，直接透传 AgentRunner（保持原有 Web chat 行为）。</summary>
     private async IAsyncEnumerable<StreamItem> PassthroughToAgentRunnerAsync(
-        Session? session,
+        IMicroSession? session,
         IReadOnlyList<SessionMessage> history,
         [EnumeratorCancellation] CancellationToken ct,
         string source)
@@ -277,7 +276,7 @@ public sealed class PetRunner(
     /// <summary>根据 PetDispatchResult 委派 AgentRunner 执行。</summary>
     private async IAsyncEnumerable<StreamItem> DelegateToAgentRunnerAsync(
         string sessionId,
-        Session? session,
+        IMicroSession? session,
         IReadOnlyList<SessionMessage> history,
         PetDispatchResult dispatch,
         PetContext petCtx,

@@ -87,7 +87,7 @@ public sealed class AgentRunner(
             throw new InvalidOperationException("No enabled default agent found.");
 
         // 从 session 获取 providerId；若 session 未绑定模型，按 Agent 路由策略选择
-        Session? session = sessionReader.Get(sessionId);
+        ISession? session = sessionReader.Get(sessionId);
         string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
             ? session.ProviderId
             : ResolveProviderByStrategy(agent.RoutingStrategy);
@@ -220,7 +220,7 @@ public sealed class AgentRunner(
                 Agent effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
                     ? agent.WithToolOverrides(petOverrides.ToolOverrides)
                     : agent;
-                Session? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
+                ISession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
                     ? sessionReader.Get(sessionId) : null;
 
                 var ancestorAgentIds = new List<string>();
@@ -229,7 +229,7 @@ public sealed class AgentRunner(
                     string? cursor = sessionForTools.ParentSessionId;
                     while (cursor is not null)
                     {
-                        Session? ancestor = sessionReader.Get(cursor);
+                        ISession? ancestor = sessionReader.Get(cursor);
                         if (ancestor is null) break;
                         if (!string.IsNullOrWhiteSpace(ancestor.AgentId))
                             ancestorAgentIds.Add(ancestor.AgentId);
@@ -282,7 +282,7 @@ public sealed class AgentRunner(
                 AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
                 if (!string.IsNullOrWhiteSpace(sessionId))
                 {
-                    Session? sessionInfo = sessionReader.Get(sessionId);
+                    ISession? sessionInfo = sessionReader.Get(sessionId);
                     if (sessionInfo is not null)
                         AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
                 }

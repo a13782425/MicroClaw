@@ -259,7 +259,7 @@ public sealed class PetRunnerTests : IDisposable
         var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
         // 返回已审批的 Session，与将要简单加载的 PetContext进行验证
         sessionRepo.Get(Arg.Any<string>()).Returns(mi =>
-            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
+            Session.Reconstitute(
                 mi.ArgAt<string>(0), "Test", "provider1", true,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow));
         sessionRepo.GetRootSessionId(Arg.Any<string>()).Returns(mi => mi.ArgAt<string>(0));

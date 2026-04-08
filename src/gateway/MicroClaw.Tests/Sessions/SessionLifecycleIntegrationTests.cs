@@ -28,6 +28,15 @@ public sealed class SessionLifecycleIntegrationTests
 
     private sealed class TrackablePetContext : IPetContext, IDisposable
     {
+        public IMicroSession MicroSession { get; } = MicroSession.Reconstitute(
+            id: "pet-owner",
+            title: "pet-owner",
+            providerId: "provider",
+            isApproved: true,
+            channelType: ChannelType.Web,
+            channelId: "web",
+            createdAt: DateTimeOffset.UtcNow);
+
         public PetContextState State { get; private set; } = PetContextState.Active;
         public bool IsEnabled => State == PetContextState.Active;
         public bool DisposeCalled { get; private set; }
@@ -67,7 +76,8 @@ public sealed class SessionLifecycleIntegrationTests
         public Task HandleAsync(SessionApprovedEvent domainEvent, CancellationToken ct = default)
         {
             WasCalled = true;
-            repo.Get(domainEvent.SessionId)?.AttachPet(ctx);
+            if (repo.Get(domainEvent.SessionId) is Session session)
+                session.AttachPet(ctx);
             return Task.CompletedTask;
         }
     }
@@ -86,7 +96,8 @@ public sealed class SessionLifecycleIntegrationTests
             if (session?.Pet is IDisposable disposable)
             {
                 disposable.Dispose();
-                session.DetachPet();
+                if (session is Session mutableSession)
+                    mutableSession.DetachPet();
             }
             return Task.CompletedTask;
         }

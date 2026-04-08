@@ -3,6 +3,9 @@ using MicroClaw.Agent;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
+using MicroClaw.Pet.Storage;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using Microsoft.AspNetCore.SignalR;
@@ -27,9 +30,13 @@ public sealed class SessionRepositoryTests : IDisposable
         hubContext.Clients.Returns(clients);
         clients.All.Returns(Substitute.For<IClientProxy>());
 
-        var agentStore = new AgentStore();
-        var webChannel = new WebSessionChannel(hubContext);
-        _svc = new SessionService(agentStore, hubContext, [], webChannel, _tempDir.Path);
+        AgentStore agentStore = new AgentStore();
+        WebChannel webChannel = new(hubContext);
+        PetStateStore petStateStore = new(_tempDir.Path);
+        EmotionStore emotionStore = new(_tempDir.Path);
+        PetContextFactory contextFactory = new(petStateStore, emotionStore);
+        PetFactory petFactory = new(petStateStore, contextFactory, _tempDir.Path, Microsoft.Extensions.Logging.Abstractions.NullLogger<PetFactory>.Instance);
+        _svc = new SessionService(agentStore, hubContext, [webChannel], petFactory, _tempDir.Path);
         _repo = _svc;
     }
 
@@ -42,7 +49,7 @@ public sealed class SessionRepositoryTests : IDisposable
     {
         var session = _svc.CreateSession("Test", "p1");
 
-        Session? result = _repo.Get(session.Id);
+        Session? result = _repo.Get(session.Id) as Session;
 
         result.Should().NotBeNull();
         result!.Id.Should().Be(session.Id);
@@ -91,12 +98,12 @@ public sealed class SessionRepositoryTests : IDisposable
     public void Save_ExistingSession_PersistsChangedFields()
     {
         var created = _svc.CreateSession("Original", "p1");
-        Session session = _repo.Get(created.Id)!;
+        Session microSession = (_repo.Get(created.Id) as Session)!;
 
-        session.Approve("reason");
-        _repo.Save(session);
+        microSession.Approve("reason");
+        _repo.Save(microSession);
 
-        Session? reloaded = _repo.Get(created.Id);
+        Session? reloaded = _repo.Get(created.Id) as Session;
         reloaded.Should().NotBeNull();
         reloaded!.IsApproved.Should().BeTrue();
         reloaded.ApprovalReason.Should().Be("reason");
@@ -106,13 +113,13 @@ public sealed class SessionRepositoryTests : IDisposable
     public void Save_ExistingSession_UpdatedProvider_IsPersisted()
     {
         var created = _svc.CreateSession("T", "old-p");
-        Session session = _repo.Get(created.Id)!;
+        Session microSession = (_repo.Get(created.Id) as Session)!;
 
-        session.UpdateProvider("new-p");
-        session.PopDomainEvents();
-        _repo.Save(session);
+        microSession.UpdateProvider("new-p");
+        microSession.PopDomainEvents();
+        _repo.Save(microSession);
 
-        Session? reloaded = _repo.Get(created.Id);
+        Session? reloaded = _repo.Get(created.Id) as Session;
         reloaded!.ProviderId.Should().Be("new-p");
     }
 
@@ -176,7 +183,7 @@ public sealed class SessionRepositoryTests : IDisposable
         var parent = _svc.CreateSession("Parent", "p1");
         var sub = _svc.CreateSession("Sub", "p1", agentId: "agent-x", parentSessionId: parent.Id);
 
-        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-x", activeSessionIds: []);
+        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-x", activeSessionIds: []) as Session;
 
         found.Should().NotBeNull();
         found!.Id.Should().Be(sub.Id);
@@ -189,7 +196,7 @@ public sealed class SessionRepositoryTests : IDisposable
         var sub = _svc.CreateSession("Sub", "p1", agentId: "agent-y", parentSessionId: parent.Id);
 
         Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-y",
-            activeSessionIds: [sub.Id]);
+            activeSessionIds: [sub.Id]) as Session;
 
         found.Should().BeNull();
     }
@@ -200,7 +207,7 @@ public sealed class SessionRepositoryTests : IDisposable
         var parent = _svc.CreateSession("Parent", "p1");
         _svc.CreateSession("Sub", "p1", agentId: "agent-A", parentSessionId: parent.Id);
 
-        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-B", activeSessionIds: []);
+        Session? found = _repo.FindIdleSubAgentSession(parent.Id, "agent-B", activeSessionIds: []) as Session;
 
         found.Should().BeNull();
     }

@@ -1,3 +1,5 @@
+using MicroClaw.Abstractions.Sessions;
+
 namespace MicroClaw.Abstractions.Pet;
 
 /// <summary>
@@ -9,6 +11,9 @@ namespace MicroClaw.Abstractions.Pet;
 /// </summary>
 public interface IPet
 {
+    /// <summary>当前 Pet 绑定的会话。</summary>
+    IMicroSession MicroSession { get; }
+
     /// <summary>宠物是否处于可参与编排的激活状态。</summary>
     bool IsEnabled { get; }
 }

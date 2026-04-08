@@ -7,14 +7,14 @@ public interface ISessionRepository
 {
     // ── 查询 ──────────────────────────────────────────────────────────────────
 
-    /// <summary>按 ID 获取 Session 领域对象。不存在时返回 null。</summary>
-    Session? Get(string id);
+    /// <summary>按 ID 获取 Session 只读视图。不存在时返回 null。</summary>
+    IMicroSession? Get(string id);
 
     /// <summary>获取所有会话（含子代理会话）的快照。</summary>
-    IReadOnlyList<Session> GetAll();
+    IReadOnlyList<IMicroSession> GetAll();
 
     /// <summary>仅返回顶层会话（ParentSessionId 为 null）。</summary>
-    IReadOnlyList<Session> GetTopLevel();
+    IReadOnlyList<IMicroSession> GetTopLevel();
 
     /// <summary>
     /// 沿 ParentSessionId 链向上遍历，返回根会话 ID。
@@ -25,7 +25,7 @@ public interface ISessionRepository
     /// <summary>
     /// 在同一父会话下查找空闲（未活跃）子代理会话，用于会话复用。
     /// </summary>
-    Session? FindIdleSubAgentSession(
+    IMicroSession? FindIdleSubAgentSession(
         string parentSessionId,
         string agentId,
         IReadOnlyCollection<string> activeSessionIds);
@@ -33,7 +33,7 @@ public interface ISessionRepository
     // ── 命令 ──────────────────────────────────────────────────────────────────
 
     /// <summary>持久化 Session 状态（新增或更新）。</summary>
-    void Save(Session session);
+    void Save(IMicroSession microSession);
 
     /// <summary>删除指定会话及其历史消息目录。返回 false 表示会话不存在。</summary>
     bool Delete(string id);

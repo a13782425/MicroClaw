@@ -3,8 +3,8 @@ using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
-using MicroClaw.Sessions;
 using Microsoft.Extensions.Logging;
+using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Jobs;
 
@@ -85,7 +85,7 @@ public sealed class FeishuDocSyncJob(
         CancellationToken ct)
     {
         // 取所有飞书会话（SessionEntity 未存储 channelId，故取全部 Feishu 会话）
-        IReadOnlyList<Session> feishuSessions = repo.GetAll()
+        IReadOnlyList<SessionView> feishuSessions = repo.GetAll()
             .Where(s => s.ChannelType == ChannelType.Feishu)
             .ToList();
 
@@ -98,7 +98,7 @@ public sealed class FeishuDocSyncJob(
         int syncedCount = 0;
         int skippedCount = 0;
 
-        foreach (Session session in feishuSessions)
+        foreach (SessionView session in feishuSessions)
         {
             if (ct.IsCancellationRequested) break;
 

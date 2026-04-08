@@ -1,8 +1,10 @@
 using FluentAssertions;
 using MicroClaw.Abstractions.Pet;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 
 namespace MicroClaw.Tests.Pet;
@@ -42,10 +44,21 @@ public sealed class PetContextTests : IDisposable
 
     private PetContext CreateContext(bool enabled = true, PetBehaviorState behaviorState = PetBehaviorState.Idle)
     {
-        var state = new PetState { SessionId = SessionId, BehaviorState = behaviorState };
-        var config = new PetConfig { Enabled = enabled };
-        return new PetContext(state, config, EmotionState.Default);
+        PetState state = new() { SessionId = SessionId, BehaviorState = behaviorState };
+        PetConfig config = new() { Enabled = enabled };
+        MicroSession microSession = CreateSession(SessionId, isApproved: true);
+        return new PetContext(microSession, state, config, EmotionState.Default, PetContextState.Active);
     }
+
+    private static MicroSession CreateSession(string sessionId, bool isApproved)
+        => MicroSession.Reconstitute(
+            id: sessionId,
+            title: sessionId,
+            providerId: "provider-1",
+            isApproved: isApproved,
+            channelType: Configuration.Options.ChannelType.Web,
+            channelId: "web",
+            createdAt: DateTimeOffset.UtcNow);
 
     // ══════════════════════════════════════════════════════════════════════════
     //  PetContext — 初始状态

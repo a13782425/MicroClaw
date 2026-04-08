@@ -16,6 +16,7 @@ using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
+using MicroClaw.Sessions;
 using MicroClaw.Skills;
 using MicroClaw.Tests.Fixtures;
 using MicroClaw.Tools;
@@ -356,7 +357,7 @@ public sealed class PetEmotionIntegrationTests : IDisposable
         // ISessionRepository + PetContextFactory（O-3-5 新增依赖）
         var sessionRepo = Substitute.For<ISessionRepository>();
         sessionRepo.Get(Arg.Any<string>()).Returns(mi =>
-            Session.Reconstitute(
+            MicroSession.Reconstitute(
                 mi.ArgAt<string>(0), "Test", "provider1", true,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow));
         sessionRepo.GetRootSessionId(Arg.Any<string>()).Returns(mi => mi.ArgAt<string>(0));

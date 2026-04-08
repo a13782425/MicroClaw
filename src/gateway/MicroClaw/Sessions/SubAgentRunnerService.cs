@@ -11,6 +11,7 @@ using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
+using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Sessions;
 
@@ -25,7 +26,7 @@ namespace MicroClaw.Sessions;
 /// - 子代理会话不在 GET /api/sessions 中对外暴露。
 /// </summary>
 public sealed class SubAgentRunnerService(
-    ISessionRepository repo,
+    ISessionService sessionService,
     AgentStore agentStore,
     Lazy<AgentRunner> agentRunnerLazy,
     int maxSubAgentDepth = 3) : ISubAgentRunner
@@ -34,6 +35,7 @@ public sealed class SubAgentRunnerService(
 
     // 记录当前正在运行的子代理会话 ID，用于空闲检测（避免并发复用同一会话）
     private readonly ConcurrentDictionary<string, byte> _activeSessions = new();
+    private readonly ISessionService _sessions = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
 
     private AgentRunner AgentRunner => agentRunnerLazy.Value;
 
@@ -56,7 +58,7 @@ public sealed class SubAgentRunnerService(
         string? cursor = parentSessionId;
         while (cursor is not null)
         {
-            Session? ancestor = repo.Get(cursor);
+            SessionView? ancestor = _sessions.Get(cursor);
             if (ancestor is null) break;
 
             if (ancestor.ParentSessionId is not null)
@@ -75,35 +77,36 @@ public sealed class SubAgentRunnerService(
         }
 
         // 获取父会话 ProviderId（子会话继承同一模型）
-        Session? parentSession = repo.Get(parentSessionId);
+        SessionView? parentSession = _sessions.Get(parentSessionId);
         string providerId = parentSession?.ProviderId ?? string.Empty;
         
         // 根会话 ID：沿祖先链找到顶层会话，子代理消息将同步写入其 jsonl 供 RAG 归并
-        string rootSessionId = repo.GetRootSessionId(parentSessionId);
+        string rootSessionId = _sessions.GetRootSessionId(parentSessionId);
         
         // 优先复用空闲子代理会话（同一父会话 + 同一 AgentId），避免重复创建
         IReadOnlyCollection<string> activeIds = _activeSessions.Keys.ToList();
-        Session? idleSession = repo.FindIdleSubAgentSession(parentSessionId, agentId, activeIds);
+        SessionView? idleSession = _sessions.FindIdleSubAgentSession(parentSessionId, agentId, activeIds);
         Session subSession;
         if (idleSession is not null)
         {
-            subSession = idleSession;
+            subSession = idleSession as Session
+                ?? throw new InvalidOperationException("Sub-agent session write path requires a concrete Session.");
         }
         else
         {
             string parentShort = parentSessionId.Length > 8 ? parentSessionId[..8] : parentSessionId;
             string title = $"[子代理] {agent.Name} ← {parentShort}";
-            subSession = Session.Create(
-                id: Guid.NewGuid().ToString("N"),
+            subSession = _sessions.CreateSession(
                 title: title,
                 providerId: providerId,
                 channelType: ChannelType.Web,
-                channelId: ChannelConfigStore.WebChannelId,
-                createdAt: TimeUtils.NowOffset(),
+                id: Guid.NewGuid().ToString("N"),
                 agentId: agentId,
-                parentSessionId: parentSessionId);
+                parentSessionId: parentSessionId,
+                channelId: ChannelConfigStore.WebChannelId) as Session
+                ?? throw new InvalidOperationException("Sub-agent session creation must return a concrete Session.");
             subSession.Approve();
-            repo.Save(subSession);
+            _sessions.Save(subSession);
         }
         
         // 标记为活跃，防止并发调用复用同一会话
@@ -114,7 +117,7 @@ public sealed class SubAgentRunnerService(
             // 保存用户任务消息到子会话
             SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null,
                 Source: $"sub-agent:{agentId}");
-            repo.AddMessage(subSession.Id, userMsg);
+            _sessions.AddMessage(subSession.Id, userMsg);
             
             // 同步写入根会话：携带 Metadata 标注来源子会话，供 UI 显示子代理信息
             // 使用 Internal 可见性：LLM 和前端均不可见，但 MemorySummarizationJob 的 role 过滤仍会包含，
@@ -122,7 +125,7 @@ public sealed class SubAgentRunnerService(
             if (rootSessionId != subSession.Id)
             {
                 var rootUserMeta = BuildSubAgentMetadata(agentId, agent.Name, subSession.Id);
-                repo.AddMessage(rootSessionId,
+                _sessions.AddMessage(rootSessionId,
                     userMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootUserMeta, Visibility = MessageVisibility.Internal });
             }
             
@@ -186,14 +189,14 @@ public sealed class SubAgentRunnerService(
             // 保存 AI 回复到子会话
             SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", main, think,
                 DateTimeOffset.UtcNow, attachments, Source: $"sub-agent:{agentId}");
-            repo.AddMessage(subSession.Id, assistantMsg);
+            _sessions.AddMessage(subSession.Id, assistantMsg);
             
             // 同步写入根会话：携带 Metadata 标注来源子会话
             // Internal 可见性确保不破坏根会话的 tool_call/tool_result 分组，同时让 RAG 归并流程可捕获
             if (rootSessionId != subSession.Id)
             {
                 var rootAssistantMeta = BuildSubAgentMetadata(agentId, agent.Name, subSession.Id);
-                repo.AddMessage(rootSessionId,
+                _sessions.AddMessage(rootSessionId,
                     assistantMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootAssistantMeta, Visibility = MessageVisibility.Internal });
             }
 

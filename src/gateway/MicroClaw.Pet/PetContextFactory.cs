@@ -1,3 +1,5 @@
+using MicroClaw.Abstractions.Pet;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
 
@@ -31,23 +33,65 @@ public sealed class PetContextFactory(
     /// <returns>
     /// 初始化好的 <see cref="PetContext"/>；若 Pet 目录或状态文件不存在则返回 <c>null</c>。
     /// </returns>
-    public async Task<PetContext?> LoadAsync(string sessionId, CancellationToken ct = default)
+    public Task<PetContext?> LoadAsync(string sessionId, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        return LoadAsync(new ReadOnlyMicroSessionStub(sessionId), ct);
+    }
+
+    /// <summary>
+    /// 从磁盘加载指定 Session 的 Pet 状态，构建并返回 <see cref="PetContext"/>。
+    /// </summary>
+    public async Task<PetContext?> LoadAsync(IMicroSession microSession, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(microSession);
+        ArgumentException.ThrowIfNullOrWhiteSpace(microSession.Id);
 
         // 加载 Pet 状态（文件不存在返回 null）
-        var petState = await _stateStore.LoadAsync(sessionId, ct);
+        PetState? petState = await _stateStore.LoadAsync(microSession.Id, ct);
         if (petState is null)
             return null;
 
         // 加载 Pet 配置（文件不存在返回 null，表示 Pet 目录不完整）
-        var petConfig = await _stateStore.LoadConfigAsync(sessionId, ct);
+        PetConfig? petConfig = await _stateStore.LoadConfigAsync(microSession.Id, ct);
         if (petConfig is null)
             return null;
 
         // 加载情绪状态（无记录时返回默认平衡情绪）
-        var emotion = await _emotionStore.GetCurrentAsync(sessionId, ct);
+        EmotionState emotion = await _emotionStore.GetCurrentAsync(microSession.Id, ct);
+        PetContextState initialState = microSession.IsApproved
+            ? PetContextState.Active
+            : PetContextState.Disabled;
 
-        return new PetContext(petState, petConfig, emotion);
+        return new PetContext(microSession, petState, petConfig, emotion, initialState);
+    }
+
+    private sealed class ReadOnlyMicroSessionStub(string sessionId) : IMicroSession
+    {
+        public string Id { get; } = sessionId;
+        public string Title { get; } = sessionId;
+        public string ProviderId { get; } = string.Empty;
+        public bool IsApproved { get; } = true;
+        public Configuration.Options.ChannelType ChannelType { get; } = Configuration.Options.ChannelType.Web;
+        public string ChannelId { get; } = "web";
+        public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
+        public string? AgentId => null;
+        public string? ParentSessionId => null;
+        public string? ApprovalReason => null;
+        public MicroClaw.Abstractions.Channel.IChannel? Channel => null;
+        public IPet? Pet => null;
+
+        public IReadOnlyList<MicroClaw.Abstractions.Events.IDomainEvent> PopDomainEvents() => [];
+
+        public SessionInfo ToInfo() => new(
+            Id,
+            Title,
+            ProviderId,
+            IsApproved,
+            ChannelType,
+            ChannelId,
+            CreatedAt,
+            AgentId,
+            ParentSessionId,
+            ApprovalReason);
     }
 }

@@ -1,9 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using NSubstitute;
 
@@ -41,9 +43,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-1";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: 目录存在
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
@@ -56,9 +59,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-state";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: state.json 存在且可加载
         var state = await _stateStore.LoadAsync(sessionId);
@@ -75,9 +79,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-config";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: config.json 存在且可加载
         var config = await _stateStore.LoadConfigAsync(sessionId);
@@ -93,9 +98,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-yaml";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: 三个 YAML 文件存在
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
@@ -110,9 +116,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-yaml-content";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: personality.yaml 内容合法
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
@@ -128,9 +135,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-dispatch";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
@@ -145,9 +153,10 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-interests";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert
         string petDir = Path.Combine(_sessionsDir, sessionId, "pet");
@@ -161,7 +170,8 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange: 先创建
         string sessionId = "factory-test-idempotent";
         var factory = CreateFactory();
-        await factory.CreateAsync(sessionId);
+        MicroSession microSession = CreateSession(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // 修改 state
         var originalState = await _stateStore.LoadAsync(sessionId);
@@ -173,7 +183,7 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         await _stateStore.SaveAsync(modifiedState);
 
         // Act: 再次调用，应跳过
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert: state 未被重置
         var reloaded = await _stateStore.LoadAsync(sessionId);
@@ -186,6 +196,7 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-custom-config";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
         var customConfig = new PetConfig
         {
             Enabled = true,
@@ -195,7 +206,7 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         };
 
         // Act
-        await factory.CreateAsync(sessionId, config: customConfig);
+        await factory.CreateOrLoadAsync(microSession, customConfig);
 
         // Assert: config 应包含自定义值
         var config = await _stateStore.LoadConfigAsync(sessionId);
@@ -210,8 +221,9 @@ public sealed class PetFactoryIntegrationTests : IDisposable
     public async Task CreateAsync_EmptySessionId_ThrowsArgument()
     {
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession("unused");
 
-        var act = () => factory.CreateAsync("");
+        var act = () => factory.CreateOrLoadAsync(CreateSession(""), ct: CancellationToken.None);
 
         await act.Should().ThrowAsync<ArgumentException>();
     }
@@ -222,10 +234,11 @@ public sealed class PetFactoryIntegrationTests : IDisposable
         // Arrange
         string sessionId = "factory-test-timestamps";
         var factory = CreateFactory();
+        MicroSession microSession = CreateSession(sessionId);
         var before = DateTimeOffset.UtcNow;
 
         // Act
-        await factory.CreateAsync(sessionId);
+        await factory.CreateOrLoadAsync(microSession);
 
         // Assert
         var state = await _stateStore.LoadAsync(sessionId);
@@ -239,25 +252,18 @@ public sealed class PetFactoryIntegrationTests : IDisposable
 
     private PetFactory CreateFactory()
     {
-        // PetFactory 使用 env.SessionsDir，但 MicroClawConfigEnv 是内部构造的。
-        // 使用 MicroClawConfig.Env 并让 PetStateStore 使用相同路径。
-        // 由于 PetFactory 内部使用 env.SessionsDir 创建目录，而测试里需要控制磁盘路径，
-        // 我们创建一个自定义的 PetFactory 子类不可行(sealed)，所以直接使用 env。
-        // PetFactory._sessionsDir = env.SessionsDir，PetFactory._stateStore = _stateStore(path = _sessionsDir)
-        // 但 env.SessionsDir != _sessionsDir 除非我们设置环境变量。
-
-        // 正确做法：通过环境变量让 MicroClawConfig.Env.SessionsDir 指向 _tempDir
-        // 但这会影响其他测试。所以改用反射来创建 PetFactory。
-        // 
-        // 更简单的方式：PetFactory 构造函数参数直接传入，我们只需保证 env.SessionsDir == _sessionsDir。
-        // 直接设置环境变量然后重新初始化 config。
-        Environment.SetEnvironmentVariable("MICROCLAW_HOME", _tempDir.Path);
-        TestConfigFixture.EnsureInitialized();
-        var env = MicroClawConfig.Env;
-        var emotionStore = new EmotionStore(_sessionsDir);
-        var contextFactory = new PetContextFactory(_stateStore, emotionStore);
-        var sessionRepo = NSubstitute.Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
-        sessionRepo.Get(Arg.Any<string>()).Returns((MicroClaw.Abstractions.Sessions.Session?)null);
-        return new PetFactory(_stateStore, contextFactory, sessionRepo, env, NullLogger<PetFactory>.Instance);
+        EmotionStore emotionStore = new(_sessionsDir);
+        PetContextFactory contextFactory = new(_stateStore, emotionStore);
+        return new PetFactory(_stateStore, contextFactory, _sessionsDir, NullLogger<PetFactory>.Instance);
     }
+
+    private static MicroSession CreateSession(string sessionId)
+        => MicroSession.Reconstitute(
+            id: sessionId,
+            title: sessionId,
+            providerId: "provider-1",
+            isApproved: false,
+            channelType: Configuration.Options.ChannelType.Web,
+            channelId: "web",
+            createdAt: DateTimeOffset.UtcNow);
 }

@@ -18,8 +18,8 @@ public enum PetContextState
 /// <summary>
 /// Per-Session Pet 上下文的抽象接口。
 /// <para>
-/// 定义在 <c>MicroClaw.Abstractions</c> 层，避免 <c>Session</c>（定义于 Abstractions）
-/// 直接引用 <c>PetContext</c>（定义于 MicroClaw.Pet）而产生循环依赖。
+/// 定义在 <c>MicroClaw.Abstractions</c> 层，避免会话模型直接引用
+/// <c>PetContext</c>（定义于 MicroClaw.Pet）而产生具体实现耦合。
 /// 实现类为 <c>MicroClaw.Pet.PetContext</c>。
 /// </para>
 /// </summary>

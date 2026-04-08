@@ -12,6 +12,7 @@ using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.StateMachine.States;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
+using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using NSubstitute;
 
@@ -196,7 +197,7 @@ public sealed class PetHeartbeatTests : IDisposable
     public void PetHeartbeatJob_JobMetadata_IsCorrect()
     {
         var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
-        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.Session>());
+        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.IMicroSession>());
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
@@ -214,7 +215,7 @@ public sealed class PetHeartbeatTests : IDisposable
     public async Task PetHeartbeatJob_NoSessions_CompletesWithoutError()
     {
         var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
-        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.Session>());
+        sessionRepo.GetAll().Returns(System.Array.Empty<MicroClaw.Abstractions.Sessions.IMicroSession>());
 
         var executor = CreateHeartbeatExecutor();
         var job = new PetHeartbeatJob(
@@ -234,7 +235,7 @@ public sealed class PetHeartbeatTests : IDisposable
         var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
         sessionRepo.GetAll().Returns(new[]
         {
-            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
+            MicroSession.Reconstitute(
                 SessionId, "Test", "provider1", true,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow)
         });
@@ -255,7 +256,7 @@ public sealed class PetHeartbeatTests : IDisposable
         var sessionRepo = Substitute.For<MicroClaw.Abstractions.Sessions.ISessionRepository>();
         sessionRepo.GetAll().Returns(new[]
         {
-            MicroClaw.Abstractions.Sessions.Session.Reconstitute(
+            MicroSession.Reconstitute(
                 "unapproved", "Test", "provider1", false,
                 MicroClaw.Abstractions.ChannelType.Web, "", DateTimeOffset.UtcNow)
         });

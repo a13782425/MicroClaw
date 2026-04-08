@@ -6,7 +6,6 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using MicroClaw.Services;
-using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -97,7 +96,7 @@ public sealed class ChannelRetryJob(
             }
             else
             {
-                Session? session = repo.Get(entry.SessionId);
+                IMicroSession? session = repo.Get(entry.SessionId);
                 string resolvedProviderId = session?.ProviderId ?? string.Empty;
                 ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
                     ? providerStore.GetDefault()

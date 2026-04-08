@@ -1,4 +1,5 @@
 using MicroClaw.Abstractions.Pet;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Pet.Emotion;
 
 namespace MicroClaw.Pet;
@@ -30,18 +31,22 @@ public sealed class PetContext : IPetContext, IDisposable
     private volatile bool _isDirty;
     private bool _disposed;
 
-    internal PetContext(PetState state, PetConfig config, EmotionState emotion)
+    internal PetContext(IMicroSession microSession, PetState state, PetConfig config, EmotionState emotion, PetContextState initialState)
     {
+        MicroSession = microSession ?? throw new ArgumentNullException(nameof(microSession));
         _petState = state ?? throw new ArgumentNullException(nameof(state));
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Emotion = emotion;
-        State = PetContextState.Active;
+        State = initialState;
     }
 
     // ── IPetContext ───────────────────────────────────────────────────────────
 
     /// <inheritdoc/>
     public PetContextState State { get; private set; }
+
+    /// <inheritdoc/>
+    public IMicroSession MicroSession { get; }
 
     /// <inheritdoc/>
     public bool IsEnabled => !_disposed && State == PetContextState.Active && Config.Enabled;
@@ -103,6 +108,15 @@ public sealed class PetContext : IPetContext, IDisposable
     /// 清除脏标记（由持久化层在写盘后调用）。
     /// </summary>
     public void ClearDirty() => _isDirty = false;
+
+    /// <summary>
+    /// Activates the current PetContext without replacing the runtime object.
+    /// </summary>
+    public void Activate()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        State = PetContextState.Active;
+    }
 
     // ── IDisposable ───────────────────────────────────────────────────────────
 

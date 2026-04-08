@@ -5,7 +5,7 @@ using Microsoft.Agents.AI;
 namespace MicroClaw.Agent.Sessions;
 
 /// <summary>
-/// 将 MicroClaw <see cref="Session"/> 的元数据写入 AF <see cref="AgentSession.StateBag"/>，
+/// 将 MicroClaw <see cref="IMicroSession"/> 的元数据写入 AF <see cref="AgentSession.StateBag"/>，
 /// 使中间件和 ContextProvider 能够通过标准 AF session 访问会话上下文。
 /// </summary>
 /// <remarks>
@@ -34,18 +34,18 @@ internal static class AgentSessionAdapter
     // ── 写入 ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 将 <see cref="Session"/> 的字段写入 <see cref="AgentSessionStateBag"/>。
+    /// 将 <see cref="IMicroSession"/> 的字段写入 <see cref="AgentSessionStateBag"/>。
     /// </summary>
-    public static void PopulateStateBag(AgentSessionStateBag bag, Session session)
+    public static void PopulateStateBag(AgentSessionStateBag bag, IMicroSession microSession)
     {
-        bag.SetValue(KeySessionId, session.Id, JsonOpts);
-        bag.SetValue(KeyProviderId, session.ProviderId, JsonOpts);
-        bag.SetValue(KeyChannelType, session.ChannelType.ToString(), JsonOpts);
-        bag.SetValue(KeyChannelId, session.ChannelId, JsonOpts);
-        bag.SetValue(KeyTitle, session.Title, JsonOpts);
+        bag.SetValue(KeySessionId, microSession.Id, JsonOpts);
+        bag.SetValue(KeyProviderId, microSession.ProviderId, JsonOpts);
+        bag.SetValue(KeyChannelType, microSession.ChannelType.ToString(), JsonOpts);
+        bag.SetValue(KeyChannelId, microSession.ChannelId, JsonOpts);
+        bag.SetValue(KeyTitle, microSession.Title, JsonOpts);
 
-        if (session.AgentId is not null)
-            bag.SetValue(KeyAgentId, session.AgentId, JsonOpts);
+        if (microSession.AgentId is not null)
+            bag.SetValue(KeyAgentId, microSession.AgentId, JsonOpts);
     }
 
     // ── 读取 ──────────────────────────────────────────────────────────────

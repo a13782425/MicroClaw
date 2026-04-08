@@ -3,9 +3,9 @@ using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
-using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using SessionView = MicroClaw.Abstractions.Sessions.ISession;
 
 namespace MicroClaw.Jobs;
 
@@ -35,15 +35,15 @@ public sealed class MemoryPendingProcessorJob(
 
     internal async Task ProcessAllSessionsAsync(CancellationToken ct)
     {
-        IReadOnlyList<Session> sessions = repo.GetAll();
-        foreach (Session session in sessions)
+        IReadOnlyList<SessionView> sessions = repo.GetAll();
+        foreach (SessionView session in sessions)
         {
             if (ct.IsCancellationRequested) break;
             await ProcessSessionAsync(session, ct);
         }
     }
 
-    private async Task ProcessSessionAsync(Session session, CancellationToken ct)
+    private async Task ProcessSessionAsync(SessionView session, CancellationToken ct)
     {
         IReadOnlyList<string> pendingFiles = memoryService.ListPendingFiles(session.Id);
         if (pendingFiles.Count == 0) return;
@@ -71,7 +71,7 @@ public sealed class MemoryPendingProcessorJob(
     }
 
     private async Task ProcessPendingFileAsync(
-        Session session, string fileName, IChatClient client, CancellationToken ct)
+        SessionView session, string fileName, IChatClient client, CancellationToken ct)
     {
         try
         {

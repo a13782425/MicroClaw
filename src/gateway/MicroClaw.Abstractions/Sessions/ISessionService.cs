@@ -31,8 +31,8 @@ public interface ISessionService : ISessionRepository
 
     // ── 会话创建 ──────────────────────────────────────────────────────────────
 
-    /// <summary>创建全新会话并返回领域对象（由 SessionEndpoints 调用）。</summary>
-    Session CreateSession(string title, string providerId,
+    /// <summary>创建全新会话并返回会话只读视图（由 SessionEndpoints 调用）。</summary>
+    IMicroSession CreateSession(string title, string providerId,
         ChannelType channelType = ChannelType.Web,
         string? id = null,
         string? agentId = null,

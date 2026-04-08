@@ -4,6 +4,9 @@ using MicroClaw.Abstractions;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
+using MicroClaw.Pet.Storage;
 using MicroClaw.Sessions;
 using MicroClaw.Tests.Fixtures;
 using Microsoft.AspNetCore.SignalR;
@@ -29,9 +32,13 @@ public sealed class SessionServiceStoreTests : IDisposable
         hubContext.Clients.Returns(clients);
         clients.All.Returns(Substitute.For<IClientProxy>());
 
-        var agentStore = new AgentStore();
-        var webChannel = new WebSessionChannel(hubContext);
-        _svc = new SessionService(agentStore, hubContext, [], webChannel, _tempDir.Path);
+        AgentStore agentStore = new AgentStore();
+        WebChannel webChannel = new(hubContext);
+        PetStateStore petStateStore = new(_tempDir.Path);
+        EmotionStore emotionStore = new(_tempDir.Path);
+        PetContextFactory contextFactory = new(petStateStore, emotionStore);
+        PetFactory petFactory = new(petStateStore, contextFactory, _tempDir.Path, Microsoft.Extensions.Logging.Abstractions.NullLogger<PetFactory>.Instance);
+        _svc = new SessionService(agentStore, hubContext, [webChannel], petFactory, _tempDir.Path);
         _repo = _svc;
     }
 
@@ -74,7 +81,7 @@ public sealed class SessionServiceStoreTests : IDisposable
     {
         var created = _svc.CreateSession("Test", "p1");
 
-        Session? result = _repo.Get(created.Id);
+        Session? result = _repo.Get(created.Id) as Session;
 
         result.Should().NotBeNull();
         result!.Id.Should().Be(created.Id);
@@ -113,10 +120,10 @@ public sealed class SessionServiceStoreTests : IDisposable
     public void Approve_ExistingSession_SetsIsApprovedTrue()
     {
         var created = _svc.CreateSession("Test", "p1");
-        Session session = _repo.Get(created.Id)!;
+        Session microSession = (_repo.Get(created.Id) as Session)!;
 
-        session.Approve();
-        _repo.Save(session);
+        microSession.Approve();
+        _repo.Save(microSession);
 
         _repo.Get(created.Id)!.IsApproved.Should().BeTrue();
     }
@@ -125,12 +132,12 @@ public sealed class SessionServiceStoreTests : IDisposable
     public void Disable_ApprovedSession_SetsIsApprovedFalse()
     {
         var created = _svc.CreateSession("Test", "p1");
-        Session session = _repo.Get(created.Id)!;
-        session.Approve();
-        _repo.Save(session);
+        Session microSession = (_repo.Get(created.Id) as Session)!;
+        microSession.Approve();
+        _repo.Save(microSession);
 
-        session.Disable();
-        _repo.Save(session);
+        microSession.Disable();
+        _repo.Save(microSession);
 
         _repo.Get(created.Id)!.IsApproved.Should().BeFalse();
     }
