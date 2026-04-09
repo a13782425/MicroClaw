@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -7,56 +7,67 @@ using MicroClaw.Abstractions.Channel;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.Logging;
+
 namespace MicroClaw.Channels.Feishu;
 
-public sealed class FeishuChannel(
+public sealed class FeishuChannelProvider(
     FeishuMessageProcessor processor,
-    ChannelConfigStore configStore,
-    ILogger<FeishuChannel> logger) : IChannel{
+    ILoggerFactory loggerFactory) : IChannelProvider
+{
     public string Name => "Feishu";
 
     public ChannelType Type => ChannelType.Feishu;
 
     public string DisplayName => "飞书";
 
-    /// <summary>
-    /// F-A-1: 主动发送消息到飞书用户或群聊。
-    /// <para><see cref="ChannelMessage.UserId"/> 填写目标的 open_id（ou_ 前缀）或 chat_id（oc_ 前缀）。</para>
-    /// <para>使用数据库中第一个已启用的飞书渠道配置的凭据发送消息。</para>
-    /// </summary>
+    public IChannel Create(ChannelEntity config)
+        => new FeishuChannel(config, processor, loggerFactory.CreateLogger<FeishuChannel>());
+
+    public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
+        => Create(config).PublishAsync(message, cancellationToken);
+
+    public Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default)
+        => Create(config).HandleWebhookAsync(body, cancellationToken);
+
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+        => Create(config).TestConnectionAsync(cancellationToken);
+}
+
+public sealed class FeishuChannel(
+    ChannelEntity config,
+    FeishuMessageProcessor processor,
+    ILogger<FeishuChannel> logger) : IChannel
+{
+    public string Id => Config.Id;
+
+    public string Name => "Feishu";
+
+    public ChannelType Type => ChannelType.Feishu;
+
+    public ChannelEntity Config { get; } = config;
+
+    public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "飞书" : Config.DisplayName;
+
     public async Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
-        ChannelEntity? channelEntity = configStore
-            .GetByType(ChannelType.Feishu)
-            .FirstOrDefault(c => c.IsEnabled);
-
-        if (channelEntity is null)
-        {
-            logger.LogWarning("F-A-1 PublishAsync 跳过：未找到已启用的飞书渠道配置");
-            return;
-        }
-
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channelEntity.SettingJson) ?? new();
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
         await processor.SendMessageAsync(message.UserId, message.Content, settings, cancellationToken);
     }
 
-    public async Task<string?> HandleWebhookAsync(string body, ChannelEntity channelEntity, CancellationToken ct = default)
+    public async Task<string?> HandleWebhookAsync(string body, CancellationToken ct = default)
     {
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channelEntity.SettingJson) ?? new();
-        logger.LogDebug("飞书 Webhook 收到请求 channel={ChannelId}", channelEntity.Id);
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
+        logger.LogDebug("飞书 Webhook 收到请求 channel={ChannelId}", Config.Id);
 
-        // 尝试解密（如果启用了 EncryptKey）
         string decrypted = TryDecrypt(body, settings.EncryptKey);
 
-        // URL Verification
         FeishuUrlVerificationRequest? verification = TryDeserialize<FeishuUrlVerificationRequest>(decrypted);
         if (verification?.Type == "url_verification")
         {
-            logger.LogInformation("飞书 URL 验证 channel={ChannelId}", channelEntity.Id);
+            logger.LogInformation("飞书 URL 验证 channel={ChannelId}", Config.Id);
             return JsonSerializer.Serialize(new { challenge = verification.Challenge });
         }
 
-        // Event Callback v2
         FeishuEventCallback<FeishuMessageEvent>? callback = TryDeserialize<FeishuEventCallback<FeishuMessageEvent>>(decrypted);
         if (callback?.Header?.EventType == "im.message.receive_v1" && callback.Event is not null)
         {
@@ -69,13 +80,11 @@ public sealed class FeishuChannel(
                 string chatId = callback.Event.Message.ChatId;
                 string messageId = callback.Event.Message.MessageId;
 
-                // F-F-1: 全链路追踪 — Webhook 接收步骤
                 string traceId = messageId.Length >= 8 ? messageId[..8] : messageId;
                 logger.LogInformation(
                     "[{TraceId}] Webhook 接收 channel={ChannelId} from={SenderId} messageId={MessageId}",
-                    traceId, channelEntity.Id, senderId, messageId);
+                    traceId, Config.Id, senderId, messageId);
 
-                // F-B-1: 提取 chatType 和被 @ 的 open_id 列表
                 string chatType = callback.Event.Message.ChatType ?? "p2p";
                 IReadOnlyList<string> mentionedOpenIds = callback.Event.Message.Mentions is { Length: > 0 }
                     ? callback.Event.Message.Mentions
@@ -84,11 +93,9 @@ public sealed class FeishuChannel(
                         .ToList()
                     : [];
 
-                // 异步处理消息，不阻塞飞书回调
-                // F-B-3: 提取 rootId，话题内消息 (root_id 非空) 回复时会带 reply_in_thread
                 string? rootId = callback.Event.Message.RootId;
                 _ = Task.Run(() => processor.ProcessMessageAsync(
-                    userText, senderId, chatId, messageId, channelEntity, settings,
+                    userText, senderId, chatId, messageId, Config, settings,
                     chatType, mentionedOpenIds, rootId: rootId, ct: CancellationToken.None));
             }
         }
@@ -96,12 +103,9 @@ public sealed class FeishuChannel(
         return JsonSerializer.Serialize(new { code = 0, msg = "ok" });
     }
 
-    /// <summary>
-    /// 通过飞书 OpenAPI 获取租户访问令牌来验证 AppId + AppSecret 凭据的有效性。
-    /// </summary>
-    public async Task<ChannelTestResult> TestConnectionAsync(ChannelEntity channelEntity, CancellationToken cancellationToken = default)
+    public async Task<ChannelTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channelEntity.SettingJson) ?? new();
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
 
         if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
             return new ChannelTestResult(false, "未配置 AppId 或 AppSecret", 0);
@@ -124,7 +128,6 @@ public sealed class FeishuChannel(
 
             if (code == 0)
             {
-                // F-E-3: Webhook 模式下探测公网可达性
                 string? hint = null;
                 if (settings.ConnectionMode.Equals("webhook", StringComparison.OrdinalIgnoreCase) &&
                     IsLikelyPrivateNetworkOnly())
@@ -132,7 +135,7 @@ public sealed class FeishuChannel(
                     hint = "当前服务器看起来处于内网环境，飞书可能无法访问您的 Webhook 地址。" +
                            "建议将连接模式改为「WebSocket 长连接」，无需公网 IP 也可正常接收消息。";
                     logger.LogInformation(
-                        "F-E-3 Webhook 内网探测提示 channel={ChannelId}", channelEntity.Id);
+                        "F-E-3 Webhook 内网探测提示 channel={ChannelId}", Config.Id);
                 }
                 return new ChannelTestResult(true, "连接成功", sw.ElapsedMilliseconds, hint);
             }
@@ -143,18 +146,11 @@ public sealed class FeishuChannel(
         catch (Exception ex)
         {
             sw.Stop();
-            logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", channelEntity.Id);
+            logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", Config.Id);
             return new ChannelTestResult(false, $"连接失败：{ex.Message}", sw.ElapsedMilliseconds);
         }
     }
 
-    /// <summary>
-    /// F-E-3: 探测当前服务器是否「仅有内网 IP」，用于判断 Webhook 公网可达性。
-    /// <para>
-    /// 算法：枚举所有非回环网络接口的单播地址；若所有 IPv4 地址均属于私有段
-    /// （10.x、172.16-31.x、192.168.x、169.254.x），则认为处于内网环境，返回 true。
-    /// </para>
-    /// </summary>
     internal static bool IsLikelyPrivateNetworkOnly()
     {
         try
@@ -174,21 +170,19 @@ public sealed class FeishuChannel(
         }
         catch
         {
-            return false; // 探测异常时保守处理，不误报
+            return false;
         }
     }
 
-    /// <summary>判断 IPv4 地址是否属于私有/链路本地网段。</summary>
     private static bool IsPrivateOrLinkLocalIpv4(System.Net.IPAddress ip)
     {
         byte[] b = ip.GetAddressBytes();
-        return b[0] == 10 ||                                   // 10.0.0.0/8
-               (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||   // 172.16.0.0/12
-               (b[0] == 192 && b[1] == 168) ||                 // 192.168.0.0/16
-               (b[0] == 169 && b[1] == 254);                   // 169.254.0.0/16 (APIPA)
+        return b[0] == 10 ||
+               (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+               (b[0] == 192 && b[1] == 168) ||
+               (b[0] == 169 && b[1] == 254);
     }
 
-    /// <summary>验证飞书 Webhook 签名：SHA256(timestamp + nonce + encryptKey + body) == expectedSignature。</summary>
     public static bool VerifyWebhookSignature(string? timestamp, string? nonce, string encryptKey, string body, string? expectedSignature)
     {
         if (string.IsNullOrEmpty(timestamp) || string.IsNullOrEmpty(nonce) || string.IsNullOrEmpty(expectedSignature))
@@ -203,7 +197,6 @@ public sealed class FeishuChannel(
             Encoding.UTF8.GetBytes(expectedSignature));
     }
 
-    /// <summary>检查时间戳是否在容差范围内（防重放）。</summary>
     public static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
     {
         if (!long.TryParse(timestamp, out long unixSeconds))

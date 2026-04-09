@@ -4,11 +4,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MicroClaw.Agent;
-using MicroClaw.Channels;
 using MicroClaw.Abstractions;
-using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Hubs;
@@ -31,7 +30,6 @@ namespace MicroClaw.Sessions;
 public sealed class SessionService(
     AgentStore agentStore,
     IHubContext<GatewayHub> hubContext,
-    Lazy<IEnumerable<IChannel>> channels,
     IPetFactory petFactory,
     string sessionsDir) : ISessionService
 {
@@ -53,10 +51,6 @@ public sealed class SessionService(
     private static readonly ConcurrentDictionary<string, DateTimeOffset> NotifyThrottle = new();
     private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
 
-    private readonly Lazy<IReadOnlyDictionary<ChannelType, IChannel>> _channels = new(() =>
-        channels.Value
-            .GroupBy(static channel => channel.Type)
-            .ToDictionary(static group => group.Key, static group => group.Last()));
     private readonly IPetFactory _petFactory = petFactory ?? throw new ArgumentNullException(nameof(petFactory));
 
     // ── ISessionService: 渠道会话管理 ──────────────────────────────────────
@@ -325,22 +319,9 @@ public sealed class SessionService(
     {
         ArgumentNullException.ThrowIfNull(microSession);
 
-        microSession.AttachChannel(ResolveChannel(microSession.ChannelType));
-
         IPet? pet = _petFactory.CreateOrLoadAsync(microSession).GetAwaiter().GetResult();
         if (pet is not null)
             microSession.AttachPet(pet);
-    }
-
-    private IChannel ResolveChannel(ChannelType channelType)
-    {
-        if (_channels.Value.TryGetValue(channelType, out IChannel? channel))
-            return channel;
-
-        if (_channels.Value.TryGetValue(ChannelType.Web, out IChannel? fallback))
-            return fallback;
-
-        throw new InvalidOperationException($"No channel is registered for type '{channelType}'.");
     }
 
     private static SessionEntity ToEntity(IMicroSession s) => new()

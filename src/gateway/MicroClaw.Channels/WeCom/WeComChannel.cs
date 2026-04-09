@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Configuration.Models;
@@ -6,7 +6,7 @@ using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Channels.WeCom;
 
-public sealed class WeComChannel : IChannel
+public sealed class WeComChannelProvider : IChannelProvider
 {
     public string Name => "WeCom";
 
@@ -14,21 +14,44 @@ public sealed class WeComChannel : IChannel
 
     public string DisplayName => "企业微信";
 
-    public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
-    {
-        return Task.CompletedTask;
-    }
+    public IChannel Create(ChannelEntity config) => new WeComChannel(config);
 
-    public Task<string?> HandleWebhookAsync(string body, ChannelEntity channelEntity, CancellationToken cancellationToken = default)
+    public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default)
     {
         // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
         return Task.FromResult<string?>(null);
     }
 
-    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity channelEntity, CancellationToken cancellationToken = default)
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+        => Task.FromResult(new ChannelTestResult(false, "企业微信渠道连通性测试尚未实现", 0));
+}
+
+public sealed class WeComChannel(ChannelEntity config) : IChannel
+{
+    public string Id => Config.Id;
+
+    public string Name => "WeCom";
+
+    public ChannelType Type => ChannelType.WeCom;
+
+    public ChannelEntity Config { get; } = config;
+
+    public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "企业微信" : Config.DisplayName;
+
+    public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<string?> HandleWebhookAsync(string body, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(new ChannelTestResult(false, "企业微信渠道连通性测试尚未实现", 0));
+        // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
+        return Task.FromResult<string?>(null);
     }
+
+    public Task<ChannelTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new ChannelTestResult(false, "企业微信渠道连通性测试尚未实现", 0));
 
     /// <summary>
     /// 验证企业微信 Webhook 签名。
@@ -51,7 +74,6 @@ public sealed class WeComChannel : IChannel
             || string.IsNullOrEmpty(expectedSignature))
             return false;
 
-        // 按字典序升序排列参与签名的字段
         string[] parts = msgEncrypt is null
             ? [token, timestamp, nonce]
             : [token, timestamp, nonce, msgEncrypt];
@@ -62,13 +84,11 @@ public sealed class WeComChannel : IChannel
         byte[] hash = SHA1.HashData(Encoding.UTF8.GetBytes(content));
         string computed = Convert.ToHexStringLower(hash);
 
-        // 使用固定时间比较防止时序攻击
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(computed),
             Encoding.UTF8.GetBytes(expectedSignature));
     }
 
-    /// <summary>检查时间戳是否在容差范围内（防重放）。</summary>
     public static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
     {
         if (!long.TryParse(timestamp, out long unixSeconds))

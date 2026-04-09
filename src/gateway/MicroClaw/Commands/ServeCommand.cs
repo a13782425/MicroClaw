@@ -72,6 +72,11 @@ public class ServeCommand : Command
 		};
 
 		var builder = WebApplication.CreateBuilder(options);
+		builder.Host.UseDefaultServiceProvider((_, opts) =>
+		{
+			opts.ValidateScopes = true;
+			opts.ValidateOnBuild = true;
+		});
 		string? configFile = MicroClawConfig.Env.Get(MICROCLAW_CONFIG_FILE);
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
@@ -195,7 +200,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SessionService>(sp => new SessionService(
 			sp.GetRequiredService<AgentStore>(),
 			sp.GetRequiredService<IHubContext<GatewayHub>>(),
-			new Lazy<IEnumerable<IChannel>>(() => sp.GetRequiredService<IEnumerable<IChannel>>()),
 			sp.GetRequiredService<MicroClaw.Abstractions.Pet.IPetFactory>(),
 			sessionsDir));
 		builder.Services.AddSingleton<ISessionService>(sp => sp.GetRequiredService<SessionService>());
@@ -450,7 +454,8 @@ public class ServeCommand : Command
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
 		builder.Services.AddSingleton<ChannelConfigStore>();
-		builder.Services.AddSingleton<IChannel, WebChannel>();
+		builder.Services.AddSingleton<IChannelProvider, WebChannelProvider>();
+		builder.Services.AddSingleton<IChannelService, ChannelService>();
 
 		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
 		builder.Services.AddSingleton<FeishuTokenCache>();
@@ -458,7 +463,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<FeishuChannelHealthStore>();
 		builder.Services.AddSingleton<FeishuChannelStatsService>();
 		builder.Services.AddSingleton<FeishuMessageProcessor>();
-		builder.Services.AddSingleton<IChannel, FeishuChannel>();
+		builder.Services.AddSingleton<IChannelProvider, FeishuChannelProvider>();
 		// F-F-2: 同时注册为单例（健康检查端点需直接注入）和 IHostedService
 		builder.Services.AddSingleton<FeishuWebSocketManager>();
 		builder.Services.AddHostedService(sp => sp.GetRequiredService<FeishuWebSocketManager>());
@@ -477,8 +482,8 @@ public class ServeCommand : Command
 		// 系统 Job 统一调度器
 		builder.Services.AddHostedService<SystemJobRegistrar>();
 
-		builder.Services.AddSingleton<IChannel, WeComChannel>();
-		builder.Services.AddSingleton<IChannel, WeChatChannel>();
+		builder.Services.AddSingleton<IChannelProvider, WeComChannelProvider>();
+		builder.Services.AddSingleton<IChannelProvider, WeChatChannelProvider>();
 	}
 
 	/// <summary>校验关键配置项安全性，不满足要求时记录 Warning 级别日志。</summary>
