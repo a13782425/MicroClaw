@@ -9,6 +9,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
 namespace MicroClaw.Tests;
@@ -86,11 +87,14 @@ public sealed class ChannelServiceTests : IDisposable
         petFactory.CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IPet?>(null));
 
-        var service = new MicroClaw.Sessions.SessionService(
-            new MicroClaw.Services.AgentStore(),
-            hubContext,
-            petFactory,
-            MicroClawConfig.Env.SessionsDir);
+        var agentStore = new MicroClaw.Agent.AgentStore();
+
+        var sp = Substitute.For<IServiceProvider>();
+        sp.GetService(typeof(MicroClaw.Agent.AgentStore)).Returns(agentStore);
+        sp.GetService(typeof(IHubContext<GatewayHub>)).Returns(hubContext);
+        sp.GetService(typeof(IPetFactory)).Returns(petFactory);
+
+        var service = new MicroClaw.Sessions.SessionService(sp);
 
         Session session = service.CreateSession("test", "provider-1");
 

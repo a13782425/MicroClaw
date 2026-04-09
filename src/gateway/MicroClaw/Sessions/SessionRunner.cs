@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MicroClaw.Abstractions.Sessions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Sessions;
 
@@ -11,10 +12,16 @@ namespace MicroClaw.Sessions;
 /// 当前为空实现，等待后续功能填充。
 /// </para>
 /// </summary>
-public sealed class SessionRunner(
-    ISessionService sessionService,
-    ILogger<SessionRunner> logger) : BackgroundService
+public sealed class SessionRunner : BackgroundService
 {
+    private readonly ISessionService _sessionService;
+    private readonly ILogger<SessionRunner> _logger;
+
+    public SessionRunner(IServiceProvider sp)
+    {
+        _sessionService = sp.GetRequiredService<ISessionService>();
+        _logger = sp.GetRequiredService<ILogger<SessionRunner>>();
+    }
     private readonly TimeSpan _tickInterval = TimeSpan.FromMilliseconds(100); // 10 FPS
     protected override async Task ExecuteAsync(CancellationToken ct)
     { 

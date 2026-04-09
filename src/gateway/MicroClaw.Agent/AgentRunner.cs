@@ -22,6 +22,7 @@ using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent;
@@ -32,43 +33,62 @@ namespace MicroClaw.Agent;
 /// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.DisabledMcpServerIds 排除。
 /// 实现 IAgentMessageHandler，供渠道消息处理器路由调用。
 /// </summary>
-public sealed class AgentRunner(
-    AgentStore agentStore,
-    IEnumerable<IAgentContextProvider> contextProviders,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    ISessionRepository sessionReader,
-    SkillToolFactory skillToolFactory,
-    IUsageTracker usageTracker,
-    ILoggerFactory loggerFactory,
-    IAgentStatusNotifier agentStatusNotifier,
-    ToolCollector toolCollector,
-    IDevMetricsService devMetrics,
-    AIContentPipeline contentPipeline,
-    IEnumerable<IChatContentRestorer> chatContentRestorers,
-    IProviderRouter? providerRouter = null,
-    IContextOverflowSummarizer? contextOverflowSummarizer = null,
-    IHookExecutor? hookExecutor = null,
-    IRagUsageAuditor? ragUsageAuditor = null,
-    RagRetrievalContext? ragRetrievalContext = null) : IAgentMessageHandler
+public sealed class AgentRunner : IAgentMessageHandler, IService
 {
-    private readonly ILogger<AgentRunner> _logger = loggerFactory.CreateLogger<AgentRunner>();
-    private readonly IReadOnlyList<IAgentContextProvider> _contextProviders =
-        contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
-    private readonly IReadOnlyList<IChatContentRestorer> _restorers =
-        chatContentRestorers.ToList().AsReadOnly();
-    private readonly IProviderRouter? _providerRouter = providerRouter;
-    private readonly IContextOverflowSummarizer? _contextOverflowSummarizer = contextOverflowSummarizer;
-    private readonly IHookExecutor? _hookExecutor = hookExecutor;
-    private readonly IRagUsageAuditor? _ragUsageAuditor = ragUsageAuditor;
-    private readonly RagRetrievalContext? _ragRetrievalContext = ragRetrievalContext;
+    private readonly AgentStore _agentStore;
+    private readonly ILogger<AgentRunner> _logger;
+    private readonly IReadOnlyList<IAgentContextProvider> _contextProviders;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly ISessionRepository _sessionReader;
+    private readonly SkillToolFactory _skillToolFactory;
+    private readonly IUsageTracker _usageTracker;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly IAgentStatusNotifier _agentStatusNotifier;
+    private readonly ToolCollector _toolCollector;
+    private readonly IDevMetricsService _devMetrics;
+    private readonly AIContentPipeline _contentPipeline;
+    private readonly IReadOnlyList<IChatContentRestorer> _restorers;
+    private readonly IProviderRouter? _providerRouter;
+    private readonly IContextOverflowSummarizer? _contextOverflowSummarizer;
+    private readonly IHookExecutor? _hookExecutor;
+    private readonly IRagUsageAuditor? _ragUsageAuditor;
+    private readonly RagRetrievalContext? _ragRetrievalContext;
+
+    public AgentRunner(IServiceProvider sp)
+    {
+        _agentStore = sp.GetRequiredService<AgentStore>();
+        _loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+        _logger = _loggerFactory.CreateLogger<AgentRunner>();
+        _contextProviders = sp.GetServices<IAgentContextProvider>().OrderBy(p => p.Order).ToList().AsReadOnly();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _sessionReader = sp.GetRequiredService<ISessionRepository>();
+        _skillToolFactory = sp.GetRequiredService<SkillToolFactory>();
+        _usageTracker = sp.GetRequiredService<IUsageTracker>();
+        _agentStatusNotifier = sp.GetRequiredService<IAgentStatusNotifier>();
+        _toolCollector = sp.GetRequiredService<ToolCollector>();
+        _devMetrics = sp.GetRequiredService<IDevMetricsService>();
+        _contentPipeline = sp.GetRequiredService<AIContentPipeline>();
+        _restorers = sp.GetServices<IChatContentRestorer>().ToList().AsReadOnly();
+        _providerRouter = sp.GetService<IProviderRouter>();
+        _contextOverflowSummarizer = sp.GetService<IContextOverflowSummarizer>();
+        _hookExecutor = sp.GetService<IHookExecutor>();
+        _ragUsageAuditor = sp.GetService<IRagUsageAuditor>();
+        _ragRetrievalContext = sp.GetService<RagRetrievalContext>();
+    }
+
+    // ── IService ─────────────────────────────────────────────────────────
+    public int InitOrder => 20;
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── IAgentMessageHandler ────────────────────────────────────────────────
 
     /// <summary>所有渠道消息默认路由到主 Agent（IsDefault=true），不再按渠道绑定匹配。</summary>
     public bool HasAgentForChannel(string channelId)
     {
-        Agent? main = agentStore.GetDefaultAgent();
+        Agent? main = _agentStore.GetDefaultAgent();
         return main is { IsEnabled: true };
     }
 
@@ -78,12 +98,12 @@ public sealed class AgentRunner(
         IReadOnlyList<SessionMessage> history,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        Agent? agent = agentStore.GetDefaultAgent();
+        Agent? agent = _agentStore.GetDefaultAgent();
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled default agent found.");
 
         // 从 session 获取 providerId；若 session 未绑定模型，按 Agent 路由策略选择
-        IMicroSession? session = sessionReader.Get(sessionId);
+        IMicroSession? session = _sessionReader.Get(sessionId);
         string providerId = !string.IsNullOrWhiteSpace(session?.ProviderId)
             ? session.ProviderId
             : ResolveProviderByStrategy(agent.RoutingStrategy);
@@ -102,11 +122,11 @@ public sealed class AgentRunner(
     {
         if (_providerRouter is not null)
         {
-            ProviderConfig? routed = _providerRouter.Route(providerStore.All, strategy);
+            ProviderConfig? routed = _providerRouter.Route(_providerStore.All, strategy);
             if (routed is not null)
                 return routed.Id;
         }
-        return providerStore.GetDefault()?.Id ?? string.Empty;
+        return _providerStore.GetDefault()?.Id ?? string.Empty;
     }
 
     // ── 流式 ReAct 循环（AF ChatClientAgent + FunctionInvokingChatClient + Channel 事件桥接）──
@@ -199,7 +219,7 @@ public sealed class AgentRunner(
             {
                 // ── 阶段 1：Setup ────────────────────────────────────────────
                 IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
-                SkillContext skillCtx = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
+                SkillContext skillCtx = _skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
 
                 List<ChatMessage> messages = await BuildChatMessagesAsync(
                     agent, validatedHistory, sessionId, skillCtx.CatalogFragment,
@@ -220,7 +240,7 @@ public sealed class AgentRunner(
                     ? agent.WithToolOverrides(petOverrides.ToolOverrides)
                     : agent;
                 IMicroSession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
-                    ? sessionReader.Get(sessionId) : null;
+                    ? _sessionReader.Get(sessionId) : null;
 
                 var ancestorAgentIds = new List<string>();
                 if (ancestorAgentIdsOverride is not null)
@@ -242,7 +262,7 @@ public sealed class AgentRunner(
                     AllowedSubAgentIds: agent.AllowedSubAgentIds,
                     AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
                 await using ToolCollectionResult toolResult =
-                    await toolCollector.CollectToolsAsync(effectiveAgent, toolContext, ct);
+                    await _toolCollector.CollectToolsAsync(effectiveAgent, toolContext, ct);
 
                 _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}",
                     agent.Id, toolResult.AllTools.Count, provider.Id);
@@ -252,14 +272,14 @@ public sealed class AgentRunner(
                     toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
                     temperatureOverride: petOverrides?.Temperature,
                     topPOverride: petOverrides?.TopP);
-                IChatClient rawClient = clientFactory.Create(provider);
+                IChatClient rawClient = _clientFactory.Create(provider);
                 var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
-                    rawClient, agent.Name, chatOptions, loggerFactory,
-                    devMetrics: devMetrics,
+                    rawClient, agent.Name, chatOptions, _loggerFactory,
+                    devMetrics: _devMetrics,
                     hookExecutor: _hookExecutor);
 
                 if (!string.IsNullOrWhiteSpace(sessionId))
-                    await agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
+                    await _agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
 
                 // 插件 Hook：SessionStart
                 if (_hookExecutor is not null)
@@ -276,9 +296,7 @@ public sealed class AgentRunner(
                 AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
                 if (!string.IsNullOrWhiteSpace(sessionId))
                 {
-                    IMicroSession? sessionInfo = sessionReader.Get(sessionId);
-                    if (sessionInfo is not null)
-                        AgentSessionAdapter.PopulateStateBag(afSession.StateBag, sessionInfo);
+                        IMicroSession? sessionInfo = _sessionReader.Get(sessionId);
                 }
 
                 UsageCapture usageCapture = new();
@@ -300,7 +318,7 @@ public sealed class AgentRunner(
                                 if (!string.IsNullOrEmpty(update.MessageId))
                                     tracker.Current = update.MessageId;
 
-                                foreach (StreamItem item in contentPipeline.Process(update.Contents))
+                                foreach (StreamItem item in _contentPipeline.Process(update.Contents))
                                 {
                                     item.MessageId ??= tracker.Current;
                                     await eventChannel.Writer.WriteAsync(item, ct);
@@ -361,16 +379,16 @@ public sealed class AgentRunner(
                 finally
                 {
                     runSw.Stop();
-                    devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
+                    _devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
                     UsageContentHandler.UnbindCapture();
                     await UsageTrackingMiddleware.TrackAsync(
                         usageCapture, sessionId, provider, source,
-                        usageTracker, _logger,
+                        _usageTracker, _logger,
                         agentId: agent.Id,
                         monthlyBudgetUsd: agent.MonthlyBudgetUsd,
                         ct: CancellationToken.None);
                     if (!string.IsNullOrWhiteSpace(sessionId))
-                        await agentStatusNotifier.NotifyAsync(
+                        await _agentStatusNotifier.NotifyAsync(
                             sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
                 }
 
@@ -452,7 +470,7 @@ public sealed class AgentRunner(
         ProviderRoutingStrategy strategy)
     {
         // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
-        IReadOnlyList<ProviderConfig> allProviders = providerStore.All
+        IReadOnlyList<ProviderConfig> allProviders = _providerStore.All
             .Where(p => p.ModelType != ModelType.Embedding)
             .ToList()
             .AsReadOnly();
@@ -491,7 +509,7 @@ public sealed class AgentRunner(
     public async Task<string> InvokeToolAsync(
         string agentId, string toolName, IReadOnlyDictionary<string, string>? nodeConfig, string fallbackInput, CancellationToken ct)
     {
-        Agent? agent = agentStore.GetAgentById(agentId);
+        Agent? agent = _agentStore.GetAgentById(agentId);
         if (agent is null || !agent.IsEnabled)
         {
             _logger.LogWarning("InvokeToolAsync: Agent '{AgentId}' not found or disabled.", agentId);
@@ -513,7 +531,7 @@ public sealed class AgentRunner(
 
         // 通过 ToolCollector 统一收集并查找工具
         var context = new ToolCreationContext();
-        await using ToolCollectionResult toolResult = await toolCollector.CollectToolsAsync(agent, context, ct);
+        await using ToolCollectionResult toolResult = await _toolCollector.CollectToolsAsync(agent, context, ct);
 
         AITool? tool = toolResult.AllTools.FirstOrDefault(t => t.Name == toolName)
             ?? toolResult.AllTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
@@ -775,7 +793,7 @@ public sealed class AgentRunner(
     }
 
     /// <summary>构建不带 UseFunctionInvocation 的客户端（供兼容方法使用，实际已被 AgentFactory 替代）。</summary>
-    private IChatClient BuildRawClient(ProviderConfig provider) => clientFactory.Create(provider);
+    private IChatClient BuildRawClient(ProviderConfig provider) => _clientFactory.Create(provider);
 
     /// <summary>校验消息历史中的附件是否被 Provider 模态能力支持。</summary>
     private IReadOnlyList<SessionMessage> ValidateModalities(

@@ -4,6 +4,7 @@ using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -16,15 +17,26 @@ namespace MicroClaw.Jobs;
 ///   3. 结合 Agent 当前的 MEMORY.md，通过 LLM 进行跨 Session 归因/摘要/洞察整理。
 ///   4. 将整理结果更新写回 Agent 的 MEMORY.md（Agent DNA），实现认知沉淀。
 /// </summary>
-public sealed class DreamingJob(
-    AgentStore agentStore,
-    ISessionRepository repo,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    AgentDnaService agentDnaService,
-    MemoryService memoryService,
-    ILogger<DreamingJob> logger) : IScheduledJob
+public sealed class DreamingJob : IScheduledJob
 {
+    private readonly AgentStore _agentStore;
+    private readonly ISessionRepository _repo;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly AgentDnaService _agentDnaService;
+    private readonly MemoryService _memoryService;
+    private readonly ILogger<DreamingJob> _logger;
+
+    public DreamingJob(IServiceProvider sp)
+    {
+        _agentStore = sp.GetRequiredService<AgentStore>();
+        _repo = sp.GetRequiredService<ISessionRepository>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _agentDnaService = sp.GetRequiredService<AgentDnaService>();
+        _memoryService = sp.GetRequiredService<MemoryService>();
+        _logger = sp.GetRequiredService<ILogger<DreamingJob>>();
+    }
     public string JobName => "dreaming";
     public JobSchedule Schedule => new JobSchedule.DailyAt(RunTime, TimeSpan.FromSeconds(90));
 
@@ -53,7 +65,7 @@ public sealed class DreamingJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogInformation("D-2 DreamingJob 开始执行离线认知整理");
+        _logger.LogInformation("D-2 DreamingJob 开始执行离线认知整理");
         await RunDreamingAsync(ct);
     }
 
@@ -70,8 +82,8 @@ public sealed class DreamingJob(
     /// 执行一轮认知整理，供测试直接调用。
     internal async Task RunDreamingAsync(CancellationToken ct)
     {
-        IReadOnlyList<AgentConfig> agents = agentStore.All;
-        IReadOnlyList<IMicroSession> allSessions = repo.GetAll();
+        IReadOnlyList<AgentConfig> agents = _agentStore.All;
+        IReadOnlyList<IMicroSession> allSessions = _repo.GetAll();
 
         foreach (AgentConfig agent in agents)
         {
@@ -96,7 +108,7 @@ public sealed class DreamingJob(
 
             if (agentSessions.Count == 0)
             {
-                logger.LogDebug("D-2 Agent={AgentId} 无关联会话，跳过", agent.Id);
+                _logger.LogDebug("D-2 Agent={AgentId} 无关联会话，跳过", agent.Id);
                 return;
             }
 
@@ -109,7 +121,7 @@ public sealed class DreamingJob(
                 for (int daysBack = 1; daysBack <= DailyMemoryLookbackDays; daysBack++)
                 {
                     string date = today.AddDays(-daysBack).ToString("yyyy-MM-dd");
-                    DailyMemoryInfo? daily = memoryService.GetDailyMemory(session.Id, date);
+                    DailyMemoryInfo? daily = _memoryService.GetDailyMemory(session.Id, date);
                     if (daily is not null && !string.IsNullOrWhiteSpace(daily.Content))
                     {
                         memoryFragments.Add((session.Title, $"[{date}] {daily.Content}"));
@@ -119,7 +131,7 @@ public sealed class DreamingJob(
 
             if (memoryFragments.Count == 0)
             {
-                logger.LogDebug(
+                _logger.LogDebug(
                     "D-2 Agent={AgentId} 近 {Days} 天无日记忆片段，跳过认知整理",
                     agent.Id, DailyMemoryLookbackDays);
                 return;
@@ -129,26 +141,26 @@ public sealed class DreamingJob(
             IChatClient? client = ResolveClient(agentSessions);
             if (client is null)
             {
-                logger.LogWarning("D-2 Agent={AgentId} 无可用 Provider，跳过认知整理", agent.Id);
+                _logger.LogWarning("D-2 Agent={AgentId} 无可用 Provider，跳过认知整理", agent.Id);
                 return;
             }
 
             // 执行认知整理
-            string existingMemory = agentDnaService.GetMemory(agent.Id);
+            string existingMemory = _agentDnaService.GetMemory(agent.Id);
             string dreamSummary = await BuildCognitiveDreamAsync(
                 existingMemory, memoryFragments, client, ct);
 
             if (!string.IsNullOrWhiteSpace(dreamSummary))
             {
-                agentDnaService.UpdateMemory(agent.Id, dreamSummary);
-                logger.LogInformation(
+                _agentDnaService.UpdateMemory(agent.Id, dreamSummary);
+                _logger.LogInformation(
                     "D-2 Agent={AgentId} 认知整理完成，处理了 {SessionCount} 个会话的 {FragmentCount} 个记忆片段",
                     agent.Id, agentSessions.Count, memoryFragments.Count);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "D-2 Agent={AgentId} 认知整理异常", agent.Id);
+            _logger.LogError(ex, "D-2 Agent={AgentId} 认知整理异常", agent.Id);
         }
     }
 
@@ -161,14 +173,14 @@ public sealed class DreamingJob(
     {
         foreach (IMicroSession session in agentSessions)
         {
-            ProviderConfig? provider = providerStore.All
+            ProviderConfig? provider = _providerStore.All
                 .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
             if (provider is not null)
-                return clientFactory.Create(provider);
+                return _clientFactory.Create(provider);
         }
 
-        ProviderConfig? fallback = providerStore.All.FirstOrDefault(p => p.IsEnabled);
-        return fallback is not null ? clientFactory.Create(fallback) : null;
+        ProviderConfig? fallback = _providerStore.All.FirstOrDefault(p => p.IsEnabled);
+        return fallback is not null ? _clientFactory.Create(fallback) : null;
     }
 
     // ── 静态 helpers（internal 供测试调用）────────────────────────────────────

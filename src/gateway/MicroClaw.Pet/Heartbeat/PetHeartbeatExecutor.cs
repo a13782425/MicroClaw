@@ -1,6 +1,7 @@
 using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet.Heartbeat;
@@ -30,22 +31,15 @@ public sealed class PetHeartbeatExecutor
     private readonly IPetNotifier _petNotifier;
     private readonly ILogger<PetHeartbeatExecutor> _logger;
 
-    public PetHeartbeatExecutor(
-        PetStateStore stateStore,
-        PetStateMachine stateMachine,
-        PetSelfAwarenessReportBuilder reportBuilder,
-        PetRagScope petRagScope,
-        PetActionExecutor actionExecutor,
-        IPetNotifier petNotifier,
-        ILogger<PetHeartbeatExecutor> logger)
+    public PetHeartbeatExecutor(IServiceProvider sp)
     {
-        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-        _stateMachine = stateMachine ?? throw new ArgumentNullException(nameof(stateMachine));
-        _reportBuilder = reportBuilder ?? throw new ArgumentNullException(nameof(reportBuilder));
-        _petRagScope = petRagScope ?? throw new ArgumentNullException(nameof(petRagScope));
-        _actionExecutor = actionExecutor ?? throw new ArgumentNullException(nameof(actionExecutor));
-        _petNotifier = petNotifier ?? throw new ArgumentNullException(nameof(petNotifier));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _stateStore = sp.GetRequiredService<PetStateStore>();
+        _stateMachine = sp.GetRequiredService<PetStateMachine>();
+        _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
+        _petRagScope = sp.GetRequiredService<PetRagScope>();
+        _actionExecutor = sp.GetRequiredService<PetActionExecutor>();
+        _petNotifier = sp.GetRequiredService<IPetNotifier>();
+        _logger = sp.GetRequiredService<ILogger<PetHeartbeatExecutor>>();
     }
 
     /// <summary>

@@ -20,15 +20,15 @@ public sealed class RagService : IRagService
     private readonly IEmbeddingService _embedding;
     private readonly RagDbContextFactory _dbFactory;
     private readonly HybridSearchService _hybridSearch;
-    private readonly IDbContextFactory<GatewayDbContext>? _statsFactory;
-    private readonly IRagPruner? _pruner;
+    private readonly IDbContextFactory<GatewayDbContext> _statsFactory;
+    private readonly IRagPruner _pruner;
 
     public RagService(
         IEmbeddingService embedding,
         RagDbContextFactory dbFactory,
         HybridSearchService hybridSearch,
-        IDbContextFactory<GatewayDbContext>? statsFactory = null,
-        IRagPruner? pruner = null)
+        IDbContextFactory<GatewayDbContext> statsFactory,
+        IRagPruner pruner)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));

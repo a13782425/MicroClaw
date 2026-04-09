@@ -14,6 +14,7 @@ using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Utils;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Sessions;
 
@@ -27,11 +28,7 @@ namespace MicroClaw.Sessions;
 /// 持久化：会话元数据写入 sessions.yaml；消息历史写入 {sessionsDir}/{id}/messages.jsonl。
 /// </para>
 /// </summary>
-public sealed class SessionService(
-    AgentStore agentStore,
-    IHubContext<GatewayHub> hubContext,
-    IPetFactory petFactory,
-    string sessionsDir) : ISessionService
+public sealed class SessionService : ISessionService, IService
 {
     // ── 持久化常量 ──────────────────────────────────────────────────────────
     private const string JsonlFileName = "messages.jsonl";
@@ -43,6 +40,30 @@ public sealed class SessionService(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // ── 依赖字段 ────────────────────────────────────────────────────────────
+    private AgentStore agentStore;
+    private IHubContext<GatewayHub> hubContext;
+    private IPetFactory _petFactory;
+    private string sessionsDir;
+    private readonly IServiceProvider serviceProvider;
+
+    public SessionService(IServiceProvider sp)
+    {
+        serviceProvider = sp;
+        sessionsDir = MicroClawConfig.Env.SessionsDir;
+    }
+
+    // ── IService ────────────────────────────────────────────────────────────
+    public int InitOrder => 20;
+    public Task InitializeAsync(CancellationToken ct = default)
+    {
+        agentStore = serviceProvider.GetRequiredService<AgentStore>();
+        hubContext = serviceProvider.GetRequiredService<IHubContext<GatewayHub>>();
+        _petFactory = serviceProvider.GetRequiredService<IPetFactory>();
+        return Task.CompletedTask;
+    }
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
     // ── 并发控制 ────────────────────────────────────────────────────────────
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
     private readonly ReaderWriterLockSlim _metaLock = new(LockRecursionPolicy.NoRecursion);
@@ -50,8 +71,6 @@ public sealed class SessionService(
     // ── 待批准通知限流（5 分钟/session）────────────────────────────────────
     private static readonly ConcurrentDictionary<string, DateTimeOffset> NotifyThrottle = new();
     private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
-
-    private readonly IPetFactory _petFactory = petFactory ?? throw new ArgumentNullException(nameof(petFactory));
 
     // ── ISessionService: 渠道会话管理 ──────────────────────────────────────
 

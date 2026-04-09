@@ -30,10 +30,9 @@ public sealed class PetPromptStore
         .IgnoreUnmatchedProperties()
         .Build();
 
-    public PetPromptStore(MicroClawConfigEnv env)
+    public PetPromptStore()
     {
-        ArgumentNullException.ThrowIfNull(env);
-        _sessionsDir = env.SessionsDir;
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
     }
 
     /// <summary>仅供测试使用：直接指定 sessions 根目录。</summary>

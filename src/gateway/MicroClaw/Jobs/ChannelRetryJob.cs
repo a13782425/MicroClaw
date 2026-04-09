@@ -17,17 +17,30 @@ namespace MicroClaw.Jobs;
 /// 每 60 秒扫描 channel_retry_queue 表，对 pending 且到期的条目重新执行 AI 调用和飞书回复。
 /// 指数退避（60s→120s→240s），最多重试 3 次；超次后标记为 exhausted 并记录 Critical 告警。
 /// </summary>
-public sealed class ChannelRetryJob(
-    ChannelRetryQueueService retryQueueService,
-    ChannelConfigStore channelConfigStore,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    ISessionService sessionService,
-    ISessionRepository repo,
-    FeishuMessageProcessor feishuProcessor,
-    IAgentMessageHandler? agentHandler,
-    ILogger<ChannelRetryJob> logger) : IScheduledJob
+public sealed class ChannelRetryJob : IScheduledJob
 {
+    private readonly ChannelRetryQueueService _retryQueueService;
+    private readonly ChannelConfigStore _channelConfigStore;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly ISessionService _sessionService;
+    private readonly ISessionRepository _repo;
+    private readonly FeishuMessageProcessor _feishuProcessor;
+    private readonly IAgentMessageHandler? _agentHandler;
+    private readonly ILogger<ChannelRetryJob> _logger;
+
+    public ChannelRetryJob(IServiceProvider sp)
+    {
+        _retryQueueService = sp.GetRequiredService<ChannelRetryQueueService>();
+        _channelConfigStore = sp.GetRequiredService<ChannelConfigStore>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _sessionService = sp.GetRequiredService<ISessionService>();
+        _repo = sp.GetRequiredService<ISessionRepository>();
+        _feishuProcessor = sp.GetRequiredService<FeishuMessageProcessor>();
+        _agentHandler = sp.GetService<IAgentMessageHandler>();
+        _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
+    }
     private const int MaxRetries = 3;
 
     public string JobName => "channel-retry";
@@ -45,16 +58,16 @@ public sealed class ChannelRetryJob(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "F-D-1 ChannelRetryJob 扫描周期发生未预期异常");
+            _logger.LogError(ex, "F-D-1 ChannelRetryJob 扫描周期发生未预期异常");
         }
     }
 
     private async Task ProcessPendingEntriesAsync(CancellationToken ct)
     {
-        List<ChannelRetryQueueEntity> entries = await retryQueueService.GetPendingAsync(ct);
+        List<ChannelRetryQueueEntity> entries = await _retryQueueService.GetPendingAsync(ct);
         if (entries.Count == 0) return;
 
-        logger.LogInformation("F-D-1 ChannelRetryJob 发现 {Count} 条待重试消息", entries.Count);
+        _logger.LogInformation("F-D-1 ChannelRetryJob 发现 {Count} 条待重试消息", entries.Count);
 
         foreach (ChannelRetryQueueEntity entry in entries)
         {
@@ -66,18 +79,18 @@ public sealed class ChannelRetryJob(
     private async Task RetryOneAsync(ChannelRetryQueueEntity entry, CancellationToken ct)
     {
         int attempt = entry.RetryCount + 1;
-        logger.LogInformation("F-D-1 重试 attempt={Attempt}/{Max} messageId={MessageId}",
+        _logger.LogInformation("F-D-1 重试 attempt={Attempt}/{Max} messageId={MessageId}",
             attempt, MaxRetries, entry.MessageId);
 
         try
         {
             // 加载渠道配置
-            ChannelEntity? channel = channelConfigStore.GetById(entry.ChannelId);
+            ChannelEntity? channel = _channelConfigStore.GetById(entry.ChannelId);
             if (channel is null || !channel.IsEnabled)
             {
-                logger.LogWarning("F-D-1 渠道 {ChannelId} 不存在或已禁用，放弃重试 messageId={MessageId}",
+                _logger.LogWarning("F-D-1 渠道 {ChannelId} 不存在或已禁用，放弃重试 messageId={MessageId}",
                     entry.ChannelId, entry.MessageId);
-                await retryQueueService.UpdateRetryAsync(entry.Id, MaxRetries, MaxRetries,
+                await _retryQueueService.UpdateRetryAsync(entry.Id, MaxRetries, MaxRetries,
                     "渠道不存在或已禁用", ct);
                 return;
             }
@@ -85,22 +98,22 @@ public sealed class ChannelRetryJob(
             FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channel.SettingJson) ?? new();
 
             // 获取会话历史
-            IReadOnlyList<SessionMessage> history = sessionService.GetMessages(entry.SessionId);
+            IReadOnlyList<SessionMessage> history = _sessionService.GetMessages(entry.SessionId);
 
             // 执行 AI 调用
             string aiReply;
-            if (agentHandler?.HasAgentForChannel(channel.Id) == true)
+            if (_agentHandler?.HasAgentForChannel(channel.Id) == true)
             {
-                AgentResponse agentResponse = await agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct).MaterializeAsync(ct);
+                AgentResponse agentResponse = await _agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct).MaterializeAsync(ct);
                 aiReply = agentResponse.Text;
             }
             else
             {
-                IMicroSession? session = repo.Get(entry.SessionId);
+                IMicroSession? session = _repo.Get(entry.SessionId);
                 string resolvedProviderId = session?.ProviderId ?? string.Empty;
                 ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
-                    ? providerStore.GetDefault()
-                    : providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
+                    ? _providerStore.GetDefault()
+                    : _providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
                 if (providerConfig is null || !providerConfig.IsEnabled)
                 {
                     throw new InvalidOperationException(
@@ -113,32 +126,32 @@ public sealed class ChannelRetryJob(
                         m.Content))
                     .ToList();
 
-                IChatClient chatClient = clientFactory.Create(providerConfig);
+                IChatClient chatClient = _clientFactory.Create(providerConfig);
                 ChatResponse response = await chatClient.GetResponseAsync(chatMessages, cancellationToken: ct);
                 aiReply = response.Text ?? "（无回复）";
             }
 
             // 保存助手消息并回复用户
-            sessionService.AddMessage(entry.SessionId,
+            _sessionService.AddMessage(entry.SessionId,
                 new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", aiReply, null, DateTimeOffset.UtcNow, null));
 
-            await feishuProcessor.SendRetryReplyAsync(entry.MessageId, aiReply, settings, ct);
+            await _feishuProcessor.SendRetryReplyAsync(entry.MessageId, aiReply, settings, ct);
 
-            // 成功，从队列移除
-            await retryQueueService.DeleteAsync(entry.Id, ct);
-            logger.LogInformation("F-D-1 重试成功，已移除队列 messageId={MessageId}", entry.MessageId);
+            // 成功，从随列移除
+            await _retryQueueService.DeleteAsync(entry.Id, ct);
+            _logger.LogInformation("F-D-1 重试成功，已移除随列 messageId={MessageId}", entry.MessageId);
         }
         catch (Exception ex)
         {
             string errorMsg = ex.Message;
-            logger.LogWarning(ex, "F-D-1 重试 attempt={Attempt} 失败 messageId={MessageId}",
+            _logger.LogWarning(ex, "F-D-1 重试 attempt={Attempt} 失败 messageId={MessageId}",
                 attempt, entry.MessageId);
 
-            await retryQueueService.UpdateRetryAsync(entry.Id, attempt, MaxRetries, errorMsg, ct);
+            await _retryQueueService.UpdateRetryAsync(entry.Id, attempt, MaxRetries, errorMsg, ct);
 
             if (attempt >= MaxRetries)
             {
-                logger.LogCritical(
+                _logger.LogCritical(
                     "F-D-1 消息重试已耗尽（{Max}次），messageId={MessageId} channelId={ChannelId}，请人工排查。",
                     MaxRetries, entry.MessageId, entry.ChannelId);
             }

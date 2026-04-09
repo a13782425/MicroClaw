@@ -8,6 +8,7 @@ using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
+using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
 
@@ -16,18 +17,14 @@ namespace MicroClaw.Sessions;
 /// <summary>
 /// 子代理运行服务：以一次性 SubAgentRun 方式调用 AgentRunner 执行任务，并将结果挂接到根会话。
 /// 实现 ISubAgentRunner 接口，由 MicroClaw.Agent 层通过接口调用，避免循环依赖。
-/// 使用 Lazy&lt;AgentRunner&gt; 打破 AgentRunner ↔ SubAgentRunnerService 的循环注册依赖。
+/// 通过 IServiceProvider 懒解析 AgentRunner，彻底消除 Lazy&lt;AgentRunner&gt; 循环依赖 hack。
 /// </summary>
-public sealed class SubAgentRunnerService(
-    ISessionService sessionService,
-    AgentStore agentStore,
-    Lazy<AgentRunner> agentRunnerLazy,
-    int maxSubAgentDepth = 3) : ISubAgentRunner
+public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
 {
-    private readonly int _maxSubAgentDepth = maxSubAgentDepth;
-    private readonly ISessionService _sessions = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
-
-    private AgentRunner AgentRunner => agentRunnerLazy.Value;
+    private int MaxSubAgentDepth => MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth;
+    private ISessionService Sessions => sp.GetRequiredService<ISessionService>();
+    private AgentStore AgentStore => sp.GetRequiredService<AgentStore>();
+    private AgentRunner AgentRunner => sp.GetRequiredService<AgentRunner>();
 
     public async Task<string> RunSubAgentAsync(
         string agentId,
@@ -35,7 +32,7 @@ public sealed class SubAgentRunnerService(
         string sessionId,
         CancellationToken ct = default)
     {
-        AgentEntity? agent = agentStore.GetAgentById(agentId);
+        AgentEntity? agent = AgentStore.GetAgentById(agentId);
         if (agent is null)
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
         if (!agent.IsEnabled)
@@ -43,15 +40,15 @@ public sealed class SubAgentRunnerService(
         
         SubAgentRunContext? currentRunContext = SubAgentRunScope.Current;
         IReadOnlyList<string> ancestorAgentIds = currentRunContext?.AgentChain ?? Array.Empty<string>();
-        if (ancestorAgentIds.Count >= _maxSubAgentDepth)
+        if (ancestorAgentIds.Count >= MaxSubAgentDepth)
             throw new InvalidOperationException(
-                $"子代理调用深度已达上限（{_maxSubAgentDepth}），禁止继续派生子代理。");
+                $"子代理调用深度已达上限（{MaxSubAgentDepth}），禁止继续派生子代理。");
         if (ancestorAgentIds.Contains(agentId, StringComparer.Ordinal))
             throw new InvalidOperationException(
                 $"检测到循环子代理调用：代理 '{agentId}' 已存在于当前调用链中，禁止循环调用。");
 
         // 获取父会话 ProviderId（子运行默认继承当前会话模型）
-        IMicroSession? session = _sessions.Get(sessionId);
+        IMicroSession? session = Sessions.Get(sessionId);
         string providerId = session?.ProviderId ?? string.Empty;
         string rootSessionId = currentRunContext?.RootSessionId ?? sessionId;
         string runId = Guid.NewGuid().ToString("N");
@@ -63,7 +60,7 @@ public sealed class SubAgentRunnerService(
             SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null,
                 Source: $"sub-agent:{agentId}");
             var rootUserMeta = BuildSubAgentMetadata(agentId, agent.Name, runId);
-            _sessions.AddMessage(rootSessionId,
+            Sessions.AddMessage(rootSessionId,
                 userMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootUserMeta, Visibility = MessageVisibility.Internal });
 
             ChannelWriter<StreamItem>? parentWriter = SubAgentEventBridge.Current;
@@ -139,7 +136,7 @@ public sealed class SubAgentRunnerService(
             SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", main, think,
                 DateTimeOffset.UtcNow, attachments, Source: $"sub-agent:{agentId}");
             var rootAssistantMeta = BuildSubAgentMetadata(agentId, agent.Name, runId);
-            _sessions.AddMessage(rootSessionId,
+            Sessions.AddMessage(rootSessionId,
                 assistantMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootAssistantMeta, Visibility = MessageVisibility.Internal });
 
             return main;

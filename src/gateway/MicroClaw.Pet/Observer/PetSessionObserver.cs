@@ -29,10 +29,9 @@ public sealed class PetSessionObserver
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    public PetSessionObserver(MicroClawConfigEnv env, ILogger<PetSessionObserver> logger)
+    public PetSessionObserver(ILogger<PetSessionObserver> logger)
     {
-        ArgumentNullException.ThrowIfNull(env);
-        _sessionsDir = env.SessionsDir;
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 

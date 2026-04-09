@@ -1,3 +1,5 @@
+using MicroClaw.Configuration;
+
 namespace MicroClaw.Agent.Memory;
 
 /// <summary>Agent DNA 文件信息。</summary>
@@ -13,8 +15,10 @@ public sealed record AgentDnaFileInfo(
 /// SOUL.md 定义 Agent 人格（跨所有会话共享），
 /// MEMORY.md 存储 Agent 跨会话积累的长期经验（注入 SystemPrompt 时截取前 200 行）。
 /// </summary>
-public sealed class AgentDnaService(string agentsDir)
+public sealed class AgentDnaService
 {
+    private readonly string agentsDir = MicroClawConfig.Env.AgentsDir;
+
     // ── 常量 ─────────────────────────────────────────────────────────────────
 
     public const string SoulFile = "SOUL.md";

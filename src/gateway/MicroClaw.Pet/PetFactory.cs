@@ -10,28 +10,31 @@ namespace MicroClaw.Pet;
 /// <summary>
 /// Creates or loads the runtime Pet resources for a persisted session.
 /// </summary>
-public sealed class PetFactory(
-    PetStateStore stateStore,
-    PetContextFactory contextFactory,
-    MicroClawConfigEnv env,
-    ILogger<PetFactory> logger)
-    : IPetFactory
+public sealed class PetFactory : IPetFactory
 {
-    private readonly PetStateStore _stateStore = stateStore;
-    private readonly PetContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
-    private readonly string _sessionsDir = env.SessionsDir;
-    private readonly ILogger<PetFactory> _logger = logger;
+    private readonly PetStateStore _stateStore;
+    private readonly PetContextFactory _contextFactory;
+    private readonly string _sessionsDir;
+    private readonly ILogger<PetFactory> _logger;
+
+    public PetFactory(PetStateStore stateStore, PetContextFactory contextFactory, ILogger<PetFactory> logger)
+    {
+        _stateStore = stateStore;
+        _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
+        _logger = logger;
+    }
 
     internal PetFactory(
         PetStateStore stateStore,
         PetContextFactory contextFactory,
         string sessionsDir,
-        ILogger<PetFactory> logger) : this(
-            stateStore,
-            contextFactory,
-            CreateTestEnv(sessionsDir),
-            logger)
+        ILogger<PetFactory> logger)
     {
+        _stateStore = stateStore;
+        _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+        _sessionsDir = sessionsDir;
+        _logger = logger;
     }
 
     /// <summary>
@@ -95,14 +98,6 @@ public sealed class PetFactory(
         if (pet is PetContext petContext)
             petContext.Activate();
         return pet;
-    }
-
-    private static MicroClawConfigEnv CreateTestEnv(string sessionsDir)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sessionsDir);
-        string rootDir = Directory.GetParent(Directory.GetParent(sessionsDir)!.FullName)!.FullName;
-        Environment.SetEnvironmentVariable("MICROCLAW_HOME", rootDir);
-        return MicroClawConfig.Env;
     }
 
     private static async Task WriteDefaultYamlAsync(string path, string content, CancellationToken ct)

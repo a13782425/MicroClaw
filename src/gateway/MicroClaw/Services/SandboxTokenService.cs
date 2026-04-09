@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -7,7 +8,7 @@ namespace MicroClaw.Services;
 /// 沙盒文件下载 Token 服务。使用 ASP.NET Core Data Protection 生成带时限的 HMAC 签名 Token，
 /// 无需数据库存储，Token 本身携带 sessionId + 相对路径，过期后自动失效。
 /// </summary>
-public sealed class SandboxTokenService
+public sealed class SandboxTokenService : ISandboxUrlGenerator
 {
     private readonly ITimeLimitedDataProtector _protector;
 

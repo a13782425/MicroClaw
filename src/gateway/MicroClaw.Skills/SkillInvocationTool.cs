@@ -2,6 +2,7 @@
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Skills;
@@ -20,19 +21,14 @@ public sealed class SkillInvocationTool
     private readonly IAgentLookup? _agentLookup;
     private readonly ILogger<SkillInvocationTool> _logger;
 
-    public SkillInvocationTool(
-        SkillToolFactory factory,
-        SkillService skillService,
-        ILogger<SkillInvocationTool> logger,
-        ISubAgentRunner? subAgentRunner = null,
-        IAgentLookup? agentLookup = null)
+    public SkillInvocationTool(IServiceProvider sp)
     {
-        _factory = factory;
-        _skillService = skillService;
+        _factory = sp.GetRequiredService<SkillToolFactory>();
+        _skillService = sp.GetRequiredService<SkillService>();
         _options = MicroClawConfig.Get<SkillOptions>();
-        _logger = logger;
-        _subAgentRunner = subAgentRunner;
-        _agentLookup = agentLookup;
+        _logger = sp.GetRequiredService<ILogger<SkillInvocationTool>>();
+        _subAgentRunner = sp.GetService<ISubAgentRunner>();
+        _agentLookup = sp.GetService<IAgentLookup>();
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.RegularExpressions;
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
@@ -10,9 +11,24 @@ namespace MicroClaw.Channels;
 /// 渠道配置存储，作为 <see cref="MicroClawConfig"/> 的线程安全二次封装。
 /// 所有写操作通过 <see cref="MicroClawConfig.Save{T}"/> 持久化到 channels.yaml。
 /// </summary>
-public sealed class ChannelConfigStore
+public sealed class ChannelConfigStore : IService
 {
     private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
+
+    // ── IService ─────────────────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public int InitOrder => 10;
+
+    /// <summary>确保内置 Web Channel 存在（幂等）。</summary>
+    public Task InitializeAsync(CancellationToken ct = default)
+    {
+        EnsureWebChannel();
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     public IReadOnlyList<ChannelEntity> All
     {

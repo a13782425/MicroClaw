@@ -3,6 +3,7 @@ using MicroClaw.Channels;
 using MicroClaw.Channels.Feishu;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Abstractions.Sessions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -22,11 +23,19 @@ namespace MicroClaw.Jobs;
 /// <para>最后同步时间仅保存在内存中，服务重启后将从"当前时间 - 同步间隔"重新计算，
 /// 避免历史多次重复追加。</para>
 /// </remarks>
-public sealed class FeishuDocSyncJob(
-    ChannelConfigStore channelConfigStore,
-    ISessionRepository repo,
-    ILogger<FeishuDocSyncJob> logger) : IScheduledJob
+public sealed class FeishuDocSyncJob : IScheduledJob
 {
+    private readonly ChannelConfigStore _channelConfigStore;
+    private readonly ISessionRepository _repo;
+    private readonly ILogger<FeishuDocSyncJob> _logger;
+
+    public FeishuDocSyncJob(IServiceProvider sp)
+    {
+        _channelConfigStore = sp.GetRequiredService<ChannelConfigStore>();
+        _repo = sp.GetRequiredService<ISessionRepository>();
+        _logger = sp.GetRequiredService<ILogger<FeishuDocSyncJob>>();
+    }
+
     public string JobName => "feishu-doc-sync";
     public JobSchedule Schedule => new JobSchedule.FixedInterval(TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30));
 
@@ -41,7 +50,7 @@ public sealed class FeishuDocSyncJob(
     /// <summary>扫描所有启用了 SummaryDocToken 的飞书渠道，并按各自间隔决定是否触发同步。</summary>
     private async Task SyncAllChannelsAsync(CancellationToken ct)
     {
-        foreach (ChannelEntity config in channelConfigStore.All)
+        foreach (ChannelEntity config in _channelConfigStore.All)
         {
             if (ct.IsCancellationRequested) break;
 
@@ -62,7 +71,7 @@ public sealed class FeishuDocSyncJob(
 
             if (DateTimeOffset.UtcNow - lastSync < interval) continue;
 
-            logger.LogInformation(
+            _logger.LogInformation(
                 "F-C-7 FeishuDocSyncJob 开始同步渠道 {ChannelId}（{ChannelName}）→ 文档 {DocToken}",
                 config.Id, config.DisplayName, settings.SummaryDocToken);
 
@@ -84,13 +93,13 @@ public sealed class FeishuDocSyncJob(
         CancellationToken ct)
     {
         // 取所有飞书会话（SessionEntity 未存储 channelId，故取全部 Feishu 会话）
-        IReadOnlyList<IMicroSession> feishuSessions = repo.GetAll()
+        IReadOnlyList<IMicroSession> feishuSessions = _repo.GetAll()
             .Where(s => s.ChannelType == ChannelType.Feishu)
             .ToList();
 
         if (feishuSessions.Count == 0)
         {
-            logger.LogDebug("F-C-7 渠道 {ChannelId} 暂无飞书会话，跳过", config.Id);
+            _logger.LogDebug("F-C-7 渠道 {ChannelId} 暂无飞书会话，跳过", config.Id);
             return;
         }
 
@@ -102,24 +111,24 @@ public sealed class FeishuDocSyncJob(
             if (ct.IsCancellationRequested) break;
 
             IReadOnlyList<SessionMessage> messages =
-                repo.GetMessages(session.Id);
+                _repo.GetMessages(session.Id);
 
             if (messages.Count == 0) continue;
 
             (bool success, string? error) = await FeishuDocTools.AppendSessionSummaryAsync(
-                settings, session.Title, messages, fromUtc, logger, ct);
+                settings, session.Title, messages, fromUtc, _logger, ct);
 
             if (success && error is null)
                 syncedCount++;
             else if (success) // success=true, error=null means "skipped (no new messages)"
                 skippedCount++;
             else
-                logger.LogWarning(
+                _logger.LogWarning(
                     "F-C-7 同步会话 {SessionId}（{SessionTitle}）失败: {Error}",
                     session.Id, session.Title, error);
         }
 
-        logger.LogInformation(
+        _logger.LogInformation(
             "F-C-7 渠道 {ChannelId} 同步完成：已追加={Synced} 跳过={Skipped} 总会话={Total}",
             config.Id, syncedCount, skippedCount, feishuSessions.Count);
     }

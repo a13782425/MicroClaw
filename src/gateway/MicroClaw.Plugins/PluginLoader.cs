@@ -1,10 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Plugins.Models;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Plugins;
@@ -13,7 +13,7 @@ namespace MicroClaw.Plugins;
 /// Loads and manages plugins from <c>workspace/plugins/</c>.
 /// Implements <see cref="IHostedService"/> to auto-load on startup.
 /// </summary>
-public sealed class PluginLoader : IPluginRegistry, IHostedService
+public sealed class PluginLoader : IPluginRegistry, IService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -44,16 +44,20 @@ public sealed class PluginLoader : IPluginRegistry, IHostedService
         _agentRegistrar = agentRegistrar;
     }
 
-    // ── IHostedService ──────────────────────────────────────────────────────
+    // ── IService ──────────────────────────────────────────────────────────────
 
-    public async Task StartAsync(CancellationToken ct)
+    /// <inheritdoc/>
+    public int InitOrder => 30;
+
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(_pluginsDir);
-        await ReloadAsync(ct);
+        await ReloadAsync(cancellationToken);
         _logger.LogInformation("Plugin system initialized: {Count} plugins loaded from {Dir}", _plugins.Count, _pluginsDir);
     }
 
-    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── IPluginRegistry ─────────────────────────────────────────────────────
 

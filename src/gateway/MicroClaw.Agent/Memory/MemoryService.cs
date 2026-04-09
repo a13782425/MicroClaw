@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Configuration;
 
 namespace MicroClaw.Agent.Memory;
 
@@ -13,8 +14,10 @@ public sealed record DailyMemoryInfo(
 /// Session 记忆服务：管理长期记忆 (MEMORY.md) 和每日记忆 (memory/YYYY-MM-DD.md)。
 /// 文件存储于 {sessionsDir}/{sessionId}/ 下。
 /// </summary>
-public sealed class MemoryService(string sessionsDir)
+public sealed class MemoryService
 {
+    private readonly string sessionsDir = MicroClawConfig.Env.SessionsDir;
+
     // ── 常量 ─────────────────────────────────────────────────────────────────
 
     private const string LongTermFile = "MEMORY.md";

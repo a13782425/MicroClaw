@@ -14,17 +14,29 @@ namespace MicroClaw.Channels.Feishu;
 /// 每个 WebSocket 模式的渠道拥有独立的 ServiceProvider（SDK 限制：一个容器只能建立一条连接）。
 /// 启动时根据 ChannelConfigStore 中已启用的 WebSocket 渠道创建连接，并定期轮询配置变更。
 /// </summary>
-public sealed class FeishuWebSocketManager(
-    ChannelConfigStore channelStore,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    ISessionService sessionService,
-    ILoggerFactory loggerFactory,
-    FeishuTokenCache? tokenCache = null,
-    IAgentMessageHandler? agentHandler = null) : BackgroundService
+public sealed class FeishuWebSocketManager : BackgroundService
 {
-    private readonly ILogger<FeishuWebSocketManager> _logger = loggerFactory.CreateLogger<FeishuWebSocketManager>();
+    private readonly ChannelConfigStore _channelStore;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly ISessionService _sessionService;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly FeishuTokenCache? _tokenCache;
+    private readonly IAgentMessageHandler? _agentHandler;
+    private readonly ILogger<FeishuWebSocketManager> _logger;
     private readonly ConcurrentDictionary<string, ChannelConnection> _connections = new();
+
+    public FeishuWebSocketManager(IServiceProvider sp)
+    {
+        _channelStore = sp.GetRequiredService<ChannelConfigStore>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _sessionService = sp.GetRequiredService<ISessionService>();
+        _loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+        _tokenCache = sp.GetService<FeishuTokenCache>();
+        _agentHandler = sp.GetService<IAgentMessageHandler>();
+        _logger = _loggerFactory.CreateLogger<FeishuWebSocketManager>();
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -35,7 +47,7 @@ public sealed class FeishuWebSocketManager(
     /// <summary>对比当前连接与数据库配置，启停对应渠道的 WebSocket 连接。</summary>
     public async Task SyncChannelsAsync(CancellationToken ct)
     {
-        IReadOnlyList<ChannelEntity> feishuChannels = channelStore.GetByType(ChannelType.Feishu);
+        IReadOnlyList<ChannelEntity> feishuChannels = _channelStore.GetByType(ChannelType.Feishu);
 
         // 需要活跃的渠道 ID 集合
         HashSet<string> desiredIds = new(StringComparer.OrdinalIgnoreCase);
@@ -179,7 +191,7 @@ public sealed class FeishuWebSocketManager(
             delaySeconds = Math.Min(delaySeconds * 2, 60);
 
             // 如果配置已变更（禁用或切换模式），不再重连
-            ChannelEntity? current = channelStore.GetByType(ChannelType.Feishu)
+            ChannelEntity? current = _channelStore.GetByType(ChannelType.Feishu)
                 .FirstOrDefault(c => c.Id == channel.Id);
             if (current is null || !current.IsEnabled) return;
             FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingJson);
@@ -233,17 +245,17 @@ public sealed class FeishuWebSocketManager(
         services.AddSingleton(new FeishuChannelContext(channel, settings));
 
         // 共享主容器的 Processor（其中需要 ProviderConfigStore 和 ProviderClientFactory）
-        services.AddSingleton(providerStore);
-        services.AddSingleton(clientFactory);
-        services.AddSingleton(sessionService);
+        services.AddSingleton(_providerStore);
+        services.AddSingleton(_clientFactory);
+        services.AddSingleton(_sessionService);
         // F-D-3: 共享 Token 缓存（子容器的 FeishuMessageProcessor 也能复用 Token）
-        if (tokenCache is not null) services.AddSingleton(tokenCache);
+        if (_tokenCache is not null) services.AddSingleton(_tokenCache);
         // 共享主容器的 Agent 消息处理器，使子容器的 FeishuMessageProcessor 能路由到 Agent（含工具）
-        if (agentHandler is not null) services.AddSingleton(agentHandler);
+        if (_agentHandler is not null) services.AddSingleton(_agentHandler);
         services.AddSingleton<FeishuMessageProcessor>();
 
         // 共享主容器的日志工厂
-        services.AddSingleton(loggerFactory);
+        services.AddSingleton(_loggerFactory);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
         // 注册事件处理器（SDK 通过反射发现）

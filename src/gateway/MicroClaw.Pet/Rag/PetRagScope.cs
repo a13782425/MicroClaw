@@ -25,11 +25,10 @@ public sealed class PetRagScope
     private const double DefaultMaxStorageMb = 20;
     private const double DefaultPruneTargetPercent = 0.8;
 
-    public PetRagScope(IEmbeddingService embedding, MicroClawConfigEnv env, ILogger<PetRagScope> logger)
+    public PetRagScope(IEmbeddingService embedding, ILogger<PetRagScope> logger)
     {
         _embedding = embedding ?? throw new ArgumentNullException(nameof(embedding));
-        ArgumentNullException.ThrowIfNull(env);
-        _sessionsDir = env.SessionsDir;
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 

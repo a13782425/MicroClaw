@@ -1,18 +1,21 @@
 ﻿using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Plugins;
+using MicroClaw.Agent.Memory;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure;
 using MicroClaw.Providers;
 using MicroClaw.Tools;
 using MicroClaw.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Agent;
 
 /// <summary>
 /// Agent 配置的 CRUD 存储，基于 MicroClawConfig AgentsOptions（内存 + 写时落盘到 agents.yaml）。
 /// </summary>
-public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
+public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -20,6 +23,29 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
     };
 
     private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
+    private readonly IServiceProvider _sp;
+
+    public AgentStore(IServiceProvider sp) => _sp = sp;
+
+    /// <summary>仅供测试使用的无参构造函数。</summary>
+    internal AgentStore() { _sp = null!; }
+
+    // ── IService ─────────────────────────────────────────────────────────
+
+    /// <inheritdoc/>
+    public int InitOrder => 10;
+
+    /// <summary>确保默认 Agent（main）存在，并初始化其 DNA 目录。</summary>
+    public Task InitializeAsync(CancellationToken ct = default)
+    {
+        AgentConfig main = EnsureMainAgent();
+        var agentDna = _sp.GetRequiredService<AgentDnaService>();
+        agentDna.InitializeAgent(main.Id);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── Queries ─────────────────────────────────────────────────────────
 

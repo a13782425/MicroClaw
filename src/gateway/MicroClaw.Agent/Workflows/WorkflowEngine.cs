@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent.Workflows;
@@ -10,12 +11,20 @@ namespace MicroClaw.Agent.Workflows;
 /// 并通过 IAsyncEnumerable{StreamItem} 实时输出事件流。
 /// 使用运行时上下文（currentAgentId / currentProviderId）实现代理和模型的传播。
 /// </summary>
-public sealed class WorkflowEngine(
-    AgentStore agentStore,
-    ProviderConfigStore providerStore,
-    AgentRunner agentRunner,
-    ILogger<WorkflowEngine> logger)
+public sealed class WorkflowEngine
 {
+    private readonly AgentStore _agentStore;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly AgentRunner _agentRunner;
+    private readonly ILogger<WorkflowEngine> _logger;
+
+    public WorkflowEngine(IServiceProvider sp)
+    {
+        _agentStore = sp.GetRequiredService<AgentStore>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _agentRunner = sp.GetRequiredService<AgentRunner>();
+        _logger = sp.GetRequiredService<ILogger<WorkflowEngine>>();
+    }
     public async IAsyncEnumerable<StreamItem> ExecuteAsync(
         WorkflowConfig workflow,
         string userInput,
@@ -34,8 +43,8 @@ public sealed class WorkflowEngine(
         }
 
         // 运行时上下文：代理与模型在节点间传播
-        string? currentAgentId = agentStore.GetDefault()?.Id;
-        string? currentProviderId = workflow.DefaultProviderId ?? providerStore.GetDefault()?.Id;
+        string? currentAgentId = _agentStore.GetDefault()?.Id;
+        string? currentProviderId = workflow.DefaultProviderId ?? _providerStore.GetDefault()?.Id;
 
         Dictionary<string, string> nodeOutputs = new();
         string currentInput = userInput;
@@ -154,10 +163,10 @@ public sealed class WorkflowEngine(
         string providerId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        Agent? agent = agentStore.GetAgentById(effectiveAgentId);
+        Agent? agent = _agentStore.GetAgentById(effectiveAgentId);
         if (agent is null || !agent.IsEnabled)
         {
-            logger.LogWarning("工作流节点 {NodeId} 引用的 Agent '{AgentId}' 不存在或已禁用，跳过。",
+            _logger.LogWarning("工作流节点 {NodeId} 引用的 Agent '{AgentId}' 不存在或已禁用，跳过。",
                 node.NodeId, effectiveAgentId);
             yield break;
         }
@@ -167,7 +176,7 @@ public sealed class WorkflowEngine(
             new(Id: Guid.NewGuid().ToString("N"), Role: "user", Content: input, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: null)
         };
 
-        await foreach (StreamItem item in agentRunner.StreamReActAsync(agent, providerId, history, sessionId: null, ct, "workflow"))
+        await foreach (StreamItem item in _agentRunner.StreamReActAsync(agent, providerId, history, sessionId: null, ct, "workflow"))
             yield return item;
     }
 
@@ -195,7 +204,7 @@ public sealed class WorkflowEngine(
 
         if (string.IsNullOrWhiteSpace(toolAgentId))
         {
-            logger.LogWarning("工作流 Tool 节点 {NodeId} 未配置 toolAgentId。", node.NodeId);
+            _logger.LogWarning("工作流 Tool 节点 {NodeId} 未配置 toolAgentId。", node.NodeId);
             yield return new TokenItem(input);
             yield break;
         }
@@ -206,7 +215,7 @@ public sealed class WorkflowEngine(
                 $"Tool 节点使用的 Agent '{toolAgentId}' 与当前上下文 Agent '{currentAgentId}' 不一致。");
         }
 
-        string result = await agentRunner.InvokeToolAsync(toolAgentId, toolName, node.Config, input, ct);
+        string result = await _agentRunner.InvokeToolAsync(toolAgentId, toolName, node.Config, input, ct);
         yield return new TokenItem(result);
     }
 

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+
 namespace MicroClaw.Safety;
 
 /// <summary>
@@ -10,6 +12,15 @@ public sealed class ToolListConfig : IToolListConfig
 
     private readonly HashSet<string> _whitelist;
     private readonly HashSet<string> _graylist;
+
+    /// <summary>
+    /// 从 IConfiguration 读取 safety:tool-whitelist 和 safety:tool-graylist 段自动构建实例。
+    /// </summary>
+    public ToolListConfig(IConfiguration config) : this(
+        config.GetSection("safety:tool-whitelist").Get<List<string>>() ?? [],
+        config.GetSection("safety:tool-graylist").Get<List<string>>() ?? [])
+    {
+    }
 
     /// <summary>
     /// 创建白名单/灰名单配置实例。

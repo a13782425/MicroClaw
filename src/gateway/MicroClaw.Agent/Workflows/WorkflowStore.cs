@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using MicroClaw.Configuration;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Utils;
@@ -6,10 +7,10 @@ using MicroClaw.Utils;
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>
-/// 宸ヤ綔娴侀厤缃殑 CRUD 瀛樺偍锛屽熀浜?YAML 鏂囦欢锛堝唴瀛樼紦瀛?+ 鍐欐椂钀界洏锛夈€?
+/// 工作流配置的 CRUD 存储，基于 YAML 文件（内存缓存 + 写时落盘）。
 /// </summary>
-public sealed class WorkflowStore(string configDir)
-    : YamlFileStore<WorkflowConfigEntity>(Path.Combine(configDir, "workflows.yaml"), e => e.Id)
+public sealed class WorkflowStore()
+    : YamlFileStore<WorkflowConfigEntity>(Path.Combine(MicroClawConfig.Env.ConfigDir, "workflows.yaml"), e => e.Id)
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {

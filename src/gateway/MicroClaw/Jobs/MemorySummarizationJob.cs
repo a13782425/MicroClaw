@@ -4,6 +4,7 @@ using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -15,14 +16,24 @@ namespace MicroClaw.Jobs;
 ///   2. 将同天日记忆按主题分类归纳，更新 RAG 分类 chunk 和 MEMORY.md 目录。
 ///   3. 清理 3 天前的日记忆文件。
 /// </summary>
-public sealed class MemorySummarizationJob(
-    ISessionRepository repo,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    MemoryService memoryService,
-    IRagService ragService,
-    ILogger<MemorySummarizationJob> logger) : IScheduledJob
+public sealed class MemorySummarizationJob : IScheduledJob
 {
+    private readonly ISessionRepository _repo;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly MemoryService _memoryService;
+    private readonly IRagService _ragService;
+    private readonly ILogger<MemorySummarizationJob> _logger;
+
+    public MemorySummarizationJob(IServiceProvider sp)
+    {
+        _repo = sp.GetRequiredService<ISessionRepository>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _memoryService = sp.GetRequiredService<MemoryService>();
+        _ragService = sp.GetRequiredService<IRagService>();
+        _logger = sp.GetRequiredService<ILogger<MemorySummarizationJob>>();
+    }
     // 每天凌晨 2 点（UTC）执行
     internal static readonly TimeOnly RunTime = new(2, 0, 0);
 
@@ -65,7 +76,7 @@ public sealed class MemorySummarizationJob(
     public async Task ExecuteAsync(CancellationToken ct)
     {
         DateOnly targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-        logger.LogInformation("B-02 MemorySummarizationJob 开始执行，目标日期={Date}", targetDate);
+        _logger.LogInformation("B-02 MemorySummarizationJob 开始执行，目标日期={Date}", targetDate);
         await RunSummarizationAsync(targetDate, ct);
     }
 
@@ -84,7 +95,7 @@ public sealed class MemorySummarizationJob(
     /// </summary>
     internal async Task RunSummarizationAsync(DateOnly date, CancellationToken ct)
     {
-        IReadOnlyList<IMicroSession> sessions = repo.GetAll();
+        IReadOnlyList<IMicroSession> sessions = _repo.GetAll();
         foreach (IMicroSession session in sessions)
         {
             if (ct.IsCancellationRequested) break;
@@ -100,20 +111,20 @@ public sealed class MemorySummarizationJob(
             string dateStr = date.ToString("yyyy-MM-dd");
 
             // 1. 每日记忆：取目标日期的 user/assistant 消息
-            IReadOnlyList<SessionMessage> allMessages = repo.GetMessages(microSession.Id);
+            IReadOnlyList<SessionMessage> allMessages = _repo.GetMessages(microSession.Id);
             List<SessionMessage> dayMessages = allMessages
                 .Where(m => DateOnly.FromDateTime(m.Timestamp.UtcDateTime) == date)
                 .Where(m => m.Role is "user" or "assistant")
                 .ToList();
 
-            ProviderConfig? provider = providerStore.All
+            ProviderConfig? provider = _providerStore.All
                 .FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled);
-            IChatClient? client = provider is not null ? clientFactory.Create(provider) : null;
+            IChatClient? client = provider is not null ? _clientFactory.Create(provider) : null;
 
             if (dayMessages.Count > 0)
             {
                 // 与 ContextOverflowSummarizer 协调：溢出已写入时，只处理更新后的消息
-                DailyMemoryInfo? existingDailyMemory = memoryService.GetDailyMemory(microSession.Id, dateStr);
+                DailyMemoryInfo? existingDailyMemory = _memoryService.GetDailyMemory(microSession.Id, dateStr);
                 if (existingDailyMemory is not null)
                 {
                     dayMessages = dayMessages
@@ -125,35 +136,35 @@ public sealed class MemorySummarizationJob(
                 {
                     if (client is null)
                     {
-                        logger.LogWarning(
+                        _logger.LogWarning(
                             "B-02 Session={SessionId} 无可用 Provider（{ProviderId}），跳过每日记忆总结",
                             microSession.Id, microSession.ProviderId);
                     }
                     else
                     {
                         string summary = await BuildDailySummaryAsync(dayMessages, client, ct);
-                        memoryService.WriteDailyMemory(microSession.Id, dateStr, summary);
-                        logger.LogInformation(
+                        _memoryService.WriteDailyMemory(microSession.Id, dateStr, summary);
+                        _logger.LogInformation(
                             "B-02 Session={SessionId} 每日记忆已写入 {Date}，消息数={Count}",
                             microSession.Id, dateStr, dayMessages.Count);
                     }
                 }
                 else
                 {
-                    logger.LogDebug(
+                    _logger.LogDebug(
                         "B-02 Session={SessionId} 在 {Date} 已有溢出总结且无新消息，跳过每日总结",
                         microSession.Id, dateStr);
                 }
             }
             else
             {
-                logger.LogDebug("B-02 Session={SessionId} 在 {Date} 无有效消息，跳过", microSession.Id, dateStr);
+                _logger.LogDebug("B-02 Session={SessionId} 在 {Date} 无有效消息，跳过", microSession.Id, dateStr);
             }
 
             // 2. 分类归纳：基于今日日记忆更新 RAG 分类 chunk 和 MEMORY.md 目录
             if (client is not null)
             {
-                DailyMemoryInfo? dailyForDate = memoryService.GetDailyMemory(microSession.Id, dateStr);
+                DailyMemoryInfo? dailyForDate = _memoryService.GetDailyMemory(microSession.Id, dateStr);
                 if (dailyForDate is not null && !string.IsNullOrWhiteSpace(dailyForDate.Content))
                     await ClassifyToCategoriesAsync(microSession, dateStr, client, ct);
             }
@@ -163,7 +174,7 @@ public sealed class MemorySummarizationJob(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "B-02 Session={SessionId} 记忆总结异常", microSession.Id);
+            _logger.LogError(ex, "B-02 Session={SessionId} 记忆总结异常", microSession.Id);
         }
     }
 
@@ -173,14 +184,14 @@ public sealed class MemorySummarizationJob(
     private async Task ClassifyToCategoriesAsync(
         IMicroSession microSession, string dateStr, IChatClient client, CancellationToken ct)
     {
-        string existingJson = memoryService.GetCategoriesJson(microSession.Id);
-        DailyMemoryInfo? daily = memoryService.GetDailyMemory(microSession.Id, dateStr);
+        string existingJson = _memoryService.GetCategoriesJson(microSession.Id);
+        DailyMemoryInfo? daily = _memoryService.GetDailyMemory(microSession.Id, dateStr);
         if (daily is null) return;
 
         string updatedJson = await BuildCategoryClassificationAsync(existingJson, daily.Content, client, ct);
         if (string.IsNullOrWhiteSpace(updatedJson))
         {
-            logger.LogWarning("B-02 Session={SessionId} 分类 LLM 返回空结果，跳过", microSession.Id);
+            _logger.LogWarning("B-02 Session={SessionId} 分类 LLM 返回空结果，跳过", microSession.Id);
             return;
         }
 
@@ -191,7 +202,7 @@ public sealed class MemorySummarizationJob(
         }
         catch (JsonException ex)
         {
-            logger.LogWarning(ex, "B-02 Session={SessionId} 分类 JSON 解析失败：{Json}",
+            _logger.LogWarning(ex, "B-02 Session={SessionId} 分类 JSON 解析失败：{Json}",
                 microSession.Id, updatedJson[..Math.Min(200, updatedJson.Length)]);
             return;
         }
@@ -202,20 +213,20 @@ public sealed class MemorySummarizationJob(
         {
             try
             {
-                await ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
-                await ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
+                await _ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
+                await _ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "B-02 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
+                _logger.LogError(ex, "B-02 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
                     microSession.Id, categoryName);
             }
         }
 
         string newJson = JsonSerializer.Serialize(categories, new JsonSerializerOptions { WriteIndented = true });
-        memoryService.WriteCategoriesJson(microSession.Id, newJson);
-        memoryService.UpdateLongTermMemory(microSession.Id, BuildCategoryIndex(categories));
-        logger.LogInformation("B-02 Session={SessionId} 分类记忆已更新，共 {Count} 个分类",
+        _memoryService.WriteCategoriesJson(microSession.Id, newJson);
+        _memoryService.UpdateLongTermMemory(microSession.Id, BuildCategoryIndex(categories));
+        _logger.LogInformation("B-02 Session={SessionId} 分类记忆已更新，共 {Count} 个分类",
             microSession.Id, categories.Count);
     }
 
@@ -224,7 +235,7 @@ public sealed class MemorySummarizationJob(
     /// </summary>
     private void CleanupOldDailyMemories(IMicroSession microSession, DateOnly today)
     {
-        IReadOnlyList<string> allDates = memoryService.ListDailyMemories(microSession.Id);
+        IReadOnlyList<string> allDates = _memoryService.ListDailyMemories(microSession.Id);
         int deletedCount = 0;
 
         foreach (string date in allDates)
@@ -238,13 +249,13 @@ public sealed class MemorySummarizationJob(
             int daysAgo = today.DayNumber - memDate.DayNumber;
             if (daysAgo <= 3) continue;
 
-            if (memoryService.DeleteDailyMemory(microSession.Id, date))
+            if (_memoryService.DeleteDailyMemory(microSession.Id, date))
                 deletedCount++;
         }
 
         if (deletedCount > 0)
         {
-            logger.LogInformation(
+            _logger.LogInformation(
                 "B-02 Session={SessionId} 清理了 {Count} 个过期日记忆文件",
                 microSession.Id, deletedCount);
         }

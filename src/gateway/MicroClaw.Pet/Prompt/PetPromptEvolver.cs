@@ -5,6 +5,7 @@ using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet.Prompt;
@@ -27,23 +28,15 @@ public sealed class PetPromptEvolver
     private readonly ILogger<PetPromptEvolver> _logger;
     private readonly string _sessionsDir;
 
-    public PetPromptEvolver(
-        PetPromptStore promptStore,
-        PetStateStore stateStore,
-        PetRateLimiter rateLimiter,
-        PetModelSelector modelSelector,
-        ProviderClientFactory clientFactory,
-        MicroClawConfigEnv env,
-        ILogger<PetPromptEvolver> logger)
+    public PetPromptEvolver(IServiceProvider sp)
     {
-        _promptStore = promptStore ?? throw new ArgumentNullException(nameof(promptStore));
-        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-        _modelSelector = modelSelector ?? throw new ArgumentNullException(nameof(modelSelector));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        ArgumentNullException.ThrowIfNull(env);
-        _sessionsDir = env.SessionsDir;
+        _promptStore = sp.GetRequiredService<PetPromptStore>();
+        _stateStore = sp.GetRequiredService<PetStateStore>();
+        _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
+        _modelSelector = sp.GetRequiredService<PetModelSelector>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _logger = sp.GetRequiredService<ILogger<PetPromptEvolver>>();
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
     }
 
     /// <summary>仅供测试使用。</summary>

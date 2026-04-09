@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MicroClaw.Configuration;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,14 +15,8 @@ namespace MicroClaw.RAG;
 /// </summary>
 public sealed class RagDbContextFactory
 {
-    private readonly string _workspaceRoot;
+    private readonly string _workspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
     private readonly ConcurrentDictionary<string, bool> _initialized = new(StringComparer.OrdinalIgnoreCase);
-
-    public RagDbContextFactory(string workspaceRoot)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);
-        _workspaceRoot = workspaceRoot;
-    }
 
     /// <summary>全局文档存储目录：<c>{workspaceRoot}/global_docs</c>。</summary>
     public string GlobalDocsPath => Path.Combine(_workspaceRoot, "global_docs");

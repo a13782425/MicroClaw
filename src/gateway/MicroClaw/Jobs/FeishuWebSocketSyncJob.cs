@@ -1,4 +1,5 @@
 using MicroClaw.Channels.Feishu;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -9,10 +10,17 @@ namespace MicroClaw.Jobs;
 /// 原逻辑从 FeishuWebSocketManager.ExecuteAsync 中的 PeriodicTimer 提取至此，
 /// 统一由 SystemJobRegistrar / Quartz 调度，与其他系统 Job 保持一致。
 /// </summary>
-public sealed class FeishuWebSocketSyncJob(
-    FeishuWebSocketManager wsManager,
-    ILogger<FeishuWebSocketSyncJob> logger) : IScheduledJob
+public sealed class FeishuWebSocketSyncJob : IScheduledJob
 {
+    private readonly FeishuWebSocketManager _wsManager;
+    private readonly ILogger<FeishuWebSocketSyncJob> _logger;
+
+    public FeishuWebSocketSyncJob(IServiceProvider sp)
+    {
+        _wsManager = sp.GetRequiredService<FeishuWebSocketManager>();
+        _logger = sp.GetRequiredService<ILogger<FeishuWebSocketSyncJob>>();
+    }
+
     public string JobName => "feishu-websocket-sync";
 
     // 首次触发延后 45s，确保 FeishuWebSocketManager 的 StartAsync 完成初始同步后再开始轮询
@@ -22,8 +30,8 @@ public sealed class FeishuWebSocketSyncJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        logger.LogDebug("FeishuWebSocketSyncJob: 开始检查渠道配置变更");
-        await wsManager.SyncChannelsAsync(ct);
-        logger.LogDebug("FeishuWebSocketSyncJob: 渠道配置同步完成");
+        _logger.LogDebug("FeishuWebSocketSyncJob: 开始检查渠道配置变更");
+        await _wsManager.SyncChannelsAsync(ct);
+        _logger.LogDebug("FeishuWebSocketSyncJob: 渠道配置同步完成");
     }
 }

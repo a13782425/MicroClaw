@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Plugins;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Tools;
@@ -10,33 +10,34 @@ namespace MicroClaw.Tools;
 /// <see cref="IMcpServerRegistry"/> 默认实现 — 进程内 <see cref="ConcurrentDictionary{TKey,TValue}"/> 缓存。
 /// </summary>
 /// <remarks>
-/// 作为 <see cref="IHostedService"/> 注册时，会在应用启动时从 <see cref="McpServerConfigStore"/> 全量同步配置
+/// 作为 <see cref="IService"/> 注册时，会在应用启动时从 <see cref="McpServerConfigStore"/> 全量同步配置
 ///（含已禁用条目），后续通过 <see cref="Register"/>/<see cref="Unregister"/> 实时维护，始终与 Store 保持一致。
 /// </remarks>
 public sealed class McpServerRegistry(McpServerConfigStore store, ILogger<McpServerRegistry> logger)
-    : BackgroundService, IMcpServerRegistry, IPluginMcpRegistrar
+    : IMcpServerRegistry, IPluginMcpRegistrar, IService
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
     private readonly ConcurrentDictionary<string, McpServerConfig> _servers = new();
 
-    // ── IHostedService 启动时同步 ─────────────────────────────────────────────
+    // ── IService ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 覆盖 StartAsync，在后台任务启动前同步加载数据，确保 <see cref="StartAsync"/> 返回时注册表已就绪。
-    /// </summary>
-    public override Task StartAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public int InitOrder => 30;
+
+    /// <summary>从 McpServerConfigStore 全量同步配置，确保注册表就绪。</summary>
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         IReadOnlyList<McpServerConfig> all = store.All;
         foreach (McpServerConfig cfg in all)
             _servers[cfg.Id] = cfg;
 
         logger.LogInformation("MCP 注册表初始化完成，已加载 {Count} 个服务器配置", all.Count);
-        return base.StartAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 
-    /// <summary>长驻任务（无需持续运行，初始化在 <see cref="StartAsync"/> 中完成）。</summary>
-    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── IMcpServerRegistry ────────────────────────────────────────────────────
 

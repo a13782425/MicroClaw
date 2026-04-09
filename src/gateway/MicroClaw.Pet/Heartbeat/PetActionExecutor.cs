@@ -6,6 +6,7 @@ using MicroClaw.Pet.Storage;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Providers;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet.Heartbeat;
@@ -56,26 +57,17 @@ public sealed class PetActionExecutor
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PetActionExecutor> _logger;
 
-    public PetActionExecutor(
-        PetRagScope petRagScope,
-        PetPromptEvolver promptEvolver,
-        PetStateStore stateStore,
-        PetRateLimiter rateLimiter,
-        PetModelSelector modelSelector,
-        ProviderClientFactory clientFactory,
-        IPetNotifier petNotifier,
-        IHttpClientFactory httpClientFactory,
-        ILogger<PetActionExecutor> logger)
+    public PetActionExecutor(IServiceProvider sp)
     {
-        _petRagScope = petRagScope ?? throw new ArgumentNullException(nameof(petRagScope));
-        _promptEvolver = promptEvolver ?? throw new ArgumentNullException(nameof(promptEvolver));
-        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-        _modelSelector = modelSelector ?? throw new ArgumentNullException(nameof(modelSelector));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
-        _petNotifier = petNotifier ?? throw new ArgumentNullException(nameof(petNotifier));
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _petRagScope = sp.GetRequiredService<PetRagScope>();
+        _promptEvolver = sp.GetRequiredService<PetPromptEvolver>();
+        _stateStore = sp.GetRequiredService<PetStateStore>();
+        _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
+        _modelSelector = sp.GetRequiredService<PetModelSelector>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _petNotifier = sp.GetRequiredService<IPetNotifier>();
+        _httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+        _logger = sp.GetRequiredService<ILogger<PetActionExecutor>>();
     }
 
     /// <summary>仅供测试使用：可注入 null 的 notifier/httpClientFactory。</summary>

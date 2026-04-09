@@ -1,6 +1,7 @@
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Jobs;
 using MicroClaw.Pet.Heartbeat;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet;
@@ -13,11 +14,18 @@ namespace MicroClaw.Pet;
 /// 单个 Session 的心跳失败不影响其他 Session。
 /// </para>
 /// </summary>
-public sealed class PetHeartbeatJob(
-    ISessionRepository sessionRepo,
-    PetHeartbeatExecutor heartbeatExecutor,
-    ILogger<PetHeartbeatJob> logger) : IScheduledJob
+public sealed class PetHeartbeatJob : IScheduledJob
 {
+    private readonly ISessionRepository _sessionRepo;
+    private readonly PetHeartbeatExecutor _heartbeatExecutor;
+    private readonly ILogger<PetHeartbeatJob> _logger;
+
+    public PetHeartbeatJob(IServiceProvider sp)
+    {
+        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _heartbeatExecutor = sp.GetRequiredService<PetHeartbeatExecutor>();
+        _logger = sp.GetRequiredService<ILogger<PetHeartbeatJob>>();
+    }
     /// <summary>并行心跳的最大并发数。</summary>
     internal const int MaxConcurrency = 5;
 
@@ -29,7 +37,7 @@ public sealed class PetHeartbeatJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        var sessions = sessionRepo.GetAll();
+        var sessions = _sessionRepo.GetAll();
         var candidates = new List<string>();
 
         // 筛选已审批的 Session（Pet 是否启用由 HeartbeatExecutor 内部检查）
@@ -44,11 +52,11 @@ public sealed class PetHeartbeatJob(
 
         if (candidates.Count == 0)
         {
-            logger.LogDebug("PetHeartbeatJob: 无活跃 Session，跳过");
+            _logger.LogDebug("PetHeartbeatJob: 无活跃 Session，跳过");
             return;
         }
 
-        logger.LogDebug("PetHeartbeatJob: 开始心跳，候选 Session {Count} 个", candidates.Count);
+        _logger.LogDebug("PetHeartbeatJob: 开始心跳，候选 Session {Count} 个", candidates.Count);
 
         int executed = 0;
         int skipped = 0;
@@ -61,7 +69,7 @@ public sealed class PetHeartbeatJob(
             await semaphore.WaitAsync(ct);
             try
             {
-                var result = await heartbeatExecutor.ExecuteAsync(sessionId, ct);
+                var result = await _heartbeatExecutor.ExecuteAsync(sessionId, ct);
                 if (!result.Executed) Interlocked.Increment(ref skipped);
                 else if (result.IsSuccess) Interlocked.Increment(ref executed);
                 else Interlocked.Increment(ref failed);
@@ -70,7 +78,7 @@ public sealed class PetHeartbeatJob(
             catch (Exception ex)
             {
                 Interlocked.Increment(ref failed);
-                logger.LogWarning(ex, "PetHeartbeatJob: Session [{SessionId}] 心跳异常", sessionId);
+                _logger.LogWarning(ex, "PetHeartbeatJob: Session [{SessionId}] 心跳异常", sessionId);
             }
             finally
             {
@@ -82,7 +90,7 @@ public sealed class PetHeartbeatJob(
 
         if (executed > 0 || failed > 0)
         {
-            logger.LogInformation(
+            _logger.LogInformation(
                 "PetHeartbeatJob 完成: 执行={Executed}, 跳过={Skipped}, 失败={Failed}",
                 executed, skipped, failed);
         }

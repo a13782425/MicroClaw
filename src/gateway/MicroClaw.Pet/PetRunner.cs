@@ -2,6 +2,7 @@
 using System.Threading.Channels;
 using MicroClaw.Agent;
 using AgentEntity = MicroClaw.Agent.Agent;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Pet.Decision;
@@ -13,6 +14,7 @@ using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
 using MicroClaw.Tools;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet;
@@ -33,38 +35,47 @@ namespace MicroClaw.Pet;
 /// 实现 <see cref="IAgentMessageHandler"/> 供渠道消息处理器路由调用。
 /// </para>
 /// </summary>
-public sealed class PetRunner(
-    AgentRunner agentRunner,
-    AgentStore agentStore,
-    ISessionRepository sessionRepo,
-    PetContextFactory petContextFactory,
-    ProviderConfigStore providerStore,
-    PetStateStore stateStore,
-    IEmotionStore emotionStore,
-    IEmotionRuleEngine emotionRuleEngine,
-    IEmotionBehaviorMapper emotionBehaviorMapper,
-    PetDecisionEngine decisionEngine,
-    PetRateLimiter rateLimiter,
-    PetRagScope petRagScope,
-    PetSelfAwarenessReportBuilder reportBuilder,
-    PetSessionObserver sessionObserver,
-    ILogger<PetRunner> logger) : IPetRunner, IAgentMessageHandler
+public sealed class PetRunner : IPetRunner, IAgentMessageHandler, IService
 {
-    private readonly AgentRunner _agentRunner = agentRunner ?? throw new ArgumentNullException(nameof(agentRunner));
-    private readonly AgentStore _agentStore = agentStore ?? throw new ArgumentNullException(nameof(agentStore));
-    private readonly ISessionRepository _sessionRepo = sessionRepo ?? throw new ArgumentNullException(nameof(sessionRepo));
-    private readonly PetContextFactory _petContextFactory = petContextFactory ?? throw new ArgumentNullException(nameof(petContextFactory));
-    private readonly ProviderConfigStore _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
-    private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-    private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
-    private readonly IEmotionRuleEngine _emotionRuleEngine = emotionRuleEngine ?? throw new ArgumentNullException(nameof(emotionRuleEngine));
-    private readonly IEmotionBehaviorMapper _emotionBehaviorMapper = emotionBehaviorMapper ?? throw new ArgumentNullException(nameof(emotionBehaviorMapper));
-    private readonly PetDecisionEngine _decisionEngine = decisionEngine ?? throw new ArgumentNullException(nameof(decisionEngine));
-    private readonly PetRateLimiter _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-    private readonly PetRagScope _petRagScope = petRagScope ?? throw new ArgumentNullException(nameof(petRagScope));
-    private readonly PetSelfAwarenessReportBuilder _reportBuilder = reportBuilder ?? throw new ArgumentNullException(nameof(reportBuilder));
-    private readonly PetSessionObserver _sessionObserver = sessionObserver ?? throw new ArgumentNullException(nameof(sessionObserver));
-    private readonly ILogger<PetRunner> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly AgentRunner _agentRunner;
+    private readonly AgentStore _agentStore;
+    private readonly ISessionRepository _sessionRepo;
+    private readonly PetContextFactory _petContextFactory;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly PetStateStore _stateStore;
+    private readonly IEmotionStore _emotionStore;
+    private readonly IEmotionRuleEngine _emotionRuleEngine;
+    private readonly IEmotionBehaviorMapper _emotionBehaviorMapper;
+    private readonly PetDecisionEngine _decisionEngine;
+    private readonly PetRateLimiter _rateLimiter;
+    private readonly PetRagScope _petRagScope;
+    private readonly PetSelfAwarenessReportBuilder _reportBuilder;
+    private readonly PetSessionObserver _sessionObserver;
+    private readonly ILogger<PetRunner> _logger;
+
+    public PetRunner(IServiceProvider sp)
+    {
+        _agentRunner = sp.GetRequiredService<AgentRunner>();
+        _agentStore = sp.GetRequiredService<AgentStore>();
+        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _petContextFactory = sp.GetRequiredService<PetContextFactory>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _stateStore = sp.GetRequiredService<PetStateStore>();
+        _emotionStore = sp.GetRequiredService<IEmotionStore>();
+        _emotionRuleEngine = sp.GetRequiredService<IEmotionRuleEngine>();
+        _emotionBehaviorMapper = sp.GetRequiredService<IEmotionBehaviorMapper>();
+        _decisionEngine = sp.GetRequiredService<PetDecisionEngine>();
+        _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
+        _petRagScope = sp.GetRequiredService<PetRagScope>();
+        _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
+        _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
+        _logger = sp.GetRequiredService<ILogger<PetRunner>>();
+    }
+
+    // ── IService ─────────────────────────────────────────────────────────
+    public int InitOrder => 25;
+    public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── IPetRunner ───────────────────────────────────────────────────────
 

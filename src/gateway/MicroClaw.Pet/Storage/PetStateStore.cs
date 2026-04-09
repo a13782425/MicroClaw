@@ -18,10 +18,9 @@ public sealed class PetStateStore
 {
     private readonly string _sessionsDir;
 
-    public PetStateStore(MicroClawConfigEnv env)
+    public PetStateStore()
     {
-        ArgumentNullException.ThrowIfNull(env);
-        _sessionsDir = env.SessionsDir;
+        _sessionsDir = MicroClawConfig.Env.SessionsDir;
     }
 
     /// <summary>仅供测试使用：直接指定 sessions 根目录。</summary>

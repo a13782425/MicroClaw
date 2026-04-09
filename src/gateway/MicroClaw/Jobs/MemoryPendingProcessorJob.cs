@@ -4,6 +4,7 @@ using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Jobs;
@@ -16,14 +17,24 @@ namespace MicroClaw.Jobs;
 ///   3. 将摘要按主题分类，写入 Session RAG 分类 chunk 并更新 MEMORY.md 目录。
 ///   4. 删除已处理的 pending 文件。
 /// </summary>
-public sealed class MemoryPendingProcessorJob(
-    ISessionRepository repo,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
-    MemoryService memoryService,
-    IRagService ragService,
-    ILogger<MemoryPendingProcessorJob> logger) : IScheduledJob
+public sealed class MemoryPendingProcessorJob : IScheduledJob
 {
+    private readonly ISessionRepository _repo;
+    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderClientFactory _clientFactory;
+    private readonly MemoryService _memoryService;
+    private readonly IRagService _ragService;
+    private readonly ILogger<MemoryPendingProcessorJob> _logger;
+
+    public MemoryPendingProcessorJob(IServiceProvider sp)
+    {
+        _repo = sp.GetRequiredService<ISessionRepository>();
+        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _memoryService = sp.GetRequiredService<MemoryService>();
+        _ragService = sp.GetRequiredService<IRagService>();
+        _logger = sp.GetRequiredService<ILogger<MemoryPendingProcessorJob>>();
+    }
     public string JobName => "memory-pending-processor";
     public JobSchedule Schedule => new JobSchedule.FixedInterval(TimeSpan.FromHours(1), TimeSpan.FromSeconds(90));
 
@@ -34,7 +45,7 @@ public sealed class MemoryPendingProcessorJob(
 
     internal async Task ProcessAllSessionsAsync(CancellationToken ct)
     {
-        IReadOnlyList<IMicroSession> sessions = repo.GetAll();
+        IReadOnlyList<IMicroSession> sessions = _repo.GetAll();
         foreach (IMicroSession session in sessions)
         {
             if (ct.IsCancellationRequested) break;
@@ -44,23 +55,23 @@ public sealed class MemoryPendingProcessorJob(
 
     private async Task ProcessSessionAsync(IMicroSession microSession, CancellationToken ct)
     {
-        IReadOnlyList<string> pendingFiles = memoryService.ListPendingFiles(microSession.Id);
+        IReadOnlyList<string> pendingFiles = _memoryService.ListPendingFiles(microSession.Id);
         if (pendingFiles.Count == 0) return;
 
         // 获取 LLM 客户端（Session 绑定模型，若不可用则取第一个启用的 Provider）
         ProviderConfig? provider =
-            providerStore.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
-            ?? providerStore.All.FirstOrDefault(p => p.IsEnabled);
+            _providerStore.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
+            ?? _providerStore.All.FirstOrDefault(p => p.IsEnabled);
 
         if (provider is null)
         {
-            logger.LogWarning(
+            _logger.LogWarning(
                 "B-03 Session={SessionId} 无可用 Provider，跳过 pending 文件处理",
                 microSession.Id);
             return;
         }
 
-        IChatClient client = clientFactory.Create(provider);
+        IChatClient client = _clientFactory.Create(provider);
 
         foreach (string fileName in pendingFiles)
         {
@@ -74,10 +85,10 @@ public sealed class MemoryPendingProcessorJob(
     {
         try
         {
-            IReadOnlyList<SessionMessage> messages = memoryService.ReadPendingMessages(microSession.Id, fileName);
+            IReadOnlyList<SessionMessage> messages = _memoryService.ReadPendingMessages(microSession.Id, fileName);
             if (messages.Count == 0)
             {
-                memoryService.DeletePendingFile(microSession.Id, fileName);
+                _memoryService.DeletePendingFile(microSession.Id, fileName);
                 return;
             }
 
@@ -85,14 +96,14 @@ public sealed class MemoryPendingProcessorJob(
             string summary = await MemorySummarizationJob.BuildDailySummaryAsync(messages, client, ct);
             if (string.IsNullOrWhiteSpace(summary))
             {
-                logger.LogWarning(
+                _logger.LogWarning(
                     "B-03 Session={SessionId} File={File} LLM 返回空摘要，跳过",
                     microSession.Id, fileName);
                 return;
             }
 
             // 2. 分类归纳：合并到已有分类记忆中
-            string existingJson = memoryService.GetCategoriesJson(microSession.Id);
+            string existingJson = _memoryService.GetCategoriesJson(microSession.Id);
             string updatedJson = await MemorySummarizationJob.BuildCategoryClassificationAsync(
                 existingJson, summary, client, ct);
 
@@ -105,7 +116,7 @@ public sealed class MemoryPendingProcessorJob(
                 }
                 catch (JsonException ex)
                 {
-                    logger.LogWarning(ex,
+                    _logger.LogWarning(ex,
                         "B-03 Session={SessionId} File={File} 分类 JSON 解析失败",
                         microSession.Id, fileName);
                     categories = null;
@@ -118,12 +129,12 @@ public sealed class MemoryPendingProcessorJob(
                     {
                         try
                         {
-                            await ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
-                            await ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
+                            await _ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
+                            await _ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
                         }
                         catch (Exception ex) when (ex is not OperationCanceledException)
                         {
-                            logger.LogError(ex,
+                            _logger.LogError(ex,
                                 "B-03 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
                                 microSession.Id, categoryName);
                         }
@@ -131,24 +142,24 @@ public sealed class MemoryPendingProcessorJob(
 
                     string newJson = JsonSerializer.Serialize(
                         categories, new JsonSerializerOptions { WriteIndented = true });
-                    memoryService.WriteCategoriesJson(microSession.Id, newJson);
-                    memoryService.UpdateLongTermMemory(microSession.Id, BuildCategoryIndex(categories));
+                    _memoryService.WriteCategoriesJson(microSession.Id, newJson);
+                    _memoryService.UpdateLongTermMemory(microSession.Id, BuildCategoryIndex(categories));
 
-                    logger.LogInformation(
+                    _logger.LogInformation(
                         "B-03 Session={SessionId} File={File} 分类记忆已更新，共 {Count} 个分类",
                         microSession.Id, fileName, categories.Count);
                 }
             }
 
             // 4. 删除已处理的 pending 文件
-            memoryService.DeletePendingFile(microSession.Id, fileName);
-            logger.LogInformation(
+            _memoryService.DeletePendingFile(microSession.Id, fileName);
+            _logger.LogInformation(
                 "B-03 Session={SessionId} 已完成 pending 文件 {File}（{Count} 条消息）",
                 microSession.Id, fileName, messages.Count);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex,
+            _logger.LogError(ex,
                 "B-03 Session={SessionId} 处理 pending 文件 {File} 异常",
                 microSession.Id, fileName);
         }

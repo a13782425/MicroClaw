@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using MicroClaw.Plugins.Models;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Plugins.Marketplace;
@@ -11,7 +11,7 @@ namespace MicroClaw.Plugins.Marketplace;
 /// Manages registered plugin marketplaces and supports browsing/installing plugins from them.
 /// Implements <see cref="IHostedService"/> to initialize on startup.
 /// </summary>
-public sealed class MarketplaceManager : IMarketplaceManager, IHostedService
+public sealed class MarketplaceManager : IMarketplaceManager, IService
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -40,16 +40,20 @@ public sealed class MarketplaceManager : IMarketplaceManager, IHostedService
         _pluginsDir = Path.Combine(MicroClawConfig.Env.WorkspaceRoot, "plugins");
     }
 
-    // ── IHostedService ──────────────────────────────────────────────────────
+    // ── IService ──────────────────────────────────────────────────────────────
 
-    public async Task StartAsync(CancellationToken ct)
+    /// <inheritdoc/>
+    public int InitOrder => 30;
+
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(_marketplaceDir);
-        await LoadRegisteredMarketplacesAsync(ct);
+        await LoadRegisteredMarketplacesAsync(cancellationToken);
         _logger.LogInformation("Marketplace system initialized: {Count} marketplaces loaded", _marketplaces.Count);
     }
 
-    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+    /// <inheritdoc/>
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── IMarketplaceManager ─────────────────────────────────────────────────
 

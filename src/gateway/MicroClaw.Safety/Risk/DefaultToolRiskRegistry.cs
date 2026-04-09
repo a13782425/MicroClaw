@@ -34,6 +34,11 @@ public sealed class DefaultToolRiskRegistry : IToolRiskRegistry
     private readonly IReadOnlyList<ToolRiskAnnotation> _allAnnotations;
 
     /// <summary>
+    /// 创建默认注册表实例（仅使用内置标注）。
+    /// </summary>
+    public DefaultToolRiskRegistry() : this((IReadOnlyList<ToolRiskAnnotation>?)null) { }
+
+    /// <summary>
     /// 创建默认注册表实例。
     /// </summary>
     /// <param name="customAnnotations">

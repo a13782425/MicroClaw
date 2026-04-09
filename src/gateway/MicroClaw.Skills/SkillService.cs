@@ -1,4 +1,6 @@
 ﻿using MicroClaw.Abstractions.Plugins;
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Skills;
 
@@ -27,7 +29,23 @@ public sealed class SkillService : IPluginSkillRegistrar
     /// <summary>SkillManifest 文件级缓存：key=skillId, value=(文件最后修改时间, 解析结果)。</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime LastWrite, SkillManifest Manifest)> _manifestCache = new();
 
-    public SkillService(string workspaceRoot, IReadOnlyList<string>? skillRoots = null)
+    public SkillService()
+    {
+        WorkspaceRoot = MicroClawConfig.Env.WorkspaceRoot;
+        var skillOpts = MicroClawConfig.Get<SkillOptions>();
+
+        static string ResolveFolder(string folder, string wsRoot) =>
+            Path.IsPathRooted(folder)
+                ? Path.GetFullPath(folder)
+                : Path.GetFullPath(Path.Combine(wsRoot, folder));
+
+        _skillRoots = [ResolveFolder(skillOpts.DefaultFolder, WorkspaceRoot)];
+        foreach (string extra in skillOpts.AdditionalFolders)
+            _skillRoots.Add(ResolveFolder(extra, WorkspaceRoot));
+    }
+
+    /// <summary>仅供测试使用：直接指定 workspaceRoot 和 skillRoots。</summary>
+    internal SkillService(string workspaceRoot, IReadOnlyList<string>? skillRoots = null)
     {
         WorkspaceRoot = workspaceRoot;
         if (skillRoots is { Count: > 0 })

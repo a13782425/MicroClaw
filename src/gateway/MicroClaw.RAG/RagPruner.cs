@@ -1,3 +1,5 @@
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -28,14 +30,13 @@ public sealed class RagPruner : IRagPruner
 
     public RagPruner(
         RagDbContextFactory dbFactory,
-        ILogger<RagPruner> logger,
-        double maxStorageSizeMb = 50,
-        double pruneTargetPercent = 0.8)
+        ILogger<RagPruner> logger)
     {
         _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _maxStorageSizeMb = maxStorageSizeMb;
-        _pruneTargetPercent = Math.Clamp(pruneTargetPercent, 0.1, 1.0);
+        var opts = MicroClawConfig.Get<RagOptions>();
+        _maxStorageSizeMb = opts.MaxStorageSizeMb;
+        _pruneTargetPercent = Math.Clamp(opts.PruneTargetPercent, 0.1, 1.0);
     }
 
     /// <summary>Update thresholds at runtime (called when config is changed via API).</summary>

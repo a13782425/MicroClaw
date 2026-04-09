@@ -1,3 +1,5 @@
+using MicroClaw.Configuration;
+
 namespace MicroClaw.Agent.Memory;
 
 /// <summary>Session DNA 固定文件信息。</summary>
@@ -12,8 +14,10 @@ public sealed record SessionDnaFileInfo(
 /// 不可新建或删除，只能编辑内容。文件直接存储于 {sessionsDir}/{sessionId}/ 下。
 /// SOUL.md 已移至 Agent 级别管理（AgentDnaService），旧 Session 中已有的 SOUL.md 仍可读写以保持向后兼容。
 /// </summary>
-public sealed class SessionDnaService(string sessionsDir)
+public sealed class SessionDnaService
 {
+    private readonly string sessionsDir = MicroClawConfig.Env.SessionsDir;
+
     // ── 常量 ─────────────────────────────────────────────────────────────────
 
     /// <summary>当前活跃的固定文件（新 Session 初始化只生成这两个）。</summary>

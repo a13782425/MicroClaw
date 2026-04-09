@@ -1,6 +1,7 @@
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Jobs;
 using MicroClaw.Pet.Emotion;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet;
@@ -14,11 +15,18 @@ namespace MicroClaw.Pet;
 /// 偏差小于等于 <see cref="DecayStep"/> 时直接归中到 <see cref="DefaultValue"/>。
 /// </para>
 /// </summary>
-public sealed class PetEmotionDecayJob(
-    ISessionRepository sessionRepo,
-    IEmotionStore emotionStore,
-    ILogger<PetEmotionDecayJob> logger) : IScheduledJob
+public sealed class PetEmotionDecayJob : IScheduledJob
 {
+    private readonly ISessionRepository _sessionRepo;
+    private readonly IEmotionStore _emotionStore;
+    private readonly ILogger<PetEmotionDecayJob> _logger;
+
+    public PetEmotionDecayJob(IServiceProvider sp)
+    {
+        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _emotionStore = sp.GetRequiredService<IEmotionStore>();
+        _logger = sp.GetRequiredService<ILogger<PetEmotionDecayJob>>();
+    }
     /// <summary>每次衰减的步长（朝 50 方向靠近的绝对值）。</summary>
     internal const int DecayStep = 3;
 
@@ -33,7 +41,7 @@ public sealed class PetEmotionDecayJob(
 
     public async Task ExecuteAsync(CancellationToken ct)
     {
-        var sessions = sessionRepo.GetAll();
+        var sessions = _sessionRepo.GetAll();
         int decayed = 0;
 
         foreach (var session in sessions)
@@ -51,7 +59,7 @@ public sealed class PetEmotionDecayJob(
             }
             else
             {
-                current = await emotionStore.GetCurrentAsync(session.Id, ct);
+                current = await _emotionStore.GetCurrentAsync(session.Id, ct);
             }
 
             // 如果已全部处于默认值，跳过写入
@@ -71,12 +79,12 @@ public sealed class PetEmotionDecayJob(
             if (petCtx is not null)
                 petCtx.UpdateEmotion(next);
 
-            await emotionStore.SaveAsync(session.Id, next, ct);
+            await _emotionStore.SaveAsync(session.Id, next, ct);
             decayed++;
         }
 
         if (decayed > 0)
-            logger.LogInformation("Pet 情绪衰减完成：共衰减 {Count} 个 Session 的情绪状态", decayed);
+            _logger.LogInformation("Pet 情绪衰减完成：共衰减 {Count} 个 Session 的情绪状态", decayed);
     }
 
     private static int Decay(int value)
