@@ -50,6 +50,8 @@ internal sealed class FeishuMessageEventHandler(
         string? senderId = body.Sender?.SenderId?.OpenId;
         ChannelEntity channel = channelContext.Channel;
         FeishuChannelSettings settings = channelContext.Settings;
+        // Capture the IFeishuTenantApi from the channel context (same child SP, SDK-managed token)
+        IFeishuTenantApi tenantApi = channelContext.Api;
 
         // F-F-1: 全链路追踪 — WebSocket 接收步骤
         string traceId = messageId!.Length >= 8 ? messageId[..8] : messageId;
@@ -70,12 +72,12 @@ internal sealed class FeishuMessageEventHandler(
         string? rootId = body.Message?.RootId;
 
         // fire-and-forget：SDK 要求 3 秒内返回，AI 调用可能耗时较长
-        // 不传入 tenantApi，因为 scoped 容器会在本方法返回后释放；
-        // ProcessMessageAsync 内部会自建 ServiceProvider 来回复消息。
+        // tenantApi 来自子 SP，生命周期与子 SP 相同，可安全在 fire-and-forget Task 中使用
         _ = Task.Run(() => processor.ProcessMessageAsync(
             userText, senderId, chatId, messageId, channel, settings,
-            chatType, mentionedOpenIds, rootId: rootId, ct: CancellationToken.None));
+            chatType, mentionedOpenIds, tenantApi: tenantApi, rootId: rootId, ct: CancellationToken.None));
 
         return Task.CompletedTask;
     }
 }
+

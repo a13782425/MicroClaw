@@ -17,15 +17,14 @@ namespace MicroClaw.Channels.Feishu;
 /// 飞书消息共享处理器：接收已提取的用户文本，管理会话，通过 Agent 处理消息，通过飞书 API 回复。
 /// Webhook 和 WebSocket 两种入口共用此处理器。
 /// </summary>
-internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILogger<FeishuMessageProcessor> logger, IAgentMessageHandler? agentHandler = null, IChannelRetryQueue? retryQueue = null, FeishuRateLimiter? rateLimiter = null, FeishuTokenCache? tokenCache = null, FeishuChannelHealthStore? healthStore = null, FeishuChannelStatsService? statsService = null) : IFeishuRetryProcessor
+internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILogger<FeishuMessageProcessor> logger, IAgentMessageHandler? agentHandler = null, IChannelRetryQueue? retryQueue = null, FeishuRateLimiter? rateLimiter = null, FeishuChannelHealthStore? healthStore = null, FeishuChannelStatsService? statsService = null) : IFeishuRetryProcessor
 {
     // F-A-2: 消息去重 — 缓存最近 5 分钟内已处理的 MessageId，防止飞书重复推送触发重复 AI 调用
     private static readonly TimeSpan DeduplicationWindow = TimeSpan.FromMinutes(5);
     private readonly ConcurrentDictionary<string, DateTimeOffset> _processedMessageIds = new();
     
     /// <summary>处理一条飞书文本消息：管理会话 → 查找 Provider → 调用 AI → 回复飞书。</summary>
-    public async Task ProcessMessageAsync(string userText, string? senderId, string chatId, string messageId, ChannelEntity channel, FeishuChannelSettings settings, string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null, IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)
-    {
+    public async Task ProcessMessageAsync(string userText, string? senderId, string chatId, string messageId, ChannelEntity channel, FeishuChannelSettings settings, string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null, IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)    {
         // F-B-1: 群聊过滤 — 群聊消息只有 @机器人 时才响应
         if (chatType == "group")
         {
@@ -317,13 +316,8 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
         {
             if (tenantApi is null)
             {
-                if (tokenCache is not null)
-                    tenantApi = tokenCache.GetOrCreateApi(settings);
-                else
-                {
-                    sp = BuildFeishuServiceProvider(settings);
-                    tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
-                }
+                sp = BuildFeishuServiceProvider(settings);
+                tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
             }
             
             var response = await tenantApi.PostImV1MessagesByMessageIdReactionsAsync(messageId, new PostImV1MessagesByMessageIdReactionsBodyDto { ReactionType = new PostImV1MessagesByMessageIdReactionsBodyDto.Emoji { EmojiType = ThinkingEmojiType } }, ct);
@@ -354,13 +348,8 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
         {
             if (tenantApi is null)
             {
-                if (tokenCache is not null)
-                    tenantApi = tokenCache.GetOrCreateApi(settings);
-                else
-                {
-                    sp = BuildFeishuServiceProvider(settings);
-                    tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
-                }
+                sp = BuildFeishuServiceProvider(settings);
+                tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
             }
             
             await tenantApi.DeleteImV1MessagesByMessageIdReactionsByReactionIdAsync(messageId, reactionId, ct);
@@ -383,16 +372,8 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
         {
             if (tenantApi is null)
             {
-                if (tokenCache is not null)
-                {
-                    // F-D-3: 复用缓存 ServiceProvider，Token 在缓存 SP 内保持有效，无需每次鉴权
-                    tenantApi = tokenCache.GetOrCreateApi(settings);
-                }
-                else
-                {
-                    sp = BuildFeishuServiceProvider(settings);
-                    tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
-                }
+                sp = BuildFeishuServiceProvider(settings);
+                tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
             }
             
             // F-D-2: 令牌桶限流，单 AppId QPS ≤ 5；超频时排队等待
@@ -528,13 +509,8 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
         {
             if (tenantApi is null)
             {
-                if (tokenCache is not null)
-                    tenantApi = tokenCache.GetOrCreateApi(settings);
-                else
-                {
-                    sp = BuildFeishuServiceProvider(settings);
-                    tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
-                }
+                sp = BuildFeishuServiceProvider(settings);
+                tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
             }
             
             var result = await tenantApi.GetContactV3UsersByUserIdAsync(openId, "open_id", null, ct);
@@ -560,7 +536,7 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
     /// F-A-1: 主动发送消息到指定飞书用户或群聊（不依赖 messageId，构造新消息）。
     /// <para>receiveId 格式：open_id（ou_ 前缀）或 chat_id（oc_ 前缀），自动识别 receive_id_type。</para>
     /// </summary>
-    public async Task SendMessageAsync(string receiveId, string text, FeishuChannelSettings settings, CancellationToken ct = default)
+    public async Task SendMessageAsync(string receiveId, string text, FeishuChannelSettings settings, IFeishuTenantApi? tenantApi = null, CancellationToken ct = default)
     {
         // 根据 ID 前缀自动判断接收方类型
         string receiveIdType = receiveId.StartsWith("oc_", StringComparison.Ordinal) ? "chat_id" : "open_id";
@@ -568,16 +544,15 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
         ServiceProvider? sp = null;
         try
         {
-            // F-D-3: 优先使用缓存 ServiceProvider，减少 Token 鉴权次数
-            IFeishuTenantApi tenantApi;
-            if (tokenCache is not null)
+            IFeishuTenantApi resolvedApi;
+            if (tenantApi is not null)
             {
-                tenantApi = tokenCache.GetOrCreateApi(settings);
+                resolvedApi = tenantApi;
             }
             else
             {
                 sp = BuildFeishuServiceProvider(settings);
-                tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
+                resolvedApi = sp.GetRequiredService<IFeishuTenantApi>();
             }
             
             // F-D-2: 令牌桶限流，单 AppId QPS ≤ 5；超频时排队等待
@@ -588,7 +563,7 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
             string msgType = ContainsMarkdown(text) ? "interactive" : "text";
             string contentJson = msgType == "interactive" ? BuildCardJson(text) : JsonSerializer.Serialize(new { text });
             
-            await tenantApi.PostImV1MessagesAsync(receiveIdType, new PostImV1MessagesBodyDto { ReceiveId = receiveId, MsgType = msgType, Content = contentJson, }, ct);
+            await resolvedApi.PostImV1MessagesAsync(receiveIdType, new PostImV1MessagesBodyDto { ReceiveId = receiveId, MsgType = msgType, Content = contentJson, }, ct);
             logger.LogInformation("飞书主动发送消息成功 to={ReceiveId} type={IdType} msgType={MsgType}", receiveId, receiveIdType, msgType);
         }
         catch (Exception ex)

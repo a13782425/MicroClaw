@@ -3,115 +3,150 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FeishuNetSdk;
+using FeishuNetSdk.Services;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
 
-internal sealed class FeishuChannelProvider(
-    FeishuMessageProcessor processor,
-    ILoggerFactory loggerFactory,
-    FeishuChannelHealthStore healthStore,
-    FeishuChannelStatsService statsService,
-    FeishuWebSocketManager? wsManager = null,
-    FeishuTokenCache? tokenCache = null) : IChannelProvider
+/// <summary>
+/// 自包含飞书渠道实例：一个实例 = 一个飞书应用 + 一个 Agent 绑定。
+/// 持有独立 SDK ServiceProvider（含 <see cref="IFeishuTenantApi"/>）及可选 WssService（WebSocket 模式）。
+/// 实例通过 <see cref="CreateAsync"/> 工厂方法创建，通过 <see cref="DisposeAsync"/> 销毁。
+/// </summary>
+internal sealed class FeishuChannel : IChannel, IAsyncDisposable
 {
-    public string Name => "Feishu";
+    private readonly ServiceProvider _sp;
+    private readonly IHostedService? _wssService;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly FeishuChannelProvider _provider;
+    private readonly FeishuMessageProcessor _processor;
+    private readonly ILogger<FeishuChannel> _logger;
 
-    public ChannelType Type => ChannelType.Feishu;
+    /// <summary>该渠道对应的 <see cref="IFeishuTenantApi"/>，与子 SP 生命周期相同。</summary>
+    public IFeishuTenantApi Api { get; }
 
-    public string DisplayName => "飞书";
-
-    public IChannel Create(ChannelEntity config)
-        => new FeishuChannel(config, this, processor, loggerFactory.CreateLogger<FeishuChannel>());
-
-    public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
-        => Create(config).PublishAsync(message, cancellationToken);
-
-    public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
-        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
-        => Create(config).HandleWebhookAsync(body, headers, cancellationToken);
-
-    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
-        => Create(config).TestConnectionAsync(cancellationToken);
-
-    public Task<ChannelDiagnostics> GetDiagnosticsAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+    private FeishuChannel(
+        ChannelEntity config,
+        ServiceProvider sp,
+        IFeishuTenantApi api,
+        IHostedService? wssService,
+        FeishuChannelProvider provider,
+        FeishuMessageProcessor processor,
+        ILogger<FeishuChannel> logger)
     {
-        FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingJson);
-        string connectionMode = settings?.ConnectionMode ?? "webhook";
-
-        string connectionStatus;
-        if (!config.IsEnabled)
-            connectionStatus = "disabled";
-        else if (string.Equals(connectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
-            connectionStatus = wsManager?.GetConnectionStatus(config.Id) ?? "unknown";
-        else
-            connectionStatus = "webhook";
-
-        TimeSpan? tokenTtl = settings?.AppId is not null
-            ? tokenCache?.GetRemainingTtl(settings.AppId)
-            : null;
-
-        var (lastAt, lastSuccess, lastError) = healthStore.GetLastMessage(config.Id);
-        var (sigFail, aiFail, replyFail) = statsService.GetStats(config.Id);
-
-        Dictionary<string, object?> extra = new()
-        {
-            ["connectionMode"] = connectionMode,
-            ["connectionStatus"] = connectionStatus,
-            ["tokenRemainingSeconds"] = tokenTtl.HasValue ? (object?)Math.Round(tokenTtl.Value.TotalSeconds) : null,
-            ["lastMessageAt"] = lastAt,
-            ["lastMessageSuccess"] = lastSuccess,
-            ["lastMessageError"] = lastError,
-            ["signatureFailures"] = sigFail,
-            ["aiCallFailures"] = aiFail,
-            ["replyFailures"] = replyFail,
-        };
-
-        return Task.FromResult(new ChannelDiagnostics(config.Id, "feishu", connectionStatus, extra));
+        Config = config;
+        _sp = sp;
+        Api = api;
+        _wssService = wssService;
+        _provider = provider;
+        _processor = processor;
+        _logger = logger;
     }
 
-    /// <summary>记录 Webhook 签名验证失败（由 <see cref="FeishuChannel"/> 内部调用）。</summary>
-    internal void ReportSignatureFailure(string channelId) => statsService.IncrementSignatureFailure(channelId);
-}
+    /// <summary>
+    /// 创建飞书渠道实例，为该渠道独立构建 SDK ServiceProvider。
+    /// WebSocket 模式下同时注册并启动 <c>WssService</c>；Webhook 模式下仅注册 API 客户端。
+    /// </summary>
+    internal static async Task<FeishuChannel> CreateAsync(
+        ChannelEntity config,
+        FeishuChannelSettings settings,
+        FeishuChannelProvider provider,
+        FeishuMessageProcessor processor,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct = default)
+    {
+        ServiceCollection services = new();
 
-internal sealed class FeishuChannel(
-    ChannelEntity config,
-    FeishuChannelProvider provider,
-    FeishuMessageProcessor processor,
-    ILogger<FeishuChannel> logger) : IChannel
-{
+        // Support configurable API Base URL
+        Action<HttpClient>? configureHttpClient = null;
+        if (!string.IsNullOrWhiteSpace(settings.ApiBaseUrl)
+            && !settings.ApiBaseUrl.Equals("https://open.feishu.cn", StringComparison.OrdinalIgnoreCase))
+        {
+            string baseUrl = settings.ApiBaseUrl.TrimEnd('/');
+            configureHttpClient = client => client.BaseAddress = new Uri(baseUrl);
+        }
+
+        services.AddFeishuNetSdk(
+            appId: settings.AppId,
+            appSecret: settings.AppSecret,
+            encryptKey: settings.EncryptKey,
+            verificationToken: settings.VerificationToken,
+            httpClientOptions: configureHttpClient);
+
+        bool isWebSocket = string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase);
+
+        if (isWebSocket)
+        {
+            services.AddFeishuWebSocket();
+            services.AddSingleton(new FeishuChannelContext(config, settings));
+            // Share the root-container processor and logger factory with the child SP
+            services.AddSingleton(processor);
+            services.AddSingleton(loggerFactory);
+            services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+            services.AddScoped<
+                IEventHandler<
+                    EventV2Dto<FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>,
+                    FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>,
+                FeishuMessageEventHandler>();
+        }
+
+        ServiceProvider sp = services.BuildServiceProvider();
+
+        // Resolve TenantApi and inject it into FeishuChannelContext so event handler can use it
+        IFeishuTenantApi tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
+        if (isWebSocket)
+        {
+            FeishuChannelContext ctx = sp.GetRequiredService<FeishuChannelContext>();
+            ctx.SetApi(tenantApi);
+        }
+
+        IHostedService? wssService = null;
+        if (isWebSocket)
+        {
+            IHostedService[] hostedServices = sp.GetServices<IHostedService>().ToArray();
+            foreach (IHostedService svc in hostedServices)
+                await svc.StartAsync(ct);
+
+            // Use the first BackgroundService (WssService) as the representative
+            wssService = hostedServices.OfType<BackgroundService>().FirstOrDefault()
+                         ?? hostedServices.FirstOrDefault();
+        }
+
+        var logger = loggerFactory.CreateLogger<FeishuChannel>();
+        return new FeishuChannel(config, sp, tenantApi, wssService, provider, processor, logger);
+    }
+
     public string Id => Config.Id;
-
     public string Name => "Feishu";
-
     public ChannelType Type => ChannelType.Feishu;
-
-    public ChannelEntity Config { get; } = config;
-
+    public ChannelEntity Config { get; }
     public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "飞书" : Config.DisplayName;
 
     public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
-        => provider.GetDiagnosticsAsync(Config, cancellationToken);
+        => _provider.GetDiagnosticsAsync(Config, cancellationToken);
 
     public Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
         CancellationToken cancellationToken = default)
-        => ((IChannelProvider)provider).HandleSessionMessageAsync(Config, message, context, cancellationToken);
+        => ((IChannelProvider)_provider).HandleSessionMessageAsync(Config, message, context, cancellationToken);
 
     public async Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
-        await processor.SendMessageAsync(message.UserId, message.Content, settings, cancellationToken);
+        await _processor.SendMessageAsync(message.UserId, message.Content, settings, Api, cancellationToken);
     }
 
     public async Task<WebhookResult> HandleWebhookAsync(string body,
         IReadOnlyDictionary<string, string?>? headers = null, CancellationToken ct = default)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
-        logger.LogDebug("飞书 Webhook 收到请求 channel={ChannelId}", Config.Id);
+        _logger.LogDebug("飞书 Webhook 收到请求 channel={ChannelId}", Config.Id);
 
         // 签名验证（仅在配置了 EncryptKey 且请求携带 headers 时启用）
         if (!string.IsNullOrWhiteSpace(settings.EncryptKey) && headers is not null)
@@ -122,16 +157,16 @@ internal sealed class FeishuChannel(
 
             if (!IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
             {
-                logger.LogWarning("飞书 Webhook 时间戳过期或无效 channel={ChannelId} timestamp={Timestamp}",
+                _logger.LogWarning("飞书 Webhook 时间戳过期或无效 channel={ChannelId} timestamp={Timestamp}",
                     Config.Id, timestamp);
-                provider.ReportSignatureFailure(Config.Id);
+                _provider.ReportSignatureFailure(Config.Id);
                 return WebhookResult.Unauthorized("Timestamp expired or invalid");
             }
 
             if (!VerifyWebhookSignature(timestamp, nonce, settings.EncryptKey, body, signature))
             {
-                logger.LogWarning("飞书 Webhook 签名验证失败 channel={ChannelId}", Config.Id);
-                provider.ReportSignatureFailure(Config.Id);
+                _logger.LogWarning("飞书 Webhook 签名验证失败 channel={ChannelId}", Config.Id);
+                _provider.ReportSignatureFailure(Config.Id);
                 return WebhookResult.Unauthorized("Signature verification failed");
             }
         }
@@ -141,7 +176,7 @@ internal sealed class FeishuChannel(
         FeishuUrlVerificationRequest? verification = TryDeserialize<FeishuUrlVerificationRequest>(decrypted);
         if (verification?.Type == "url_verification")
         {
-            logger.LogInformation("飞书 URL 验证 channel={ChannelId}", Config.Id);
+            _logger.LogInformation("飞书 URL 验证 channel={ChannelId}", Config.Id);
             return WebhookResult.Ok(JsonSerializer.Serialize(new { challenge = verification.Challenge }));
         }
 
@@ -158,7 +193,7 @@ internal sealed class FeishuChannel(
                 string messageId = callback.Event.Message.MessageId;
 
                 string traceId = messageId.Length >= 8 ? messageId[..8] : messageId;
-                logger.LogInformation(
+                _logger.LogInformation(
                     "[{TraceId}] Webhook 接收 channel={ChannelId} from={SenderId} messageId={MessageId}",
                     traceId, Config.Id, senderId, messageId);
 
@@ -171,9 +206,10 @@ internal sealed class FeishuChannel(
                     : [];
 
                 string? rootId = callback.Event.Message.RootId;
-                _ = Task.Run(() => processor.ProcessMessageAsync(
+                IFeishuTenantApi capturedApi = Api;
+                _ = Task.Run(() => _processor.ProcessMessageAsync(
                     userText, senderId, chatId, messageId, Config, settings,
-                    chatType, mentionedOpenIds, rootId: rootId, ct: CancellationToken.None));
+                    chatType, mentionedOpenIds, tenantApi: capturedApi, rootId: rootId, ct: CancellationToken.None));
             }
         }
 
@@ -211,7 +247,7 @@ internal sealed class FeishuChannel(
                 {
                     hint = "当前服务器看起来处于内网环境，飞书可能无法访问您的 Webhook 地址。" +
                            "建议将连接模式改为「WebSocket 长连接」，无需公网 IP 也可正常接收消息。";
-                    logger.LogInformation(
+                    _logger.LogInformation(
                         "F-E-3 Webhook 内网探测提示 channel={ChannelId}", Config.Id);
                 }
                 return new ChannelTestResult(true, "连接成功", sw.ElapsedMilliseconds, hint);
@@ -223,9 +259,21 @@ internal sealed class FeishuChannel(
         catch (Exception ex)
         {
             sw.Stop();
-            logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", Config.Id);
+            _logger.LogWarning(ex, "飞书渠道连通性测试失败 channel={ChannelId}", Config.Id);
             return new ChannelTestResult(false, $"连接失败：{ex.Message}", sw.ElapsedMilliseconds);
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts.Cancel();
+        if (_wssService is not null)
+        {
+            try { await _wssService.StopAsync(CancellationToken.None); }
+            catch { /* best-effort */ }
+        }
+        _cts.Dispose();
+        await _sp.DisposeAsync();
     }
 
     internal static bool IsLikelyPrivateNetworkOnly()
