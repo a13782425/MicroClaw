@@ -360,8 +360,13 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetHeartbeatExecutor>();
 		builder.Services.AddSingleton<IScheduledJob, PetHeartbeatJob>();
 
-		// 领域事件基础设施（O-0-3）
+		// 全局异步事件总线
+		builder.Services.AddSingleton<IAsyncEventBus, MicroClaw.Events.InMemoryAsyncEventBus>();
+
+		// 领域事件基础设施（O-0-3，已过时，迁移至 IAsyncEventBus 后移除）
+#pragma warning disable CS0618
 		builder.Services.AddSingleton<IDomainEventDispatcher, MicroClaw.Events.DomainEventDispatcher>();
+#pragma warning restore CS0618
 
 		// 领域事件处理器（O-1-9, O-1-10）
 		builder.Services.AddSingleton<IDomainEventHandler<SessionApprovedEvent>, MicroClaw.Events.SessionApprovedEventHandler>();

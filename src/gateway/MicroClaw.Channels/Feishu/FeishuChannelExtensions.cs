@@ -22,7 +22,6 @@ public static class FeishuChannelExtensions
         services.AddSingleton<FeishuChannelProvider>();
         services.AddHostedService(sp => sp.GetRequiredService<FeishuChannelProvider>());
         services.AddSingleton<IChannelProvider>(sp => sp.GetRequiredService<FeishuChannelProvider>());
-        services.AddSingleton<IFeishuWebSocketSync>(sp => sp.GetRequiredService<FeishuChannelProvider>());
 
         // 工具工厂（对外通过 IToolProvider 暴露）
         services.AddSingleton<FeishuToolsFactory>();

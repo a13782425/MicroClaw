@@ -3,6 +3,8 @@ namespace MicroClaw.Abstractions.Events;
 /// <summary>
 /// 领域事件分发器。负责将领域事件分发给所有已注册的处理器。
 /// </summary>
+/// <remarks>已过时，请改用 <see cref="IAsyncEventBus"/>。</remarks>
+[Obsolete("请改用 IAsyncEventBus 发布/订阅事件，IDomainEventDispatcher 将在后续版本移除。")]
 public interface IDomainEventDispatcher
 {
     /// <summary>

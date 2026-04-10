@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using MicroClaw.Abstractions.Channel;
+using MicroClaw.Abstractions.Events;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.Hosting;
@@ -12,7 +13,7 @@ namespace MicroClaw.Channels.Feishu;
 /// 持有 <see cref="FeishuChannel"/> 实例字典，替代已删除的 <c>FeishuWebSocketManager</c>，
 /// 负责 WebSocket 渠道的定时同步与断线重连。
 /// </summary>
-internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvider, IFeishuWebSocketSync
+internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvider
 {
     private readonly ChannelService _channelStore;
     private readonly FeishuMessageProcessor _processor;
@@ -29,7 +30,8 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
         FeishuMessageProcessor processor,
         ILoggerFactory loggerFactory,
         FeishuChannelHealthStore healthStore,
-        FeishuChannelStatsService statsService)
+        FeishuChannelStatsService statsService,
+        IAsyncEventBus eventBus)
     {
         _channelStore = channelStore;
         _processor = processor;
@@ -37,6 +39,8 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
         _healthStore = healthStore;
         _statsService = statsService;
         _logger = loggerFactory.CreateLogger<FeishuChannelProvider>();
+
+        eventBus.Subscribe<FeishuChannelSyncRequestedEvent>((_, ct) => SyncChannelsAsync(ct));
     }
 
     // ── IChannelProvider ────────────────────────────────────────────────
@@ -125,7 +129,7 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
     }
 
     /// <summary>对比期望状态与实际状态，启停对应 WebSocket 渠道实例。</summary>
-    public async Task SyncChannelsAsync(CancellationToken ct = default)
+    private async Task SyncChannelsAsync(CancellationToken ct = default)
     {
         IReadOnlyList<ChannelEntity> feishuChannels = _channelStore.GetConfigsByType(ChannelType.Feishu);
 
@@ -276,10 +280,6 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
 
     /// <summary>记录 Webhook 签名验证失败（由 <see cref="FeishuChannel"/> 调用）。</summary>
     internal void ReportSignatureFailure(string channelId) => _statsService.IncrementSignatureFailure(channelId);
-
-    /// <summary>返回指定渠道 ID 的连接状态（用于 <see cref="IFeishuWebSocketSync"/> 兼容）。</summary>
-    public string GetConnectionStatus(string channelId)
-        => _instances.ContainsKey(channelId) ? "connected" : "disconnected";
 
     /// <summary>
     /// 获取指定渠道的活跃实例 <see cref="IFeishuTenantApi"/>，供工具工厂按需调用。
