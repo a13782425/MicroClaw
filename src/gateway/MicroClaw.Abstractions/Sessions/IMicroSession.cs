@@ -15,11 +15,11 @@ public interface IMicroSession
     bool IsApproved { get; }
     ChannelType ChannelType { get; }
     string ChannelId { get; }
+    SessionEntity Entity { get; }
     DateTimeOffset CreatedAt { get; }
     string? AgentId { get; }
     string? ApprovalReason { get; }
     IChannel? Channel { get; }
     IPet? Pet { get; }
-    IReadOnlyList<Events.IDomainEvent> PopDomainEvents();
     SessionInfo ToInfo();
 }

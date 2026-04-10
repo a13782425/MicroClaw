@@ -9,7 +9,7 @@ using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Agent.Sessions;
 using MicroClaw.Channels;
-using MicroClaw.Channels.Feishu;
+using MicroClaw.Channels.Feishu; // FeishuChannelExtensions.AddFeishuChannel()
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Tools;
@@ -200,7 +200,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
 		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
 		builder.Services.AddSingleton<ProviderClientFactory>();
-
+		
 		// Agent 服务
 		builder.Services.AddService<AgentStore>();
 		builder.Services.MapAs<IPluginAgentRegistrar, AgentStore>();
@@ -246,6 +246,7 @@ public class ServeCommand : Command
 		// ISubAgentRunner: 通过 IServiceProvider 懒解析，彻底消除 Lazy<AgentRunner> 循环依赖
 		builder.Services.AddSingleton<SubAgentRunnerService>();
 		builder.Services.MapAs<ISubAgentRunner, SubAgentRunnerService>();
+		builder.Services.AddSingleton<IMicroHubService, MicroHubService>();
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		// AIContent→StreamItem 转换管道（Handler + Pipeline）
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.TextContentHandler>();
@@ -370,22 +371,16 @@ public class ServeCommand : Command
 	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
-		builder.Services.AddService<ChannelConfigStore>();
-		builder.Services.AddSingleton<IChannelProvider, WebChannelProvider>();
-		builder.Services.AddSingleton<IChannelService, ChannelService>();
+		builder.Services.AddService<ChannelService>();
+		builder.Services.MapAs<IChannelService, ChannelService>();
 
-		// 飞书：共享消息处理器 + Webhook 渠道 + WebSocket 长连接管理器
-		builder.Services.AddSingleton<FeishuTokenCache>();
-		builder.Services.AddSingleton<FeishuRateLimiter>();
-		builder.Services.AddSingleton<FeishuChannelHealthStore>();
-		builder.Services.AddSingleton<FeishuChannelStatsService>();
-		builder.Services.AddSingleton<FeishuMessageProcessor>();
-		builder.Services.AddSingleton<IChannelProvider, FeishuChannelProvider>();
-		// F-F-2: 同时注册为单例（健康检查端点需直接注入）和 IHostedService
-		builder.Services.AddRunner<FeishuWebSocketManager>();
-		// F-C-1: 飞书文档读取工具工厂（供 AgentRunner 加载工具，并展示到渠道工具面板）
-		builder.Services.AddSingleton<FeishuToolsFactory>();
-		builder.Services.MapAs<IToolProvider, FeishuToolsFactory>();
+		// 内置渠道 Provider
+		builder.Services.AddSingleton<IChannelProvider, WebChannelProvider>();
+		builder.Services.AddSingleton<IChannelProvider, WeComChannelProvider>();
+		builder.Services.AddSingleton<IChannelProvider, WeChatChannelProvider>();
+
+		// 飞书：封装所有内部实现类的注册，外部不引用具体类型
+		builder.Services.AddFeishuChannel();
 		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
 		builder.Services.AddSingleton<IScheduledJob, FeishuDocSyncJob>();
 		// F-F-3: 飞书 WebSocket 渠道配置 30s 同步（从 FeishuWebSocketManager.PeriodicTimer 提取）
@@ -398,8 +393,7 @@ public class ServeCommand : Command
 		// 系统 Job 统一调度器
 		builder.Services.AddHostedService<SystemJobRegistrar>();
 
-		builder.Services.AddSingleton<IChannelProvider, WeComChannelProvider>();
-		builder.Services.AddSingleton<IChannelProvider, WeChatChannelProvider>();
+
 	}
 
 	/// <summary>校验关键配置项安全性，不满足要求时记录 Warning 级别日志。</summary>

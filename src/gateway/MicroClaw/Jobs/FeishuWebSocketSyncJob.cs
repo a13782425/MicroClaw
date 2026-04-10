@@ -12,12 +12,12 @@ namespace MicroClaw.Jobs;
 /// </summary>
 public sealed class FeishuWebSocketSyncJob : IScheduledJob
 {
-    private readonly FeishuWebSocketManager _wsManager;
+    private readonly IFeishuWebSocketSync _wsSync;
     private readonly ILogger<FeishuWebSocketSyncJob> _logger;
 
     public FeishuWebSocketSyncJob(IServiceProvider sp)
     {
-        _wsManager = sp.GetRequiredService<FeishuWebSocketManager>();
+        _wsSync = sp.GetRequiredService<IFeishuWebSocketSync>();
         _logger = sp.GetRequiredService<ILogger<FeishuWebSocketSyncJob>>();
     }
 
@@ -31,7 +31,7 @@ public sealed class FeishuWebSocketSyncJob : IScheduledJob
     public async Task ExecuteAsync(CancellationToken ct)
     {
         _logger.LogDebug("FeishuWebSocketSyncJob: 开始检查渠道配置变更");
-        await _wsManager.SyncChannelsAsync(ct);
+        await _wsSync.SyncChannelsAsync(ct);
         _logger.LogDebug("FeishuWebSocketSyncJob: 渠道配置同步完成");
     }
 }

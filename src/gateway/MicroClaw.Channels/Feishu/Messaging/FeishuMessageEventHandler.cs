@@ -12,7 +12,7 @@ namespace MicroClaw.Channels.Feishu;
 /// SDK 通过反射自动发现此类，在收到 im.message.receive_v1 事件时调用 ExecuteAsync。
 /// 每个子 ServiceProvider 包含独立的 FeishuChannelContext，标识当前渠道。
 /// </summary>
-public sealed class FeishuMessageEventHandler(
+internal sealed class FeishuMessageEventHandler(
     FeishuChannelContext channelContext,
     FeishuMessageProcessor processor,
     ILogger<FeishuMessageEventHandler> logger)

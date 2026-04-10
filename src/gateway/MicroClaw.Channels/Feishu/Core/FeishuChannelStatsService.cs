@@ -6,7 +6,7 @@ namespace MicroClaw.Channels.Feishu;
 /// F-F-3: 统计各飞书渠道的错误事件次数（签名验证失败、AI 调用失败、回复失败）。
 /// 内存级存储，重启清零；线程安全（Interlocked.Increment）。
 /// </summary>
-public sealed class FeishuChannelStatsService
+internal sealed class FeishuChannelStatsService
 {
     private sealed class StatsEntry
     {

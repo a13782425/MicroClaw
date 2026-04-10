@@ -4,15 +4,20 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MicroClaw.Abstractions.Channel;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
 
-public sealed class FeishuChannelProvider(
+internal sealed class FeishuChannelProvider(
     FeishuMessageProcessor processor,
-    ILoggerFactory loggerFactory) : IChannelProvider
+    ILoggerFactory loggerFactory,
+    FeishuChannelHealthStore healthStore,
+    FeishuChannelStatsService statsService,
+    FeishuWebSocketManager? wsManager = null,
+    FeishuTokenCache? tokenCache = null) : IChannelProvider
 {
     public string Name => "Feishu";
 
@@ -21,20 +26,61 @@ public sealed class FeishuChannelProvider(
     public string DisplayName => "飞书";
 
     public IChannel Create(ChannelEntity config)
-        => new FeishuChannel(config, processor, loggerFactory.CreateLogger<FeishuChannel>());
+        => new FeishuChannel(config, this, processor, loggerFactory.CreateLogger<FeishuChannel>());
 
     public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
         => Create(config).PublishAsync(message, cancellationToken);
 
-    public Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default)
-        => Create(config).HandleWebhookAsync(body, cancellationToken);
+    public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
+        => Create(config).HandleWebhookAsync(body, headers, cancellationToken);
 
     public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
         => Create(config).TestConnectionAsync(cancellationToken);
+
+    public Task<ChannelDiagnostics> GetDiagnosticsAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+    {
+        FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingJson);
+        string connectionMode = settings?.ConnectionMode ?? "webhook";
+
+        string connectionStatus;
+        if (!config.IsEnabled)
+            connectionStatus = "disabled";
+        else if (string.Equals(connectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
+            connectionStatus = wsManager?.GetConnectionStatus(config.Id) ?? "unknown";
+        else
+            connectionStatus = "webhook";
+
+        TimeSpan? tokenTtl = settings?.AppId is not null
+            ? tokenCache?.GetRemainingTtl(settings.AppId)
+            : null;
+
+        var (lastAt, lastSuccess, lastError) = healthStore.GetLastMessage(config.Id);
+        var (sigFail, aiFail, replyFail) = statsService.GetStats(config.Id);
+
+        Dictionary<string, object?> extra = new()
+        {
+            ["connectionMode"] = connectionMode,
+            ["connectionStatus"] = connectionStatus,
+            ["tokenRemainingSeconds"] = tokenTtl.HasValue ? (object?)Math.Round(tokenTtl.Value.TotalSeconds) : null,
+            ["lastMessageAt"] = lastAt,
+            ["lastMessageSuccess"] = lastSuccess,
+            ["lastMessageError"] = lastError,
+            ["signatureFailures"] = sigFail,
+            ["aiCallFailures"] = aiFail,
+            ["replyFailures"] = replyFail,
+        };
+
+        return Task.FromResult(new ChannelDiagnostics(config.Id, "feishu", connectionStatus, extra));
+    }
+
+    /// <summary>记录 Webhook 签名验证失败（由 <see cref="FeishuChannel"/> 内部调用）。</summary>
+    internal void ReportSignatureFailure(string channelId) => statsService.IncrementSignatureFailure(channelId);
 }
 
-public sealed class FeishuChannel(
+internal sealed class FeishuChannel(
     ChannelEntity config,
+    FeishuChannelProvider provider,
     FeishuMessageProcessor processor,
     ILogger<FeishuChannel> logger) : IChannel
 {
@@ -48,16 +94,47 @@ public sealed class FeishuChannel(
 
     public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "飞书" : Config.DisplayName;
 
+    public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => provider.GetDiagnosticsAsync(Config, cancellationToken);
+
+    public Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
+        CancellationToken cancellationToken = default)
+        => ((IChannelProvider)provider).HandleSessionMessageAsync(Config, message, context, cancellationToken);
+
     public async Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
         await processor.SendMessageAsync(message.UserId, message.Content, settings, cancellationToken);
     }
 
-    public async Task<string?> HandleWebhookAsync(string body, CancellationToken ct = default)
+    public async Task<WebhookResult> HandleWebhookAsync(string body,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken ct = default)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
         logger.LogDebug("飞书 Webhook 收到请求 channel={ChannelId}", Config.Id);
+
+        // 签名验证（仅在配置了 EncryptKey 且请求携带 headers 时启用）
+        if (!string.IsNullOrWhiteSpace(settings.EncryptKey) && headers is not null)
+        {
+            headers.TryGetValue("X-Lark-Signature", out string? signature);
+            headers.TryGetValue("X-Lark-Request-Timestamp", out string? timestamp);
+            headers.TryGetValue("X-Lark-Request-Nonce", out string? nonce);
+
+            if (!IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            {
+                logger.LogWarning("飞书 Webhook 时间戳过期或无效 channel={ChannelId} timestamp={Timestamp}",
+                    Config.Id, timestamp);
+                provider.ReportSignatureFailure(Config.Id);
+                return WebhookResult.Unauthorized("Timestamp expired or invalid");
+            }
+
+            if (!VerifyWebhookSignature(timestamp, nonce, settings.EncryptKey, body, signature))
+            {
+                logger.LogWarning("飞书 Webhook 签名验证失败 channel={ChannelId}", Config.Id);
+                provider.ReportSignatureFailure(Config.Id);
+                return WebhookResult.Unauthorized("Signature verification failed");
+            }
+        }
 
         string decrypted = TryDecrypt(body, settings.EncryptKey);
 
@@ -65,7 +142,7 @@ public sealed class FeishuChannel(
         if (verification?.Type == "url_verification")
         {
             logger.LogInformation("飞书 URL 验证 channel={ChannelId}", Config.Id);
-            return JsonSerializer.Serialize(new { challenge = verification.Challenge });
+            return WebhookResult.Ok(JsonSerializer.Serialize(new { challenge = verification.Challenge }));
         }
 
         FeishuEventCallback<FeishuMessageEvent>? callback = TryDeserialize<FeishuEventCallback<FeishuMessageEvent>>(decrypted);
@@ -100,7 +177,7 @@ public sealed class FeishuChannel(
             }
         }
 
-        return JsonSerializer.Serialize(new { code = 0, msg = "ok" });
+        return WebhookResult.Ok(JsonSerializer.Serialize(new { code = 0, msg = "ok" }));
     }
 
     public async Task<ChannelTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
@@ -183,7 +260,7 @@ public sealed class FeishuChannel(
                (b[0] == 169 && b[1] == 254);
     }
 
-    public static bool VerifyWebhookSignature(string? timestamp, string? nonce, string encryptKey, string body, string? expectedSignature)
+    internal static bool VerifyWebhookSignature(string? timestamp, string? nonce, string encryptKey, string body, string? expectedSignature)
     {
         if (string.IsNullOrEmpty(timestamp) || string.IsNullOrEmpty(nonce) || string.IsNullOrEmpty(expectedSignature))
             return false;
@@ -197,7 +274,7 @@ public sealed class FeishuChannel(
             Encoding.UTF8.GetBytes(expectedSignature));
     }
 
-    public static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
+    internal static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
     {
         if (!long.TryParse(timestamp, out long unixSeconds))
             return false;

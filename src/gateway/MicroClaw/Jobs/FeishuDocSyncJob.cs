@@ -25,13 +25,13 @@ namespace MicroClaw.Jobs;
 /// </remarks>
 public sealed class FeishuDocSyncJob : IScheduledJob
 {
-    private readonly ChannelConfigStore _channelConfigStore;
+    private readonly ChannelService _channelConfigStore;
     private readonly ISessionRepository _repo;
     private readonly ILogger<FeishuDocSyncJob> _logger;
 
     public FeishuDocSyncJob(IServiceProvider sp)
     {
-        _channelConfigStore = sp.GetRequiredService<ChannelConfigStore>();
+        _channelConfigStore = sp.GetRequiredService<ChannelService>();
         _repo = sp.GetRequiredService<ISessionRepository>();
         _logger = sp.GetRequiredService<ILogger<FeishuDocSyncJob>>();
     }

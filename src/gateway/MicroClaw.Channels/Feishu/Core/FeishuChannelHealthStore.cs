@@ -5,7 +5,7 @@ namespace MicroClaw.Channels.Feishu;
 /// <summary>
 /// F-F-2: 记录各飞书渠道最近一条消息的处理结果，供健康检查端点读取。
 /// </summary>
-public sealed class FeishuChannelHealthStore
+internal sealed class FeishuChannelHealthStore
 {
     private sealed record HealthEntry(DateTimeOffset ProcessedAt, bool Success, string? Error);
 

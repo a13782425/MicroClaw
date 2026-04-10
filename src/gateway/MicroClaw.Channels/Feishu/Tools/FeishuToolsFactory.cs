@@ -10,8 +10,8 @@ namespace MicroClaw.Channels.Feishu;
 /// 按指定渠道配置中的凭据创建 Agent 可调用的飞书工具集。
 /// 注册为单例，供 ToolCollector 按渠道类型动态注入工具。
 /// </summary>
-public sealed class FeishuToolsFactory(
-    ChannelConfigStore channelConfigStore,
+internal sealed class FeishuToolsFactory(
+    ChannelService channelService,
     ILogger<FeishuToolsFactory> logger) : IToolProvider
 {
     // ── IToolProvider ──────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ public sealed class FeishuToolsFactory(
         if (context.ChannelType != ChannelType.Feishu || string.IsNullOrWhiteSpace(context.ChannelId))
             return Task.FromResult(ToolProviderResult.Empty);
 
-        ChannelEntity? config = channelConfigStore.GetById(context.ChannelId);
+        ChannelEntity? config = channelService.GetById(context.ChannelId);
         if (config is null)
             return Task.FromResult(ToolProviderResult.Empty);
 

@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
 
@@ -19,7 +20,27 @@ public interface IChannelProvider
 
     Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default);
 
-    Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 处理渠道 Webhook 回调。<paramref name="headers"/> 供渠道实现内部做签名验证等安全检查。
+    /// </summary>
+    Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default);
 
     Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 返回该渠道的运行时诊断信息（连接状态、Token TTL、最近消息结果、错误统计等）。
+    /// 各渠道 Provider 按需重写，填充 <see cref="ChannelDiagnostics.Extra"/> 中的渠道特有字段。
+    /// 默认实现返回基础 ok 状态。
+    /// </summary>
+    Task<ChannelDiagnostics> GetDiagnosticsAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+        => Task.FromResult(ChannelDiagnostics.Ok(config.Id, Type.ToString()));
+
+    /// <summary>
+    /// Channel 接收 Session 转发的消息，执行渠道特定的业务处理（如云文档操作、表格写入）。
+    /// 不包含 AI 逻辑，仅做渠道级别的操作。返回 null 表示该渠道不处理此消息。
+    /// </summary>
+    Task<string?> HandleSessionMessageAsync(ChannelEntity config, SessionMessage message,
+        SessionMessageContext context, CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 }

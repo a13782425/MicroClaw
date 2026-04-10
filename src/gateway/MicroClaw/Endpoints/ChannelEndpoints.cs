@@ -1,7 +1,6 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Channels;
-using MicroClaw.Channels.Feishu;
 using MicroClaw.Channels.WeCom;
 using MicroClaw.Channels.WeChat;
 using MicroClaw.Configuration.Models;
@@ -15,15 +14,15 @@ public static class ChannelEndpoints
 {
     public static IEndpointRouteBuilder MapChannelEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/channels", (ChannelConfigStore store) =>
+        endpoints.MapGet("/channels", (ChannelService store) =>
         {
             var result = store.All.Select(c => new
             {
                 c.Id,
                 c.DisplayName,
-                ChannelType = ChannelConfigStore.SerializeChannelType(c.ChannelType),
+                ChannelType = ChannelService.SerializeChannelType(c.ChannelType),
                 c.IsEnabled,
-                Settings = ChannelConfigStore.MaskSettingsSecrets(c.SettingJson, c.ChannelType)
+                Settings = ChannelService.MaskSettingsSecrets(c.SettingJson, c.ChannelType)
             });
             return Results.Ok(result);
         })
@@ -66,7 +65,7 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelConfigStore store) =>
+        endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
                 return ApiErrors.BadRequest("DisplayName is required.");
@@ -74,7 +73,7 @@ public static class ChannelEndpoints
             ChannelEntity channel = new()
             {
                 DisplayName = req.DisplayName.Trim(),
-                ChannelType = ChannelConfigStore.ParseChannelType(req.ChannelType),
+                ChannelType = ChannelService.ParseChannelType(req.ChannelType),
                 IsEnabled = req.IsEnabled,
                 SettingJson = req.Settings ?? "{}"
             };
@@ -84,7 +83,7 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelConfigStore store) =>
+        endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
@@ -92,7 +91,7 @@ public static class ChannelEndpoints
             ChannelEntity incoming = new()
             {
                 DisplayName = req.DisplayName?.Trim() ?? string.Empty,
-                ChannelType = ChannelConfigStore.ParseChannelType(req.ChannelType),
+                ChannelType = ChannelService.ParseChannelType(req.ChannelType),
                 IsEnabled = req.IsEnabled,
                 SettingJson = req.Settings ?? "{}"
             };
@@ -105,7 +104,7 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        endpoints.MapPost("/channels/delete", (ChannelDeleteRequest req, ChannelConfigStore store) =>
+        endpoints.MapPost("/channels/delete", (ChannelDeleteRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
@@ -151,85 +150,44 @@ public static class ChannelEndpoints
         })
         .WithTags("Channels");
 
-        // F-F-2: 娓犻亾鍋ュ悍妫€鏌ョ鐐?
-        endpoints.MapGet("/channels/{id}/health", (
+
+        // 渠道健康检查端点：委托给渠道实例的 GetDiagnosticsAsync，各渠道自行填充 Extra 字段
+        endpoints.MapGet("/channels/{id}/health", async (
             string id,
-            ChannelConfigStore store,
-            FeishuWebSocketManager? wsManager = null,
-            FeishuTokenCache? tokenCache = null,
-            FeishuChannelHealthStore? healthStore = null) =>
+            IChannelService channelService,
+            CancellationToken ct) =>
         {
-            ChannelEntity? config = store.GetById(id);
-            if (config is null)
+            if (!channelService.TryGet(id, out IChannel? channel))
                 return ApiErrors.NotFound($"Channel '{id}' not found.");
 
-            // 闈為涔︽笭閬撳彧杩斿洖鍩虹鐘舵€?
-            if (config.ChannelType != ChannelType.Feishu)
-                return Results.Ok(new { ChannelId = id, ChannelType = config.ChannelType.ToString(), Status = "ok" });
-
-            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingJson);
-            string connectionMode = settings?.ConnectionMode ?? "webhook";
-
-            string connectionStatus;
-            if (!config.IsEnabled)
-                connectionStatus = "disabled";
-            else if (string.Equals(connectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
-                connectionStatus = wsManager?.GetConnectionStatus(id) ?? "unknown";
-            else
-                connectionStatus = "webhook"; // Webhook 妯″紡鏃犻暱杩炴帴鐘舵€?
-
-            TimeSpan? tokenTtl = settings?.AppId is not null
-                ? tokenCache?.GetRemainingTtl(settings.AppId)
-                : null;
-
-            var (lastAt, lastSuccess, lastError) = healthStore is not null
-                ? healthStore.GetLastMessage(id)
-                : ((DateTimeOffset?)null, (bool?)null, (string?)null);
-
-            return Results.Ok(new
-            {
-                ChannelId = id,
-                ConnectionMode = connectionMode,
-                ConnectionStatus = connectionStatus,
-                TokenRemainingSeconds = tokenTtl.HasValue ? (long?)Math.Round(tokenTtl.Value.TotalSeconds) : null,
-                LastMessageAt = lastAt,
-                LastMessageSuccess = lastSuccess,
-                LastMessageError = lastError
-            });
+            ChannelDiagnostics diag = await channel.GetDiagnosticsAsync(ct);
+            return Results.Ok(diag);
         })
         .WithTags("Channels");
 
-        // F-F-3: 娓犻亾閿欒浜嬩欢缁熻绔偣
-        endpoints.MapGet("/channels/{id}/stats", (
+        // 渠道统计端点：复用 GetDiagnosticsAsync，从 Extra 字段提取统计数据
+        endpoints.MapGet("/channels/{id}/stats", async (
             string id,
-            ChannelConfigStore store,
-            FeishuChannelStatsService? statsService = null) =>
+            IChannelService channelService,
+            CancellationToken ct) =>
         {
-            ChannelEntity? config = store.GetById(id);
-            if (config is null)
+            if (!channelService.TryGet(id, out IChannel? channel))
                 return ApiErrors.NotFound($"Channel '{id}' not found.");
 
-            // 闈為涔︽笭閬撳彧杩斿洖鍩虹鐘舵€?
-            if (config.ChannelType != ChannelType.Feishu)
-                return Results.Ok(new { ChannelId = id, ChannelType = config.ChannelType.ToString(), Status = "ok" });
-
-            var (sigFail, aiFail, replyFail) = statsService is not null
-                ? statsService.GetStats(id)
-                : (0L, 0L, 0L);
-
+            ChannelDiagnostics diag = await channel.GetDiagnosticsAsync(ct);
             return Results.Ok(new
             {
-                ChannelId = id,
-                SignatureFailures = sigFail,
-                AiCallFailures = aiFail,
-                ReplyFailures = replyFail
+                diag.ChannelId,
+                diag.ChannelType,
+                SignatureFailures = diag.Extra.TryGetValue("signatureFailures", out object? sf) ? sf : 0L,
+                AiCallFailures    = diag.Extra.TryGetValue("aiCallFailures",    out object? af) ? af : 0L,
+                ReplyFailures     = diag.Extra.TryGetValue("replyFailures",     out object? rf) ? rf : 0L,
             });
         })
         .WithTags("Channels");
 
         return endpoints;
     }
-
     public static IEndpointRouteBuilder MapChannelWebhookEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/channels/feishu/{channelId}/webhook", async (
@@ -239,64 +197,42 @@ public static class ChannelEndpoints
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook");
-            // F-F-3: 浠?DI 瀹瑰櫒瑙ｆ瀽缁熻鏈嶅姟锛堝彲閫夛紝鏈敞鍐屾椂涓?null锛?
-            FeishuChannelStatsService? statsService =
-                context.RequestServices.GetService(typeof(FeishuChannelStatsService)) as FeishuChannelStatsService;
-            logger.LogInformation("鏀跺埌椋炰功 Webhook 璇锋眰 channelId={ChannelId}", channelId);
+            logger.LogInformation("收到飞书 Webhook 请求 channelId={ChannelId}", channelId);
 
             if (!channelService.TryGet(channelId, out IChannel? feishuChannel)
                 || !feishuChannel.Config.IsEnabled
                 || feishuChannel.Type != ChannelType.Feishu)
             {
-                logger.LogWarning("娓犻亾鏈壘鍒版垨宸茬鐢?channelId={ChannelId}", channelId);
+                logger.LogWarning("飞书渠道未找到或已禁用 channelId={ChannelId}", channelId);
                 return ApiErrors.NotFound("Channel not found or disabled.");
             }
 
             using StreamReader reader = new(context.Request.Body);
             string body = await reader.ReadToEndAsync();
-            logger.LogDebug("椋炰功 Webhook body: {Body}", body);
+            logger.LogDebug("飞书 Webhook body: {Body}", body);
 
-            // 绛惧悕楠岃瘉锛堜粎鍦ㄩ厤缃簡 EncryptKey 鏃跺惎鐢級
-            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(feishuChannel.Config.SettingJson) ?? new();
-            if (!string.IsNullOrWhiteSpace(settings.EncryptKey))
+            // 将请求头传给渠道实例，签名验证由渠道内部负责
+            Dictionary<string, string?> headers = new(StringComparer.OrdinalIgnoreCase)
             {
-                string? signature = context.Request.Headers["X-Lark-Signature"];
-                string? timestamp = context.Request.Headers["X-Lark-Request-Timestamp"];
-                string? nonce = context.Request.Headers["X-Lark-Request-Nonce"];
+                ["X-Lark-Signature"]          = context.Request.Headers["X-Lark-Signature"],
+                ["X-Lark-Request-Timestamp"]  = context.Request.Headers["X-Lark-Request-Timestamp"],
+                ["X-Lark-Request-Nonce"]      = context.Request.Headers["X-Lark-Request-Nonce"],
+            };
 
-                if (!FeishuChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
-                {
-                    logger.LogWarning("椋炰功 Webhook 鏃堕棿鎴宠繃鏈熸垨鏃犳晥 channelId={ChannelId} timestamp={Timestamp}",
-                        channelId, timestamp);
-                    // F-F-3: 绛惧悕楠岃瘉澶辫触璁℃暟
-                    statsService?.IncrementSignatureFailure(channelId);
-                    return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
-                }
-
-                if (!FeishuChannel.VerifyWebhookSignature(timestamp, nonce, settings.EncryptKey, body, signature))
-                {
-                    logger.LogWarning("椋炰功 Webhook 绛惧悕楠岃瘉澶辫触 channelId={ChannelId}", channelId);
-                    // F-F-3: 绛惧悕楠岃瘉澶辫触璁℃暟
-                    statsService?.IncrementSignatureFailure(channelId);
-                    return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
-                }
-            }
-
-            string? response = await feishuChannel.HandleWebhookAsync(body, context.RequestAborted);
-            if (response is null)
+            WebhookResult result = await feishuChannel.HandleWebhookAsync(body, headers, context.RequestAborted);
+            if (result.StatusCode != 200)
+                return Results.Json(new { success = false, message = result.Body }, statusCode: result.StatusCode);
+            if (result.Body is null)
                 return Results.Ok();
-
-            return Results.Content(response, "application/json");
+            return Results.Content(result.Body, "application/json");
         })
         .WithTags("Webhooks");
 
-        // 鈹€鈹€鈹€ 浼佷笟寰俊锛圵eCom锛塛ebhook 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-
-        // GET锛歎RL 鎺ュ叆楠岃瘉锛堜紒寰悗鍙伴厤缃椂鍙戦€侊紝杩斿洖 echostr锛?
+       
         endpoints.MapGet("/channels/wecom/{channelId}/webhook", (
             string channelId,
             HttpContext context,
-            ChannelConfigStore store,
+            ChannelService store,
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeCom");
@@ -304,14 +240,14 @@ public static class ChannelEndpoints
             ChannelEntity? config = store.GetById(channelId);
             if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeCom)
             {
-                logger.LogWarning("浼佷笟寰俊娓犻亾鏈壘鍒版垨宸茬鐢?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.NotFound();
             }
 
             WeComChannelSettings settings = WeComChannelSettings.TryParse(config.SettingJson) ?? new();
             if (string.IsNullOrWhiteSpace(settings.Token))
             {
-                logger.LogWarning("浼佷笟寰俊娓犻亾鏈厤缃?Token锛屾嫆缁?URL 楠岃瘉 channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.BadRequest();
             }
 
@@ -322,23 +258,23 @@ public static class ChannelEndpoints
 
             if (!WeComChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
             {
-                logger.LogWarning("浼佷笟寰俊 URL 楠岃瘉鏃堕棿鎴宠繃鏈?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Unauthorized();
             }
 
             // URL 楠岃瘉闃舵鏃?msg_encrypt锛屼娇鐢ㄥ熀纭€涓夊瓧娈电鍚?
             if (!WeComChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature))
             {
-                logger.LogWarning("浼佷笟寰俊 URL 楠岃瘉绛惧悕澶辫触 channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Unauthorized();
             }
 
-            logger.LogInformation("浼佷笟寰俊 URL 楠岃瘉鎴愬姛 channelId={ChannelId}", channelId);
+            logger.LogInformation(" channelId={ChannelId}", channelId);
             return Results.Text(echostr ?? string.Empty);
         })
         .WithTags("Webhooks");
 
-        // POST锛氭秷鎭笌浜嬩欢鍥炶皟锛堥獙璇佺鍚嶅悗杞彂鑷?HandleWebhookAsync锛?
+        // POST 
         endpoints.MapPost("/channels/wecom/{channelId}/webhook", async (
             string channelId,
             HttpContext context,
@@ -346,19 +282,19 @@ public static class ChannelEndpoints
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeCom");
-            logger.LogInformation("鏀跺埌浼佷笟寰俊 Webhook 璇锋眰 channelId={ChannelId}", channelId);
+            logger.LogInformation("  channelId={ChannelId}", channelId);
 
             if (!channelService.TryGet(channelId, out IChannel? weComChannel)
                 || !weComChannel.Config.IsEnabled
                 || weComChannel.Type != ChannelType.WeCom)
             {
-                logger.LogWarning("浼佷笟寰俊娓犻亾鏈壘鍒版垨宸茬鐢?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return ApiErrors.NotFound("Channel not found or disabled.");
             }
 
             if (string.IsNullOrWhiteSpace(WeComChannelSettings.TryParse(weComChannel.Config.SettingJson)?.Token))
             {
-                logger.LogWarning("浼佷笟寰俊娓犻亾鏈厤缃?Token channelId={ChannelId}", channelId);
+                logger.LogWarning(" Token channelId={ChannelId}", channelId);
                 return ApiErrors.BadRequest("Token is not configured.");
             }
 
@@ -370,35 +306,37 @@ public static class ChannelEndpoints
 
             if (!WeComChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
             {
-                logger.LogWarning("浼佷笟寰俊 Webhook 鏃堕棿鎴宠繃鏈?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
             }
 
             using StreamReader reader = new(context.Request.Body);
             string body = await reader.ReadToEndAsync();
-            logger.LogDebug("浼佷笟寰俊 Webhook body: {Body}", body);
+            logger.LogDebug(" Webhook body: {Body}", body);
 
-            // 浠?XML 涓彁鍙?Encrypt 瀛楁鐢ㄤ簬绛惧悕锛圫afeMode锛夛紱鏄庢枃妯″紡涓?msgEncrypt 涓?null
+            //  
             string? msgEncrypt = ExtractXmlField(body, "Encrypt");
 
             if (!WeComChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature, msgEncrypt))
             {
-                logger.LogWarning("浼佷笟寰俊 Webhook 绛惧悕楠岃瘉澶辫触 channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
             }
 
-            string? response = await weComChannel.HandleWebhookAsync(body, context.RequestAborted);
-            return response is null ? Results.Ok() : Results.Content(response, "application/xml");
+            WebhookResult weComResult = await weComChannel.HandleWebhookAsync(body, cancellationToken: context.RequestAborted);
+            if (weComResult.StatusCode != 200)
+                return Results.Json(new { success = false, message = weComResult.Body }, statusCode: weComResult.StatusCode);
+            return weComResult.Body is null ? Results.Ok() : Results.Content(weComResult.Body, "application/xml");
         })
         .WithTags("Webhooks");
 
-        // 鈹€鈹€鈹€ 寰俊鍏紬鍙凤紙WeChat锛塛ebhook 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // 
 
-        // GET锛歎RL 鎺ュ叆楠岃瘉
+        // GET 
         endpoints.MapGet("/channels/wechat/{channelId}/webhook", (
             string channelId,
             HttpContext context,
-            ChannelConfigStore store,
+            ChannelService store,
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeChat");
@@ -406,14 +344,14 @@ public static class ChannelEndpoints
             ChannelEntity? config = store.GetById(channelId);
             if (config is null || !config.IsEnabled || config.ChannelType != ChannelType.WeChat)
             {
-                logger.LogWarning("寰俊娓犻亾鏈壘鍒版垨宸茬鐢?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.NotFound();
             }
 
             WeChatChannelSettings settings = WeChatChannelSettings.TryParse(config.SettingJson) ?? new();
             if (string.IsNullOrWhiteSpace(settings.Token))
             {
-                logger.LogWarning("寰俊娓犻亾鏈厤缃?Token锛屾嫆缁?URL 楠岃瘉 channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.BadRequest();
             }
 
@@ -424,22 +362,22 @@ public static class ChannelEndpoints
 
             if (!WeChatChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
             {
-                logger.LogWarning("寰俊 URL 楠岃瘉鏃堕棿鎴宠繃鏈?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Unauthorized();
             }
 
             if (!WeChatChannel.VerifySignature(settings.Token, timestamp, nonce, signature))
             {
-                logger.LogWarning("寰俊 URL 楠岃瘉绛惧悕澶辫触 channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Unauthorized();
             }
 
-            logger.LogInformation("寰俊 URL 楠岃瘉鎴愬姛 channelId={ChannelId}", channelId);
+            logger.LogInformation(" channelId={ChannelId}", channelId);
             return Results.Text(echostr ?? string.Empty);
         })
         .WithTags("Webhooks");
 
-        // POST锛氭秷鎭笌浜嬩欢鍥炶皟
+        // POST 
         endpoints.MapPost("/channels/wechat/{channelId}/webhook", async (
             string channelId,
             HttpContext context,
@@ -447,24 +385,24 @@ public static class ChannelEndpoints
             ILoggerFactory loggerFactory) =>
         {
             ILogger logger = loggerFactory.CreateLogger("ChannelWebhook.WeChat");
-            logger.LogInformation("鏀跺埌寰俊 Webhook 璇锋眰 channelId={ChannelId}", channelId);
+            logger.LogInformation("  channelId={ChannelId}", channelId);
 
             if (!channelService.TryGet(channelId, out IChannel? weChatChannel)
                 || !weChatChannel.Config.IsEnabled
                 || weChatChannel.Type != ChannelType.WeChat)
             {
-                logger.LogWarning("寰俊娓犻亾鏈壘鍒版垨宸茬鐢?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return ApiErrors.NotFound("Channel not found or disabled.");
             }
 
             WeChatChannelSettings settings = WeChatChannelSettings.TryParse(weChatChannel.Config.SettingJson) ?? new();
             if (string.IsNullOrWhiteSpace(settings.Token))
             {
-                logger.LogWarning("寰俊娓犻亾鏈厤缃?Token channelId={ChannelId}", channelId);
+                logger.LogWarning(" Token channelId={ChannelId}", channelId);
                 return ApiErrors.BadRequest("Token is not configured.");
             }
 
-            // 瀹夊叏妯″紡涓嬩娇鐢?msg_signature锛屾槑鏂囨ā寮忎娇鐢?signature
+            //  
             string? msgSignature = context.Request.Query["msg_signature"];
             string? signature    = context.Request.Query["signature"];
             string? timestamp    = context.Request.Query["timestamp"];
@@ -472,21 +410,21 @@ public static class ChannelEndpoints
 
             if (!WeChatChannel.IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
             {
-                logger.LogWarning("寰俊 Webhook 鏃堕棿鎴宠繃鏈?channelId={ChannelId}", channelId);
+                logger.LogWarning(" channelId={ChannelId}", channelId);
                 return Results.Json(new { success = false, message = "Timestamp expired or invalid" }, statusCode: 401);
             }
 
             using StreamReader reader = new(context.Request.Body);
             string body = await reader.ReadToEndAsync();
-            logger.LogDebug("寰俊 Webhook body: {Body}", body);
+            logger.LogDebug("  Webhook body: {Body}", body);
 
             if (!string.IsNullOrEmpty(msgSignature))
             {
-                // 瀹夊叏妯″紡锛氫粠 XML 涓彁鍙?Encrypt 瀛楁
+                //  
                 string? msgEncrypt = ExtractXmlField(body, "Encrypt");
                 if (!WeChatChannel.VerifySignature(settings.Token, timestamp, nonce, msgSignature, msgEncrypt))
                 {
-                    logger.LogWarning("寰俊 Webhook 绛惧悕楠岃瘉澶辫触锛堝畨鍏ㄦā寮忥級 channelId={ChannelId}", channelId);
+                    logger.LogWarning(" channelId={ChannelId}", channelId);
                     return Results.Json(new { success = false, message = "Signature verification failed" }, statusCode: 401);
                 }
             }
@@ -500,15 +438,17 @@ public static class ChannelEndpoints
                 }
             }
 
-            string? response = await weChatChannel.HandleWebhookAsync(body, context.RequestAborted);
-            return response is null ? Results.Ok() : Results.Content(response, "application/xml");
+            WebhookResult weChatResult = await weChatChannel.HandleWebhookAsync(body, cancellationToken: context.RequestAborted);
+            if (weChatResult.StatusCode != 200)
+                return Results.Json(new { success = false, message = weChatResult.Body }, statusCode: weChatResult.StatusCode);
+            return weChatResult.Body is null ? Results.Ok() : Results.Content(weChatResult.Body, "application/xml");
         })
         .WithTags("Webhooks");
 
         return endpoints;
     }
 
-    /// <summary>浠?XML 瀛楃涓蹭腑鎻愬彇鎸囧畾鏍囩鍐呯殑鏂囨湰鍐呭锛堢畝鍗曞瓧绗︿覆瑙ｆ瀽锛屾棤闇€瀹屾暣 XML 瑙ｆ瀽鍣級銆?/summary>
+    /// <summary> </summary>
     private static string? ExtractXmlField(string xml, string tagName)
     {
         string open  = $"<{tagName}>";

@@ -1,8 +1,9 @@
-using System.Security.Cryptography;
-using System.Text;
 using MicroClaw.Abstractions.Channel;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MicroClaw.Channels.WeChat;
 
@@ -19,10 +20,11 @@ public sealed class WeChatChannelProvider : IChannelProvider
     public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    public Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default)
+    public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
     {
         // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
-        return Task.FromResult<string?>(null);
+        return Task.FromResult(WebhookResult.Empty);
     }
 
     public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
@@ -44,11 +46,19 @@ public sealed class WeChatChannel(ChannelEntity config) : IChannel
     public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    public Task<string?> HandleWebhookAsync(string body, CancellationToken cancellationToken = default)
+    public Task<WebhookResult> HandleWebhookAsync(string body,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
     {
         // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
-        return Task.FromResult<string?>(null);
+        return Task.FromResult(WebhookResult.Empty);
     }
+
+    public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(ChannelDiagnostics.Ok(Config.Id, "wechat"));
+
+    public Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 
     public Task<ChannelTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(new ChannelTestResult(false, "微信渠道连通性测试尚未实现", 0));

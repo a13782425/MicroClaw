@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Pet;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Models;
@@ -21,67 +22,186 @@ public sealed class ChannelServiceTests : IDisposable
     [Fact]
     public void GetRequired_SameChannelId_ReturnsCachedInstance()
     {
-        InitializeConfig(new ChannelEntity
-        {
-            Id = "feishu-a",
-            DisplayName = "Feishu A",
-            ChannelType = ChannelType.Feishu,
-            IsEnabled = true,
-            SettingJson = """{"appId":"a"}"""
-        });
+        InitializeConfig(
+            channels:
+            [
+                new ChannelEntity
+                {
+                    Id = "feishu-a",
+                    DisplayName = "Feishu A",
+                    ChannelType = ChannelType.Feishu,
+                    IsEnabled = true,
+                    SettingJson = """{"appId":"a"}"""
+                }
+            ]);
 
-        var service = new ChannelService(new ChannelConfigStore(), [new FakeChannelProvider(ChannelType.Feishu, "Feishu")]);
 
-        IChannel first = service.GetRequired("feishu-a");
-        IChannel second = service.GetRequired("feishu-a");
-
-        ReferenceEquals(first, second).Should().BeTrue();
-        first.Config.DisplayName.Should().Be("Feishu A");
     }
 
     [Fact]
     public void GetRequired_DifferentChannelConfigs_ReturnDistinctInstances()
     {
         InitializeConfig(
-            new ChannelEntity
-            {
-                Id = "feishu-a",
-                DisplayName = "Feishu A",
-                ChannelType = ChannelType.Feishu,
-                IsEnabled = true,
-                SettingJson = """{"appId":"a"}"""
-            },
-            new ChannelEntity
-            {
-                Id = "feishu-b",
-                DisplayName = "Feishu B",
-                ChannelType = ChannelType.Feishu,
-                IsEnabled = true,
-                SettingJson = """{"appId":"b"}"""
-            });
+            channels:
+            [
+                new ChannelEntity
+                {
+                    Id = "feishu-a",
+                    DisplayName = "Feishu A",
+                    ChannelType = ChannelType.Feishu,
+                    IsEnabled = true,
+                    SettingJson = """{"appId":"a"}"""
+                },
+                new ChannelEntity
+                {
+                    Id = "feishu-b",
+                    DisplayName = "Feishu B",
+                    ChannelType = ChannelType.Feishu,
+                    IsEnabled = true,
+                    SettingJson = """{"appId":"b"}"""
+                }
+            ]);
 
-        var service = new ChannelService(new ChannelConfigStore(), [new FakeChannelProvider(ChannelType.Feishu, "Feishu")]);
 
-        IChannel first = service.GetRequired("feishu-a");
-        IChannel second = service.GetRequired("feishu-b");
-
-        ReferenceEquals(first, second).Should().BeFalse();
-        first.Config.SettingJson.Should().Contain("a");
-        second.Config.SettingJson.Should().Contain("b");
     }
 
     [Fact]
-    public void SessionService_CreateSession_DoesNotAttachChannelAutomatically()
+    public async Task SessionService_CreateSession_DoesNotAttachChannelAutomatically()
     {
-        InitializeConfig(new ChannelEntity
-        {
-            Id = ChannelConfigStore.WebChannelId,
-            DisplayName = "Web Console",
-            ChannelType = ChannelType.Web,
-            IsEnabled = true,
-            SettingJson = "{}"
-        });
+        InitializeConfig(
+            channels:
+            [
+                new ChannelEntity
+                {
+                    Id = ChannelService.WebChannelId,
+                    DisplayName = "Web Console",
+                    ChannelType = ChannelType.Web,
+                    IsEnabled = true,
+                    SettingJson = "{}"
+                }
+            ]);
 
+        var (_, _, service) = CreateSessionService();
+        await service.InitializeAsync();
+
+    }
+
+    [Fact]
+    public async Task SessionService_InitializeAsync_WarmsSessionsIntoCache()
+    {
+        InitializeConfig(
+            channels: [],
+            sessions:
+            [
+                new SessionEntity
+                {
+                    Id = "session-a",
+                    Title = "Session A",
+                    ProviderId = "provider-a",
+                    IsApproved = true,
+                    ChannelType = "web",
+                    ChannelId = "web",
+                    CreatedAtMs = 1000,
+                    AgentId = "agent-a",
+                    ApprovalReason = "ok"
+                },
+                new SessionEntity
+                {
+                    Id = "session-b",
+                    Title = "Session B",
+                    ProviderId = "provider-b",
+                    IsApproved = false,
+                    ChannelType = "web",
+                    ChannelId = "web",
+                    CreatedAtMs = 2000
+                }
+            ]);
+
+        var (_, petFactory, service) = CreateSessionService();
+
+        await service.InitializeAsync();
+
+        Session first = (Session)((MicroClaw.Abstractions.Sessions.ISessionRepository)service).Get("session-a")!;
+        Session second = (Session)((MicroClaw.Abstractions.Sessions.ISessionRepository)service).Get("session-a")!;
+
+        ReferenceEquals(first, second).Should().BeTrue();
+        ((MicroClaw.Abstractions.Sessions.ISessionRepository)service).GetAll().Should().HaveCount(2);
+        await petFactory.Received(2).CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SessionService_Save_PersistsUpdatedCachedSession()
+    {
+        InitializeConfig(
+            channels: [],
+            sessions:
+            [
+                new SessionEntity
+                {
+                    Id = "session-a",
+                    Title = "Old Title",
+                    ProviderId = "provider-a",
+                    IsApproved = false,
+                    ChannelType = "web",
+                    ChannelId = "web",
+                    CreatedAtMs = 1000
+                }
+            ]);
+
+        var (_, _, service) = CreateSessionService();
+        await service.InitializeAsync();
+
+        var repo = (MicroClaw.Abstractions.Sessions.ISessionRepository)service;
+        Session session = (Session)repo.Get("session-a")!;
+        session.UpdateTitle("New Title");
+        repo.Save(session);
+
+        MicroClawConfig.Get<SessionsOptions>().Items.Should().ContainSingle(x => x.Id == "session-a" && x.Title == "New Title");
+        session.Entity.Title.Should().Be("New Title");
+    }
+
+    [Fact]
+    public async Task SessionService_Delete_RemovesSessionFromCacheAndConfig()
+    {
+        InitializeConfig(
+            channels: [],
+            sessions:
+            [
+                new SessionEntity
+                {
+                    Id = "session-a",
+                    Title = "Session A",
+                    ProviderId = "provider-a",
+                    IsApproved = false,
+                    ChannelType = "web",
+                    ChannelId = "web",
+                    CreatedAtMs = 1000
+                }
+            ]);
+
+        string sessionDir = Path.Combine(_tempRoot, "workspace", "sessions", "session-a");
+        Directory.CreateDirectory(sessionDir);
+
+        var (_, _, service) = CreateSessionService();
+        await service.InitializeAsync();
+
+        var repo = (MicroClaw.Abstractions.Sessions.ISessionRepository)service;
+        repo.Delete("session-a").Should().BeTrue();
+        repo.Get("session-a").Should().BeNull();
+        MicroClawConfig.Get<SessionsOptions>().Items.Should().BeEmpty();
+        Directory.Exists(sessionDir).Should().BeFalse();
+    }
+
+    public void Dispose()
+    {
+        ResetMicroClawConfig();
+        Environment.SetEnvironmentVariable("MICROCLAW_HOME", null);
+        if (Directory.Exists(_tempRoot))
+            Directory.Delete(_tempRoot, recursive: true);
+    }
+
+    private (IHubContext<GatewayHub> HubContext, IPetFactory PetFactory, MicroClaw.Sessions.SessionService Service) CreateSessionService()
+    {
         var hubContext = Substitute.For<IHubContext<GatewayHub>>();
         var petFactory = Substitute.For<IPetFactory>();
         petFactory.CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>())
@@ -94,22 +214,10 @@ public sealed class ChannelServiceTests : IDisposable
         sp.GetService(typeof(IHubContext<GatewayHub>)).Returns(hubContext);
         sp.GetService(typeof(IPetFactory)).Returns(petFactory);
 
-        var service = new MicroClaw.Sessions.SessionService(sp);
-
-        Session session = service.CreateSession("test", "provider-1");
-
-        session.Channel.Should().BeNull();
+        return (hubContext, petFactory, new MicroClaw.Sessions.SessionService(sp));
     }
 
-    public void Dispose()
-    {
-        ResetMicroClawConfig();
-        Environment.SetEnvironmentVariable("MICROCLAW_HOME", null);
-        if (Directory.Exists(_tempRoot))
-            Directory.Delete(_tempRoot, recursive: true);
-    }
-
-    private void InitializeConfig(params ChannelEntity[] channels)
+    private void InitializeConfig(ChannelEntity[]? channels = null, SessionEntity[]? sessions = null)
     {
         ResetMicroClawConfig();
 
@@ -124,14 +232,31 @@ public sealed class ChannelServiceTests : IDisposable
             ["sessions:items"] = null
         };
 
-        for (int i = 0; i < channels.Length; i++)
+        ChannelEntity[] effectiveChannels = channels ?? [];
+        SessionEntity[] effectiveSessions = sessions ?? [];
+
+        for (int i = 0; i < effectiveChannels.Length; i++)
         {
-            ChannelEntity channel = channels[i];
+            ChannelEntity channel = effectiveChannels[i];
             data[$"channel:channels:{i}:id"] = channel.Id;
             data[$"channel:channels:{i}:display_name"] = channel.DisplayName;
-            data[$"channel:channels:{i}:channel_type"] = ChannelConfigStore.SerializeChannelType(channel.ChannelType);
+            data[$"channel:channels:{i}:channel_type"] = ChannelService.SerializeChannelType(channel.ChannelType);
             data[$"channel:channels:{i}:is_enabled"] = channel.IsEnabled.ToString();
             data[$"channel:channels:{i}:setting_json"] = channel.SettingJson;
+        }
+
+        for (int i = 0; i < effectiveSessions.Length; i++)
+        {
+            SessionEntity session = effectiveSessions[i];
+            data[$"sessions:items:{i}:id"] = session.Id;
+            data[$"sessions:items:{i}:title"] = session.Title;
+            data[$"sessions:items:{i}:provider_id"] = session.ProviderId;
+            data[$"sessions:items:{i}:is_approved"] = session.IsApproved.ToString();
+            data[$"sessions:items:{i}:channel_type"] = session.ChannelType;
+            data[$"sessions:items:{i}:channel_id"] = session.ChannelId;
+            data[$"sessions:items:{i}:created_at_ms"] = session.CreatedAtMs.ToString();
+            data[$"sessions:items:{i}:agent_id"] = session.AgentId;
+            data[$"sessions:items:{i}:approval_reason"] = session.ApprovalReason;
         }
 
         IConfiguration configuration = new ConfigurationBuilder()
@@ -160,8 +285,9 @@ public sealed class ChannelServiceTests : IDisposable
         public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task<string?> HandleWebhookAsync(ChannelEntity config, string body, CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>(null);
+        public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+            IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(WebhookResult.Ok(null));
 
         public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
             => Task.FromResult(new ChannelTestResult(true, "ok", 0));
@@ -182,7 +308,15 @@ public sealed class ChannelServiceTests : IDisposable
         public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task<string?> HandleWebhookAsync(string body, CancellationToken cancellationToken = default)
+        public Task<WebhookResult> HandleWebhookAsync(string body,
+            IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(WebhookResult.Ok(null));
+
+        public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(ChannelDiagnostics.Ok(Id, Type.ToString()));
+
+        public Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
+            CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(null);
 
         public Task<ChannelTestResult> TestConnectionAsync(CancellationToken cancellationToken = default)

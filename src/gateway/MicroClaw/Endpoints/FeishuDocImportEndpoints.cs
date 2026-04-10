@@ -22,7 +22,7 @@ public static class FeishuDocImportEndpoints
 
         endpoints.MapPost("/sessions/{id}/dna/import-from-feishu",
             async (string id, FeishuDocImportRequest req, SessionDnaService sessionDna,
-                   ISessionRepository repo, ChannelConfigStore channelStore,
+                   ISessionRepository repo, ChannelService channelStore,
                    ILoggerFactory loggerFactory, CancellationToken ct) =>
             {
                 if (repo.Get(id) is null)
@@ -58,7 +58,7 @@ public static class FeishuDocImportEndpoints
         string sessionId,
         string fileName,
         FeishuDocImportRequest req,
-        ChannelConfigStore channelStore,
+        ChannelService channelStore,
         SessionDnaService sessionDna,
         ILogger logger,
         CancellationToken ct)
@@ -68,7 +68,7 @@ public static class FeishuDocImportEndpoints
 
         // 获取第一个已启用的飞书渠道配置
         ChannelEntity? feishuConfig = channelStore
-            .GetByType(ChannelType.Feishu)
+            .GetConfigsByType(ChannelType.Feishu)
             .FirstOrDefault(c => c.IsEnabled);
 
         if (feishuConfig is null)

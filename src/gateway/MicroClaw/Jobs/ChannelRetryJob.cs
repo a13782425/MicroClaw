@@ -20,24 +20,24 @@ namespace MicroClaw.Jobs;
 public sealed class ChannelRetryJob : IScheduledJob
 {
     private readonly ChannelRetryQueueService _retryQueueService;
-    private readonly ChannelConfigStore _channelConfigStore;
+    private readonly ChannelService _channelConfigStore;
     private readonly ProviderConfigStore _providerStore;
     private readonly ProviderClientFactory _clientFactory;
     private readonly ISessionService _sessionService;
     private readonly ISessionRepository _repo;
-    private readonly FeishuMessageProcessor _feishuProcessor;
+    private readonly IFeishuRetryProcessor _feishuProcessor;
     private readonly IAgentMessageHandler? _agentHandler;
     private readonly ILogger<ChannelRetryJob> _logger;
 
     public ChannelRetryJob(IServiceProvider sp)
     {
         _retryQueueService = sp.GetRequiredService<ChannelRetryQueueService>();
-        _channelConfigStore = sp.GetRequiredService<ChannelConfigStore>();
+        _channelConfigStore = sp.GetRequiredService<ChannelService>();
         _providerStore = sp.GetRequiredService<ProviderConfigStore>();
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
         _sessionService = sp.GetRequiredService<ISessionService>();
         _repo = sp.GetRequiredService<ISessionRepository>();
-        _feishuProcessor = sp.GetRequiredService<FeishuMessageProcessor>();
+        _feishuProcessor = sp.GetRequiredService<IFeishuRetryProcessor>();
         _agentHandler = sp.GetService<IAgentMessageHandler>();
         _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
     }

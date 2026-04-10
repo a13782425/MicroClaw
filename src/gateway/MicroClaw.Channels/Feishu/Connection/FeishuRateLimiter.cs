@@ -8,7 +8,7 @@ namespace MicroClaw.Channels.Feishu;
 /// <para>按 AppId 独立限流，单个 AppId QPS ≤ 5，符合飞书开放平台消息发送接口限制。</para>
 /// <para>超频时令牌桶排队等待，而非直接失败，确保消息可靠送达。</para>
 /// </summary>
-public sealed class FeishuRateLimiter : IDisposable
+internal sealed class FeishuRateLimiter : IDisposable
 {
     // 每个 AppId 独享一个令牌桶：5 个令牌 / 秒，队列最多允许 50 个请求等待
     private readonly ConcurrentDictionary<string, TokenBucketRateLimiter> _limiters = new();

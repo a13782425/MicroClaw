@@ -14,9 +14,9 @@ namespace MicroClaw.Channels.Feishu;
 /// 每个 WebSocket 模式的渠道拥有独立的 ServiceProvider（SDK 限制：一个容器只能建立一条连接）。
 /// 启动时根据 ChannelConfigStore 中已启用的 WebSocket 渠道创建连接，并定期轮询配置变更。
 /// </summary>
-public sealed class FeishuWebSocketManager : BackgroundService
+internal sealed class FeishuWebSocketManager : BackgroundService, IFeishuWebSocketSync
 {
-    private readonly ChannelConfigStore _channelStore;
+    private readonly ChannelService _channelStore;
     private readonly ProviderConfigStore _providerStore;
     private readonly ProviderClientFactory _clientFactory;
     private readonly ISessionService _sessionService;
@@ -28,7 +28,7 @@ public sealed class FeishuWebSocketManager : BackgroundService
 
     public FeishuWebSocketManager(IServiceProvider sp)
     {
-        _channelStore = sp.GetRequiredService<ChannelConfigStore>();
+        _channelStore = sp.GetRequiredService<ChannelService>();
         _providerStore = sp.GetRequiredService<ProviderConfigStore>();
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
         _sessionService = sp.GetRequiredService<ISessionService>();
@@ -47,7 +47,7 @@ public sealed class FeishuWebSocketManager : BackgroundService
     /// <summary>对比当前连接与数据库配置，启停对应渠道的 WebSocket 连接。</summary>
     public async Task SyncChannelsAsync(CancellationToken ct)
     {
-        IReadOnlyList<ChannelEntity> feishuChannels = _channelStore.GetByType(ChannelType.Feishu);
+        IReadOnlyList<ChannelEntity> feishuChannels = _channelStore.GetConfigsByType(ChannelType.Feishu);
 
         // 需要活跃的渠道 ID 集合
         HashSet<string> desiredIds = new(StringComparer.OrdinalIgnoreCase);
@@ -82,7 +82,7 @@ public sealed class FeishuWebSocketManager : BackgroundService
     private async Task StartConnectionAsync(ChannelEntity channel, FeishuChannelSettings settings,
         CancellationToken ct)
     {
-        string maskedSecret = ChannelConfigStore.MaskSecret(settings.AppSecret);
+        string maskedSecret = ChannelService.MaskSecret(settings.AppSecret);
         _logger.LogInformation(
             "启动飞书 WebSocket 连接 channel={ChannelId} ({DisplayName}) appId={AppId} appSecret={MaskedSecret}",
             channel.Id, channel.DisplayName, settings.AppId, maskedSecret);
@@ -191,7 +191,7 @@ public sealed class FeishuWebSocketManager : BackgroundService
             delaySeconds = Math.Min(delaySeconds * 2, 60);
 
             // 如果配置已变更（禁用或切换模式），不再重连
-            ChannelEntity? current = _channelStore.GetByType(ChannelType.Feishu)
+            ChannelEntity? current = _channelStore.GetConfigsByType(ChannelType.Feishu)
                 .FirstOrDefault(c => c.Id == channel.Id);
             if (current is null || !current.IsEnabled) return;
             FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingJson);

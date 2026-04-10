@@ -1,5 +1,6 @@
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
 
@@ -73,6 +74,7 @@ public sealed class PetContextFactory(
         public bool IsApproved { get; } = true;
         public Configuration.Options.ChannelType ChannelType { get; } = Configuration.Options.ChannelType.Web;
         public string ChannelId { get; } = "web";
+        public SessionEntity Entity { get; }
         public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
         public string? AgentId => null;
         public string? ApprovalReason => null;

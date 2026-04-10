@@ -9,4 +9,10 @@ public static class MicroClawUtils
     /// </summary>
     /// <returns></returns>
     public static string GetUniqueId() => Guid.NewGuid().ToString("N");
+    
+    public static void CheckDirectory(string path)
+    {
+        if (!Directory.Exists(path))
+            Directory.CreateDirectory(path);
+    }
 }

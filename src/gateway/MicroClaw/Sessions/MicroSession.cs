@@ -2,11 +2,11 @@ using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Events;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
 
 namespace MicroClaw.Sessions;
-
 /// <summary>
 /// Session 聚合根（领域对象）。
 /// <para>
@@ -19,121 +19,78 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public sealed class MicroSession : IMicroSession
 {
-    private readonly List<IDomainEvent> _domainEvents = [];
-
-    private MicroSession() { }
-
-    public string Id { get; private set; } = string.Empty;
-    public string Title { get; private set; } = string.Empty;
-    public string ProviderId { get; private set; } = string.Empty;
-    public bool IsApproved { get; private set; }
-    public ChannelType ChannelType { get; private set; }
-    public string ChannelId { get; private set; } = string.Empty;
-    public DateTimeOffset CreatedAt { get; private set; }
-    public string? AgentId { get; private set; }
-    public string? ApprovalReason { get; private set; }
+    
+    private MicroSession(SessionEntity entity)
+    {
+        Entity = entity ?? throw new ArgumentNullException(nameof(entity));
+    }
+    public SessionEntity Entity { get; private set; }
+    
+    public string Id => Entity.Id;
+    public string Title => Entity.Title;
+    public string ProviderId => Entity.ProviderId;
+    public bool IsApproved => Entity.IsApproved;
+    public ChannelType ChannelType => ChannelService.ParseChannelType(Entity.ChannelType);
+    public string ChannelId => string.IsNullOrEmpty(Entity.ChannelId) ? ChannelService.WebChannelId : Entity.ChannelId;
+    public DateTimeOffset CreatedAt => TimeUtils.FromMs(Entity.CreatedAtMs);
+    public string? AgentId => Entity.AgentId;
+    public string? ApprovalReason => Entity.ApprovalReason;
     public IChannel? Channel { get; private set; }
     public IPet? Pet { get; private set; }
-
-    public static MicroSession Reconstitute(
-        string id,
-        string title,
-        string providerId,
-        bool isApproved,
-        ChannelType channelType,
-        string channelId,
-        DateTimeOffset createdAt,
-        string? agentId = null,
-        string? approvalReason = null)
+    public static MicroSession Reconstitute(SessionEntity entity) => new(entity);
+    
+    public static MicroSession Create(string id, string title, string providerId, ChannelType channelType, string channelId, DateTimeOffset createdAt, string? agentId = null)
     {
-        return new MicroSession
-        {
-            Id = id,
-            Title = title,
-            ProviderId = providerId,
-            IsApproved = isApproved,
-            ChannelType = channelType,
-            ChannelId = channelId,
-            CreatedAt = createdAt,
-            AgentId = agentId,
-            ApprovalReason = approvalReason,
-        };
-    }
-
-    public static MicroSession Create(
-        string id,
-        string title,
-        string providerId,
-        ChannelType channelType,
-        string channelId,
-        DateTimeOffset createdAt,
-        string? agentId = null)
-    {
-        return new MicroSession
+        var entity = new SessionEntity
         {
             Id = id,
             Title = title,
             ProviderId = providerId,
             IsApproved = false,
-            ChannelType = channelType,
+            ChannelType = ChannelService.SerializeChannelType(channelType),
             ChannelId = channelId,
-            CreatedAt = createdAt,
+            CreatedAtMs = TimeUtils.ToMs(createdAt),
             AgentId = agentId,
         };
+        return new MicroSession(entity);
     }
-
+    
     public void Approve(string? reason = null)
     {
-        IsApproved = true;
-        ApprovalReason = reason;
-        RaiseDomainEvent(new SessionApprovedEvent(Id));
+        Entity.IsApproved = true;
+        Entity.ApprovalReason = reason;
     }
-
+    
     public void Disable(string? reason = null)
     {
-        IsApproved = false;
-        ApprovalReason = reason;
+        Entity.IsApproved = false;
+        Entity.ApprovalReason = reason;
     }
-
+    
     public void UpdateProvider(string newProviderId)
     {
-        string old = ProviderId;
-        ProviderId = newProviderId;
-        RaiseDomainEvent(new SessionProviderChangedEvent(Id, old, newProviderId));
+        Entity.ProviderId = newProviderId;
     }
-
+    
     public void UpdateTitle(string newTitle)
     {
-        Title = newTitle;
+        Entity.Title = newTitle;
     }
-
+    
     public void AttachChannel(IChannel channel)
     {
         Channel = channel;
     }
-
+    
     public void AttachPet(IPet pet)
     {
         Pet = pet;
     }
-
+    
     public void DetachPet()
     {
         Pet = null;
     }
-
-    public IReadOnlyList<IDomainEvent> PopDomainEvents()
-    {
-        var events = _domainEvents.ToList().AsReadOnly();
-        _domainEvents.Clear();
-        return events;
-    }
-
-    private void RaiseDomainEvent(IDomainEvent domainEvent)
-        => _domainEvents.Add(domainEvent);
-
-    public SessionInfo ToInfo() => new(
-        Id, Title, ProviderId, IsApproved,
-        ChannelType, ChannelId, CreatedAt,
-        AgentId, ApprovalReason);
+    
+    public SessionInfo ToInfo() => new(Id, Title, ProviderId, IsApproved, ChannelType, ChannelId, CreatedAt, AgentId, ApprovalReason);
 }

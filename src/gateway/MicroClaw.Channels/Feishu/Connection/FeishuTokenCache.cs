@@ -9,7 +9,7 @@ namespace MicroClaw.Channels.Feishu;
 /// F-D-3: 按 AppId 缓存飞书 ServiceProvider，复用 SDK 内部的 Tenant Access Token，
 /// 避免每次 API 调用都重新鉴权。缓存有效期为 1 小时 50 分钟（Token 实际有效期 2 小时，提前 10 分钟刷新）。
 /// </summary>
-public sealed class FeishuTokenCache(ILogger<FeishuTokenCache> logger) : IDisposable
+internal sealed class FeishuTokenCache(ILogger<FeishuTokenCache> logger) : IDisposable
 {
     private sealed record CachedEntry(ServiceProvider Sp, DateTimeOffset ExpiresAt);
 
