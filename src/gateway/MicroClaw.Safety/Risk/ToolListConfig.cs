@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Safety;
 
@@ -16,6 +17,7 @@ public sealed class ToolListConfig : IToolListConfig
     /// <summary>
     /// 从 IConfiguration 读取 safety:tool-whitelist 和 safety:tool-graylist 段自动构建实例。
     /// </summary>
+    [ActivatorUtilitiesConstructor]      
     public ToolListConfig(IConfiguration config) : this(
         config.GetSection("safety:tool-whitelist").Get<List<string>>() ?? [],
         config.GetSection("safety:tool-graylist").Get<List<string>>() ?? [])
@@ -28,7 +30,7 @@ public sealed class ToolListConfig : IToolListConfig
     /// <param name="whitelistedTools">白名单工具名称集合（大小写不敏感）。</param>
     /// <param name="greylistedTools">灰名单工具名称集合（大小写不敏感）。</param>
     /// <exception cref="ArgumentException">工具名称同时出现在白名单和灰名单时抛出。</exception>
-    public ToolListConfig(
+    private ToolListConfig(
         IEnumerable<string> whitelistedTools,
         IEnumerable<string> greylistedTools)
     {

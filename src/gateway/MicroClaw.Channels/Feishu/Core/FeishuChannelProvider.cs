@@ -1,46 +1,73 @@
 using System.Collections.Concurrent;
+using FeishuNetSdk;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Channel;
-using MicroClaw.Abstractions.Events;
+using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
 
 /// <summary>
-/// 有状态 BackgroundService，管理所有飞书渠道实例的生命周期。
-/// 持有 <see cref="FeishuChannel"/> 实例字典，替代已删除的 <c>FeishuWebSocketManager</c>，
-/// 负责 WebSocket 渠道的定时同步与断线重连。
+/// Feishu channel provider — manages all Feishu channel instances.
+/// NOT a BackgroundService — lifecycle driven by <c>ChannelRunner</c>.
+/// Holds RateLimiter / HealthStore / StatsService / MessageProcessor for all instances.
 /// </summary>
-internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvider
+internal sealed class FeishuChannelProvider : IChannelProvider
 {
     private readonly ChannelService _channelStore;
-    private readonly FeishuMessageProcessor _processor;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly FeishuChannelHealthStore _healthStore;
-    private readonly FeishuChannelStatsService _statsService;
     private readonly ILogger<FeishuChannelProvider> _logger;
 
-    /// <summary>活跃的飞书渠道实例字典，key = channelId。</summary>
+    /// <summary>Active Feishu channel instances, key = channelId.</summary>
     private readonly ConcurrentDictionary<string, FeishuChannel> _instances = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Config fingerprint for each managed instance, used by TickAsync to detect changes.</summary>
+    private readonly ConcurrentDictionary<string, string> _fingerprints = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Per-AppId token-bucket rate limiter (QPS ≤ 5).</summary>
+    internal FeishuRateLimiter RateLimiter { get; } = new();
+
+    /// <summary>Tracks last message processing result per channel.</summary>
+    internal FeishuChannelHealthStore HealthStore { get; } = new();
+
+    /// <summary>Error statistics per channel (signature/AI/reply failures).</summary>
+    internal FeishuChannelStatsService StatsService { get; } = new();
+
+    /// <summary>Shared message processor, created lazily when first needed (after DI container is built).</summary>
+    private FeishuMessageProcessor? _processor;
+    private readonly Lock _processorLock = new();
+
+    internal FeishuMessageProcessor Processor
+    {
+        get
+        {
+            if (_processor is not null) return _processor;
+            lock (_processorLock)
+            {
+                return _processor ??= new FeishuMessageProcessor(
+                    _serviceProvider.GetRequiredService<ISessionService>(),
+                    _loggerFactory.CreateLogger<FeishuMessageProcessor>(),
+                    _serviceProvider.GetService<IAgentMessageHandler>(),
+                    _serviceProvider.GetService<IChannelRetryQueue>(),
+                    RateLimiter, HealthStore, StatsService);
+            }
+        }
+    }
 
     public FeishuChannelProvider(
         ChannelService channelStore,
-        FeishuMessageProcessor processor,
-        ILoggerFactory loggerFactory,
-        FeishuChannelHealthStore healthStore,
-        FeishuChannelStatsService statsService,
-        IAsyncEventBus eventBus)
+        IServiceProvider serviceProvider,
+        ILoggerFactory loggerFactory)
     {
         _channelStore = channelStore;
-        _processor = processor;
+        _serviceProvider = serviceProvider;
         _loggerFactory = loggerFactory;
-        _healthStore = healthStore;
-        _statsService = statsService;
         _logger = loggerFactory.CreateLogger<FeishuChannelProvider>();
-
-        eventBus.Subscribe<FeishuChannelSyncRequestedEvent>((_, ct) => SyncChannelsAsync(ct));
     }
 
     // ── IChannelProvider ────────────────────────────────────────────────
@@ -51,16 +78,13 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
 
     public IChannel Create(ChannelEntity config)
     {
-        // For Webhook channels: create lightweight instance on demand.
-        // For WebSocket channels: return from _instances cache (managed by BackgroundService).
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
         bool isWebSocket = string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase);
 
         if (isWebSocket && _instances.TryGetValue(config.Id, out FeishuChannel? existing))
             return existing;
 
-        // Create synchronously for Webhook mode; for WebSocket, block once (instance will be cached next call)
-        FeishuChannel channel = FeishuChannel.CreateAsync(config, settings, this, _processor, _loggerFactory)
+        FeishuChannel channel = FeishuChannel.CreateAsync(config, settings, this, _loggerFactory)
             .GetAwaiter().GetResult();
 
         if (isWebSocket)
@@ -102,15 +126,16 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
         else
             connectionStatus = "webhook";
 
-        var (lastAt, lastSuccess, lastError) = _healthStore.GetLastMessage(config.Id);
-        var (sigFail, aiFail, replyFail) = _statsService.GetStats(config.Id);
+        // Enrich diagnostics with health + stats data
+        (DateTimeOffset? lastAt, bool? lastOk, string? lastError) = HealthStore.GetLastMessage(config.Id);
+        (long sigFail, long aiFail, long replyFail) = StatsService.GetStats(config.Id);
 
         Dictionary<string, object?> extra = new()
         {
             ["connectionMode"] = connectionMode,
             ["connectionStatus"] = connectionStatus,
-            ["lastMessageAt"] = lastAt,
-            ["lastMessageSuccess"] = lastSuccess,
+            ["lastMessageAt"] = lastAt?.ToString("o"),
+            ["lastMessageSuccess"] = lastOk,
             ["lastMessageError"] = lastError,
             ["signatureFailures"] = sigFail,
             ["aiCallFailures"] = aiFail,
@@ -120,170 +145,141 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
         return Task.FromResult(new ChannelDiagnostics(config.Id, "feishu", connectionStatus, extra));
     }
 
-    // ── BackgroundService (replaces FeishuWebSocketManager) ─────────────
+    // ── Lifecycle Hooks (driven by ChannelRunner) ───────────────────────
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        // Initial sync on startup
-        await SyncChannelsAsync(stoppingToken);
+        _logger.LogInformation("飞书 Provider 启动，开始扫描渠道配置…");
+
+        IReadOnlyList<ChannelEntity> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
+        int started = 0;
+
+        foreach (ChannelEntity config in configs)
+        {
+            if (!config.IsEnabled)
+            {
+                _logger.LogDebug("跳过已禁用的飞书渠道 channel={ChannelId}", config.Id);
+                continue;
+            }
+
+            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
+            if (!string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("跳过 Webhook 模式飞书渠道 channel={ChannelId}（按需创建）", config.Id);
+                continue;
+            }
+
+            try
+            {
+                await StartInstanceAsync(config, settings, cancellationToken);
+                started++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "启动飞书渠道实例失败 channel={ChannelId} appId={AppId}",
+                    config.Id, settings.AppId);
+            }
+        }
+
+        _logger.LogInformation("飞书 Provider 启动完成，已启动 {Count} 个 WebSocket 实例", started);
     }
 
-    /// <summary>对比期望状态与实际状态，启停对应 WebSocket 渠道实例。</summary>
-    private async Task SyncChannelsAsync(CancellationToken ct = default)
+    public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<ChannelEntity> feishuChannels = _channelStore.GetConfigsByType(ChannelType.Feishu);
+        _logger.LogInformation("飞书 Provider 停止，释放 {Count} 个实例…", _instances.Count);
 
+        foreach (string id in _instances.Keys.ToArray())
+            await RemoveAsync(id);
+
+        RateLimiter.Dispose();
+        _logger.LogInformation("飞书 Provider 已停止");
+    }
+
+    public async Task TickAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<ChannelEntity> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
+
+        // Build desired state: enabled WebSocket channels
         HashSet<string> desiredIds = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, (ChannelEntity Config, FeishuChannelSettings Settings)> desiredMap = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (ChannelEntity channel in feishuChannels)
+        foreach (ChannelEntity config in configs)
         {
-            if (!channel.IsEnabled) continue;
-            FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(channel.SettingJson);
-            if (settings is null) continue;
-            if (!string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase)) continue;
+            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
+            if (!config.IsEnabled ||
+                !string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
+                continue;
 
-            desiredIds.Add(channel.Id);
-
-            if (!_instances.ContainsKey(channel.Id))
-                await StartInstanceAsync(channel, settings, ct);
+            desiredIds.Add(config.Id);
+            desiredMap[config.Id] = (config, settings);
         }
 
-        // Remove instances that are no longer needed
-        foreach (string existingId in _instances.Keys.ToArray())
+        // Remove instances that are no longer desired (deleted / disabled / switched to webhook)
+        foreach (string id in _instances.Keys.ToArray())
         {
-            if (!desiredIds.Contains(existingId))
-                await RemoveAsync(existingId);
+            if (desiredIds.Contains(id)) continue;
+
+            _logger.LogInformation("飞书渠道已移除或禁用，停止实例 channel={ChannelId}", id);
+            await RemoveAsync(id);
+        }
+
+        // Add or recreate instances
+        foreach ((string id, (ChannelEntity config, FeishuChannelSettings settings)) in desiredMap)
+        {
+            string newFingerprint = BuildFingerprint(config);
+
+            if (_instances.ContainsKey(id))
+            {
+                // Check if config changed — if so, recreate
+                if (_fingerprints.TryGetValue(id, out string? oldFingerprint) && oldFingerprint == newFingerprint)
+                    continue;
+
+                _logger.LogInformation("飞书渠道配置变更，重建实例 channel={ChannelId}", id);
+                await RemoveAsync(id);
+            }
+
+            try
+            {
+                await StartInstanceAsync(config, settings, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "TickAsync 启动飞书渠道实例失败 channel={ChannelId}", id);
+            }
         }
     }
 
-    /// <summary>移除并释放指定渠道实例。</summary>
-    public async Task RemoveAsync(string channelId)
+    // ── Internal Helpers ────────────────────────────────────────────────
+
+    /// <summary>Create and register a WebSocket channel instance.</summary>
+    private async Task StartInstanceAsync(ChannelEntity config, FeishuChannelSettings settings, CancellationToken ct)
     {
+        FeishuChannel channel = await FeishuChannel.CreateAsync(config, settings, this, _loggerFactory, ct);
+        _instances[config.Id] = channel;
+        _fingerprints[config.Id] = BuildFingerprint(config);
+
+        _logger.LogInformation("飞书渠道实例已启动 channel={ChannelId} appId={AppId} mode={Mode}",
+            config.Id, settings.AppId, settings.ConnectionMode);
+    }
+
+    /// <summary>Remove and dispose a channel instance.</summary>
+    internal async Task RemoveAsync(string channelId)
+    {
+        _fingerprints.TryRemove(channelId, out _);
         if (!_instances.TryRemove(channelId, out FeishuChannel? ch)) return;
         _logger.LogInformation("停止飞书渠道实例 channel={ChannelId}", channelId);
         try { await ch.DisposeAsync(); }
         catch (Exception ex) { _logger.LogWarning(ex, "释放飞书渠道实例异常 channel={ChannelId}", channelId); }
     }
 
-    private async Task StartInstanceAsync(ChannelEntity channel, FeishuChannelSettings settings, CancellationToken ct)
+    /// <summary>Report webhook signature failure (called by FeishuChannel).</summary>
+    internal void ReportSignatureFailure(string channelId)
     {
-        if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
-        {
-            _logger.LogError("飞书 WebSocket 启动失败：AppId 或 AppSecret 为空 channel={ChannelId}", channel.Id);
-            return;
-        }
-
-        try
-        {
-            _logger.LogInformation("启动飞书 WebSocket 实例 channel={ChannelId} appId={AppId}", channel.Id, settings.AppId);
-            FeishuChannel ch = await FeishuChannel.CreateAsync(channel, settings, this, _processor, _loggerFactory, ct);
-            _instances[channel.Id] = ch;
-
-            // Start per-connection reconnect monitor as a fire-and-forget background Task
-            _ = Task.Run(() => MonitorConnectionAsync(channel, settings, ch, ct), CancellationToken.None);
-
-            _logger.LogInformation("飞书 WebSocket 实例已启动 channel={ChannelId}", channel.Id);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "飞书 WebSocket 实例启动失败 channel={ChannelId}", channel.Id);
-        }
+        StatsService.IncrementSignatureFailure(channelId);
+        _logger.LogWarning("飞书 Webhook 签名验证失败 channel={ChannelId}", channelId);
     }
 
-    /// <summary>
-    /// 监控指定渠道 WssService 生命周期；断线时使用指数退避重连（5s→10s→20s→40s→60s 封顶）。
-    /// </summary>
-    private async Task MonitorConnectionAsync(
-        ChannelEntity channel,
-        FeishuChannelSettings settings,
-        FeishuChannel instance,
-        CancellationToken stoppingToken)
-    {
-        // Obtain the WssService's ExecuteTask via reflection on BackgroundService
-        Task? wssTask = instance.GetType()
-            .GetProperty("WssExecuteTask", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?
-            .GetValue(instance) as Task;
-
-        // Fallback: just wait until stoppingToken is cancelled (SDK handles reconnect internally)
-        if (wssTask is null)
-        {
-            try { await Task.Delay(Timeout.Infinite, stoppingToken); }
-            catch (OperationCanceledException) { }
-            return;
-        }
-
-        try { await wssTask.WaitAsync(stoppingToken); }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "WssService 异常退出 channel={ChannelId}", channel.Id);
-        }
-
-        if (wssTask.IsCompletedSuccessfully)
-        {
-            try { await Task.Delay(Timeout.Infinite, stoppingToken); }
-            catch (OperationCanceledException) { }
-            return;
-        }
-
-        if (stoppingToken.IsCancellationRequested) return;
-
-        _logger.LogWarning("飞书 WebSocket 断线 channel={ChannelId}，准备重连", channel.Id);
-
-        // Remove old instance
-        if (_instances.TryRemove(channel.Id, out FeishuChannel? old))
-        {
-            try { await old.DisposeAsync(); }
-            catch (Exception ex) { _logger.LogWarning(ex, "释放断线实例异常 channel={ChannelId}", channel.Id); }
-        }
-
-        // Exponential backoff: 5s → 10s → 20s → 40s → 60s (cap)
-        int delaySeconds = 5;
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            _logger.LogInformation("飞书 WebSocket 重连等待 {Delay}s channel={ChannelId}", delaySeconds, channel.Id);
-            try { await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken); }
-            catch (OperationCanceledException) { return; }
-
-            delaySeconds = Math.Min(delaySeconds * 2, 60);
-
-            ChannelEntity? current = _channelStore.GetConfigsByType(ChannelType.Feishu)
-                .FirstOrDefault(c => c.Id == channel.Id);
-            if (current is null || !current.IsEnabled) return;
-
-            FeishuChannelSettings? currentSettings = FeishuChannelSettings.TryParse(current.SettingJson);
-            if (currentSettings is null ||
-                !string.Equals(currentSettings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            if (_instances.ContainsKey(channel.Id)) return;
-
-            try
-            {
-                await StartInstanceAsync(current, currentSettings, stoppingToken);
-                _logger.LogInformation("飞书 WebSocket 重连成功 channel={ChannelId}", channel.Id);
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "飞书 WebSocket 重连失败 channel={ChannelId}，{Delay}s 后重试", channel.Id, delaySeconds);
-            }
-        }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        foreach (string id in _instances.Keys.ToArray())
-            await RemoveAsync(id);
-        await base.StopAsync(cancellationToken);
-    }
-
-    /// <summary>记录 Webhook 签名验证失败（由 <see cref="FeishuChannel"/> 调用）。</summary>
-    internal void ReportSignatureFailure(string channelId) => _statsService.IncrementSignatureFailure(channelId);
-
-    /// <summary>
-    /// 获取指定渠道的活跃实例 <see cref="IFeishuTenantApi"/>，供工具工厂按需调用。
-    /// </summary>
+    /// <summary>Get active IFeishuTenantApi for a channel (used by tool factory).</summary>
     internal bool TryGetApi(string channelId, out FeishuNetSdk.IFeishuTenantApi? api)
     {
         if (_instances.TryGetValue(channelId, out FeishuChannel? ch))
@@ -294,4 +290,61 @@ internal sealed class FeishuChannelProvider : BackgroundService, IChannelProvide
         api = null;
         return false;
     }
+
+    // ── Tool Management (IChannelProvider) ──────────────────────────────
+
+    /// <summary>Returns all Feishu tool descriptions from the 5 tool classes.</summary>
+    public IReadOnlyList<(string Name, string Description)> GetToolDescriptions() =>
+        [.. FeishuDocTools.GetToolDescriptions(),
+         .. FeishuBitableTools.GetToolDescriptions(),
+         .. FeishuWikiTools.GetToolDescriptions(),
+         .. FeishuCalendarTools.GetToolDescriptions(),
+         .. FeishuApprovalTools.GetToolDescriptions()];
+
+    /// <summary>
+    /// Creates Feishu tools for a specific channel instance.
+    /// For WebSocket channels, reuses the cached API; for webhook channels, creates a temporary channel.
+    /// </summary>
+    public Task<IReadOnlyList<AIFunction>> CreateToolsAsync(string channelId, CancellationToken cancellationToken = default)
+    {
+        ChannelEntity? config = _channelStore.GetById(channelId);
+        if (config is null)
+            return Task.FromResult<IReadOnlyList<AIFunction>>([]);
+
+        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
+        if (string.IsNullOrWhiteSpace(settings.AppId) || string.IsNullOrWhiteSpace(settings.AppSecret))
+        {
+            _logger.LogWarning("飞书渠道 {ChannelId} AppId/AppSecret 未配置，跳过飞书工具创建", channelId);
+            return Task.FromResult<IReadOnlyList<AIFunction>>([]);
+        }
+
+        // Try cached WebSocket instance first; fall back to creating a temporary channel for webhook mode
+        IFeishuTenantApi api;
+        if (_instances.TryGetValue(channelId, out FeishuChannel? cached))
+        {
+            api = cached.Api;
+        }
+        else
+        {
+            IChannel ch = Create(config);
+            if (ch is FeishuChannel feishuCh)
+                api = feishuCh.Api;
+            else
+                return Task.FromResult<IReadOnlyList<AIFunction>>([]);
+        }
+
+        ILogger toolLogger = _loggerFactory.CreateLogger("MicroClaw.Channels.Feishu.Tools");
+
+        IReadOnlyList<AIFunction> tools =
+            [.. FeishuDocTools.CreateTools(settings, api, toolLogger),
+             .. FeishuBitableTools.CreateTools(settings, api, toolLogger),
+             .. FeishuWikiTools.CreateTools(settings, api, toolLogger),
+             .. FeishuCalendarTools.CreateTools(settings, api, toolLogger),
+             .. FeishuApprovalTools.CreateTools(settings, api, toolLogger)];
+
+        return Task.FromResult(tools);
+    }
+
+    private static string BuildFingerprint(ChannelEntity config)
+        => string.Join("|", config.Id, config.IsEnabled, config.SettingJson);
 }

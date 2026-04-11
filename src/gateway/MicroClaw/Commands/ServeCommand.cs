@@ -9,9 +9,6 @@ using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Agent.Sessions;
 using MicroClaw.Channels;
-using MicroClaw.Channels.Feishu; // FeishuChannelExtensions.AddFeishuChannel()
-using MicroClaw.Channels.WeChat;
-using MicroClaw.Channels.WeCom;
 using MicroClaw.Tools;
 using Microsoft.AspNetCore.StaticFiles;
 using MicroClaw.Configuration;
@@ -373,23 +370,18 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IDomainEventHandler<SessionDeletedEvent>, MicroClaw.Events.SessionDeletedEventHandler>();
 	}
 
-	/// <summary>注册渠道配置存储和渠道实现（飞书、企业微信、微信），渠道配置由数据库管理。</summary>
+	/// <summary>注册渠道配置存储和渠道实现，由 ChannelService 内部构建 Provider，ChannelRunner 统一调度生命周期。</summary>
 	private static void ConfigureChannels(WebApplicationBuilder builder)
 	{
 		builder.Services.AddService<ChannelService>();
 		builder.Services.MapAs<IChannelService, ChannelService>();
 
-		// 内置渠道 Provider
-		builder.Services.AddSingleton<IChannelProvider, WebChannelProvider>();
-		builder.Services.AddSingleton<IChannelProvider, WeComChannelProvider>();
-		builder.Services.AddSingleton<IChannelProvider, WeChatChannelProvider>();
+		// ChannelRunner: 统一驱动所有 Provider 的 StartAsync/TickAsync/StopAsync 生命周期
+		builder.Services.AddRunner<ChannelRunner>();
 
-		// 飞书：封装所有内部实现类的注册，外部不引用具体类型
-		builder.Services.AddFeishuChannel();
-		// F-C-7: 飞书对话摘要定时同步（将会话消息追加到配置的 summaryDocToken 文档）
-		builder.Services.AddSingleton<IScheduledJob, FeishuDocSyncJob>();
-		// F-F-3: 飞书 WebSocket 渠道配置 30s 同步（从 FeishuWebSocketManager.PeriodicTimer 提取）
-		builder.Services.AddSingleton<IScheduledJob, FeishuWebSocketSyncJob>();
+		// ChannelToolBridge: 桥接 IChannelProvider 工具管理到 ToolCollector
+		builder.Services.AddSingleton<IToolProvider, ChannelToolBridge>();
+
 		// B-02: 每日记忆总结（将会话消息摘要写入 memory/YYYY-MM-DD.md，每周合并至 MEMORY.md）
 		builder.Services.AddSingleton<IScheduledJob, MemorySummarizationJob>();
 		builder.Services.AddSingleton<IScheduledJob, MemoryPendingProcessorJob>();

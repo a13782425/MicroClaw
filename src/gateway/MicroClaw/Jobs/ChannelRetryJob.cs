@@ -1,5 +1,4 @@
 ﻿using MicroClaw.Channels;
-using MicroClaw.Channels.Feishu;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Configuration.Options;
@@ -25,7 +24,6 @@ public sealed class ChannelRetryJob : IScheduledJob
     private readonly ProviderClientFactory _clientFactory;
     private readonly ISessionService _sessionService;
     private readonly ISessionRepository _repo;
-    private readonly IFeishuRetryProcessor _feishuProcessor;
     private readonly IAgentMessageHandler? _agentHandler;
     private readonly ILogger<ChannelRetryJob> _logger;
 
@@ -37,7 +35,6 @@ public sealed class ChannelRetryJob : IScheduledJob
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
         _sessionService = sp.GetRequiredService<ISessionService>();
         _repo = sp.GetRequiredService<ISessionRepository>();
-        _feishuProcessor = sp.GetRequiredService<IFeishuRetryProcessor>();
         _agentHandler = sp.GetService<IAgentMessageHandler>();
         _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
     }
@@ -95,8 +92,6 @@ public sealed class ChannelRetryJob : IScheduledJob
                 return;
             }
 
-            FeishuChannelSettings settings = FeishuChannelSettings.TryParse(channel.SettingJson) ?? new();
-
             // 获取会话历史
             IReadOnlyList<SessionMessage> history = _sessionService.GetMessages(entry.SessionId);
 
@@ -135,7 +130,10 @@ public sealed class ChannelRetryJob : IScheduledJob
             _sessionService.AddMessage(entry.SessionId,
                 new SessionMessage(Guid.NewGuid().ToString("N"), "assistant", aiReply, null, DateTimeOffset.UtcNow, null));
 
-            await _feishuProcessor.SendRetryReplyAsync(entry.MessageId, aiReply, settings, ct);
+            // Retry reply via channel provider
+            // TODO: implement retry reply through IChannelProvider.PublishAsync once ChannelMessage supports reply semantics
+            _logger.LogWarning("F-D-1 重试回复暂未实现（IFeishuRetryProcessor 已移除），消息已保存但未回复用户 messageId={MessageId}",
+                entry.MessageId);
 
             // 成功，从随列移除
             await _retryQueueService.DeleteAsync(entry.Id, ct);

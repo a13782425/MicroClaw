@@ -1,6 +1,7 @@
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Abstractions.Channel;
 
@@ -43,4 +44,27 @@ public interface IChannelProvider
     Task<string?> HandleSessionMessageAsync(ChannelEntity config, SessionMessage message,
         SessionMessageContext context, CancellationToken cancellationToken = default)
         => Task.FromResult<string?>(null);
+
+    // ── Lifecycle Hooks (driven by ChannelRunner) ───────────────────────
+
+    /// <summary>Provider 启动时由 ChannelRunner 调用，用于初始化长连接等资源。默认空实现。</summary>
+    Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>Provider 停止时由 ChannelRunner 调用，用于释放长连接等资源。默认空实现。</summary>
+    Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    /// <summary>由 ChannelRunner 定时调用（默认 30s），用于同步配置、断线重连等周期任务。默认空实现。</summary>
+    Task TickAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    // ── Tool Management (delegated via ChannelToolBridge) ───────────────
+
+    /// <summary>返回此渠道 Provider 提供的工具元数据描述列表（不需要运行时上下文，用于 UI 展示）。默认空列表。</summary>
+    IReadOnlyList<(string Name, string Description)> GetToolDescriptions() => [];
+
+    /// <summary>
+    /// 按指定渠道实例 ID 创建工具列表。由 ChannelToolBridge 桥接调用。
+    /// 默认返回空列表，飞书等渠道重写此方法以按凭据创建渠道工具。
+    /// </summary>
+    Task<IReadOnlyList<AIFunction>> CreateToolsAsync(string channelId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<AIFunction>>([]);
 }

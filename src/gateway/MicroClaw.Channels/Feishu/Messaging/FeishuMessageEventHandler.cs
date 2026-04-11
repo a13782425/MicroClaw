@@ -23,7 +23,7 @@ internal sealed class FeishuMessageEventHandler(
         ImMessageReceiveV1EventBodyDto? body = input.Event;
         if (body is null) return Task.CompletedTask;
 
-        // F-A-7: 先构建 Key→Name mention 字典，再提取文本时传入以保留被提及用户名称
+        // F-A-7: Build Key→Name mention map before text extraction to preserve @-mentioned user names
         IReadOnlyDictionary<string, string>? mentionMap = null;
         if (body.Message?.Mentions is { Length: > 0 })
         {
@@ -53,13 +53,13 @@ internal sealed class FeishuMessageEventHandler(
         // Capture the IFeishuTenantApi from the channel context (same child SP, SDK-managed token)
         IFeishuTenantApi tenantApi = channelContext.Api;
 
-        // F-F-1: 全链路追踪 — WebSocket 接收步骤
+        // F-F-1: Trace logging for WebSocket receive path
         string traceId = messageId!.Length >= 8 ? messageId[..8] : messageId;
         logger.LogInformation(
             "[{TraceId}] WebSocket 接收 channel={ChannelId} from={SenderId} messageId={MessageId}: {Text}",
             traceId, channel.Id, senderId, messageId, userText);
 
-        // F-B-1: 提取 chatType 和被 @ 的 open_id 列表
+        // F-B-1: Extract chatType and list of @-mentioned open_ids
         string chatType = body.Message?.ChatType ?? "p2p";
         IReadOnlyList<string> mentionedOpenIds = body.Message?.Mentions is { Length: > 0 }
             ? body.Message.Mentions
@@ -68,11 +68,11 @@ internal sealed class FeishuMessageEventHandler(
                 .ToList()
             : [];
 
-        // F-B-3: 提取 rootId，话题内消息 (root_id 非空) 回复时会带 reply_in_thread
+        // F-B-3: Extract rootId — replies to thread messages carry reply_in_thread
         string? rootId = body.Message?.RootId;
 
-        // fire-and-forget：SDK 要求 3 秒内返回，AI 调用可能耗时较长
-        // tenantApi 来自子 SP，生命周期与子 SP 相同，可安全在 fire-and-forget Task 中使用
+        // fire-and-forget: SDK requires return within 3 seconds, AI calls may take much longer.
+        // tenantApi comes from the child SP whose lifetime matches the channel, safe for fire-and-forget.
         _ = Task.Run(() => processor.ProcessMessageAsync(
             userText, senderId, chatId, messageId, channel, settings,
             chatType, mentionedOpenIds, tenantApi: tenantApi, rootId: rootId, ct: CancellationToken.None));
@@ -80,4 +80,3 @@ internal sealed class FeishuMessageEventHandler(
         return Task.CompletedTask;
     }
 }
-

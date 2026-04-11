@@ -26,7 +26,6 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
     private readonly IHostedService? _wssService;
     private readonly CancellationTokenSource _cts = new();
     private readonly FeishuChannelProvider _provider;
-    private readonly FeishuMessageProcessor _processor;
     private readonly ILogger<FeishuChannel> _logger;
 
     /// <summary>该渠道对应的 <see cref="IFeishuTenantApi"/>，与子 SP 生命周期相同。</summary>
@@ -38,7 +37,6 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         IFeishuTenantApi api,
         IHostedService? wssService,
         FeishuChannelProvider provider,
-        FeishuMessageProcessor processor,
         ILogger<FeishuChannel> logger)
     {
         Config = config;
@@ -46,10 +44,13 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         Api = api;
         _wssService = wssService;
         _provider = provider;
-        _processor = processor;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Phase 1 lightweight factory: creates channel without message processor.
+    /// Full SDK integration, but no message handling until Phase 2/3.
+    /// </summary>
     /// <summary>
     /// 创建飞书渠道实例，为该渠道独立构建 SDK ServiceProvider。
     /// WebSocket 模式下同时注册并启动 <c>WssService</c>；Webhook 模式下仅注册 API 客户端。
@@ -58,7 +59,6 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         ChannelEntity config,
         FeishuChannelSettings settings,
         FeishuChannelProvider provider,
-        FeishuMessageProcessor processor,
         ILoggerFactory loggerFactory,
         CancellationToken ct = default)
     {
@@ -86,15 +86,11 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         {
             services.AddFeishuWebSocket();
             services.AddSingleton(new FeishuChannelContext(config, settings));
-            // Share the root-container processor and logger factory with the child SP
-            services.AddSingleton(processor);
+            // Share the logger factory with the child SP
             services.AddSingleton(loggerFactory);
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
-            services.AddScoped<
-                IEventHandler<
-                    EventV2Dto<FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>,
-                    FeishuNetSdk.Im.Events.ImMessageReceiveV1EventBodyDto>,
-                FeishuMessageEventHandler>();
+            services.AddSingleton(provider.Processor); 
+            // Phase 2/3: register FeishuMessageEventHandler here when processor is available
         }
 
         ServiceProvider sp = services.BuildServiceProvider();
@@ -120,7 +116,7 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         }
 
         var logger = loggerFactory.CreateLogger<FeishuChannel>();
-        return new FeishuChannel(config, sp, tenantApi, wssService, provider, processor, logger);
+        return new FeishuChannel(config, sp, tenantApi, wssService, provider, logger);
     }
 
     public string Id => Config.Id;
@@ -136,10 +132,11 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         CancellationToken cancellationToken = default)
         => ((IChannelProvider)_provider).HandleSessionMessageAsync(Config, message, context, cancellationToken);
 
-    public async Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
+    public Task PublishAsync(ChannelMessage message, CancellationToken cancellationToken = default)
     {
-        FeishuChannelSettings settings = FeishuChannelSettings.TryParse(Config.SettingJson) ?? new();
-        await _processor.SendMessageAsync(message.UserId, message.Content, settings, Api, cancellationToken);
+        // Phase 2/3: delegate to FeishuMessageProcessor.SendMessageAsync
+        _logger.LogWarning("飞书渠道消息发送跳过：Processor 未初始化（Phase 1） channel={ChannelId}", Config.Id);
+        return Task.CompletedTask;
     }
 
     public async Task<WebhookResult> HandleWebhookAsync(string body,
@@ -183,34 +180,8 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
         FeishuEventCallback<FeishuMessageEvent>? callback = TryDeserialize<FeishuEventCallback<FeishuMessageEvent>>(decrypted);
         if (callback?.Header?.EventType == "im.message.receive_v1" && callback.Event is not null)
         {
-            string? userText = FeishuMessageProcessor.ExtractText(callback.Event);
-            if (!string.IsNullOrWhiteSpace(userText)
-                && !string.IsNullOrWhiteSpace(callback.Event.Message?.MessageId)
-                && !string.IsNullOrWhiteSpace(callback.Event.Message?.ChatId))
-            {
-                string? senderId = callback.Event.Sender?.SenderId?.OpenId;
-                string chatId = callback.Event.Message.ChatId;
-                string messageId = callback.Event.Message.MessageId;
-
-                string traceId = messageId.Length >= 8 ? messageId[..8] : messageId;
-                _logger.LogInformation(
-                    "[{TraceId}] Webhook 接收 channel={ChannelId} from={SenderId} messageId={MessageId}",
-                    traceId, Config.Id, senderId, messageId);
-
-                string chatType = callback.Event.Message.ChatType ?? "p2p";
-                IReadOnlyList<string> mentionedOpenIds = callback.Event.Message.Mentions is { Length: > 0 }
-                    ? callback.Event.Message.Mentions
-                        .Select(m => m.Id?.OpenId)
-                        .OfType<string>()
-                        .ToList()
-                    : [];
-
-                string? rootId = callback.Event.Message.RootId;
-                IFeishuTenantApi capturedApi = Api;
-                _ = Task.Run(() => _processor.ProcessMessageAsync(
-                    userText, senderId, chatId, messageId, Config, settings,
-                    chatType, mentionedOpenIds, tenantApi: capturedApi, rootId: rootId, ct: CancellationToken.None));
-            }
+            // Phase 2/3: delegate to FeishuMessageProcessor.ProcessMessageAsync
+            _logger.LogInformation("飞书 Webhook 消息接收 channel={ChannelId}（Phase 1 不处理）", Config.Id);
         }
 
         return WebhookResult.Ok(JsonSerializer.Serialize(new { code = 0, msg = "ok" }));

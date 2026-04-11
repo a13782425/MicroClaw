@@ -9,6 +9,7 @@ using MicroClaw.Channels.WeChat;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels;
@@ -32,10 +33,18 @@ public sealed class ChannelService : IChannelService
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     public ChannelService(
-        IEnumerable<IChannelProvider> providers,
+        IServiceProvider serviceProvider,
         ILoggerFactory loggerFactory)
     {
-        _providers = providers.ToDictionary(static p => p.Type);
+        // Build providers internally — no longer injected from DI
+        var providers = new Dictionary<ChannelType, IChannelProvider>
+        {
+            [ChannelType.Web] = new WebChannelProvider(serviceProvider.GetRequiredService<IMicroHubService>()),
+            [ChannelType.WeCom] = new WeComChannelProvider(),
+            [ChannelType.WeChat] = new WeChatChannelProvider(),
+            [ChannelType.Feishu] = new FeishuChannelProvider(this, serviceProvider, loggerFactory),
+        };
+        _providers = providers;
     }
 
     // ── Config CRUD ───────────────────────────────────────────────────────

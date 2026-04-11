@@ -1,6 +1,8 @@
 using System.ComponentModel;
-using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using FeishuNetSdk;
+using FeishuNetSdk.Approval;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -9,10 +11,6 @@ namespace MicroClaw.Channels.Feishu;
 /// <summary>
 /// F-C-9: 飞书审批工具 — 提供 <c>submit_feishu_approval</c> 和 <c>get_feishu_approval_status</c> AIFunction，
 /// Agent 可代用户提交飞书审批单或查询现有审批实例的状态。
-/// 飞书 API 参考：
-///   POST /open-apis/approval/v4/instances              （创建审批实例）
-///   GET  /open-apis/approval/v4/instances/{instance_code} （查询审批实例）
-/// 权限要求：approval:approval:write（提交）、approval:approval:readonly（查询）
 /// </summary>
 public static class FeishuApprovalTools
 {
@@ -29,7 +27,7 @@ public static class FeishuApprovalTools
     /// <summary>
     /// 根据已启用的飞书渠道配置创建审批工具实例列表（提交 + 查询）。
     /// </summary>
-    public static IReadOnlyList<AIFunction> CreateTools(FeishuChannelSettings settings, ILogger logger)
+    public static IReadOnlyList<AIFunction> CreateTools(FeishuChannelSettings settings, IFeishuTenantApi api, ILogger logger)
     {
         return
         [
@@ -43,34 +41,25 @@ public static class FeishuApprovalTools
                 {
                     try
                     {
-                        // 1. 安全校验：approval_code 格式
                         if (string.IsNullOrWhiteSpace(approvalCode) || !IsValidApprovalCode(approvalCode))
-                        {
-                            return (object)new { success = false, error = "審批定义 Code 格式不正确，只允许字母、数字和横线。" };
-                        }
+                            return (object)new { success = false, error = "审批定义 Code 格式不正确，只允许字母、数字和横线。" };
 
-                        // 2. 安全校验：openId 格式（必须 ou_ 开头）
                         if (string.IsNullOrWhiteSpace(openId) || !openId.StartsWith("ou_", StringComparison.Ordinal))
-                        {
                             return (object)new { success = false, error = "提交人 open_id 格式不正确，必须以 ou_ 开头。" };
-                        }
 
-                        // 3. 白名单校验（配置非空时才限制）
                         if (settings.AllowedApprovalCodes.Length > 0 &&
                             !settings.AllowedApprovalCodes.Contains(approvalCode, StringComparer.Ordinal))
                         {
                             return (object)new { success = false, error = "该审批定义 Code 不在渠道允许的白名单内，Agent 无权提交此类型审批。" };
                         }
 
-                        // 4. formValues 格式校验（必须是合法 JSON 对象）
+                        // Validate and transform formValues into Feishu form array format
                         JsonElement formJson;
                         try
                         {
                             using var tempDoc = JsonDocument.Parse(formValues);
                             if (tempDoc.RootElement.ValueKind != JsonValueKind.Object)
-                            {
                                 return (object)new { success = false, error = "formValues 必须是 JSON 对象格式（{...}）。" };
-                            }
                             formJson = tempDoc.RootElement.Clone();
                         }
                         catch (JsonException)
@@ -78,21 +67,37 @@ public static class FeishuApprovalTools
                             return (object)new { success = false, error = "formValues 不是合法的 JSON 字符串，请检查格式。" };
                         }
 
-                        // 5. 获取 Tenant Access Token
-                        string? tenantToken = await GetTenantAccessTokenAsync(settings, logger, ct);
-                        if (string.IsNullOrWhiteSpace(tenantToken))
+                        // Build form field array as required by Feishu approval API
+                        var formFields = new List<object>();
+                        foreach (var prop in formJson.EnumerateObject())
                         {
-                            return (object)new { success = false, error = "获取飞书 Tenant Access Token 失败，请检查渠道 AppId/AppSecret 配置。" };
+                            formFields.Add(new
+                            {
+                                id    = prop.Name,
+                                type  = "input",
+                                value = prop.Value.ValueKind == JsonValueKind.String
+                                        ? prop.Value.GetString()
+                                        : prop.Value.ToString(),
+                            });
+                        }
+                        string formStr = JsonSerializer.Serialize(formFields);
+
+                        var bodyDto = new PostApprovalV4InstancesBodyDto
+                        {
+                            ApprovalCode = approvalCode,
+                            OpenId = openId,
+                            Form = formStr,
+                        };
+
+                        var response = await api.PostApprovalV4InstancesAsync(bodyDto);
+
+                        if (response.Code != 0)
+                        {
+                            logger.LogWarning("submit_feishu_approval API 返回错误: {Msg}", response.Msg);
+                            return (object)new { success = false, error = response.Msg ?? "提交飞书审批失败，请确认 approval_code 正确且机器人应用已申请 approval:approval 权限。" };
                         }
 
-                        // 6. 提交审批
-                        string? instanceCode = await CreateApprovalInstanceAsync(
-                            settings.ApiBaseUrl, tenantToken, approvalCode, openId, formJson, logger, ct);
-
-                        if (instanceCode is null)
-                        {
-                            return (object)new { success = false, error = "提交飞书审批失败，请确认 approval_code 正确且机器人应用已申请 approval:approval:write 权限。" };
-                        }
+                        string? instanceCode = response.Data?.InstanceCode;
 
                         logger.LogInformation(
                             "submit_feishu_approval 成功 approvalCode={ApprovalCode} openId={OpenId} instanceCode={InstanceCode}",
@@ -124,43 +129,35 @@ public static class FeishuApprovalTools
                 {
                     try
                     {
-                        // 1. 安全校验：instance_code 格式
                         if (string.IsNullOrWhiteSpace(instanceCode) || !IsValidInstanceCode(instanceCode))
-                        {
                             return (object)new { success = false, error = "审批实例 Code 格式不正确，只允许字母、数字和横线。" };
-                        }
 
-                        // 2. 获取 Tenant Access Token
-                        string? tenantToken = await GetTenantAccessTokenAsync(settings, logger, ct);
-                        if (string.IsNullOrWhiteSpace(tenantToken))
+                        var response = await api.GetApprovalV4InstancesByInstanceIdAsync(instanceCode);
+
+                        if (response.Code != 0)
                         {
-                            return (object)new { success = false, error = "获取飞书 Tenant Access Token 失败，请检查渠道 AppId/AppSecret 配置。" };
+                            logger.LogWarning("get_feishu_approval_status API 返回错误: {Msg}", response.Msg);
+                            return (object)new { success = false, error = response.Msg ?? "查询飞书审批实例失败，请确认 instance_code 正确且机器人应用已申请 approval:approval:readonly 权限。" };
                         }
 
-                        // 3. 查询审批实例
-                        var detail = await GetApprovalInstanceAsync(
-                            settings.ApiBaseUrl, tenantToken, instanceCode, logger, ct);
-
-                        if (detail is null)
-                        {
-                            return (object)new { success = false, error = "查询飞书审批实例失败，请确认 instance_code 正确且机器人应用已申请 approval:approval:readonly 权限。" };
-                        }
+                        var data = response.Data;
+                        string? status = data?.Status;
 
                         logger.LogInformation(
                             "get_feishu_approval_status 成功 instanceCode={InstanceCode} status={Status}",
-                            instanceCode, detail.Status);
+                            instanceCode, status);
 
                         return (object)new
                         {
                             success = true,
                             instanceCode,
-                            status         = detail.Status,
-                            statusLabel    = MapStatusLabel(detail.Status),
-                            approvalCode   = detail.ApprovalCode,
-                            startTime      = detail.StartTime,
-                            endTime        = detail.EndTime,
-                            approverList   = detail.ApproverList,
-                            ccList         = detail.CcList,
+                            status,
+                            statusLabel = MapStatusLabel(status),
+                            approvalCode = data?.ApprovalCode,
+                            approvalName = data?.ApprovalName,
+                            serialNumber = data?.SerialNumber,
+                            startTime = data?.StartTime,
+                            endTime = data?.EndTime,
                         };
                     }
                     catch (Exception ex)
@@ -174,21 +171,17 @@ public static class FeishuApprovalTools
         ];
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // 私有辅助方法
-    // ══════════════════════════════════════════════════════════════════════════
-
     /// <summary>校验审批定义 Code 格式（字母/数字/横线，防路径注入）。</summary>
     internal static bool IsValidApprovalCode(string code) =>
         !string.IsNullOrWhiteSpace(code) &&
         code.Length <= 128 &&
-        System.Text.RegularExpressions.Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$");
+        Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$");
 
     /// <summary>校验审批实例 Code 格式（字母/数字/横线，防路径注入）。</summary>
     internal static bool IsValidInstanceCode(string code) =>
         !string.IsNullOrWhiteSpace(code) &&
         code.Length <= 128 &&
-        System.Text.RegularExpressions.Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$");
+        Regex.IsMatch(code, @"^[a-zA-Z0-9\-_]+$");
 
     /// <summary>将飞书审批状态码映射为中文可读标签。</summary>
     private static string MapStatusLabel(string? status) => status switch
@@ -200,224 +193,4 @@ public static class FeishuApprovalTools
         "DELETED"   => "已删除",
         _           => status ?? "未知",
     };
-
-    /// <summary>
-    /// 获取飞书 Tenant Access Token（与其他工具相同逻辑）。
-    /// </summary>
-    private static async Task<string?> GetTenantAccessTokenAsync(
-        FeishuChannelSettings settings,
-        ILogger logger,
-        CancellationToken ct)
-    {
-        try
-        {
-            using var http = new System.Net.Http.HttpClient();
-            http.BaseAddress = new Uri(settings.ApiBaseUrl);
-
-            var body = JsonSerializer.Serialize(new
-            {
-                app_id     = settings.AppId,
-                app_secret = settings.AppSecret,
-            });
-            using var content = new StringContent(body, Encoding.UTF8, "application/json");
-            using var response = await http.PostAsync(
-                "/open-apis/auth/v3/tenant_access_token/internal", content, ct);
-
-            if (!response.IsSuccessStatusCode) return null;
-
-            string json = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("tenant_access_token", out var tokenEl))
-                return tokenEl.GetString();
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "获取飞书 Tenant Access Token 失败");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// 提交飞书审批实例。
-    /// API: POST /open-apis/approval/v4/instances
-    /// </summary>
-    private static async Task<string?> CreateApprovalInstanceAsync(
-        string apiBaseUrl,
-        string tenantToken,
-        string approvalCode,
-        string openId,
-        JsonElement formJson,
-        ILogger logger,
-        CancellationToken ct)
-    {
-        try
-        {
-            using var http = new System.Net.Http.HttpClient();
-            http.BaseAddress = new Uri(apiBaseUrl);
-            http.DefaultRequestHeaders.Add("Authorization", $"Bearer {tenantToken}");
-
-            // 将 formJson 对象拆成飞书 form 数组格式：[{id, type, value}]
-            // 飞书审批要求 form 字段为 JSON 字符串（stringified array）
-            var formFields = new List<object>();
-            foreach (var prop in formJson.EnumerateObject())
-            {
-                formFields.Add(new
-                {
-                    id    = prop.Name,
-                    type  = "input",        // 通用文本类型，实际类型由审批定义决定
-                    value = prop.Value.ValueKind == JsonValueKind.String
-                            ? prop.Value.GetString()
-                            : prop.Value.ToString(),
-                });
-            }
-            string formStr = JsonSerializer.Serialize(formFields);
-
-            var bodyObj = new
-            {
-                approval_code = approvalCode,
-                open_id       = openId,
-                form          = formStr,
-            };
-
-            string bodyJson = JsonSerializer.Serialize(bodyObj);
-            using var httpContent = new StringContent(bodyJson, Encoding.UTF8, "application/json");
-            using var response = await http.PostAsync("/open-apis/approval/v4/instances", httpContent, ct);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning(
-                    "submit_feishu_approval API 返回 {StatusCode}", (int)response.StatusCode);
-                return null;
-            }
-
-            string json = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-
-            int code = doc.RootElement.TryGetProperty("code", out var codeEl) ? codeEl.GetInt32() : -1;
-            if (code != 0)
-            {
-                string msg = doc.RootElement.TryGetProperty("msg", out var msgEl)
-                    ? msgEl.GetString() ?? string.Empty : string.Empty;
-                logger.LogWarning("submit_feishu_approval API code={Code} msg={Msg}", code, msg);
-                return null;
-            }
-
-            if (doc.RootElement.TryGetProperty("data", out var data) &&
-                data.TryGetProperty("instance_code", out var instEl))
-            {
-                return instEl.GetString();
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "CreateApprovalInstanceAsync 发生异常");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// 查询飞书审批实例详情。
-    /// API: GET /open-apis/approval/v4/instances/{instance_code}
-    /// </summary>
-    private static async Task<ApprovalInstanceDetail?> GetApprovalInstanceAsync(
-        string apiBaseUrl,
-        string tenantToken,
-        string instanceCode,
-        ILogger logger,
-        CancellationToken ct)
-    {
-        try
-        {
-            using var http = new System.Net.Http.HttpClient();
-            http.BaseAddress = new Uri(apiBaseUrl);
-            http.DefaultRequestHeaders.Add("Authorization", $"Bearer {tenantToken}");
-
-            string encoded = Uri.EscapeDataString(instanceCode);
-            using var response = await http.GetAsync(
-                $"/open-apis/approval/v4/instances/{encoded}", ct);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning(
-                    "get_feishu_approval_status API 返回 {StatusCode}", (int)response.StatusCode);
-                return null;
-            }
-
-            string json = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-
-            int code = doc.RootElement.TryGetProperty("code", out var codeEl) ? codeEl.GetInt32() : -1;
-            if (code != 0)
-            {
-                string msg = doc.RootElement.TryGetProperty("msg", out var msgEl)
-                    ? msgEl.GetString() ?? string.Empty : string.Empty;
-                logger.LogWarning("get_feishu_approval_status API code={Code} msg={Msg}", code, msg);
-                return null;
-            }
-
-            if (!doc.RootElement.TryGetProperty("data", out var data))
-                return null;
-
-            string? status       = data.TryGetProperty("status",        out var sts) ? sts.GetString()   : null;
-            string? approvalCode = data.TryGetProperty("approval_code", out var ac)  ? ac.GetString()    : null;
-            string? startTime    = data.TryGetProperty("start_time",    out var st)  ? FormatTimestamp(st): null;
-            string? endTime      = data.TryGetProperty("end_time",      out var et)  ? FormatTimestamp(et): null;
-
-            var approverList = ExtractUserList(data, "timeline");
-            var ccList       = ExtractUserList(data, "cc_list");
-
-            return new ApprovalInstanceDetail(status, approvalCode, startTime, endTime, approverList, ccList);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "GetApprovalInstanceAsync 发生异常");
-            return null;
-        }
-    }
-
-    /// <summary>从 timeline 或 cc_list 数组中提取用户 open_id 和操作状态。</summary>
-    private static List<object> ExtractUserList(JsonElement data, string propertyName)
-    {
-        var list = new List<object>();
-        if (!data.TryGetProperty(propertyName, out var arr) ||
-            arr.ValueKind != JsonValueKind.Array)
-            return list;
-
-        foreach (var item in arr.EnumerateArray())
-        {
-            string? userId = item.TryGetProperty("open_id",  out var uid) ? uid.GetString()    : null;
-            string? status = item.TryGetProperty("status",   out var sts) ? sts.GetString()    : null;
-            string? name   = item.TryGetProperty("user_id",  out var unm) ? unm.GetString()    : null;
-            list.Add(new { openId = userId, name, status });
-        }
-
-        return list;
-    }
-
-    /// <summary>将毫秒级 Unix 时间戳元素转为可读时间字符串。</summary>
-    private static string? FormatTimestamp(JsonElement el)
-    {
-        string? raw = el.GetString();
-        if (long.TryParse(raw, out long ms))
-        {
-            // 飞书审批时间戳单位为毫秒
-            return DateTimeOffset.FromUnixTimeMilliseconds(ms)
-                .ToOffset(TimeSpan.FromHours(8))
-                .ToString("yyyy-MM-dd HH:mm:ss");
-        }
-        return raw;
-    }
-
-    // ── 数据传输对象 ──────────────────────────────────────────────────────────
-
-    private sealed record ApprovalInstanceDetail(
-        string? Status,
-        string? ApprovalCode,
-        string? StartTime,
-        string? EndTime,
-        List<object> ApproverList,
-        List<object> CcList);
 }
