@@ -1,6 +1,7 @@
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Abstractions.Channel;
 
@@ -37,4 +38,11 @@ public interface IChannel
     /// </summary>
     Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Create channel-specific AI tools for this channel instance.
+    /// Default implementation returns an empty list.
+    /// </summary>
+    Task<IReadOnlyList<AIFunction>> CreateToolsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<AIFunction>>([]);
 }

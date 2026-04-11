@@ -52,7 +52,7 @@ public sealed class PetEmotionDecayJob : IScheduledJob
             EmotionState current;
 
             // 若 Pet 已加载到内存，直接使用内存情绪快照；否则从磁盘加载
-            var petCtx = session.Pet as PetContext;
+            var petCtx = session.Pet as MicroPet;
             if (petCtx is not null)
             {
                 current = petCtx.Emotion;

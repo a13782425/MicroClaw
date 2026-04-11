@@ -139,14 +139,16 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         [EnumeratorCancellation] CancellationToken ct = default,
         string source = "chat",
         PetOverrides? petOverrides = null,
-        IReadOnlyList<string>? ancestorAgentIdsOverride = null)
+        IReadOnlyList<string>? ancestorAgentIdsOverride = null,
+        ToolCollectionResult? prebuiltTools = null)
     {
         // ── 薄迭代器：delegating to non-iterator ExecuteStreamingCoreAsync ──────────
         // C# 规则：yield return 不能置于 try-catch 块中，因此将含回退逻辑的非迭代器方法
         // 通过 Channel 与迭代器解耦，迭代器只负责从 Channel 读取并 yield。
         var outputChannel = System.Threading.Channels.Channel.CreateUnbounded<StreamItem>();
         Task execution = ExecuteStreamingCoreAsync(
-            agent, providerId, history, sessionId, ct, source, outputChannel, petOverrides, ancestorAgentIdsOverride);
+            agent, providerId, history, sessionId, ct, source, outputChannel, petOverrides, ancestorAgentIdsOverride,
+            prebuiltTools);
 
         try
         {
@@ -177,7 +179,8 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         string source,
         System.Threading.Channels.Channel<StreamItem> output,
         PetOverrides? petOverrides = null,
-        IReadOnlyList<string>? ancestorAgentIdsOverride = null)
+        IReadOnlyList<string>? ancestorAgentIdsOverride = null,
+        ToolCollectionResult? prebuiltTools = null)
     {
         IReadOnlyList<ProviderConfig> chain = BuildFallbackChain(primaryProviderId, agent.RoutingStrategy);
 
@@ -235,34 +238,44 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                         $"[Pet 背景知识]\n{petOverrides.PetKnowledge}"));
                 }
 
-                // 工具收集（Pet 可覆盖工具配置）
-                Agent effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
-                    ? agent.WithToolOverrides(petOverrides.ToolOverrides)
-                    : agent;
-                IMicroSession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
-                    ? _sessionReader.Get(sessionId) : null;
-
-                var ancestorAgentIds = new List<string>();
-                if (ancestorAgentIdsOverride is not null)
+                // 工具收集（prebuiltTools != null 时由调用方管理释放，跳过内部收集）
+                ToolCollectionResult toolResult;
+                bool ownsToolResult;
+                if (prebuiltTools is not null)
                 {
-                    ancestorAgentIds.AddRange(
-                        ancestorAgentIdsOverride.Where(static id => !string.IsNullOrWhiteSpace(id)));
+                    toolResult = prebuiltTools;
+                    ownsToolResult = false;
                 }
-                else if (SubAgentRunScope.Current?.AgentChain is { Count: > 0 } currentAgentChain)
+                else
                 {
-                    ancestorAgentIds.AddRange(currentAgentChain);
-                }
+                    Agent effectiveAgent = petOverrides?.ToolOverrides is { Count: > 0 }
+                        ? agent.WithToolOverrides(petOverrides.ToolOverrides)
+                        : agent;
+                    IMicroSession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId)
+                        ? _sessionReader.Get(sessionId) : null;
 
-                var toolContext = new ToolCreationContext(
-                    SessionId: sessionId,
-                    ChannelType: sessionForTools?.ChannelType,
-                    ChannelId: sessionForTools?.ChannelId,
-                    DisabledSkillIds: agent.DisabledSkillIds,
-                    CallingAgentId: agent.Id,
-                    AllowedSubAgentIds: agent.AllowedSubAgentIds,
-                    AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
-                await using ToolCollectionResult toolResult =
-                    await _toolCollector.CollectToolsAsync(effectiveAgent, toolContext, ct);
+                    var ancestorAgentIds = new List<string>();
+                    if (ancestorAgentIdsOverride is not null)
+                    {
+                        ancestorAgentIds.AddRange(
+                            ancestorAgentIdsOverride.Where(static id => !string.IsNullOrWhiteSpace(id)));
+                    }
+                    else if (SubAgentRunScope.Current?.AgentChain is { Count: > 0 } currentAgentChain)
+                    {
+                        ancestorAgentIds.AddRange(currentAgentChain);
+                    }
+
+                    var toolContext = new ToolCreationContext(
+                        SessionId: sessionId,
+                        ChannelType: sessionForTools?.ChannelType,
+                        ChannelId: sessionForTools?.ChannelId,
+                        DisabledSkillIds: agent.DisabledSkillIds,
+                        CallingAgentId: agent.Id,
+                        AllowedSubAgentIds: agent.AllowedSubAgentIds,
+                        AncestorAgentIds: ancestorAgentIds.Count > 0 ? ancestorAgentIds : null);
+                    toolResult = await _toolCollector.CollectToolsAsync(effectiveAgent, toolContext, ct);
+                    ownsToolResult = true;
+                }
 
                 _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}",
                     agent.Id, toolResult.AllTools.Count, provider.Id);
@@ -390,6 +403,8 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                     if (!string.IsNullOrWhiteSpace(sessionId))
                         await _agentStatusNotifier.NotifyAsync(
                             sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+                    if (ownsToolResult)
+                        await toolResult.DisposeAsync();
                 }
 
                 // streamingException 被内层 catch 捕获 → 尝试下一个 Provider

@@ -80,7 +80,7 @@ public sealed class PetFactory : IPetFactory
             _logger.LogInformation("Pet 初始化完成：SessionId={SessionId}", sessionId);
         }
 
-        PetContext? petCtx = await _contextFactory.LoadAsync(microSession, ct);
+        MicroPet? petCtx = await _contextFactory.LoadAsync(microSession, ct);
         if (petCtx is null)
             return null;
 
@@ -95,7 +95,7 @@ public sealed class PetFactory : IPetFactory
     public async Task<IPet?> ActivateAsync(IMicroSession microSession, CancellationToken ct = default)
     {
         IPet? pet = await CreateOrLoadAsync(microSession, ct);
-        if (pet is PetContext petContext)
+        if (pet is MicroPet petContext)
             petContext.Activate();
         return pet;
     }

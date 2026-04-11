@@ -9,6 +9,7 @@ using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -89,7 +90,6 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
             // Share the logger factory with the child SP
             services.AddSingleton(loggerFactory);
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
-            services.AddSingleton(provider.Processor); 
             // Phase 2/3: register FeishuMessageEventHandler here when processor is available
         }
 
@@ -127,6 +127,9 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
 
     public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
         => _provider.GetDiagnosticsAsync(Config, cancellationToken);
+
+    public Task<IReadOnlyList<AIFunction>> CreateToolsAsync(CancellationToken cancellationToken = default)
+        => _provider.CreateToolsAsync(Config.Id, cancellationToken);
 
     public Task<string?> HandleSessionMessageAsync(SessionMessage message, SessionMessageContext context,
         CancellationToken cancellationToken = default)

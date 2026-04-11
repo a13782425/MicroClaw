@@ -1,4 +1,5 @@
 using MicroClaw.Abstractions.Sessions;
+using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Abstractions.Pet;
 
@@ -16,4 +17,11 @@ public interface IPet
 
     /// <summary>宠物是否处于可参与编排的激活状态。</summary>
     bool IsEnabled { get; }
+
+    /// <summary>
+    /// Collect channel-specific AI tools via the bound session's channel.
+    /// Default implementation returns an empty list.
+    /// </summary>
+    Task<IReadOnlyList<AIFunction>> CollectChannelToolsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<AIFunction>>([]);
 }

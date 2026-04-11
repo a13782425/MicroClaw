@@ -1,13 +1,21 @@
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Agent;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
+using MicroClaw.Pet.Observer;
+using MicroClaw.Pet.Rag;
+using MicroClaw.Pet.RateLimit;
+using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Providers;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet;
 
 /// <summary>
-/// Per-Session <see cref="PetContext"/> 工厂：从文件系统加载 Pet 状态并构建 <see cref="PetContext"/> 实例。
+/// Per-Session <see cref="MicroPet"/> 工厂：从文件系统加载 Pet 状态并构建 <see cref="MicroPet"/> 实例。
 /// <para>
 /// 本工厂为无状态 Singleton，可多会话并发安全调用。
 /// </para>
@@ -21,28 +29,38 @@ namespace MicroClaw.Pet;
 /// </summary>
 public sealed class PetContextFactory(
     PetStateStore stateStore,
-    IEmotionStore emotionStore)
+    IEmotionStore emotionStore,
+    PetDecisionEngine decisionEngine,
+    IEmotionRuleEngine emotionRuleEngine,
+    IEmotionBehaviorMapper emotionBehaviorMapper,
+    PetRagScope petRagScope,
+    PetSessionObserver sessionObserver,
+    PetRateLimiter rateLimiter,
+    PetSelfAwarenessReportBuilder reportBuilder,
+    AgentStore agentStore,
+    ProviderConfigStore providerStore,
+    ILoggerFactory loggerFactory)
 {
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
 
     /// <summary>
-    /// 从磁盘加载指定 Session 的 Pet 状态，构建并返回 <see cref="PetContext"/>。
+    /// 从磁盘加载指定 Session 的 Pet 状态，构建并返回 <see cref="MicroPet"/>。
     /// </summary>
     /// <param name="sessionId">Session 唯一标识符。</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>
-    /// 初始化好的 <see cref="PetContext"/>；若 Pet 目录或状态文件不存在则返回 <c>null</c>。
+    /// 初始化好的 <see cref="MicroPet"/>；若 Pet 目录或状态文件不存在则返回 <c>null</c>。
     /// </returns>
-    public Task<PetContext?> LoadAsync(string sessionId, CancellationToken ct = default)
+    public Task<MicroPet?> LoadAsync(string sessionId, CancellationToken ct = default)
     {
         return LoadAsync(new ReadOnlyMicroSessionStub(sessionId), ct);
     }
 
     /// <summary>
-    /// 从磁盘加载指定 Session 的 Pet 状态，构建并返回 <see cref="PetContext"/>。
+    /// 从磁盘加载指定 Session 的 Pet 状态，构建并返回 <see cref="MicroPet"/>。
     /// </summary>
-    public async Task<PetContext?> LoadAsync(IMicroSession microSession, CancellationToken ct = default)
+    public async Task<MicroPet?> LoadAsync(IMicroSession microSession, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(microSession);
         ArgumentException.ThrowIfNullOrWhiteSpace(microSession.Id);
@@ -63,7 +81,11 @@ public sealed class PetContextFactory(
             ? PetContextState.Active
             : PetContextState.Disabled;
 
-        return new PetContext(microSession, petState, petConfig, emotion, initialState);
+        return new MicroPet(
+            microSession, petState, petConfig, emotion, initialState,
+            decisionEngine, _emotionStore, emotionRuleEngine, emotionBehaviorMapper,
+            petRagScope, _stateStore, sessionObserver, rateLimiter,
+            reportBuilder, agentStore, providerStore, loggerFactory);
     }
 
     private sealed class ReadOnlyMicroSessionStub(string sessionId) : IMicroSession

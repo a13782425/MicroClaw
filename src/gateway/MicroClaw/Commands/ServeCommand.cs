@@ -349,13 +349,13 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.Rag.PetRagScope>();
 		// 2-A-11: RAG 定期容量清理（每日 UTC 01:00，早于记忆总结和做梦模式）
 		builder.Services.AddSingleton<IScheduledJob, RagPruneJob>();
-		// P-B-7: Pet 情绪自然衰减（每小时向默认值 50 靠近，每 Session 独立衰减）
-		builder.Services.AddSingleton<IScheduledJob, PetEmotionDecayJob>();
+		// P-B-7: Pet 情绪自然衰减 — 暂禁用，待 Pet 系统重构后适配恢复
+		// builder.Services.AddSingleton<IScheduledJob, PetEmotionDecayJob>();
 		// P-G: Pet 心跳与自主行为
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.IPetNotifier, MicroClaw.Services.HubPetNotifier>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetActionExecutor>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Heartbeat.PetHeartbeatExecutor>();
-		builder.Services.AddSingleton<IScheduledJob, PetHeartbeatJob>();
+		// builder.Services.AddSingleton<IScheduledJob, PetHeartbeatJob>(); // 暂禁用，待 Pet 系统重构后适配恢复
 
 		// 全局异步事件总线
 		builder.Services.AddSingleton<IAsyncEventBus, MicroClaw.Events.InMemoryAsyncEventBus>();
