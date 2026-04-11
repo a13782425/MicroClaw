@@ -359,15 +359,6 @@ public class ServeCommand : Command
 
 		// 全局异步事件总线
 		builder.Services.AddSingleton<IAsyncEventBus, MicroClaw.Events.InMemoryAsyncEventBus>();
-
-		// 领域事件基础设施（O-0-3，已过时，迁移至 IAsyncEventBus 后移除）
-#pragma warning disable CS0618
-		builder.Services.AddSingleton<IDomainEventDispatcher, MicroClaw.Events.DomainEventDispatcher>();
-#pragma warning restore CS0618
-
-		// 领域事件处理器（O-1-9, O-1-10）
-		builder.Services.AddSingleton<IDomainEventHandler<SessionApprovedEvent>, MicroClaw.Events.SessionApprovedEventHandler>();
-		builder.Services.AddSingleton<IDomainEventHandler<SessionDeletedEvent>, MicroClaw.Events.SessionDeletedEventHandler>();
 	}
 
 	/// <summary>注册渠道配置存储和渠道实现，由 ChannelService 内部构建 Provider，ChannelRunner 统一调度生命周期。</summary>

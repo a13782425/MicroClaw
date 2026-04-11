@@ -4,7 +4,6 @@ using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions;
-using MicroClaw.Abstractions.Events;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
@@ -58,14 +57,29 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionRepository repo, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionRepository repo, MicroClaw.Pet.Rag.PetRagScope petRagScope, SessionDnaService sessionDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
-            
-            if (repo.Get(req.Id) is null)
+
+            IMicroSession? session = repo.Get(req.Id);
+            if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
-            
+
+            // Release Pet context before deletion
+            if (session.Pet is IDisposable disposable)
+            {
+                disposable.Dispose();
+                if (session is MicroSession mutableSession)
+                    mutableSession.DetachPet();
+            }
+
+            // Close Pet RAG SQLite connection to release file lock
+            petRagScope.CloseDatabase(req.Id);
+
+            // Delete session DNA files (USER.md / AGENTS.md)
+            sessionDna.DeleteSessionDnaFiles(req.Id);
+
             repo.Delete(req.Id);
             return Results.Ok();
         }).WithTags("Sessions");

@@ -103,8 +103,6 @@ public sealed class PetContextFactory(
         public MicroClaw.Abstractions.Channel.IChannel? Channel => null;
         public IPet? Pet => null;
 
-        public IReadOnlyList<MicroClaw.Abstractions.Events.IDomainEvent> PopDomainEvents() => [];
-
         public SessionInfo ToInfo() => new(
             Id,
             Title,
