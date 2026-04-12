@@ -22,7 +22,7 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet", async (
             string id,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             IEmotionStore emotionStore,
             PetRateLimiter rateLimiter,
@@ -58,7 +58,7 @@ public static class PetEndpoints
         endpoints.MapPost("/sessions/{id}/pet/config", async (
             string id,
             UpdatePetConfigRequest req,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             CancellationToken ct) =>
         {
@@ -90,7 +90,7 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/journal", async (
             string id,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             int? limit,
             CancellationToken ct) =>
@@ -112,7 +112,7 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/knowledge", async (
             string id,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             PetRagScope ragScope,
             CancellationToken ct) =>
@@ -136,7 +136,7 @@ public static class PetEndpoints
 
         endpoints.MapGet("/sessions/{id}/pet/prompts", async (
             string id,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             PetPromptStore promptStore,
             CancellationToken ct) =>
@@ -166,7 +166,7 @@ public static class PetEndpoints
         endpoints.MapPost("/sessions/{id}/pet/prompts", async (
             string id,
             UpdatePetPromptsRequest req,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             PetPromptStore promptStore,
             CancellationToken ct) =>
@@ -227,7 +227,7 @@ public static class PetEndpoints
             string id,
             long? from,
             long? to,
-            ISessionRepository repo,
+            ISessionService repo,
             PetStateStore stateStore,
             IEmotionStore emotionStore,
             CancellationToken ct) =>

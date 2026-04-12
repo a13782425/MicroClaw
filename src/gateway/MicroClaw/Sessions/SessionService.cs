@@ -20,8 +20,7 @@ namespace MicroClaw.Sessions;
 /// <summary>
 /// 会话统一服务：合并了原 <c>SessionStore</c>（持久化）与 <c>ChannelSessionService</c>（渠道会话管理）的职责。
 /// <para>
-/// 实现 <see cref="ISessionService"/> 和 <see cref="ISessionRepository"/>，
-/// 后者供 AgentRunner 等内部组件继续使用，无需迁移接口名称。
+/// 实现 <see cref="ISessionService"/>（Session CRUD + 消息持久化 + 渠道会话管理）。
 /// </para>
 /// <para>
 /// 持久化：会话元数据写入 sessions.yaml；消息历史写入 {sessionsDir}/{id}/messages.jsonl。
@@ -130,15 +129,13 @@ public sealed class SessionService : ISessionService
         return microSession;
     }
     
-    // ── ISessionRepository: 查询 ───────────────────────────────────────────
+    // ── Session CRUD ────────────────────────────────────────────────────────
     
-    IMicroSession? ISessionRepository.Get(string id) => _sessions.TryGetValue(id, out MicroSession? microSession) ? microSession : null;
+    public IMicroSession? Get(string id) => _sessions.TryGetValue(id, out MicroSession? microSession) ? microSession : null;
     
-    IReadOnlyList<IMicroSession> ISessionRepository.GetAll() => _sessions.Values.OrderByDescending(s => s.CreatedAt).Cast<IMicroSession>().ToList().AsReadOnly();
+    public IReadOnlyList<IMicroSession> GetAll() => _sessions.Values.OrderByDescending(s => s.CreatedAt).Cast<IMicroSession>().ToList().AsReadOnly();
     
-    // ── ISessionRepository: 命令 ───────────────────────────────────────────
-    
-    void ISessionRepository.Save(IMicroSession microSession)
+    public void Save(IMicroSession microSession)
     {
         _metaLock.EnterWriteLock();
         try
@@ -157,7 +154,7 @@ public sealed class SessionService : ISessionService
         }
     }
     
-    bool ISessionRepository.Delete(string id)
+    public bool Delete(string id)
     {
         _metaLock.EnterWriteLock();
         try
@@ -177,9 +174,9 @@ public sealed class SessionService : ISessionService
         return true;
     }
     
-    // ── ISessionRepository: 消息操作 ──────────────────────────────────────
+    // ── Message persistence ──────────────────────────────────────────────
     
-    void ISessionRepository.AddMessage(string sessionId, SessionMessage message)
+    public void AddMessage(string sessionId, SessionMessage message)
     {
         string dir = GetSessionDir(sessionId);
         Directory.CreateDirectory(dir);
@@ -198,9 +195,9 @@ public sealed class SessionService : ISessionService
         }
     }
     
-    IReadOnlyList<SessionMessage> ISessionRepository.GetMessages(string sessionId) => ReadAllMessages(sessionId);
+    public IReadOnlyList<SessionMessage> GetMessages(string sessionId) => ReadAllMessages(sessionId);
     
-    (IReadOnlyList<SessionMessage> Messages, int Total) ISessionRepository.GetMessagesPaged(string sessionId, int skip, int limit)
+    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(string sessionId, int skip, int limit)
     {
         List<SessionMessage> all = ReadAllMessages(sessionId);
         int total = all.Count;
@@ -209,7 +206,7 @@ public sealed class SessionService : ISessionService
         return (all.Skip(startIdx).Take(endIdx - startIdx).ToList().AsReadOnly(), total);
     }
     
-    void ISessionRepository.RemoveMessages(string sessionId, IReadOnlySet<string> messageIds)
+    public void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds)
     {
         if (messageIds.Count == 0) return;
         

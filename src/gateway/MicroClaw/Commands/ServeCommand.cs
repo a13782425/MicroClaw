@@ -191,7 +191,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ProviderConfigStore>();
 		builder.Services.AddService<SessionService>();
 		builder.Services.MapAs<ISessionService, SessionService>();
-		builder.Services.MapAs<ISessionRepository, SessionService>();
 
 		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
 		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();

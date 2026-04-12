@@ -27,7 +27,7 @@ public sealed class PetRunner : IPetRunner, IAgentMessageHandler, IService
 {
     private readonly AgentRunner _agentRunner;
     private readonly AgentStore _agentStore;
-    private readonly ISessionRepository _sessionRepo;
+    private readonly ISessionService _sessionRepo;
     private readonly PetContextFactory _petContextFactory;
     private readonly ToolCollector _toolCollector;
     private readonly ILogger<PetRunner> _logger;
@@ -36,7 +36,7 @@ public sealed class PetRunner : IPetRunner, IAgentMessageHandler, IService
     {
         _agentRunner = sp.GetRequiredService<AgentRunner>();
         _agentStore = sp.GetRequiredService<AgentStore>();
-        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _sessionRepo = sp.GetRequiredService<ISessionService>();
         _petContextFactory = sp.GetRequiredService<PetContextFactory>();
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _logger = sp.GetRequiredService<ILogger<PetRunner>>();

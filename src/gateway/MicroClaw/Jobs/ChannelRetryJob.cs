@@ -23,7 +23,6 @@ public sealed class ChannelRetryJob : IScheduledJob
     private readonly ProviderConfigStore _providerStore;
     private readonly ProviderClientFactory _clientFactory;
     private readonly ISessionService _sessionService;
-    private readonly ISessionRepository _repo;
     private readonly IAgentMessageHandler? _agentHandler;
     private readonly ILogger<ChannelRetryJob> _logger;
 
@@ -34,7 +33,6 @@ public sealed class ChannelRetryJob : IScheduledJob
         _providerStore = sp.GetRequiredService<ProviderConfigStore>();
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
         _sessionService = sp.GetRequiredService<ISessionService>();
-        _repo = sp.GetRequiredService<ISessionRepository>();
         _agentHandler = sp.GetService<IAgentMessageHandler>();
         _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
     }
@@ -104,7 +102,7 @@ public sealed class ChannelRetryJob : IScheduledJob
             }
             else
             {
-                IMicroSession? session = _repo.Get(entry.SessionId);
+                IMicroSession? session = _sessionService.Get(entry.SessionId);
                 string resolvedProviderId = session?.ProviderId ?? string.Empty;
                 ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
                     ? _providerStore.GetDefault()

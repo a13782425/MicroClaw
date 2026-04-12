@@ -32,7 +32,7 @@ public interface IContextOverflowSummarizer
 /// </summary>
 public sealed class ContextOverflowSummarizer(
     MemoryService memoryService,
-    ISessionRepository sessionRepository,
+    ISessionService sessionRepository,
     ILogger<ContextOverflowSummarizer> logger) : IContextOverflowSummarizer
 {
     // Per-session dedup: last overflow message ID that was archived

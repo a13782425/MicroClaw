@@ -259,7 +259,7 @@ public static class RagEndpoints
 
         // POST /api/sessions/{sessionId}/rag/vectorize — 手动将会话全部消息写入 pending JSONL 等待向量化，并从活跃历史中移除
         endpoints.MapPost("/sessions/{sessionId}/rag/vectorize",
-            (string sessionId, ISessionRepository sessionRepository, MemoryService memoryService) =>
+            (string sessionId, ISessionService sessionRepository, MemoryService memoryService) =>
             {
                 if (string.IsNullOrWhiteSpace(sessionId))
                     return Results.BadRequest(new { success = false, message = "sessionId 不能为空。", errorCode = "BAD_REQUEST" });

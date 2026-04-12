@@ -16,13 +16,13 @@ namespace MicroClaw.Pet;
 /// </summary>
 public sealed class PetHeartbeatJob : IScheduledJob
 {
-    private readonly ISessionRepository _sessionRepo;
+    private readonly ISessionService _sessionRepo;
     private readonly PetHeartbeatExecutor _heartbeatExecutor;
     private readonly ILogger<PetHeartbeatJob> _logger;
 
     public PetHeartbeatJob(IServiceProvider sp)
     {
-        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _sessionRepo = sp.GetRequiredService<ISessionService>();
         _heartbeatExecutor = sp.GetRequiredService<PetHeartbeatExecutor>();
         _logger = sp.GetRequiredService<ILogger<PetHeartbeatJob>>();
     }

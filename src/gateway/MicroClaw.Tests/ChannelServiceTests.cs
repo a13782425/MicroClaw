@@ -121,11 +121,11 @@ public sealed class ChannelServiceTests : IDisposable
 
         await service.InitializeAsync();
 
-        Session first = (Session)((MicroClaw.Abstractions.Sessions.ISessionRepository)service).Get("session-a")!;
-        Session second = (Session)((MicroClaw.Abstractions.Sessions.ISessionRepository)service).Get("session-a")!;
+        Session first = (Session)((MicroClaw.Abstractions.Sessions.ISessionService)service).Get("session-a")!;
+        Session second = (Session)((MicroClaw.Abstractions.Sessions.ISessionService)service).Get("session-a")!;
 
         ReferenceEquals(first, second).Should().BeTrue();
-        ((MicroClaw.Abstractions.Sessions.ISessionRepository)service).GetAll().Should().HaveCount(2);
+        ((MicroClaw.Abstractions.Sessions.ISessionService)service).GetAll().Should().HaveCount(2);
         await petFactory.Received(2).CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>());
     }
 
@@ -151,7 +151,7 @@ public sealed class ChannelServiceTests : IDisposable
         var (_, _, service) = CreateSessionService();
         await service.InitializeAsync();
 
-        var repo = (MicroClaw.Abstractions.Sessions.ISessionRepository)service;
+        var repo = (MicroClaw.Abstractions.Sessions.ISessionService)service;
         Session session = (Session)repo.Get("session-a")!;
         session.UpdateTitle("New Title");
         repo.Save(session);
@@ -185,7 +185,7 @@ public sealed class ChannelServiceTests : IDisposable
         var (_, _, service) = CreateSessionService();
         await service.InitializeAsync();
 
-        var repo = (MicroClaw.Abstractions.Sessions.ISessionRepository)service;
+        var repo = (MicroClaw.Abstractions.Sessions.ISessionService)service;
         repo.Delete("session-a").Should().BeTrue();
         repo.Get("session-a").Should().BeNull();
         MicroClawConfig.Get<SessionsOptions>().Items.Should().BeEmpty();

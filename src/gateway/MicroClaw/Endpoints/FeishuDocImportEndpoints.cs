@@ -22,7 +22,7 @@ public static class FeishuDocImportEndpoints
 
         endpoints.MapPost("/sessions/{id}/dna/import-from-feishu",
             async (string id, FeishuDocImportRequest req, SessionDnaService sessionDna,
-                   ISessionRepository repo, ChannelService channelStore,
+                   ISessionService repo, ChannelService channelStore,
                    ILoggerFactory loggerFactory, CancellationToken ct) =>
             {
                 if (repo.Get(id) is null)

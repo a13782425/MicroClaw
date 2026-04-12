@@ -14,7 +14,7 @@ namespace MicroClaw.Jobs;
 /// 向目标 Session 注入提示消息，调用 AI 获取回复，保存消息并通过 SignalR 通知前端。
 /// </summary>
 public sealed class SessionChatService(
-    ISessionRepository repo,
+    ISessionService repo,
     ProviderConfigStore providerStore,
     ProviderClientFactory clientFactory,
     IHubContext<GatewayHub> hub,

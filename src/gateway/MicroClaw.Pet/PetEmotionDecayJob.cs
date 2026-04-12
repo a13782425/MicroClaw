@@ -17,13 +17,13 @@ namespace MicroClaw.Pet;
 /// </summary>
 public sealed class PetEmotionDecayJob : IScheduledJob
 {
-    private readonly ISessionRepository _sessionRepo;
+    private readonly ISessionService _sessionRepo;
     private readonly IEmotionStore _emotionStore;
     private readonly ILogger<PetEmotionDecayJob> _logger;
 
     public PetEmotionDecayJob(IServiceProvider sp)
     {
-        _sessionRepo = sp.GetRequiredService<ISessionRepository>();
+        _sessionRepo = sp.GetRequiredService<ISessionService>();
         _emotionStore = sp.GetRequiredService<IEmotionStore>();
         _logger = sp.GetRequiredService<ILogger<PetEmotionDecayJob>>();
     }

@@ -39,7 +39,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders;
     private readonly ProviderConfigStore _providerStore;
     private readonly ProviderClientFactory _clientFactory;
-    private readonly ISessionRepository _sessionReader;
+    private readonly ISessionService _sessionReader;
     private readonly SkillToolFactory _skillToolFactory;
     private readonly IUsageTracker _usageTracker;
     private readonly ILoggerFactory _loggerFactory;
@@ -62,7 +62,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         _contextProviders = sp.GetServices<IAgentContextProvider>().OrderBy(p => p.Order).ToList().AsReadOnly();
         _providerStore = sp.GetRequiredService<ProviderConfigStore>();
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
-        _sessionReader = sp.GetRequiredService<ISessionRepository>();
+        _sessionReader = sp.GetRequiredService<ISessionService>();
         _skillToolFactory = sp.GetRequiredService<SkillToolFactory>();
         _usageTracker = sp.GetRequiredService<IUsageTracker>();
         _agentStatusNotifier = sp.GetRequiredService<IAgentStatusNotifier>();

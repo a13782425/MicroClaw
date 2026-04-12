@@ -24,7 +24,7 @@ public static class SessionEndpoints
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）
-        endpoints.MapGet("/sessions", (ISessionRepository repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
+        endpoints.MapGet("/sessions", (ISessionService repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
         
         // POST /api/sessions— 创建会话
         endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderConfigStore providerStore, AgentStore agentStore, ChannelService channelStore, SessionDnaService sessionDna) =>
@@ -57,7 +57,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionRepository repo, MicroClaw.Pet.Rag.PetRagScope petRagScope, SessionDnaService sessionDna, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService repo, MicroClaw.Pet.Rag.PetRagScope petRagScope, SessionDnaService sessionDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -85,7 +85,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionRepository repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionService repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -105,7 +105,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/disable — 禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionRepository repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionService repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -124,7 +124,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/switch-provider — 切换会话绑定的 Provider
-        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionRepository repo, ProviderConfigStore providerStore, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionService repo, ProviderConfigStore providerStore, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -149,7 +149,7 @@ public static class SessionEndpoints
         
         // GET /api/sessions/{id}/messages — 获取消息历史
         // 可选分页参数：?skip=0&limit=50（skip 从末尾计数，省略时返回全量）
-        endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionRepository repo, int? skip, int? limit) =>
+        endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionService repo, int? skip, int? limit) =>
         {
             IMicroSession? session = repo.Get(id);
             if (session is null)
@@ -169,7 +169,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionRepository repo, ProviderConfigStore providerStore, AgentStore agentStore, IPetRunner petRunner, IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderConfigStore providerStore, AgentStore agentStore, IPetRunner petRunner, IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers, HttpContext ctx, CancellationToken ct) =>
         {
             IMicroSession? session = repo.Get(id);
             if (session is null)
@@ -270,7 +270,7 @@ public static class SessionEndpoints
         // SOUL.md 已迁移至 Agent 级别（通过 /agents/{id}/dna 管理）
         
         // GET /api/sessions/{id}/dna — 列出固定 DNA 文件（USER / AGENTS）
-        endpoints.MapGet("/sessions/{id}/dna", (string id, ISessionRepository repo, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna", (string id, ISessionService repo, SessionDnaService sessionDna) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
@@ -279,7 +279,7 @@ public static class SessionEndpoints
         }).WithTags("SessionDNA");
         
         // GET /api/sessions/{id}/dna/{fileName} — 读取指定固定 DNA 文件
-        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, ISessionRepository repo, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, ISessionService repo, SessionDnaService sessionDna) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
@@ -289,7 +289,7 @@ public static class SessionEndpoints
         }).WithTags("SessionDNA");
         
         // POST /api/sessions/{id}/dna — 更新固定 DNA 文件内容（body: fileName + content）
-        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, ISessionRepository repo, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, ISessionService repo, SessionDnaService sessionDna) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
@@ -305,7 +305,7 @@ public static class SessionEndpoints
         // ── 会话记忆端点（B-02）────────────────────────────────────────────────────
         
         // GET /api/sessions/{id}/memory — 获取长期记忆（MEMORY.md）
-        endpoints.MapGet("/sessions/{id}/memory", (string id, ISessionRepository repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory", (string id, ISessionService repo, MemoryService memory) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
@@ -319,7 +319,7 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/{id}/memory", () => Results.StatusCode(405)).WithTags("SessionMemory");
         
         // GET /api/sessions/{id}/memory/daily — 列出所有每日记忆（日期列表，降序）
-        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, ISessionRepository repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, ISessionService repo, MemoryService memory) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
@@ -329,7 +329,7 @@ public static class SessionEndpoints
         }).WithTags("SessionMemory");
         
         // GET /api/sessions/{id}/memory/daily/{date} — 获取指定日期记忆（YYYY-MM-DD）
-        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, ISessionRepository repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, ISessionService repo, MemoryService memory) =>
         {
             if (repo.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });

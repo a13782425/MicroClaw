@@ -20,7 +20,7 @@ namespace MicroClaw.Jobs;
 public sealed class DreamingJob : IScheduledJob
 {
     private readonly AgentStore _agentStore;
-    private readonly ISessionRepository _repo;
+    private readonly ISessionService _repo;
     private readonly ProviderConfigStore _providerStore;
     private readonly ProviderClientFactory _clientFactory;
     private readonly AgentDnaService _agentDnaService;
@@ -30,7 +30,7 @@ public sealed class DreamingJob : IScheduledJob
     public DreamingJob(IServiceProvider sp)
     {
         _agentStore = sp.GetRequiredService<AgentStore>();
-        _repo = sp.GetRequiredService<ISessionRepository>();
+        _repo = sp.GetRequiredService<ISessionService>();
         _providerStore = sp.GetRequiredService<ProviderConfigStore>();
         _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
         _agentDnaService = sp.GetRequiredService<AgentDnaService>();
