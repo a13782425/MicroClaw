@@ -36,7 +36,6 @@ public static class GatewayEndpointRouteBuilderExtensions
 		protectedApi.MapWorkflowEndpoints();
 		protectedApi.MapRagEndpoints();
 		// P-B-6: EmotionEndpoints 已随 Emotion 项目内联到 Pet，待 P-C 阶段添加新的 Session 级情绪端点
-		protectedApi.MapPainMemoryEndpoints();
 		protectedApi.MapPetEndpoints();
 		protectedApi.MapPluginEndpoints();
 		protectedApi.MapMarketplaceEndpoints();

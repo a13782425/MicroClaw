@@ -39,17 +39,3 @@ export function toISODateLocal(ms: number): string {
   const date = new Date(ms)
   return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
-
-export const SEVERITY_COLORS: Record<string, string> = {
-  Low: 'gray',
-  Medium: 'yellow',
-  High: 'orange',
-  Critical: 'red',
-}
-
-export const SEVERITY_LABELS: Record<string, string> = {
-  Low: '低',
-  Medium: '中',
-  High: '高',
-  Critical: '严重',
-}

@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Agent\MicroClaw.Agent.csproj" />
-    <ProjectReference Include="..\MicroClaw.Safety\MicroClaw.Safety.csproj" />
     <ProjectReference Include="..\MicroClaw.Pet\MicroClaw.Pet.csproj" />
     <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />

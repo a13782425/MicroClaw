@@ -21,7 +21,6 @@
     <ProjectReference Include="..\MicroClaw.Jobs\MicroClaw.Jobs.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
-    <ProjectReference Include="..\MicroClaw.Safety\MicroClaw.Safety.csproj" />
   </ItemGroup>
 
 </Project>

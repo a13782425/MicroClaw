@@ -17,7 +17,6 @@ using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Providers;
-using MicroClaw.Safety;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
 using Microsoft.Agents.AI;

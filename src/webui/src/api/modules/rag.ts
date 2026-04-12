@@ -126,25 +126,3 @@ export async function getRagReindexStatus(): Promise<RagReindexStatus> {
   const { data } = await request.get<RagReindexStatus>('/api/rag/reindex-all/status')
   return data
 }
-
-export type PainMemoryDto = {
-  id: string
-  agentId: string
-  triggerDescription: string
-  consequenceDescription: string
-  avoidanceStrategy: string
-  severity: string
-  severityLevel: number
-  occurrenceCount: number
-  lastOccurredAtMs: number
-  createdAtMs: number
-}
-
-export async function listAgentPainMemories(agentId: string): Promise<PainMemoryDto[]> {
-  const { data } = await request.get<PainMemoryDto[]>(`/api/agents/${agentId}/pain-memories`)
-  return data
-}
-
-export async function deleteAgentPainMemory(agentId: string, memoryId: string): Promise<void> {
-  await request.delete(`/api/agents/${agentId}/pain-memories/${memoryId}`)
-}

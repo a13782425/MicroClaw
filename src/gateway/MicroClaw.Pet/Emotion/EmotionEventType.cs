@@ -29,9 +29,3 @@ public enum EmotionEventType
     /// <summary>整体任务/工作流失败（超过重试上限、显式中止等）。</summary>
     TaskFailed,
 
-    /// <summary>记录了一条高严重度（High）痛觉记忆。触发谨慎情绪偏移。</summary>
-    PainOccurredHigh,
-
-    /// <summary>记录了一条极高严重度（Critical）痛觉记忆。触发强烈谨慎情绪偏移。</summary>
-    PainOccurredCritical,
-}

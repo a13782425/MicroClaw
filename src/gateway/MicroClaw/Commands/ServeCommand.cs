@@ -28,7 +28,6 @@ using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
-using MicroClaw.Safety;
 using MicroClaw.Plugins;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Plugins.Marketplace;
@@ -224,16 +223,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IEmotionStore, EmotionStore>();
 		builder.Services.AddSingleton<IEmotionRuleEngine, EmotionRuleEngine>();
 		builder.Services.AddSingleton<IEmotionBehaviorMapper, EmotionBehaviorMapper>();
-		// 安全/痛觉系统服务
-		builder.Services.AddSingleton<IPainMemoryStore, PainMemoryStore>();
-		builder.Services.AddSingleton<IToolRiskRegistry, DefaultToolRiskRegistry>();
-		// 白名单/灰名单配置：构造函数内自动从 IConfiguration 读取
-		builder.Services.AddSingleton<IToolListConfig, ToolListConfig>();
-		builder.Services.AddSingleton<IToolRiskInterceptor, ListBasedToolRiskInterceptor>();
 		// Provider 路由器
 		builder.Services.AddSingleton<IProviderRouter, ProviderRouter>();
-		// 痛觉-Pet 情绪联动服务（基于 Session 隔离，Pet 版本替代旧 Agent 级 IPainEmotionLinker）
-		builder.Services.AddSingleton<IPainEmotionLinker, MicroClaw.Pet.PainEmotionLinker>();
 		// Context Providers（按 Order 聚合 System Prompt）
 		builder.Services.AddSingleton<IAgentContextProvider, ServerTimeContextProvider>();  // Order 5：服务器时间层
 		builder.Services.AddSingleton<IAgentContextProvider, AgentDnaContextProvider>();

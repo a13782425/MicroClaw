@@ -13,7 +13,6 @@ import {
 } from '@/api/gateway'
 import { routingStrategyCollection, ROUTING_STRATEGY_OPTIONS } from './agent-constants'
 import { ToolsTab, McpTab, SkillsTab, DnaTab, SubAgentsTab } from './agent-access-tabs'
-import { SafetyMemoryTab } from './agent-knowledge-tabs'
 
 interface AgentDetailProps {
   agent: AgentConfig
@@ -199,14 +198,6 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
           >
             技能
           </Tabs.Trigger>
-          <Tabs.Trigger
-            value="safety"
-            color="var(--mc-text-muted)"
-            _hover={{ bg: 'var(--mc-card-hover)', color: 'var(--mc-text)' }}
-            _selected={{ bg: 'var(--mc-selected-bg)', color: 'var(--mc-text)', fontWeight: 'semibold' }}
-          >
-            🔴 安全记忆
-          </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="overview" flex="1" overflowY="auto">
@@ -318,10 +309,6 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
 
         <Tabs.Content value="skills" flex="1" overflowY="auto" p="0">
           <SkillsTab agent={agent} onUpdated={onUpdated} />
-        </Tabs.Content>
-
-        <Tabs.Content value="safety" flex="1" overflowY="auto" p="0">
-          <SafetyMemoryTab agent={agent} />
         </Tabs.Content>
       </Tabs.Root>
     </Flex>
