@@ -52,7 +52,7 @@ public sealed class PetActionExecutor
     private readonly PetStateStore _stateStore;
     private readonly PetRateLimiter _rateLimiter;
     private readonly PetModelSelector _modelSelector;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly IPetNotifier _petNotifier;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PetActionExecutor> _logger;
@@ -64,7 +64,7 @@ public sealed class PetActionExecutor
         _stateStore = sp.GetRequiredService<PetStateStore>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
         _modelSelector = sp.GetRequiredService<PetModelSelector>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _petNotifier = sp.GetRequiredService<IPetNotifier>();
         _httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
         _logger = sp.GetRequiredService<ILogger<PetActionExecutor>>();
@@ -77,7 +77,7 @@ public sealed class PetActionExecutor
         PetStateStore stateStore,
         PetRateLimiter rateLimiter,
         PetModelSelector modelSelector,
-        ProviderClientFactory clientFactory,
+        ProviderService providerService,
         IPetNotifier? petNotifier,
         IHttpClientFactory? httpClientFactory,
         ILogger<PetActionExecutor> logger,
@@ -88,7 +88,7 @@ public sealed class PetActionExecutor
         _stateStore = stateStore;
         _rateLimiter = rateLimiter;
         _modelSelector = modelSelector;
-        _clientFactory = clientFactory;
+        _providerService = providerService;
         _petNotifier = petNotifier!;
         _httpClientFactory = httpClientFactory!;
         _logger = logger;
@@ -240,7 +240,7 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.OrganizeMemory, false, "无可用 Provider");
 
-        var client = _clientFactory.Create(provider);
+        var client = _providerService.CreateClient(provider);
         var response = await client.GetResponseAsync(
             [
                 new ChatMessage(ChatRole.System,
@@ -288,7 +288,7 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.ReflectOnSession, false, "无可用 Provider");
 
-        var client = _clientFactory.Create(provider);
+        var client = _providerService.CreateClient(provider);
         var response = await client.GetResponseAsync(
             [
                 new ChatMessage(ChatRole.System,

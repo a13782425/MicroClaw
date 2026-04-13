@@ -26,14 +26,14 @@ public sealed class PetDecisionEngine(
     PetModelSelector modelSelector,
     PetStateStore stateStore,
     IEmotionStore emotionStore,
-    ProviderClientFactory clientFactory,
+    ProviderService providerService,
     ILogger<PetDecisionEngine> logger)
 {
     private readonly PetRateLimiter _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
     private readonly PetModelSelector _modelSelector = modelSelector ?? throw new ArgumentNullException(nameof(modelSelector));
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
-    private readonly ProviderClientFactory _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+    private readonly ProviderService _providerService = providerService ?? throw new ArgumentNullException(nameof(providerService));
     private readonly ILogger<PetDecisionEngine> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
@@ -75,7 +75,7 @@ public sealed class PetDecisionEngine(
 
         try
         {
-            var client = _clientFactory.Create(provider);
+            var client = _providerService.CreateClient(provider);
             var response = await client.GetResponseAsync(
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),

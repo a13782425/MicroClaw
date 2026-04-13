@@ -21,8 +21,7 @@ public sealed class DreamingJob : IScheduledJob
 {
     private readonly AgentStore _agentStore;
     private readonly ISessionService _repo;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly AgentDnaService _agentDnaService;
     private readonly MemoryService _memoryService;
     private readonly ILogger<DreamingJob> _logger;
@@ -31,8 +30,7 @@ public sealed class DreamingJob : IScheduledJob
     {
         _agentStore = sp.GetRequiredService<AgentStore>();
         _repo = sp.GetRequiredService<ISessionService>();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _agentDnaService = sp.GetRequiredService<AgentDnaService>();
         _memoryService = sp.GetRequiredService<MemoryService>();
         _logger = sp.GetRequiredService<ILogger<DreamingJob>>();
@@ -173,14 +171,14 @@ public sealed class DreamingJob : IScheduledJob
     {
         foreach (IMicroSession session in agentSessions)
         {
-            ProviderConfig? provider = _providerStore.All
+            ProviderConfig? provider = _providerService.All
                 .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
             if (provider is not null)
-                return _clientFactory.Create(provider);
+                return _providerService.CreateClient(provider);
         }
 
-        ProviderConfig? fallback = _providerStore.All.FirstOrDefault(p => p.IsEnabled);
-        return fallback is not null ? _clientFactory.Create(fallback) : null;
+        ProviderConfig? fallback = _providerService.All.FirstOrDefault(p => p.IsEnabled);
+        return fallback is not null ? _providerService.CreateClient(fallback) : null;
     }
 
     // ── 静态 helpers（internal 供测试调用）────────────────────────────────────

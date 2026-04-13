@@ -4,7 +4,7 @@ namespace MicroClaw.Providers;
 
 /// <summary>
 /// 嵌入生成器工厂 — 根据 <see cref="ProviderConfig"/> 路由到正确的 <see cref="IEmbeddingProvider"/>。
-/// 用法与 <see cref="ProviderClientFactory"/> 平行。
+/// 用法与 <see cref="ProviderService"/> 平行。
 /// </summary>
 public sealed class ProviderEmbeddingFactory
 {

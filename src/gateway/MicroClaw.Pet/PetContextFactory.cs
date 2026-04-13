@@ -38,7 +38,7 @@ public sealed class PetContextFactory(
     PetRateLimiter rateLimiter,
     PetSelfAwarenessReportBuilder reportBuilder,
     AgentStore agentStore,
-    ProviderConfigStore providerStore,
+    ProviderService providerStore,
     ILoggerFactory loggerFactory)
 {
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));

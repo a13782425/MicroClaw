@@ -37,8 +37,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
     private readonly AgentStore _agentStore;
     private readonly ILogger<AgentRunner> _logger;
     private readonly IReadOnlyList<IAgentContextProvider> _contextProviders;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly ISessionService _sessionReader;
     private readonly SkillToolFactory _skillToolFactory;
     private readonly IUsageTracker _usageTracker;
@@ -60,8 +59,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         _loggerFactory = sp.GetRequiredService<ILoggerFactory>();
         _logger = _loggerFactory.CreateLogger<AgentRunner>();
         _contextProviders = sp.GetServices<IAgentContextProvider>().OrderBy(p => p.Order).ToList().AsReadOnly();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _sessionReader = sp.GetRequiredService<ISessionService>();
         _skillToolFactory = sp.GetRequiredService<SkillToolFactory>();
         _usageTracker = sp.GetRequiredService<IUsageTracker>();
@@ -115,17 +113,17 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
 
     /// <summary>
     /// 当 Session 未显式绑定 Provider 时，按 Agent 路由策略从已启用 Provider 中自动选择。
-    /// 降级链：<see cref="IProviderRouter"/> → <see cref="ProviderConfigStore.GetDefault"/> → 空字符串。
+    /// 降级链：<see cref="IProviderRouter"/> → <see cref="ProviderService.GetDefault"/> → 空字符串。
     /// </summary>
     private string ResolveProviderByStrategy(ProviderRoutingStrategy strategy)
     {
         if (_providerRouter is not null)
         {
-            ProviderConfig? routed = _providerRouter.Route(_providerStore.All, strategy);
+            ProviderConfig? routed = _providerRouter.Route(_providerService.All, strategy);
             if (routed is not null)
                 return routed.Id;
         }
-        return _providerStore.GetDefault()?.Id ?? string.Empty;
+        return _providerService.GetDefault()?.Id ?? string.Empty;
     }
 
     // ── 流式 ReAct 循环（AF ChatClientAgent + FunctionInvokingChatClient + Channel 事件桥接）──
@@ -284,7 +282,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                     toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
                     temperatureOverride: petOverrides?.Temperature,
                     topPOverride: petOverrides?.TopP);
-                IChatClient rawClient = _clientFactory.Create(provider);
+                IChatClient rawClient = _providerService.CreateClient(provider);
                 var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
                     rawClient, agent.Name, chatOptions, _loggerFactory,
                     devMetrics: _devMetrics,
@@ -484,7 +482,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         ProviderRoutingStrategy strategy)
     {
         // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
-        IReadOnlyList<ProviderConfig> allProviders = _providerStore.All
+        IReadOnlyList<ProviderConfig> allProviders = _providerService.All
             .Where(p => p.ModelType != ModelType.Embedding)
             .ToList()
             .AsReadOnly();
@@ -807,7 +805,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
     }
 
     /// <summary>构建不带 UseFunctionInvocation 的客户端（供兼容方法使用，实际已被 AgentFactory 替代）。</summary>
-    private IChatClient BuildRawClient(ProviderConfig provider) => _clientFactory.Create(provider);
+    private IChatClient BuildRawClient(ProviderConfig provider) => _providerService.CreateClient(provider);
 
     /// <summary>校验消息历史中的附件是否被 Provider 模态能力支持。</summary>
     private IReadOnlyList<SessionMessage> ValidateModalities(

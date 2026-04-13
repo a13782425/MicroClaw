@@ -24,7 +24,6 @@ using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Jobs;
 using MicroClaw.Providers;
-using MicroClaw.Providers.Claude;
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
@@ -159,7 +158,7 @@ public class ServeCommand : Command
 		builder.Services.AddAuthorization();
 	}
 
-	/// <summary>注册核心基础设施服务：SQLite DbContext、SessionStore、ProviderConfigStore、各 ModelProvider、SignalR 和 Swagger。</summary>
+	/// <summary>注册核心基础设施服务：SQLite DbContext、SessionStore、ProviderService、SignalR 和 Swagger。</summary>
 	private static void ConfigureServices(WebApplicationBuilder builder)
 	{
 		builder.Services.ConfigureHttpJsonOptions(options =>
@@ -188,13 +187,9 @@ public class ServeCommand : Command
 		});
 
 		builder.Services.AddSingleton<ConfigService>();
-		builder.Services.AddSingleton<ProviderConfigStore>();
+		builder.Services.AddSingleton<ProviderService>();
 		builder.Services.AddService<SessionService>();
 		builder.Services.MapAs<ISessionService, SessionService>();
-
-		builder.Services.AddSingleton<IModelProvider, OpenAIModelProvider>();
-		builder.Services.AddSingleton<IModelProvider, AnthropicModelProvider>();
-		builder.Services.AddSingleton<ProviderClientFactory>();
 		
 		// Agent 服务
 		builder.Services.AddService<AgentStore>();

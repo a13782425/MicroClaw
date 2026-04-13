@@ -19,8 +19,7 @@ namespace MicroClaw.Jobs;
 public sealed class MemorySummarizationJob : IScheduledJob
 {
     private readonly ISessionService _repo;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly MemoryService _memoryService;
     private readonly IRagService _ragService;
     private readonly ILogger<MemorySummarizationJob> _logger;
@@ -28,8 +27,7 @@ public sealed class MemorySummarizationJob : IScheduledJob
     public MemorySummarizationJob(IServiceProvider sp)
     {
         _repo = sp.GetRequiredService<ISessionService>();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _memoryService = sp.GetRequiredService<MemoryService>();
         _ragService = sp.GetRequiredService<IRagService>();
         _logger = sp.GetRequiredService<ILogger<MemorySummarizationJob>>();
@@ -117,9 +115,9 @@ public sealed class MemorySummarizationJob : IScheduledJob
                 .Where(m => m.Role is "user" or "assistant")
                 .ToList();
 
-            ProviderConfig? provider = _providerStore.All
+            ProviderConfig? provider = _providerService.All
                 .FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled);
-            IChatClient? client = provider is not null ? _clientFactory.Create(provider) : null;
+            IChatClient? client = provider is not null ? _providerService.CreateClient(provider) : null;
 
             if (dayMessages.Count > 0)
             {

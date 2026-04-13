@@ -66,7 +66,7 @@ public sealed class MicroPet : IPet, IDisposable
     private readonly PetRateLimiter _rateLimiter;
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
     private readonly AgentStore _agentStore;
-    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderService _providerStore;
     private readonly ILogger _logger;
 
     internal MicroPet(
@@ -85,7 +85,7 @@ public sealed class MicroPet : IPet, IDisposable
         PetRateLimiter rateLimiter,
         PetSelfAwarenessReportBuilder reportBuilder,
         AgentStore agentStore,
-        ProviderConfigStore providerStore,
+        ProviderService providerStore,
         ILoggerFactory loggerFactory)
     {
         MicroSession = microSession ?? throw new ArgumentNullException(nameof(microSession));

@@ -1,13 +1,51 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Providers.Claude;
+using MicroClaw.Providers.OpenAI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Providers;
 
-public sealed class ProviderConfigStore
+/// <summary>
+/// Provider 统一服务：合并配置 CRUD（原 ProviderConfigStore）和客户端工厂（原 ProviderClientFactory）。
+/// Provider 实现（OpenAI / Anthropic）在构造函数中内部创建，不再逐个注册到 DI。
+/// 对标 ChannelService 的模式——单一服务持有所有 Provider 实例。
+/// </summary>
+public sealed class ProviderService
 {
     private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
+    private readonly IReadOnlyDictionary<ProviderProtocol, IModelProvider> _providers;
+
+    public ProviderService(ILoggerFactory loggerFactory)
+    {
+        // Build providers internally — no longer injected from DI
+        _providers = new Dictionary<ProviderProtocol, IModelProvider>
+        {
+            [ProviderProtocol.OpenAI] = new OpenAIModelProvider(loggerFactory),
+            [ProviderProtocol.Anthropic] = new AnthropicModelProvider(loggerFactory),
+        };
+    }
+
+    // ── Client Factory ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Dispatches IChatClient creation to the registered <see cref="IModelProvider"/> that
+    /// supports the requested <see cref="ProviderProtocol"/>.
+    /// </summary>
+    public IChatClient CreateClient(ProviderConfig config)
+    {
+        if (!_providers.TryGetValue(config.Protocol, out IModelProvider? provider))
+            throw new NotSupportedException(
+                $"Protocol '{config.Protocol}' is not supported. " +
+                "Ensure the corresponding IModelProvider is registered in ProviderService.");
+
+        return provider.Create(config);
+    }
+
+    // ── Config CRUD ─────────────────────────────────────────────────────
 
     public IReadOnlyList<ProviderConfig> All
     {
@@ -128,6 +166,8 @@ public sealed class ProviderConfigStore
         }
         finally { _lock.ExitWriteLock(); }
     }
+
+    // ── Private Helpers ─────────────────────────────────────────────────
 
     private static List<ProviderConfigEntity> GetItems() => MicroClawConfig.Get<ProvidersOptions>().Items;
 

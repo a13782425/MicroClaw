@@ -61,7 +61,7 @@ public static class A2AEndpoints
             HttpContext ctx,
             AgentStore store,
             AgentRunner runner,
-            ProviderConfigStore providerStore,
+            ProviderService providerStore,
             ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("A2A");
@@ -139,7 +139,7 @@ public static class A2AEndpoints
         Agent agent,
         JsonRpcRequest rpc,
         AgentRunner runner,
-        ProviderConfigStore providerStore,
+        ProviderService providerStore,
         ILogger logger)
     {
         // ½âÎö tasks/send ²ÎÊý

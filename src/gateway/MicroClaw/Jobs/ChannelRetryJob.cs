@@ -20,8 +20,7 @@ public sealed class ChannelRetryJob : IScheduledJob
 {
     private readonly ChannelRetryQueueService _retryQueueService;
     private readonly ChannelService _channelConfigStore;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly ISessionService _sessionService;
     private readonly IAgentMessageHandler? _agentHandler;
     private readonly ILogger<ChannelRetryJob> _logger;
@@ -30,8 +29,7 @@ public sealed class ChannelRetryJob : IScheduledJob
     {
         _retryQueueService = sp.GetRequiredService<ChannelRetryQueueService>();
         _channelConfigStore = sp.GetRequiredService<ChannelService>();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _sessionService = sp.GetRequiredService<ISessionService>();
         _agentHandler = sp.GetService<IAgentMessageHandler>();
         _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
@@ -105,8 +103,8 @@ public sealed class ChannelRetryJob : IScheduledJob
                 IMicroSession? session = _sessionService.Get(entry.SessionId);
                 string resolvedProviderId = session?.ProviderId ?? string.Empty;
                 ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
-                    ? _providerStore.GetDefault()
-                    : _providerStore.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
+                    ? _providerService.GetDefault()
+                    : _providerService.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
                 if (providerConfig is null || !providerConfig.IsEnabled)
                 {
                     throw new InvalidOperationException(
@@ -119,7 +117,7 @@ public sealed class ChannelRetryJob : IScheduledJob
                         m.Content))
                     .ToList();
 
-                IChatClient chatClient = _clientFactory.Create(providerConfig);
+                IChatClient chatClient = _providerService.CreateClient(providerConfig);
                 ChatResponse response = await chatClient.GetResponseAsync(chatMessages, cancellationToken: ct);
                 aiReply = response.Text ?? "（无回复）";
             }

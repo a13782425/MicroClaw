@@ -6,7 +6,7 @@ public static class SystemEndpoints
 {
     public static IEndpointRouteBuilder MapSystemEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/providers", (ProviderConfigStore store) =>
+        endpoints.MapGet("/providers", (ProviderService store) =>
         {
             IEnumerable<object> result = store.All.Select(p => new
             {
@@ -26,7 +26,7 @@ public static class SystemEndpoints
         })
         .WithTags("Providers");
 
-        endpoints.MapPost("/providers", (ProviderCreateRequest req, ProviderConfigStore store) =>
+        endpoints.MapPost("/providers", (ProviderCreateRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
                 return ApiErrors.BadRequest("DisplayName is required.");
@@ -53,7 +53,7 @@ public static class SystemEndpoints
         })
         .WithTags("Providers");
 
-        endpoints.MapPost("/providers/update", (ProviderUpdateRequest req, ProviderConfigStore store) =>
+        endpoints.MapPost("/providers/update", (ProviderUpdateRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
@@ -83,7 +83,7 @@ public static class SystemEndpoints
         })
         .WithTags("Providers");
 
-        endpoints.MapPost("/providers/delete", (ProviderDeleteRequest req, ProviderConfigStore store) =>
+        endpoints.MapPost("/providers/delete", (ProviderDeleteRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
@@ -96,7 +96,7 @@ public static class SystemEndpoints
         })
         .WithTags("Providers");
 
-        endpoints.MapPost("/providers/set-default", (ProviderSetDefaultRequest req, ProviderConfigStore store) =>
+        endpoints.MapPost("/providers/set-default", (ProviderSetDefaultRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");

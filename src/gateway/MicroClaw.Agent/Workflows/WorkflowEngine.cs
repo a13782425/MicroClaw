@@ -14,14 +14,14 @@ namespace MicroClaw.Agent.Workflows;
 public sealed class WorkflowEngine
 {
     private readonly AgentStore _agentStore;
-    private readonly ProviderConfigStore _providerStore;
+    private readonly ProviderService _providerStore;
     private readonly AgentRunner _agentRunner;
     private readonly ILogger<WorkflowEngine> _logger;
 
     public WorkflowEngine(IServiceProvider sp)
     {
         _agentStore = sp.GetRequiredService<AgentStore>();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
+        _providerStore = sp.GetRequiredService<ProviderService>();
         _agentRunner = sp.GetRequiredService<AgentRunner>();
         _logger = sp.GetRequiredService<ILogger<WorkflowEngine>>();
     }

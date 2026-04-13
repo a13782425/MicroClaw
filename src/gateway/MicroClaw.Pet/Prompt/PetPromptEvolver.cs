@@ -24,7 +24,7 @@ public sealed class PetPromptEvolver
     private readonly PetStateStore _stateStore;
     private readonly PetRateLimiter _rateLimiter;
     private readonly PetModelSelector _modelSelector;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly ILogger<PetPromptEvolver> _logger;
     private readonly string _sessionsDir;
 
@@ -34,7 +34,7 @@ public sealed class PetPromptEvolver
         _stateStore = sp.GetRequiredService<PetStateStore>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
         _modelSelector = sp.GetRequiredService<PetModelSelector>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _logger = sp.GetRequiredService<ILogger<PetPromptEvolver>>();
         _sessionsDir = MicroClawConfig.Env.SessionsDir;
     }
@@ -45,7 +45,7 @@ public sealed class PetPromptEvolver
         PetStateStore stateStore,
         PetRateLimiter rateLimiter,
         PetModelSelector modelSelector,
-        ProviderClientFactory clientFactory,
+        ProviderService providerService,
         string sessionsDir,
         ILogger<PetPromptEvolver> logger)
     {
@@ -53,7 +53,7 @@ public sealed class PetPromptEvolver
         _stateStore = stateStore;
         _rateLimiter = rateLimiter;
         _modelSelector = modelSelector;
-        _clientFactory = clientFactory;
+        _providerService = providerService;
         _sessionsDir = sessionsDir;
         _logger = logger;
     }
@@ -99,7 +99,7 @@ public sealed class PetPromptEvolver
         // ── 调用 LLM ──
         try
         {
-            var client = _clientFactory.Create(provider);
+            var client = _providerService.CreateClient(provider);
             var response = await client.GetResponseAsync(
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),

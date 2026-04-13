@@ -13,7 +13,7 @@ namespace MicroClaw.Services;
 /// </summary>
 public sealed class EmbeddingProviderAccessor : IEmbeddingProviderAccessor
 {
-    private readonly ProviderConfigStore _configStore;
+    private readonly ProviderService _configStore;
     private readonly ProviderEmbeddingFactory _factory;
     private readonly IUsageTracker _usageTracker;
     private readonly ILogger<EmbeddingProviderAccessor> _logger;
@@ -30,7 +30,7 @@ public sealed class EmbeddingProviderAccessor : IEmbeddingProviderAccessor
         $"{config.Id}|{config.Protocol}|{config.ModelName}|{config.BaseUrl}|{config.ApiKey.GetHashCode():X8}";
 
     public EmbeddingProviderAccessor(
-        ProviderConfigStore configStore,
+        ProviderService configStore,
         ProviderEmbeddingFactory factory,
         IUsageTracker usageTracker,
         ILogger<EmbeddingProviderAccessor> logger)

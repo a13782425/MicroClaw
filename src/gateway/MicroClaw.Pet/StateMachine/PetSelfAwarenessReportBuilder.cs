@@ -14,14 +14,14 @@ public sealed class PetSelfAwarenessReportBuilder(
     IEmotionStore emotionStore,
     IEmotionBehaviorMapper behaviorMapper,
     PetRateLimiter rateLimiter,
-    ProviderConfigStore providerStore,
+    ProviderService providerStore,
     AgentStore agentStore)
 {
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
     private readonly IEmotionBehaviorMapper _behaviorMapper = behaviorMapper ?? throw new ArgumentNullException(nameof(behaviorMapper));
     private readonly PetRateLimiter _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-    private readonly ProviderConfigStore _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
+    private readonly ProviderService _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
     private readonly AgentStore _agentStore = agentStore ?? throw new ArgumentNullException(nameof(agentStore));
 
     /// <summary>

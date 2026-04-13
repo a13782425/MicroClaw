@@ -15,10 +15,10 @@ namespace MicroClaw.Pet.Decision;
 /// </para>
 /// </summary>
 public sealed class PetModelSelector(
-    ProviderConfigStore providerStore,
+    ProviderService providerService,
     IProviderRouter providerRouter)
 {
-    private readonly ProviderConfigStore _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
+    private readonly ProviderService _providerService = providerService ?? throw new ArgumentNullException(nameof(providerService));
     private readonly IProviderRouter _providerRouter = providerRouter ?? throw new ArgumentNullException(nameof(providerRouter));
 
     /// <summary>
@@ -29,7 +29,7 @@ public sealed class PetModelSelector(
     /// <returns>选中的 Provider 配置；无可用 Provider 时返回 <c>null</c>。</returns>
     public ProviderConfig? Select(PetModelScenario scenario, string? preferredProviderId = null)
     {
-        var allProviders = _providerStore.All;
+        var allProviders = _providerService.All;
 
         // 优先使用首选 Provider（若指定且可用）
         if (!string.IsNullOrWhiteSpace(preferredProviderId))
@@ -56,7 +56,7 @@ public sealed class PetModelSelector(
     /// <returns>排序后的 Provider 列表，第一个为最优选择。</returns>
     public IReadOnlyList<ProviderConfig> GetFallbackChain(PetModelScenario scenario, string? preferredProviderId = null)
     {
-        var allProviders = _providerStore.All;
+        var allProviders = _providerService.All;
         var strategy = MapScenarioToStrategy(scenario);
         var chain = _providerRouter.GetFallbackChain(allProviders, strategy).ToList();
 

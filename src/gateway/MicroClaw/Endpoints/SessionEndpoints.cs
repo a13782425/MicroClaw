@@ -27,7 +27,7 @@ public static class SessionEndpoints
         endpoints.MapGet("/sessions", (ISessionService repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
         
         // POST /api/sessions— 创建会话
-        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderConfigStore providerStore, AgentStore agentStore, ChannelService channelStore, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderService providerStore, AgentStore agentStore, ChannelService channelStore, SessionDnaService sessionDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Title))
                 return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
@@ -124,7 +124,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/switch-provider — 切换会话绑定的 Provider
-        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionService repo, ProviderConfigStore providerStore, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionService repo, ProviderService providerStore, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -169,7 +169,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderConfigStore providerStore, AgentStore agentStore, IPetRunner petRunner, IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderService providerStore, AgentStore agentStore, IPetRunner petRunner, IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers, HttpContext ctx, CancellationToken ct) =>
         {
             IMicroSession? session = repo.Get(id);
             if (session is null)

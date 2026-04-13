@@ -20,8 +20,7 @@ namespace MicroClaw.Jobs;
 public sealed class MemoryPendingProcessorJob : IScheduledJob
 {
     private readonly ISessionService _repo;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly MemoryService _memoryService;
     private readonly IRagService _ragService;
     private readonly ILogger<MemoryPendingProcessorJob> _logger;
@@ -29,8 +28,7 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
     public MemoryPendingProcessorJob(IServiceProvider sp)
     {
         _repo = sp.GetRequiredService<ISessionService>();
-        _providerStore = sp.GetRequiredService<ProviderConfigStore>();
-        _clientFactory = sp.GetRequiredService<ProviderClientFactory>();
+        _providerService = sp.GetRequiredService<ProviderService>();
         _memoryService = sp.GetRequiredService<MemoryService>();
         _ragService = sp.GetRequiredService<IRagService>();
         _logger = sp.GetRequiredService<ILogger<MemoryPendingProcessorJob>>();
@@ -60,8 +58,8 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
 
         // 获取 LLM 客户端（Session 绑定模型，若不可用则取第一个启用的 Provider）
         ProviderConfig? provider =
-            _providerStore.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
-            ?? _providerStore.All.FirstOrDefault(p => p.IsEnabled);
+            _providerService.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
+            ?? _providerService.All.FirstOrDefault(p => p.IsEnabled);
 
         if (provider is null)
         {
@@ -71,7 +69,7 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
             return;
         }
 
-        IChatClient client = _clientFactory.Create(provider);
+        IChatClient client = _providerService.CreateClient(provider);
 
         foreach (string fileName in pendingFiles)
         {

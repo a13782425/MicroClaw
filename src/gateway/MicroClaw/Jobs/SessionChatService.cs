@@ -15,8 +15,7 @@ namespace MicroClaw.Jobs;
 /// </summary>
 public sealed class SessionChatService(
     ISessionService repo,
-    ProviderConfigStore providerStore,
-    ProviderClientFactory clientFactory,
+    ProviderService providerService,
     IHubContext<GatewayHub> hub,
     IUsageTracker usageTracker,
     ILogger<SessionChatService> logger)
@@ -30,7 +29,7 @@ public sealed class SessionChatService(
             return null;
         }
 
-        ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == session.ProviderId);
+        ProviderConfig? provider = providerService.All.FirstOrDefault(p => p.Id == session.ProviderId);
         if (provider is null || !provider.IsEnabled)
         {
             logger.LogWarning("CronJob: provider '{ProviderId}' not found or disabled for session '{SessionId}'.",
@@ -53,7 +52,7 @@ public sealed class SessionChatService(
         IReadOnlyList<SessionMessage> history = repo.GetMessages(sessionId);
         List<ChatMessage> chatMessages = BuildChatMessages(history);
 
-        IChatClient client = clientFactory.Create(provider);
+        IChatClient client = providerService.CreateClient(provider);
         try
         {
             ChatResponse response = await client.GetResponseAsync(chatMessages, cancellationToken: ct);

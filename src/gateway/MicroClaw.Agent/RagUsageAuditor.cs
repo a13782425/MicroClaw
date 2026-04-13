@@ -13,8 +13,7 @@ namespace MicroClaw.Agent;
 public sealed class RagUsageAuditor : IRagUsageAuditor
 {
     private readonly IRagService _ragService;
-    private readonly ProviderConfigStore _providerStore;
-    private readonly ProviderClientFactory _clientFactory;
+    private readonly ProviderService _providerService;
     private readonly ILogger<RagUsageAuditor> _logger;
 
     internal const string AuditPromptTemplate =
@@ -39,13 +38,11 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
 
     public RagUsageAuditor(
         IRagService ragService,
-        ProviderConfigStore providerStore,
-        ProviderClientFactory clientFactory,
+        ProviderService providerService,
         ILogger<RagUsageAuditor> logger)
     {
         _ragService = ragService ?? throw new ArgumentNullException(nameof(ragService));
-        _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
-        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+        _providerService = providerService ?? throw new ArgumentNullException(nameof(providerService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -109,11 +106,11 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
 
     private IChatClient? CreateAuditClient()
     {
-        ProviderConfig? provider = _providerStore.GetDefault();
+        ProviderConfig? provider = _providerService.GetDefault();
         if (provider is null || !provider.IsEnabled)
-            provider = _providerStore.All.FirstOrDefault(p => p.IsEnabled);
+            provider = _providerService.All.FirstOrDefault(p => p.IsEnabled);
 
-        return provider is not null ? _clientFactory.Create(provider) : null;
+        return provider is not null ? _providerService.CreateClient(provider) : null;
     }
 
     private static string FormatChunksForAudit(IReadOnlyList<RagChunkRef> chunks)
