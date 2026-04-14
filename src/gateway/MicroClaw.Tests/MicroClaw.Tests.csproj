@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
     <ProjectReference Include="..\MicroClaw\MicroClaw.csproj" />
     <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
     <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />

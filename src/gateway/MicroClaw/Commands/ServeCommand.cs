@@ -19,6 +19,7 @@ using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Core;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
@@ -310,6 +311,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService<CronJobStartupService>();
 		builder.Services.AddHostedService<SessionRunner>();
 		builder.Services.AddHostedService<MicroClaw.Pet.PetRunner>();
+		builder.Services.AddMicroEngine();
 
 		// Token 用量追踪
 		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();

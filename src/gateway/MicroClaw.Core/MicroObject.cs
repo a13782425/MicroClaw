@@ -1,0 +1,437 @@
+namespace MicroClaw.Core;
+
+public enum MicroObjectState
+{
+    Created,
+    Initialized,
+    Active,
+    Disposed,
+}
+
+public class MicroObject
+{
+    private readonly object _gate = new();
+    private readonly Dictionary<Type, MicroComponent> _components = new();
+    private bool _isTransitioning;
+
+    public MicroEngine? Engine { get; private set; }
+
+    public MicroObjectState State { get; private set; } = MicroObjectState.Created;
+
+    public IReadOnlyList<MicroComponent> Components
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _components.Values.ToArray();
+            }
+        }
+    }
+
+    public TComponent AddComponent<TComponent>() where TComponent : MicroComponent, new()
+        => AddComponent(new TComponent());
+
+    public TComponent AddComponent<TComponent>(TComponent component) where TComponent : MicroComponent
+    {
+        ArgumentNullException.ThrowIfNull(component);
+
+        Type componentType = component.GetType();
+        bool shouldInitialize;
+        bool shouldActivate;
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            ThrowIfTransitioning();
+
+            if (component.Host is not null && !ReferenceEquals(component.Host, this))
+                throw new InvalidOperationException("A component can only belong to one MicroObject at a time.");
+
+            if (_components.ContainsKey(componentType))
+                throw new InvalidOperationException($"Component type '{componentType.Name}' is already attached to this MicroObject.");
+
+            _components.Add(componentType, component);
+            shouldInitialize = State is MicroObjectState.Initialized or MicroObjectState.Active;
+            shouldActivate = State == MicroObjectState.Active;
+        }
+
+        try
+        {
+            component.AttachTo(this);
+
+            if (shouldInitialize)
+                component.Initialize();
+
+            if (shouldActivate)
+                component.Activate();
+
+            return component;
+        }
+        catch (Exception ex)
+        {
+            lock (_gate)
+            {
+                _components.Remove(componentType);
+            }
+
+            List<Exception> rollbackErrors = [];
+            if (ReferenceEquals(component.Host, this))
+                CollectRollbackError(component, MicroComponentState.Detached, rollbackErrors);
+
+            if (rollbackErrors.Count == 0)
+                throw;
+
+            rollbackErrors.Insert(0, ex);
+            throw new AggregateException(rollbackErrors);
+        }
+    }
+
+    public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
+        => TryGetComponent<TComponent>(out TComponent? component) ? component : null;
+
+    public bool TryGetComponent<TComponent>(out TComponent? component) where TComponent : MicroComponent
+    {
+        lock (_gate)
+        {
+            if (!TryResolveComponent(typeof(TComponent), out MicroComponent? resolved))
+            {
+                component = null;
+                return false;
+            }
+
+            if (resolved is null)
+            {
+                component = null;
+                return false;
+            }
+
+            component = (TComponent)resolved;
+            return true;
+        }
+    }
+
+    public bool RemoveComponent<TComponent>() where TComponent : MicroComponent
+    {
+        MicroComponent? component;
+        Type? componentType;
+
+        lock (_gate)
+        {
+            ThrowIfTransitioning();
+
+            if (!TryResolveComponent(typeof(TComponent), out component))
+                return false;
+
+            if (component is null)
+                return false;
+
+            componentType = component.GetType();
+            _components.Remove(componentType);
+        }
+
+        try
+        {
+            component.DetachFromHost();
+            return true;
+        }
+        catch
+        {
+            if (ReferenceEquals(component.Host, this))
+            {
+                lock (_gate)
+                {
+                    _components[componentType!] = component;
+                }
+            }
+
+            throw;
+        }
+    }
+
+    public bool RemoveComponent(MicroComponent component)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+
+        bool removed;
+        lock (_gate)
+        {
+            ThrowIfTransitioning();
+
+            removed = _components.TryGetValue(component.GetType(), out MicroComponent? existing)
+                && ReferenceEquals(existing, component)
+                && _components.Remove(component.GetType());
+        }
+
+        if (!removed)
+            return false;
+
+        try
+        {
+            component.DetachFromHost();
+            return true;
+        }
+        catch
+        {
+            if (ReferenceEquals(component.Host, this))
+            {
+                lock (_gate)
+                {
+                    _components[component.GetType()] = component;
+                }
+            }
+
+            throw;
+        }
+    }
+
+    public void Activate()
+    {
+        MicroComponent[] snapshot;
+        MicroObjectState previousState;
+
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            ThrowIfTransitioning();
+
+            if (State == MicroObjectState.Active)
+                return;
+
+            _isTransitioning = true;
+            previousState = State;
+            State = MicroObjectState.Active;
+            snapshot = _components.Values.ToArray();
+        }
+
+        List<(MicroComponent Component, MicroComponentState PreviousState)> activated = [];
+
+        try
+        {
+            foreach (MicroComponent component in snapshot)
+            {
+                MicroComponentState previousComponentState = component.State;
+
+                try
+                {
+                    component.Initialize();
+                    component.Activate();
+                    activated.Add((component, previousComponentState));
+                }
+                catch (Exception ex)
+                {
+                    List<Exception> rollbackErrors = [];
+                    CollectRollbackError(component, previousComponentState, rollbackErrors);
+
+                    foreach ((MicroComponent activatedComponent, MicroComponentState componentState) in activated.AsEnumerable().Reverse())
+                        CollectRollbackError(activatedComponent, componentState, rollbackErrors);
+
+                    lock (_gate)
+                    {
+                        if (State != MicroObjectState.Disposed)
+                            State = previousState;
+                    }
+
+                    if (rollbackErrors.Count == 0)
+                        throw;
+
+                    rollbackErrors.Insert(0, ex);
+                    throw new AggregateException(rollbackErrors);
+                }
+            }
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
+        }
+    }
+
+    public void Deactivate()
+    {
+        MicroComponent[] snapshot;
+        MicroObjectState previousState;
+
+        lock (_gate)
+        {
+            if (State != MicroObjectState.Active)
+                return;
+
+            ThrowIfTransitioning();
+
+            _isTransitioning = true;
+            previousState = State;
+            State = MicroObjectState.Initialized;
+            snapshot = _components.Values.Reverse().ToArray();
+        }
+
+        List<(MicroComponent Component, MicroComponentState PreviousState)> deactivated = [];
+
+        try
+        {
+            foreach (MicroComponent component in snapshot)
+            {
+                MicroComponentState previousComponentState = component.State;
+
+                try
+                {
+                    component.Deactivate();
+                    deactivated.Add((component, previousComponentState));
+                }
+                catch (Exception ex)
+                {
+                    List<Exception> rollbackErrors = [];
+                    CollectRollbackError(component, previousComponentState, rollbackErrors);
+
+                    foreach ((MicroComponent deactivatedComponent, MicroComponentState componentState) in deactivated.AsEnumerable().Reverse())
+                        CollectRollbackError(deactivatedComponent, componentState, rollbackErrors);
+
+                    lock (_gate)
+                    {
+                        if (State != MicroObjectState.Disposed)
+                            State = previousState;
+                    }
+
+                    if (rollbackErrors.Count == 0)
+                        throw;
+
+                    rollbackErrors.Insert(0, ex);
+                    throw new AggregateException(rollbackErrors);
+                }
+            }
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        MicroComponent[] snapshot;
+        MicroEngine? engine;
+
+        lock (_gate)
+        {
+            if (State == MicroObjectState.Disposed)
+                return;
+
+            ThrowIfTransitioning();
+
+            _isTransitioning = true;
+            snapshot = _components.Values.Reverse().ToArray();
+            engine = Engine;
+            State = MicroObjectState.Disposed;
+        }
+
+        List<Exception> errors = [];
+
+        try
+        {
+            foreach (MicroComponent component in snapshot)
+            {
+                try
+                {
+                    component.DetachFromHost();
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _components.Remove(component.GetType());
+                    }
+                }
+            }
+        }
+        finally
+        {
+            engine?.DetachDisposedObject(this);
+
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
+        }
+
+        ThrowIfNeeded(errors);
+    }
+
+    internal void AttachToEngine(MicroEngine engine)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+
+        if (Engine is not null && !ReferenceEquals(Engine, engine))
+            throw new InvalidOperationException("A MicroObject can only belong to one MicroEngine at a time.");
+
+        Engine = engine;
+    }
+
+    internal void DetachFromEngine(MicroEngine engine)
+    {
+        if (ReferenceEquals(Engine, engine))
+            Engine = null;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (State == MicroObjectState.Disposed)
+            throw new ObjectDisposedException(nameof(MicroObject));
+    }
+
+    private void ThrowIfTransitioning()
+    {
+        if (_isTransitioning)
+            throw new InvalidOperationException("MicroObject cannot be mutated while a lifecycle transition is in progress.");
+    }
+
+    private bool TryResolveComponent(Type requestedType, out MicroComponent? component)
+    {
+        if (_components.TryGetValue(requestedType, out component))
+            return true;
+
+        MicroComponent? match = null;
+        foreach (MicroComponent candidate in _components.Values)
+        {
+            if (!requestedType.IsAssignableFrom(candidate.GetType()))
+                continue;
+
+            if (match is not null)
+                throw new InvalidOperationException($"Multiple components are assignable to type '{requestedType.Name}'.");
+
+            match = candidate;
+        }
+
+        component = match;
+        return component is not null;
+    }
+
+    private static void CollectRollbackError(MicroComponent component, MicroComponentState targetState, List<Exception> rollbackErrors)
+    {
+        try
+        {
+            component.RollbackTo(targetState);
+        }
+        catch (Exception ex)
+        {
+            rollbackErrors.Add(ex);
+        }
+    }
+
+    private static void ThrowIfNeeded(IReadOnlyList<Exception> errors)
+    {
+        if (errors.Count == 1)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
+
+        if (errors.Count > 1)
+            throw new AggregateException(errors);
+    }
+}

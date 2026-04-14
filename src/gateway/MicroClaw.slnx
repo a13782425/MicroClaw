@@ -1,7 +1,8 @@
-﻿<Solution>
+<Solution>
   <Project Path="MicroClaw.Channels/MicroClaw.Channels.csproj" />
   <Project Path="MicroClaw.Abstractions/MicroClaw.Abstractions.csproj" />
   <Project Path="MicroClaw/MicroClaw.csproj" />
+  <Project Path="MicroClaw.Core/MicroClaw.Core.csproj" />
   <Project Path="MicroClaw.Infrastructure/MicroClaw.Infrastructure.csproj" />
   <Project Path="MicroClaw.Providers/MicroClaw.Providers.csproj" />
   <Project Path="MicroClaw.Tests/MicroClaw.Tests.csproj" />
