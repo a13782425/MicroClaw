@@ -3,14 +3,14 @@ using MicroClaw.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MicroClaw.Services;
+namespace MicroClaw.Channels;
 
 /// <summary>
 /// Background runner that drives <see cref="IChannelProvider"/> lifecycle hooks.
 /// Calls <c>StartAsync</c> on each provider at startup, <c>TickAsync</c> every 30 seconds,
 /// and <c>StopAsync</c> on shutdown.
 /// </summary>
-internal sealed class ChannelRunner(
+public sealed class ChannelRunner(
     ChannelService channelService,
     ILoggerFactory loggerFactory) : BackgroundService
 {

@@ -4,6 +4,7 @@ using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
@@ -13,7 +14,6 @@ using MicroClaw.Pet;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
 using MicroClaw.Streaming;
-using MicroClaw.Utils;
 using Microsoft.AspNetCore.SignalR;
 
 namespace MicroClaw.Endpoints;
@@ -169,8 +169,9 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderService providerStore, AgentStore agentStore, IPetRunner petRunner, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, PetContextFactory petContextFactory, HttpContext ctx, CancellationToken ct) =>
         {
+            // ── 1. 找到 Session ──
             IMicroSession? session = repo.Get(id);
             if (session is null)
             {
@@ -186,41 +187,27 @@ public static class SessionEndpoints
                 return;
             }
             
-            ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == session.ProviderId);
-            if (provider is null)
-            {
-                ctx.Response.StatusCode = 400;
-                await ctx.Response.WriteAsJsonAsync(new { message = $"Provider '{session.ProviderId}' not found." }, ct);
-                return;
-            }
-            
-            // 保存用户消息
-            SessionMessage userMessage = new(Id: MicroClawUtils.GetUniqueId(), Role: "user", Content: req.Content, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: req.Attachments);
-            repo.AddMessage(id, userMessage);
-            
-            // 构建历史消息上下文
-            IReadOnlyList<SessionMessage> history = repo.GetMessages(id);
-            
-            // 获取 Session 绑定的 Agent（优先用绑定 AgentId，否则退到默认 Agent）
-            AgentConfig? defaultAgent = string.IsNullOrWhiteSpace(session.AgentId) ? agentStore.GetDefault() : agentStore.GetById(session.AgentId) ?? agentStore.GetDefault();
-            if (defaultAgent is null || !defaultAgent.IsEnabled)
+            // ── 2. 找到 Session 的 Pet（惰性加载） ──
+            IPet? pet = session.Pet;
+            if (pet is null)
             {
                 ctx.Response.StatusCode = 503;
-                await ctx.Response.WriteAsJsonAsync(new { message = "No enabled agent found for this session." }, ct);
+                await ctx.Response.WriteAsJsonAsync(new { message = "宠物在这个会话没有启用." }, ct);
                 return;
             }
             
-            // 设置 SSE 响应头
+            // ── 3. 设置 SSE 响应头 ──
             ctx.Response.ContentType = "text/event-stream; charset=utf-8";
             ctx.Response.Headers.CacheControl = "no-cache";
             ctx.Response.Headers.Connection = "keep-alive";
             ctx.Response.Headers["X-Accel-Buffering"] = "no";
             
+            // ── 4. Pet 处理消息（内部完成：保存用户消息、加载历史、Provider/Agent 解析、决策、执行）──
             var persistencePipeline = new StreamItemPersistencePipeline();
             
             try
             {
-                await foreach (StreamItem item in petRunner.HandleMessageAsync(id, history, ct))
+                await foreach (StreamItem item in pet.HandleChatAsync(req, ct))
                 {
                     // 持久化逻辑：通过管道分发
                     IReadOnlyList<SessionMessage> msgs = persistencePipeline.ProcessItem(item);

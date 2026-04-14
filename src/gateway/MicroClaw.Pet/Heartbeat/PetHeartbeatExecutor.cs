@@ -69,7 +69,7 @@ public sealed class PetHeartbeatExecutor
             return HeartbeatResult.Skipped("不在活跃时段");
         }
 
-        // ── 3. 正在处理消息时跳过（Dispatching 由 PetRunner 管理）──
+        // ── 3. 正在处理消息时跳过（Dispatching 由 MicroPet 管理）──
         if (petState.BehaviorState == PetBehaviorState.Dispatching)
         {
             _logger.LogDebug("Pet [{SessionId}] 正在处理消息（Dispatching），跳过心跳", sessionId);

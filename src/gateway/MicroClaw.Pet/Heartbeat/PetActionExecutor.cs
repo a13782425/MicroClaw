@@ -335,7 +335,7 @@ public sealed class PetActionExecutor
         return new ActionExecutionResult(PetActionType.NotifyUser, true);
     }
 
-    // ── DelegateToAgent：委派 Agent（记录意图，实际执行需由 PetRunner 协调）──
+    // ── DelegateToAgent：委派 Agent（记录意图，实际执行需由 MicroPet 协调）──
 
     private Task<ActionExecutionResult> ExecuteDelegateToAgentAsync(
         string sessionId, PetPlannedAction action, CancellationToken ct)

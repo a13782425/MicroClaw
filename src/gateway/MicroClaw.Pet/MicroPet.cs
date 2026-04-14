@@ -1,6 +1,10 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent;
+using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Observer;
@@ -9,6 +13,10 @@ using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
+using MicroClaw.Tools;
+using MicroClaw.Utils;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Pet;
@@ -55,7 +63,7 @@ public sealed class MicroPet : IPet, IDisposable
     private volatile bool _isDirty;
     private bool _disposed;
 
-    // ── Subsystem references (internal, not exposed) ──────────────────────
+    // ── Subsystem references (resolved from IServiceProvider) ─────────────
     private readonly PetDecisionEngine _decisionEngine;
     private readonly IEmotionStore _emotionStore;
     private readonly IEmotionRuleEngine _emotionRuleEngine;
@@ -67,45 +75,41 @@ public sealed class MicroPet : IPet, IDisposable
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
     private readonly AgentStore _agentStore;
     private readonly ProviderService _providerStore;
+    private readonly ISessionService _sessionService;
+    private readonly AgentRunner _agentRunner;
+    private readonly ToolCollector _toolCollector;
     private readonly ILogger _logger;
 
     internal MicroPet(
+        IServiceProvider sp,
         IMicroSession microSession,
         PetState state,
         PetConfig config,
         EmotionState emotion,
-        PetContextState initialState,
-        PetDecisionEngine decisionEngine,
-        IEmotionStore emotionStore,
-        IEmotionRuleEngine emotionRuleEngine,
-        IEmotionBehaviorMapper emotionBehaviorMapper,
-        PetRagScope petRagScope,
-        PetStateStore stateStore,
-        PetSessionObserver sessionObserver,
-        PetRateLimiter rateLimiter,
-        PetSelfAwarenessReportBuilder reportBuilder,
-        AgentStore agentStore,
-        ProviderService providerStore,
-        ILoggerFactory loggerFactory)
+        PetContextState initialState)
     {
+        ArgumentNullException.ThrowIfNull(sp);
         MicroSession = microSession ?? throw new ArgumentNullException(nameof(microSession));
         _petState = state ?? throw new ArgumentNullException(nameof(state));
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Emotion = emotion;
         State = initialState;
 
-        _decisionEngine = decisionEngine ?? throw new ArgumentNullException(nameof(decisionEngine));
-        _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
-        _emotionRuleEngine = emotionRuleEngine ?? throw new ArgumentNullException(nameof(emotionRuleEngine));
-        _emotionBehaviorMapper = emotionBehaviorMapper ?? throw new ArgumentNullException(nameof(emotionBehaviorMapper));
-        _petRagScope = petRagScope ?? throw new ArgumentNullException(nameof(petRagScope));
-        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-        _sessionObserver = sessionObserver ?? throw new ArgumentNullException(nameof(sessionObserver));
-        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-        _reportBuilder = reportBuilder ?? throw new ArgumentNullException(nameof(reportBuilder));
-        _agentStore = agentStore ?? throw new ArgumentNullException(nameof(agentStore));
-        _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
-        _logger = loggerFactory?.CreateLogger<MicroPet>() ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _decisionEngine = sp.GetRequiredService<PetDecisionEngine>();
+        _emotionStore = sp.GetRequiredService<IEmotionStore>();
+        _emotionRuleEngine = sp.GetRequiredService<IEmotionRuleEngine>();
+        _emotionBehaviorMapper = sp.GetRequiredService<IEmotionBehaviorMapper>();
+        _petRagScope = sp.GetRequiredService<PetRagScope>();
+        _stateStore = sp.GetRequiredService<PetStateStore>();
+        _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
+        _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
+        _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
+        _agentStore = sp.GetRequiredService<AgentStore>();
+        _providerStore = sp.GetRequiredService<ProviderService>();
+        _sessionService = sp.GetRequiredService<ISessionService>();
+        _agentRunner = sp.GetRequiredService<AgentRunner>();
+        _toolCollector = sp.GetRequiredService<ToolCollector>();
+        _logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
     }
 
     // ── IPet ──────────────────────────────────────────────────────────────
@@ -194,7 +198,221 @@ public sealed class MicroPet : IPet, IDisposable
         State = PetContextState.Active;
     }
 
-    // ── Pet 编排方法（internal，由 PetRunner 调用）──────────────────────────
+    // ── IPet.HandleChatAsync — 完整消息处理 ─────────────────────────────────
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<StreamItem> HandleChatAsync(
+        ChatRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        string sessionId = MicroSession.Id;
+
+        // ── 1. 保存用户消息 ──
+        SessionMessage userMessage = new(
+            Id: MicroClawUtils.GetUniqueId(),
+            Role: "user",
+            Content: request.Content,
+            ThinkContent: null,
+            Timestamp: DateTimeOffset.UtcNow,
+            Attachments: request.Attachments);
+        _sessionService.AddMessage(sessionId, userMessage);
+
+        // ── 2. 加载历史消息 ──
+        IReadOnlyList<SessionMessage> history = _sessionService.GetMessages(sessionId);
+
+        // ── 3. Pet 未启用：直接透传 AgentRunner ──
+        if (!IsEnabled)
+        {
+            _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner", sessionId);
+
+            AgentEntity? agent = ResolveAgent(MicroSession.AgentId);
+            if (agent is null || !agent.IsEnabled)
+                throw new InvalidOperationException("No enabled agent found for this session.");
+
+            string providerId = MicroSession.ProviderId;
+
+            var toolContext = BuildToolContext(agent);
+            ToolCollectionResult? prebuiltTools = null;
+            try
+            {
+                prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+                await foreach (var item in _agentRunner.StreamReActAsync(
+                    agent, providerId, history, sessionId, ct, source: "chat", prebuiltTools: prebuiltTools))
+                {
+                    yield return item;
+                }
+            }
+            finally
+            {
+                if (prebuiltTools is not null)
+                    await prebuiltTools.DisposeAsync();
+            }
+            yield break;
+        }
+
+        // ── 4. Pet 启用：Channel 解耦迭代器 ──
+        var outputChannel = Channel.CreateUnbounded<StreamItem>();
+        Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: "chat");
+
+        await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+            yield return item;
+
+        try { await execution; }
+        catch (OperationCanceledException) { /* cancelled silently */ }
+    }
+
+    // ── IPet.HandleMessageAsync — 渠道消息处理（调用方已保存消息 & 加载历史）──
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<StreamItem> HandleMessageAsync(
+        IReadOnlyList<SessionMessage> history,
+        [EnumeratorCancellation] CancellationToken ct = default,
+        string source = "chat")
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        string sessionId = MicroSession.Id;
+
+        // ── Pet 未启用：直接透传 AgentRunner ──
+        if (!IsEnabled)
+        {
+            _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner (source={Source})", sessionId, source);
+
+            AgentEntity? agent = ResolveAgent(MicroSession.AgentId);
+            if (agent is null || !agent.IsEnabled)
+                throw new InvalidOperationException("No enabled agent found for this session.");
+
+            string providerId = MicroSession.ProviderId;
+
+            var toolContext = BuildToolContext(agent);
+            ToolCollectionResult? prebuiltTools = null;
+            try
+            {
+                prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+                await foreach (var item in _agentRunner.StreamReActAsync(
+                    agent, providerId, history, sessionId, ct, source: source, prebuiltTools: prebuiltTools))
+                {
+                    yield return item;
+                }
+            }
+            finally
+            {
+                if (prebuiltTools is not null)
+                    await prebuiltTools.DisposeAsync();
+            }
+            yield break;
+        }
+
+        // ── Pet 启用：Channel 解耦迭代器 ──
+        var outputChannel = Channel.CreateUnbounded<StreamItem>();
+        Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: source);
+
+        await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+            yield return item;
+
+        try { await execution; }
+        catch (OperationCanceledException) { /* cancelled silently */ }
+    }
+
+    /// <summary>
+    /// Pet 编排核心逻辑（非迭代器，可自由使用 try-catch）。
+    /// </summary>
+    private async Task ExecuteChatWithPetAsync(
+        IReadOnlyList<SessionMessage> history,
+        CancellationToken ct,
+        Channel<StreamItem> output,
+        string source = "chat")
+    {
+        string sessionId = MicroSession.Id;
+        PetDispatchResult dispatch = new() { Reason = "初始化" };
+        bool messageSucceeded = false;
+        PetBehaviorState previousBehaviorState = PetState.BehaviorState;
+
+        try
+        {
+            // ── Enter Dispatching state ──
+            previousBehaviorState = await EnterDispatchingAsync(ct);
+
+            // ── Pet LLM 决策 ──
+            dispatch = await DecideAsync(history, previousBehaviorState, ct);
+
+            _logger.LogInformation(
+                "Pet [{SessionId}] 调度决策: Agent={AgentId}, Provider={ProviderId}, ShouldPetRespond={PetRespond}, Reason={Reason}",
+                sessionId, dispatch.AgentId ?? "default", dispatch.ProviderId ?? "default",
+                dispatch.ShouldPetRespond, dispatch.Reason);
+
+            // ── 根据 dispatch 结果执行 ──
+            if (dispatch.ShouldPetRespond && !string.IsNullOrWhiteSpace(dispatch.PetResponse))
+            {
+                output.Writer.TryWrite(new TokenItem(dispatch.PetResponse));
+                messageSucceeded = true;
+            }
+            else
+            {
+                // Resolve Agent / Provider from dispatch or session defaults
+                AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId)
+                    ? _agentStore.GetAgentById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId)
+                    : ResolveAgent(MicroSession.AgentId);
+                if (agent is null || !agent.IsEnabled)
+                    throw new InvalidOperationException("No enabled agent found for this session.");
+
+                string providerId = !string.IsNullOrWhiteSpace(dispatch.ProviderId)
+                    ? dispatch.ProviderId
+                    : MicroSession.ProviderId;
+
+                // Collect tools: common + channel
+                var toolContext = BuildToolContext(agent);
+                ToolCollectionResult? prebuiltTools = null;
+                try
+                {
+                    prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+
+                    // Merge channel tools
+                    IReadOnlyList<AIFunction> channelTools = await CollectChannelToolsAsync(ct);
+                    if (channelTools.Count > 0)
+                        prebuiltTools.AddTools(channelTools);
+
+                    // Build PetOverrides from emotion-behavior mapping
+                    var behaviorProfile = GetBehaviorProfile();
+                    var petOverrides = new PetOverrides
+                    {
+                        Temperature = behaviorProfile.Temperature,
+                        TopP = behaviorProfile.TopP,
+                        BehaviorSuffix = behaviorProfile.SystemPromptSuffix,
+                        ToolOverrides = dispatch.ToolOverrides is { Count: > 0 } ? dispatch.ToolOverrides : null,
+                        PetKnowledge = dispatch.PetKnowledge,
+                    };
+
+                    await foreach (var item in _agentRunner.StreamReActAsync(
+                        agent, providerId, history, sessionId, ct, source: source, petOverrides,
+                        prebuiltTools: prebuiltTools))
+                    {
+                        output.Writer.TryWrite(item);
+                    }
+                    messageSucceeded = true;
+                }
+                finally
+                {
+                    if (prebuiltTools is not null)
+                        await prebuiltTools.DisposeAsync();
+                }
+            }
+
+            output.Writer.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            if (ex is not OperationCanceledException)
+                _logger.LogError(ex, "Pet [{SessionId}] 执行失败", sessionId);
+            output.Writer.TryComplete(ex);
+        }
+        finally
+        {
+            await PostProcessAsync(previousBehaviorState, messageSucceeded, dispatch, ct);
+        }
+    }
+
+    // ── Pet 编排方法（internal）──────────────────────────────────────────
 
     /// <summary>
     /// Enter Dispatching state and persist. Returns the previous behavior state for later restoration.
@@ -317,7 +535,7 @@ public sealed class MicroPet : IPet, IDisposable
 
     /// <summary>
     /// Get the <see cref="BehaviorProfile"/> mapped from current emotion state.
-    /// Used by PetRunner to build <see cref="PetOverrides"/>.
+    /// Used by MicroPet to build <see cref="PetOverrides"/>.
     /// </summary>
     internal BehaviorProfile GetBehaviorProfile() => _emotionBehaviorMapper.GetProfile(Emotion);
 
@@ -374,12 +592,26 @@ public sealed class MicroPet : IPet, IDisposable
         return ["fetch", "shell", "cron", "sub-agent", "file", "skill"];
     }
 
+    // ── Agent/Tool 辅助方法 ──────────────────────────────────────────────────
+
+    private AgentEntity? ResolveAgent(string? agentId) =>
+        string.IsNullOrWhiteSpace(agentId)
+            ? _agentStore.GetDefaultAgent()
+            : _agentStore.GetAgentById(agentId) ?? _agentStore.GetDefaultAgent();
+
+    private ToolCreationContext BuildToolContext(AgentEntity agent) => new(
+        SessionId: MicroSession.Id,
+        ChannelType: MicroSession.ChannelType,
+        ChannelId: MicroSession.ChannelId,
+        DisabledSkillIds: agent.DisabledSkillIds,
+        CallingAgentId: agent.Id,
+        AllowedSubAgentIds: agent.AllowedSubAgentIds);
+
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     /// <summary>
     /// 将 PetContext 标记为已释放（Disabled）。
-    /// 会话删除时由 <see cref="SessionDeletedEventHandler"/> 调用，
-    /// 防止此后 PetRunner 继续使用已失效的状态。
+    /// 会话删除时调用，防止此后继续使用已失效的状态。
     /// </summary>
     public void Dispose()
     {

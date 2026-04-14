@@ -4,7 +4,7 @@ namespace MicroClaw.Agent;
 
 /// <summary>
 /// Pet 编排层传递给 AgentRunner 的覆盖参数。
-/// 当 Pet 启用时，由 PetRunner 根据 PetDecisionEngine 的调度决策和情绪映射构建，
+/// 当 Pet 启用时，由 MicroPet 根据 PetDecisionEngine 的调度决策和情绪映射构建，
 /// 传入 <see cref="AgentRunner.StreamReActAsync"/> 以覆盖 Agent 的默认行为。
 /// </summary>
 public sealed record PetOverrides

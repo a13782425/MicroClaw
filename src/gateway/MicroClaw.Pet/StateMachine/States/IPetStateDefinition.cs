@@ -33,7 +33,7 @@ public interface IPetStateDefinition
 
     /// <summary>
     /// Pet 在该状态下与用户对话时使用的个性化 Context Hint（可为 null）。
-    /// 供 PetRunner 在未来版本中用于调整对话风格。
+    /// 供 MicroPet 在未来版本中用于调整对话风格。
     /// </summary>
     string? PersonalityContextHint { get; }
 }

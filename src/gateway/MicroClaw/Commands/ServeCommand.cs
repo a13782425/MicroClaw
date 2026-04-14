@@ -249,10 +249,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.PetFactory>();
 		builder.Services.MapAs<MicroClaw.Abstractions.Pet.IPetFactory, MicroClaw.Pet.PetFactory>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>();
-		builder.Services.AddService<MicroClaw.Pet.PetRunner>();
-		builder.Services.MapAs<IPetRunner, MicroClaw.Pet.PetRunner>();
-		// P-F-3: IAgentMessageHandler 指向 PetRunner，渠道消息经 Pet 编排后再委派 AgentRunner
-		builder.Services.MapAs<IAgentMessageHandler, MicroClaw.Pet.PetRunner>();
+		builder.Services.AddService<MicroClaw.Pet.PetService>();
+		builder.Services.MapAs<MicroClaw.Pet.IPetService, MicroClaw.Pet.PetService>();
+		// P-F-3: IAgentMessageHandler 指向 PetService，渠道消息经 Pet 编排后再委派 AgentRunner
+		builder.Services.MapAs<IAgentMessageHandler, MicroClaw.Pet.PetService>();
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();
@@ -309,6 +309,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService<ServiceLifetimeHost>();
 		builder.Services.AddHostedService<CronJobStartupService>();
 		builder.Services.AddHostedService<SessionRunner>();
+		builder.Services.AddHostedService<MicroClaw.Pet.PetRunner>();
 
 		// Token 用量追踪
 		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();
