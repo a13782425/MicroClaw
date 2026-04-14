@@ -230,23 +230,10 @@ public class ServeCommand : Command
 		builder.Services.MapAs<ISubAgentRunner, SubAgentRunnerService>();
 		builder.Services.AddSingleton<IMicroHubService, MicroHubService>();
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
-		// AIContent→StreamItem 转换管道（Handler + Pipeline）
-		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.TextContentHandler>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.DataContentHandler>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.UsageContentHandler>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.IAIContentHandler, MicroClaw.Agent.Streaming.Handlers.ThinkingContentHandler>();
+		// AIContent→StreamItem 转换管道（Handler 由 Pipeline 内部构建）
 		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.AIContentPipeline>();
-		// StreamItem 持久化 Handler（供 SessionEndpoints 注入）
-		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolCallPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.ToolResultPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentStartPersistenceHandler>();
-		builder.Services.AddSingleton<MicroClaw.Abstractions.Streaming.IStreamItemPersistenceHandler, MicroClaw.Streaming.PersistenceHandlers.SubAgentResultPersistenceHandler>();
-		// SessionMessage → AIContent 还原策略（供 BuildChatMessagesAsync 使用）
-		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.ThinkingContentRestorer>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.TextContentRestorer>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.FunctionCallRestorer>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.FunctionResultRestorer>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.IChatContentRestorer, MicroClaw.Agent.Restorers.DataContentRestorer>();
+		// SessionMessage → AIContent 还原服务（Restorer 由 Service 内部构建）
+		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.ChatContentRestorerService>();
 		builder.Services.AddService<AgentRunner>();
 		// P-F-5: Pet 编排层服务注册（Pet 为消息入口，AgentRunner 保留但不再作为消息入口）
 		builder.Services.AddSingleton<MicroClaw.Pet.Storage.PetStateStore>();

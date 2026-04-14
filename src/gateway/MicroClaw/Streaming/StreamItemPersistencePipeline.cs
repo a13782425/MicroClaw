@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Streaming.PersistenceHandlers;
 
 namespace MicroClaw.Streaming;
 
@@ -14,6 +15,7 @@ namespace MicroClaw.Streaming;
 /// <para>
 /// 生命周期应为 Scoped（per-request），因为内部持有聚合状态。
 /// 调用方在流结束后调用 <see cref="Finalize"/> 获取最终聚合的 assistant 消息。
+/// Handler 实例由 Pipeline 内部构建，无需通过 DI 逐个注册。
 /// </para>
 /// </summary>
 public sealed class StreamItemPersistencePipeline
@@ -25,9 +27,15 @@ public sealed class StreamItemPersistencePipeline
     private readonly List<SessionMessage> _immediateMessages = [];
     private string? _currentMessageId;
 
-    public StreamItemPersistencePipeline(IEnumerable<IStreamItemPersistenceHandler> handlers)
+    public StreamItemPersistencePipeline()
     {
-        _handlers = handlers.ToList().AsReadOnly();
+        _handlers = new IStreamItemPersistenceHandler[]
+        {
+            new ToolCallPersistenceHandler(),
+            new ToolResultPersistenceHandler(),
+            new SubAgentStartPersistenceHandler(),
+            new SubAgentResultPersistenceHandler(),
+        };
     }
 
     /// <summary>

@@ -169,7 +169,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderService providerStore, AgentStore agentStore, IPetRunner petRunner, IEnumerable<IStreamItemPersistenceHandler> persistenceHandlers, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, ProviderService providerStore, AgentStore agentStore, IPetRunner petRunner, HttpContext ctx, CancellationToken ct) =>
         {
             IMicroSession? session = repo.Get(id);
             if (session is null)
@@ -216,7 +216,7 @@ public static class SessionEndpoints
             ctx.Response.Headers.Connection = "keep-alive";
             ctx.Response.Headers["X-Accel-Buffering"] = "no";
             
-            var persistencePipeline = new StreamItemPersistencePipeline(persistenceHandlers);
+            var persistencePipeline = new StreamItemPersistencePipeline();
             
             try
             {

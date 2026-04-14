@@ -46,7 +46,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
     private readonly ToolCollector _toolCollector;
     private readonly IDevMetricsService _devMetrics;
     private readonly AIContentPipeline _contentPipeline;
-    private readonly IReadOnlyList<IChatContentRestorer> _restorers;
+    private readonly ChatContentRestorerService _restorerService;
     private readonly IProviderRouter? _providerRouter;
     private readonly IContextOverflowSummarizer? _contextOverflowSummarizer;
     private readonly IHookExecutor? _hookExecutor;
@@ -67,7 +67,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _devMetrics = sp.GetRequiredService<IDevMetricsService>();
         _contentPipeline = sp.GetRequiredService<AIContentPipeline>();
-        _restorers = sp.GetServices<IChatContentRestorer>().ToList().AsReadOnly();
+        _restorerService = sp.GetRequiredService<ChatContentRestorerService>();
         _providerRouter = sp.GetService<IProviderRouter>();
         _contextOverflowSummarizer = sp.GetService<IContextOverflowSummarizer>();
         _hookExecutor = sp.GetService<IHookExecutor>();
@@ -747,22 +747,8 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         return adjustedIndex;
     }
 
-    /// <summary>通过注册的 Restorer 将 SessionMessage 还原为 AIContent 列表。</summary>
-    private List<AIContent> RestoreContents(SessionMessage msg)
-    {
-        var contents = new List<AIContent>();
-        foreach (IChatContentRestorer restorer in _restorers)
-        {
-            if (restorer.CanRestore(msg))
-                contents.AddRange(restorer.Restore(msg));
-        }
-
-        // 如果没有任何 Restorer 匹配但有内容，回退为 TextContent
-        if (contents.Count == 0 && !string.IsNullOrEmpty(msg.Content))
-            contents.Add(new TextContent(msg.Content));
-
-        return contents;
-    }
+    /// <summary>通过 ChatContentRestorerService 将 SessionMessage 还原为 AIContent 列表。</summary>
+    private List<AIContent> RestoreContents(SessionMessage msg) => _restorerService.RestoreContents(msg);
 
     /// <summary>
     /// 构建 System Prompt：按 <see cref="IAgentContextProvider.Order"/> 顺序聚合所有 Provider 的上下文片段，

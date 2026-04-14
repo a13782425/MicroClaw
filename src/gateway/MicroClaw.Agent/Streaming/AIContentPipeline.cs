@@ -1,21 +1,29 @@
-﻿using MicroClaw.Abstractions.Streaming;
+﻿using MicroClaw.Agent.Streaming.Handlers;
+using MicroClaw.Abstractions.Streaming;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent.Streaming;
 
 /// <summary>
-/// AIContent 转换管道：遍历注册的 <see cref="IAIContentHandler"/> 将
+/// AIContent 转换管道：遍历内部注册的 <see cref="IAIContentHandler"/> 将
 /// <see cref="AIContent"/> 转为 <see cref="StreamItem"/>。
+/// Handler 实例由 Pipeline 内部构建，无需通过 DI 逐个注册。
 /// </summary>
 public sealed class AIContentPipeline
 {
     private readonly IReadOnlyList<IAIContentHandler> _handlers;
     private readonly ILogger<AIContentPipeline> _logger;
 
-    public AIContentPipeline(IEnumerable<IAIContentHandler> handlers, ILogger<AIContentPipeline> logger)
+    public AIContentPipeline(ILogger<AIContentPipeline> logger)
     {
-        _handlers = handlers.ToList().AsReadOnly();
+        _handlers = new IAIContentHandler[]
+        {
+            new TextContentHandler(),
+            new DataContentHandler(),
+            new UsageContentHandler(),
+            new ThinkingContentHandler(),
+        };
         _logger = logger;
     }
 
