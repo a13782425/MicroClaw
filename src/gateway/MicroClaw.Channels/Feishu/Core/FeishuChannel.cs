@@ -297,14 +297,7 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
     }
 
     internal static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
-    {
-        if (!long.TryParse(timestamp, out long unixSeconds))
-            return false;
-
-        DateTimeOffset requestTime = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
-        double diff = Math.Abs((DateTimeOffset.UtcNow - requestTime).TotalSeconds);
-        return diff <= toleranceSeconds;
-    }
+        => WebhookUtils.IsTimestampFresh(timestamp, toleranceSeconds);
 
     private static T? TryDeserialize<T>(string json) where T : class
     {

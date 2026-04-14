@@ -49,7 +49,36 @@ public sealed class WeComChannel(ChannelEntity config) : IChannel
     public Task<WebhookResult> HandleWebhookAsync(string body,
         IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
     {
-        // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
+        WeComChannelSettings settings = WeComChannelSettings.TryParse(Config.SettingJson) ?? new();
+        if (string.IsNullOrWhiteSpace(settings.Token))
+            return Task.FromResult(WebhookResult.Unauthorized("Token is not configured."));
+
+        headers ??= new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        headers.TryGetValue("timestamp",      out string? timestamp);
+        headers.TryGetValue("nonce",          out string? nonce);
+        headers.TryGetValue("msg_signature",  out string? msgSignature);
+        headers.TryGetValue("echostr",        out string? echostr);
+
+        // GET URL 验证：企业微信服务器发送 echostr 校验回调地址
+        if (!string.IsNullOrEmpty(echostr))
+        {
+            if (!IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+                return Task.FromResult(WebhookResult.Unauthorized("Timestamp expired or invalid"));
+            if (!VerifySignature(settings.Token, timestamp, nonce, msgSignature))
+                return Task.FromResult(WebhookResult.Unauthorized("Signature verification failed"));
+            return Task.FromResult(WebhookResult.OkText(echostr));
+        }
+
+        // POST 消息接收：验证时间戳 + 签名（加密模式携带 Encrypt 字段）
+        if (!IsTimestampFresh(timestamp, settings.WebhookTimestampToleranceSeconds))
+            return Task.FromResult(WebhookResult.Unauthorized("Timestamp expired or invalid"));
+
+        headers.TryGetValue("encrypt", out string? msgEncrypt);
+        string? encryptParam = string.IsNullOrEmpty(msgEncrypt) ? null : msgEncrypt;
+        if (!VerifySignature(settings.Token, timestamp, nonce, msgSignature, encryptParam))
+            return Task.FromResult(WebhookResult.Unauthorized("Signature verification failed"));
+
+        // 消息正文处理（预留完整 XML 解析实现）
         return Task.FromResult(WebhookResult.Empty);
     }
 
@@ -100,12 +129,5 @@ public sealed class WeComChannel(ChannelEntity config) : IChannel
     }
 
     public static bool IsTimestampFresh(string? timestamp, int toleranceSeconds)
-    {
-        if (!long.TryParse(timestamp, out long unixSeconds))
-            return false;
-
-        DateTimeOffset requestTime = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
-        double diff = Math.Abs((DateTimeOffset.UtcNow - requestTime).TotalSeconds);
-        return diff <= toleranceSeconds;
-    }
+        => WebhookUtils.IsTimestampFresh(timestamp, toleranceSeconds);
 }
