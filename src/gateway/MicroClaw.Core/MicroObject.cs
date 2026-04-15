@@ -13,17 +13,17 @@ public enum MicroObjectState
 /// 引擎中的实体对象，采用组件模式（Component Pattern）。
 /// 通过 <see cref="AddComponent{TComponent}()"/> 挂载功能组件，生命周期随引擎同步变更。
 /// </summary>
-public class MicroObject
+public class MicroObject : MicroLifeCycle<MicroEngine>
 {
-    private readonly Lock _gate = new();                             // 保护组件字典及状态字段的互斥锁
+    private readonly Lock _gate = new();
     private readonly Dictionary<Type, MicroComponent> _components = new();
-    private bool _isTransitioning;                                     // 标记正在进行生命周期转换，防止并发修改
+    private bool _isTransitioning;
 
     /// <summary>所属引擎，未注册时为 null。</summary>
-    public MicroEngine? Engine { get; private set; }
+    public MicroEngine? Engine => Host;
 
     /// <summary>当前对象状态。</summary>
-    public MicroObjectState State { get; private set; } = MicroObjectState.Created;
+    public MicroObjectState State => MapState(LifeCycleState);
 
     public IReadOnlyList<MicroComponent> Components
     {
@@ -69,8 +69,8 @@ public class MicroObject
             }
 
             _components.Add(componentType, component);
-            shouldInitialize = State is MicroObjectState.Initialized or MicroObjectState.Active;
-            shouldActivate = State == MicroObjectState.Active;
+            shouldInitialize = LifeCycleState is MicroLifeCycleState.Initialized or MicroLifeCycleState.Active;
+            shouldActivate = LifeCycleState == MicroLifeCycleState.Active;
         }
 
         try
@@ -147,20 +147,28 @@ public class MicroObject
 
             _isTransitioning = true;
 
-            if (!TryResolveComponent(typeof(TComponent), out component))
+            try
+            {
+                if (!TryResolveComponent(typeof(TComponent), out component))
+                {
+                    _isTransitioning = false;
+                    return false;
+                }
+
+                if (component is null)
+                {
+                    _isTransitioning = false;
+                    return false;
+                }
+
+                componentType = component.GetType();
+                _components.Remove(componentType);
+            }
+            catch
             {
                 _isTransitioning = false;
-                return false;
+                throw;
             }
-
-            if (component is null)
-            {
-                _isTransitioning = false;
-                return false;
-            }
-
-            componentType = component.GetType();
-            _components.Remove(componentType);
         }
 
         try
@@ -240,61 +248,43 @@ public class MicroObject
         }
     }
 
-    /// <summary>激活对象及其所有组件（先初始化未初始化的组件，再逐一激活）；已激活则跳过。</summary>
+    /// <summary>激活对象及其所有组件；对象必须先挂载到引擎。</summary>
     public void Activate()
     {
-        MicroComponent[] snapshot;
-        MicroObjectState previousState;
+        MicroLifeCycleState previousState;
 
         lock (_gate)
         {
             ThrowIfDisposed();
-            ThrowIfTransitioning();
 
-            if (State == MicroObjectState.Active)
+            if (LifeCycleState == MicroLifeCycleState.Active)
                 return;
 
+            ThrowIfTransitioning();
             _isTransitioning = true;
-            previousState = State;
-            State = MicroObjectState.Active;
-            snapshot = _components.Values.ToArray();
+            previousState = LifeCycleState;
         }
-
-        List<(MicroComponent Component, MicroComponentState PreviousState)> activated = [];
 
         try
         {
-            foreach (MicroComponent component in snapshot)
+            ActivateCore();
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed)
             {
-                MicroComponentState previousComponentState = component.State;
-
                 try
                 {
-                    component.Initialize();
-                    component.Activate();
-                    activated.Add((component, previousComponentState));
+                    RollbackToCore(previousState);
                 }
-                catch (Exception ex)
+                catch (Exception rollbackException)
                 {
-                    List<Exception> rollbackErrors = [];
-                    CollectRollbackError(component, previousComponentState, rollbackErrors);
-
-                    foreach ((MicroComponent activatedComponent, MicroComponentState componentState) in activated.AsEnumerable().Reverse())
-                        CollectRollbackError(activatedComponent, componentState, rollbackErrors);
-
-                    lock (_gate)
-                    {
-                        if (State != MicroObjectState.Disposed)
-                            State = previousState;
-                    }
-
-                    if (rollbackErrors.Count == 0)
-                        throw;
-
-                    rollbackErrors.Insert(0, ex);
-                    throw new AggregateException(rollbackErrors);
+                    AlignLifeCycleStateToComponents(previousState);
+                    throw CreateAggregate(ex, rollbackException);
                 }
             }
+
+            throw;
         }
         finally
         {
@@ -308,56 +298,18 @@ public class MicroObject
     /// <summary>停用对象及其所有组件（按逆序停用），状态回退到 Initialized；未激活则跳过。</summary>
     public void Deactivate()
     {
-        MicroComponent[] snapshot;
-        MicroObjectState previousState;
-
         lock (_gate)
         {
-            if (State != MicroObjectState.Active)
+            if (LifeCycleState != MicroLifeCycleState.Active)
                 return;
 
             ThrowIfTransitioning();
-
             _isTransitioning = true;
-            previousState = State;
-            State = MicroObjectState.Initialized;
-            snapshot = _components.Values.Reverse().ToArray();
         }
-
-        List<(MicroComponent Component, MicroComponentState PreviousState)> deactivated = [];
 
         try
         {
-            foreach (MicroComponent component in snapshot)
-            {
-                MicroComponentState previousComponentState = component.State;
-
-                try
-                {
-                    component.Deactivate();
-                    deactivated.Add((component, previousComponentState));
-                }
-                catch (Exception ex)
-                {
-                    List<Exception> rollbackErrors = [];
-                    CollectRollbackError(component, previousComponentState, rollbackErrors);
-
-                    foreach ((MicroComponent deactivatedComponent, MicroComponentState componentState) in deactivated.AsEnumerable().Reverse())
-                        CollectRollbackError(deactivatedComponent, componentState, rollbackErrors);
-
-                    lock (_gate)
-                    {
-                        if (State != MicroObjectState.Disposed)
-                            State = previousState;
-                    }
-
-                    if (rollbackErrors.Count == 0)
-                        throw;
-
-                    rollbackErrors.Insert(0, ex);
-                    throw new AggregateException(rollbackErrors);
-                }
-            }
+            DeactivateCore();
         }
         finally
         {
@@ -369,7 +321,7 @@ public class MicroObject
     }
 
     /// <summary>释放对象；若已注册到引擎则委托引擎执行销毁，否则直接调用 <see cref="DisposeCore"/>。</summary>
-    public void Dispose()
+    public override void Dispose()
     {
         if (Engine is { } engine)
         {
@@ -382,42 +334,18 @@ public class MicroObject
 
     internal void DisposeCore()
     {
-        MicroComponent[] snapshot;
-
         lock (_gate)
         {
-            if (State == MicroObjectState.Disposed)
+            if (IsDisposed)
                 return;
 
             ThrowIfTransitioning();
-
             _isTransitioning = true;
-            snapshot = _components.Values.Reverse().ToArray();
-            State = MicroObjectState.Disposed;
         }
-
-        List<Exception> errors = [];
 
         try
         {
-            foreach (MicroComponent component in snapshot)
-            {
-                try
-                {
-                    component.DetachFromHost();
-                }
-                catch (Exception ex)
-                {
-                    errors.Add(ex);
-                }
-                finally
-                {
-                    lock (_gate)
-                    {
-                        _components.Remove(component.GetType());
-                    }
-                }
-            }
+            DisposeLifeCycle();
         }
         finally
         {
@@ -426,30 +354,160 @@ public class MicroObject
                 _isTransitioning = false;
             }
         }
-
-        ThrowIfNeeded(errors);
     }
 
     internal void AttachToEngine(MicroEngine engine)
     {
         ArgumentNullException.ThrowIfNull(engine);
 
-        if (Engine is not null && !ReferenceEquals(Engine, engine))
+        if (Host is not null && !ReferenceEquals(Host, engine))
             throw new InvalidOperationException("A MicroObject can only belong to one MicroEngine at a time.");
 
-        Engine = engine;
+        AttachToHost(engine);
     }
 
     internal void DetachFromEngine(MicroEngine engine)
     {
-        if (ReferenceEquals(Engine, engine))
-            Engine = null;
+        if (ReferenceEquals(Host, engine))
+            DetachCore();
+    }
+
+    internal void RollbackToState(MicroObjectState state)
+        => RollbackToCore(state switch
+        {
+            MicroObjectState.Created => Host is null ? MicroLifeCycleState.Detached : MicroLifeCycleState.Attached,
+            MicroObjectState.Initialized => MicroLifeCycleState.Initialized,
+            MicroObjectState.Active => MicroLifeCycleState.Active,
+            MicroObjectState.Disposed => MicroLifeCycleState.Disposed,
+            _ => throw new ArgumentOutOfRangeException(nameof(state)),
+        });
+
+    protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        ExecuteComponentTransition(
+            snapshotFactory: static snapshot => snapshot,
+            transition: static component => component.Initialize(),
+            rollback: static (component, previousState, errors) => CollectRollbackError(component, previousState, errors),
+            ownsTransitionGuard: !_isTransitioning);
+
+        return ValueTask.CompletedTask;
+    }
+
+    protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+    {
+        ExecuteComponentTransition(
+            snapshotFactory: static snapshot => snapshot,
+            transition: static component => component.Activate(),
+            rollback: static (component, previousState, errors) => CollectRollbackError(component, previousState, errors),
+            ownsTransitionGuard: !_isTransitioning);
+
+        return ValueTask.CompletedTask;
+    }
+
+    protected override async ValueTask OnTickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
+    {
+        MicroComponent[] snapshot;
+
+        lock (_gate)
+        {
+            snapshot = _components.Values.ToArray();
+        }
+
+        foreach (MicroComponent component in snapshot)
+            await component.TickNodeAsync(deltaTime, cancellationToken);
+    }
+
+    protected override ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
+    {
+        ExecuteComponentTransition(
+            snapshotFactory: static snapshot => snapshot.Reverse().ToArray(),
+            transition: static component => component.Deactivate(),
+            rollback: static (component, previousState, errors) => CollectRollbackError(component, previousState, errors),
+            ownsTransitionGuard: !_isTransitioning,
+            preserveCompletedTransitionsOnFailure: true);
+
+        return ValueTask.CompletedTask;
+    }
+
+    protected override ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
+    {
+        ExecuteComponentTransition(
+            snapshotFactory: static snapshot => snapshot.Reverse().ToArray(),
+            transition: static component => component.RollbackTo(MicroComponentState.Attached),
+            rollback: static (component, previousState, errors) => CollectRollbackError(component, previousState, errors),
+            ownsTransitionGuard: !_isTransitioning,
+            preserveCompletedTransitionsOnFailure: true);
+
+        return ValueTask.CompletedTask;
+    }
+
+    protected override ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    {
+        MicroComponent[] snapshot;
+
+        lock (_gate)
+        {
+            snapshot = _components.Values.Reverse().ToArray();
+        }
+
+        List<Exception> errors = [];
+
+        foreach (MicroComponent component in snapshot)
+        {
+            try
+            {
+                component.DetachFromHost();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+
+            try
+            {
+                component.DisposeLifeCycle();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _components.Remove(component.GetType());
+                }
+            }
+        }
+
+        ThrowIfNeeded(errors);
+        return ValueTask.CompletedTask;
     }
 
     private void ThrowIfDisposed()
     {
-        if (State == MicroObjectState.Disposed)
+        if (IsDisposed)
             throw new ObjectDisposedException(nameof(MicroObject));
+    }
+
+    private void AlignLifeCycleStateToComponents(MicroLifeCycleState fallbackState)
+    {
+        lock (_gate)
+        {
+            if (_components.Values.Any(static component => component.State == MicroComponentState.Active))
+            {
+                SetLifeCycleState(MicroLifeCycleState.Active);
+                return;
+            }
+
+            if (_components.Values.Any(static component => component.State == MicroComponentState.Initialized))
+            {
+                SetLifeCycleState(MicroLifeCycleState.Initialized);
+                return;
+            }
+
+            SetLifeCycleState(Host is null ? MicroLifeCycleState.Detached : fallbackState);
+        }
     }
 
     private void ThrowIfTransitioning()
@@ -479,6 +537,70 @@ public class MicroObject
         return component is not null;
     }
 
+    private void ExecuteComponentTransition(
+        Func<MicroComponent[], MicroComponent[]> snapshotFactory,
+        Action<MicroComponent> transition,
+        Action<MicroComponent, MicroComponentState, List<Exception>> rollback,
+        bool ownsTransitionGuard,
+        bool preserveCompletedTransitionsOnFailure = false)
+    {
+        MicroComponent[] snapshot;
+
+        lock (_gate)
+        {
+            if (ownsTransitionGuard)
+            {
+                ThrowIfTransitioning();
+                _isTransitioning = true;
+            }
+
+            snapshot = snapshotFactory(_components.Values.ToArray());
+        }
+
+        List<(MicroComponent Component, MicroComponentState PreviousState)> transitioned = [];
+
+        try
+        {
+            foreach (MicroComponent component in snapshot)
+            {
+                MicroComponentState previousState = component.State;
+
+                try
+                {
+                    transition(component);
+                    transitioned.Add((component, previousState));
+                }
+                catch (Exception ex)
+                {
+                    if (preserveCompletedTransitionsOnFailure)
+                        throw;
+
+                    List<Exception> rollbackErrors = [];
+                    rollback(component, previousState, rollbackErrors);
+
+                    foreach ((MicroComponent transitionedComponent, MicroComponentState componentState) in transitioned.AsEnumerable().Reverse())
+                        rollback(transitionedComponent, componentState, rollbackErrors);
+
+                    if (rollbackErrors.Count == 0)
+                        throw;
+
+                    rollbackErrors.Insert(0, ex);
+                    throw new AggregateException(rollbackErrors);
+                }
+            }
+        }
+        finally
+        {
+            if (ownsTransitionGuard)
+            {
+                lock (_gate)
+                {
+                    _isTransitioning = false;
+                }
+            }
+        }
+    }
+
     private static void CollectRollbackError(MicroComponent component, MicroComponentState targetState, List<Exception> rollbackErrors)
     {
         try
@@ -491,6 +613,17 @@ public class MicroObject
         }
     }
 
+    private static MicroObjectState MapState(MicroLifeCycleState state)
+        => state switch
+        {
+            MicroLifeCycleState.Detached => MicroObjectState.Created,
+            MicroLifeCycleState.Attached => MicroObjectState.Created,
+            MicroLifeCycleState.Initialized => MicroObjectState.Initialized,
+            MicroLifeCycleState.Active => MicroObjectState.Active,
+            MicroLifeCycleState.Disposed => MicroObjectState.Disposed,
+            _ => throw new ArgumentOutOfRangeException(nameof(state)),
+        };
+
     private static void ThrowIfNeeded(IReadOnlyList<Exception> errors)
     {
         if (errors.Count == 1)
@@ -498,5 +631,22 @@ public class MicroObject
 
         if (errors.Count > 1)
             throw new AggregateException(errors);
+    }
+
+    private static AggregateException CreateAggregate(Exception primaryException, Exception rollbackException)
+    {
+        List<Exception> errors = [];
+
+        if (primaryException is AggregateException primaryAggregate)
+            errors.AddRange(primaryAggregate.InnerExceptions);
+        else
+            errors.Add(primaryException);
+
+        if (rollbackException is AggregateException rollbackAggregate)
+            errors.AddRange(rollbackAggregate.InnerExceptions);
+        else
+            errors.Add(rollbackException);
+
+        return new AggregateException(errors);
     }
 }

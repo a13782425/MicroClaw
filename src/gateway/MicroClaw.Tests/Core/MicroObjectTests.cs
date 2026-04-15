@@ -42,6 +42,7 @@ public sealed class MicroObjectTests
     public void AddComponent_HostAlreadyActive_InitializesAndActivatesComponent()
     {
         var host = new MicroObject();
+        CreateEngineWith(host);
         host.Activate();
 
         var component = host.AddComponent<TrackingComponent>();
@@ -55,6 +56,7 @@ public sealed class MicroObjectTests
     public void AddComponent_WhenActivationFails_RollsBackAttachment()
     {
         var host = new MicroObject();
+        CreateEngineWith(host);
         host.Activate();
         var component = new ThrowingComponent();
 
@@ -92,6 +94,7 @@ public sealed class MicroObjectTests
     public void Activate_WhenComponentMutatesHost_ReentrantMutationIsRejected()
     {
         var host = new MicroObject();
+        CreateEngineWith(host);
         host.AddComponent<ReentrantComponent>();
 
         Action act = () => host.Activate();
@@ -103,9 +106,10 @@ public sealed class MicroObjectTests
     }
 
     [Fact]
-    public void Activate_WhenRollbackCallbackFails_ThrowsAggregateAndRestoresHostState()
+    public void Activate_WhenRollbackCallbackFails_ThrowsAggregateAndPreservesFailedRollbackState()
     {
         var host = new MicroObject();
+        CreateEngineWith(host);
         var rollbackFailure = host.AddComponent<RollbackFailureComponent>();
         var failing = host.AddComponent<ThrowingComponent>();
 
@@ -113,16 +117,33 @@ public sealed class MicroObjectTests
 
         var exception = act.Should().Throw<AggregateException>().Which;
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "activate failed");
-        exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "rollback deactivate failed");
-        host.State.Should().Be(MicroObjectState.Created);
-        rollbackFailure.State.Should().Be(MicroComponentState.Attached);
+        exception.InnerExceptions.Should().Contain(ex => ex.Message == "rollback deactivate failed");
+        host.State.Should().Be(MicroObjectState.Active);
+        rollbackFailure.State.Should().Be(MicroComponentState.Active);
         failing.State.Should().Be(MicroComponentState.Attached);
+    }
+
+    [Fact]
+    public void Activate_WhenOuterRollbackFails_PreservesOriginalActivationError()
+    {
+        var host = new MicroObject();
+        CreateEngineWith(host);
+        var component = host.AddComponent<OuterRollbackFailureComponent>();
+
+        Action act = () => host.Activate();
+
+        var exception = act.Should().Throw<AggregateException>().Which;
+        exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "activate failed");
+        exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "outer rollback failed");
+        host.State.Should().Be(MicroObjectState.Initialized);
+        component.State.Should().Be(MicroComponentState.Initialized);
     }
 
     [Fact]
     public void AddComponent_WhenDetachRollbackFails_ThrowsAggregateAndDetachesComponent()
     {
         var host = new MicroObject();
+        CreateEngineWith(host);
         host.Activate();
         var component = new ThrowingAndDetachFailingComponent();
 
@@ -134,6 +155,80 @@ public sealed class MicroObjectTests
         host.GetComponent<ThrowingAndDetachFailingComponent>().Should().BeNull();
         component.Host.Should().BeNull();
         component.State.Should().Be(MicroComponentState.Detached);
+    }
+
+    [Fact]
+    public void RemoveComponent_WhenResolutionIsAmbiguous_DoesNotLeaveHostTransitioning()
+    {
+        var host = new MicroObject();
+        host.AddComponent<AmbiguousComponentA>();
+        host.AddComponent<AmbiguousComponentB>();
+
+        Action act = () => host.RemoveComponent<AmbiguousComponentBase>();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*Multiple components*");
+        host.AddComponent<TrackingComponent>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Dispose_ComponentInstance_RemovesItFromHostAndMarksItDisposed()
+    {
+        var host = new MicroObject();
+        var component = host.AddComponent<TrackingComponent>();
+
+        component.Dispose();
+
+        host.GetComponent<TrackingComponent>().Should().BeNull();
+        host.Components.Should().BeEmpty();
+        component.Host.Should().BeNull();
+        component.IsDisposed.Should().BeTrue();
+        component.DetachedCount.Should().Be(1);
+        component.DisposedCount.Should().Be(1);
+
+        Action act = () => host.AddComponent(component);
+
+        act.Should().Throw<ObjectDisposedException>();
+        host.AddComponent<TrackingComponent>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Dispose_ComponentInstance_WhenDetachFails_StillMarksItDisposed()
+    {
+        var host = new MicroObject();
+        var component = host.AddComponent<DetachAndDisposeTrackingComponent>();
+
+        Action act = () => component.Dispose();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("detach failed");
+        host.GetComponent<DetachAndDisposeTrackingComponent>().Should().BeNull();
+        component.Host.Should().BeNull();
+        component.IsDisposed.Should().BeTrue();
+        component.DisposedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Dispose_ComponentInstance_WhenHostIsTransitioning_DoesNotDisposeOrDetachComponent()
+    {
+        var host = new MicroObject();
+        var component = new BlockingAttachComponent();
+
+        Task addTask = Task.Run(() => host.AddComponent(component));
+        await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Action act = () => component.Dispose();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*transition*");
+        component.IsDisposed.Should().BeFalse();
+        component.Host.Should().BeSameAs(host);
+
+        component.AllowAttach();
+        await addTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingAttachComponent>().Should().BeSameAs(component);
+        component.IsDisposed.Should().BeFalse();
     }
 
     [Fact]
@@ -155,9 +250,23 @@ public sealed class MicroObjectTests
         host.Components.Should().BeEmpty();
         tracking.Host.Should().BeNull();
         tracking.State.Should().Be(MicroComponentState.Detached);
+        tracking.IsDisposed.Should().BeTrue();
+        tracking.DisposedCount.Should().Be(1);
         failing.Host.Should().BeNull();
         failing.State.Should().Be(MicroComponentState.Detached);
         engine.Objects.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Dispose_HostDisposesComponents_InvokesOnDisposed()
+    {
+        var host = new MicroObject();
+        var component = host.AddComponent<TrackingComponent>();
+
+        host.Dispose();
+
+        component.IsDisposed.Should().BeTrue();
+        component.DisposedCount.Should().Be(1);
     }
 
     [Fact]
@@ -189,6 +298,13 @@ public sealed class MicroObjectTests
         public object? GetService(Type serviceType) => null;
     }
 
+    private static MicroEngine CreateEngineWith(MicroObject host)
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        engine.RegisterObject(host).Should().BeTrue();
+        return engine;
+    }
+
     private sealed class TrackingComponent : MicroComponent
     {
         public int InitializedCount { get; private set; }
@@ -196,6 +312,8 @@ public sealed class MicroObjectTests
         public int ActivatedCount { get; private set; }
 
         public int DetachedCount { get; private set; }
+
+        public int DisposedCount { get; private set; }
 
         protected override void OnInitialized()
         {
@@ -210,6 +328,11 @@ public sealed class MicroObjectTests
         protected override void OnDetached()
         {
             DetachedCount++;
+        }
+
+        protected override void OnDisposed()
+        {
+            DisposedCount++;
         }
     }
 
@@ -258,11 +381,45 @@ public sealed class MicroObjectTests
         }
     }
 
+    private sealed class OuterRollbackFailureComponent : MicroComponent
+    {
+        protected override void OnActivated()
+        {
+            throw new InvalidOperationException("activate failed");
+        }
+
+        protected override void OnUninitialized()
+        {
+            throw new InvalidOperationException("outer rollback failed");
+        }
+    }
+
+    private abstract class AmbiguousComponentBase : MicroComponent;
+
+    private sealed class AmbiguousComponentA : AmbiguousComponentBase;
+
+    private sealed class AmbiguousComponentB : AmbiguousComponentBase;
+
     private sealed class DetachFailingComponent : MicroComponent
     {
         protected override void OnDetached()
         {
             throw new InvalidOperationException("detach failed");
+        }
+    }
+
+    private sealed class DetachAndDisposeTrackingComponent : MicroComponent
+    {
+        public int DisposedCount { get; private set; }
+
+        protected override void OnDetached()
+        {
+            throw new InvalidOperationException("detach failed");
+        }
+
+        protected override void OnDisposed()
+        {
+            DisposedCount++;
         }
     }
 

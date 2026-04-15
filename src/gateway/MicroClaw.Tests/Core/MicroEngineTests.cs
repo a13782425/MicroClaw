@@ -31,6 +31,23 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
+    public async Task TickAsync_WhenStarted_InvokesActiveObjectComponents()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var host = new MicroObject();
+        var component = host.AddComponent<TickingComponent>();
+
+        engine.RegisterObject(host).Should().BeTrue();
+
+        await engine.StartAsync();
+        await engine.TickAsync(TimeSpan.FromMilliseconds(25));
+        await engine.StopAsync();
+
+        component.TickCount.Should().Be(1);
+        component.LastDelta.Should().Be(TimeSpan.FromMilliseconds(25));
+    }
+
+    [Fact]
     public async Task RegisterObject_AfterStart_ActivatesAttachedComponentsImmediately()
     {
         var engine = new MicroEngine(new NullServiceProvider(), []);
@@ -77,6 +94,36 @@ public sealed class MicroEngineTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("start failed");
         service.StopCount.Should().Be(1);
+        service.State.Should().Be(MicroServiceState.Stopped);
+        engine.State.Should().Be(MicroEngineState.Stopped);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenServiceInitializationFails_DoesNotInvokeStopCallback()
+    {
+        var service = new ThrowingInitializeService(order: 10);
+        var engine = new MicroEngine(new NullServiceProvider(), [service]);
+
+        Func<Task> act = () => engine.StartAsync().AsTask();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("initialize failed");
+        service.StopCount.Should().Be(0);
+        service.State.Should().Be(MicroServiceState.Stopped);
+        engine.State.Should().Be(MicroEngineState.Stopped);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenActivationHookFails_RunsDeactivationHookRollback()
+    {
+        var service = new ThrowingActivationHookService(order: 10);
+        var engine = new MicroEngine(new NullServiceProvider(), [service]);
+
+        Func<Task> act = () => engine.StartAsync().AsTask();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("activate failed");
+        service.DeactivatedCount.Should().Be(1);
         service.State.Should().Be(MicroServiceState.Stopped);
         engine.State.Should().Be(MicroEngineState.Stopped);
     }
@@ -366,7 +413,112 @@ public sealed class MicroEngineTests
         engine.State.Should().Be(MicroEngineState.Faulted);
         engine.Services.Should().Contain(service);
         service.Engine.Should().BeSameAs(engine);
-        service.State.Should().Be(MicroServiceState.Starting);
+        service.State.Should().Be(MicroServiceState.Stopping);
+    }
+
+    [Fact]
+    public async Task Dispose_WhenRegisteredService_RemovesItFromEngineAndMarksDisposed()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var service = new TrackingService(order: 10);
+
+        await engine.RegisterServiceAsync(service);
+        await engine.StartAsync();
+
+        service.Dispose();
+
+        engine.Services.Should().NotContain(service);
+        service.Engine.Should().BeNull();
+        service.IsDisposed.Should().BeTrue();
+        service.State.Should().Be(MicroServiceState.Stopped);
+        service.StopCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Dispose_WhenServiceStopFails_DoesNotInvokeStopTwice()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var service = new ThrowingStopService(order: 10);
+
+        await engine.RegisterServiceAsync(service);
+        await engine.StartAsync();
+
+        Action act = () => service.Dispose();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("stop failed");
+        service.StopCount.Should().Be(1);
+        service.IsDisposed.Should().BeTrue();
+        engine.Services.Should().NotContain(service);
+    }
+
+    [Fact]
+    public async Task Dispose_WhenUninitializeFails_RetriesUninitializeWithoutRepeatingStop()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var service = new ThrowingUninitializeService(order: 10);
+
+        await engine.RegisterServiceAsync(service);
+        await engine.StartAsync();
+
+        Action act = () => service.Dispose();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("uninitialize failed");
+        service.StopCount.Should().Be(1);
+        service.UninitializeCount.Should().Be(2);
+        service.IsDisposed.Should().BeTrue();
+        engine.Services.Should().NotContain(service);
+    }
+
+    [Fact]
+    public async Task UnregisterServiceAsync_WhenUninitializeFails_LeavesServiceNotStarted()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var service = new ThrowingAlwaysUninitializeService(order: 10);
+
+        await engine.RegisterServiceAsync(service);
+        await engine.StartAsync();
+
+        Func<Task> act = () => engine.UnregisterServiceAsync(service).AsTask();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("uninitialize failed");
+        service.State.Should().Be(MicroServiceState.Stopping);
+        service.IsStarted.Should().BeFalse();
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+        engine.Services.Should().Contain(service);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenServiceIsPartiallyStopped_RetriesCleanupAndAllowsRestart()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var service = new ThrowingUninitializeService(order: 10);
+
+        await engine.RegisterServiceAsync(service);
+        await engine.StartAsync();
+
+        Func<Task> firstStop = () => engine.StopAsync().AsTask();
+
+        await firstStop.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("uninitialize failed");
+        engine.State.Should().Be(MicroEngineState.Faulted);
+        service.State.Should().Be(MicroServiceState.Stopping);
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+        service.StopCount.Should().Be(1);
+
+        await engine.StopAsync();
+
+        engine.State.Should().Be(MicroEngineState.Stopped);
+        service.State.Should().Be(MicroServiceState.Stopped);
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
+        service.StopCount.Should().Be(1);
+
+        await engine.StartAsync();
+        engine.State.Should().Be(MicroEngineState.Running);
+
+        await engine.StopAsync();
     }
 
     [Fact]
@@ -515,6 +667,20 @@ public sealed class MicroEngineTests
         }
     }
 
+    private sealed class TickingComponent : MicroComponent
+    {
+        public int TickCount { get; private set; }
+
+        public TimeSpan? LastDelta { get; private set; }
+
+        protected override ValueTask OnTickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
+        {
+            TickCount++;
+            LastDelta = deltaTime;
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class ThrowingComponent : MicroComponent
     {
         protected override void OnActivated()
@@ -539,6 +705,38 @@ public sealed class MicroEngineTests
         }
     }
 
+    private sealed class ThrowingInitializeService(int order) : MicroService
+    {
+        public override int Order => order;
+
+        public int StopCount { get; private set; }
+
+        protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("initialize failed"));
+
+        protected override ValueTask StopAsync(CancellationToken cancellationToken = default)
+        {
+            StopCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingActivationHookService(int order) : MicroService
+    {
+        public override int Order => order;
+
+        public int DeactivatedCount { get; private set; }
+
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("activate failed"));
+
+        protected override ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
+        {
+            DeactivatedCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class ThrowingStartAndStopService(int order) : MicroService
     {
         public override int Order => order;
@@ -548,6 +746,58 @@ public sealed class MicroEngineTests
 
         protected override ValueTask StopAsync(CancellationToken cancellationToken = default)
             => ValueTask.FromException(new InvalidOperationException("stop failed"));
+    }
+
+    private sealed class ThrowingStopService(int order) : MicroService
+    {
+        public override int Order => order;
+
+        public int StopCount { get; private set; }
+
+        protected override ValueTask StartAsync(CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
+
+        protected override ValueTask StopAsync(CancellationToken cancellationToken = default)
+        {
+            StopCount++;
+            return ValueTask.FromException(new InvalidOperationException("stop failed"));
+        }
+    }
+
+    private sealed class ThrowingUninitializeService(int order) : MicroService
+    {
+        public override int Order => order;
+
+        public int StopCount { get; private set; }
+
+        public int UninitializeCount { get; private set; }
+
+        protected override ValueTask StopAsync(CancellationToken cancellationToken = default)
+        {
+            StopCount++;
+            return ValueTask.CompletedTask;
+        }
+
+        protected override ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
+        {
+            UninitializeCount++;
+
+            if (UninitializeCount == 1)
+                return ValueTask.FromException(new InvalidOperationException("uninitialize failed"));
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingAlwaysUninitializeService(int order) : MicroService
+    {
+        public override int Order => order;
+
+        protected override ValueTask StopAsync(CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
+
+        protected override ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("uninitialize failed"));
     }
 
     private sealed class BlockingStartService(int order) : MicroService

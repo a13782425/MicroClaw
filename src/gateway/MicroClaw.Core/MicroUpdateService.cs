@@ -8,4 +8,7 @@ public abstract class MicroUpdateService : MicroService
 {
     /// <summary>每帧更新逻辑，<paramref name="deltaTime"/> 为距上一帧的时间间隔。</summary>
     public abstract ValueTask TickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default);
+
+    protected override ValueTask OnTickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
+        => TickAsync(deltaTime, cancellationToken);
 }

@@ -37,16 +37,30 @@ public sealed class MicroEngine
                 attachedServices.Add(service);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            List<Exception> rollbackErrors = [];
+
             // 回滚：按逆序卸载已成功挂载的服务
             foreach (MicroService service in attachedServices.AsEnumerable().Reverse())
             {
                 _services.Remove(service);
-                service.DetachFromEngine(this);
+
+                try
+                {
+                    service.DetachFromEngine(this);
+                }
+                catch (Exception detachException)
+                {
+                    rollbackErrors.Add(detachException);
+                }
             }
-            
-            throw;
+
+            if (rollbackErrors.Count == 0)
+                throw;
+
+            rollbackErrors.Insert(0, ex);
+            throw new AggregateException(rollbackErrors);
         }
     }
     
@@ -111,19 +125,20 @@ public sealed class MicroEngine
                     throw new InvalidOperationException($"MicroEngine cannot start while it is '{State}'.");
                 
                 State = MicroEngineState.Starting;
+                WriteTrace("Engine starting.");
                 serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
                 objectSnapshot = _objects.ToArray();
             }
             
             List<MicroService> startedServices = [];
-            List<MicroObject> activatedObjects = [];
+            List<(MicroObject Object, MicroObjectState PreviousState)> activatedObjects = [];
             
             try
             {
                 foreach (MicroService service in serviceSnapshot)
                 {
                     startedServices.Add(service);
-                    await service.StartInternalAsync(cancellationToken);
+                    await service.StartNodeAsync(cancellationToken);
                 }
                 
                 foreach (MicroObject microObject in objectSnapshot)
@@ -133,25 +148,39 @@ public sealed class MicroEngine
                         if (!_objects.Contains(microObject) || microObject.State == MicroObjectState.Disposed)
                             continue;
                     }
-                    
-                    microObject.Activate();
-                    activatedObjects.Add(microObject);
+
+                    MicroObjectState previousState = microObject.State;
+
+                    try
+                    {
+                        microObject.Activate();
+                        activatedObjects.Add((microObject, previousState));
+                    }
+                    catch
+                    {
+                        if (microObject.State != previousState)
+                            activatedObjects.Add((microObject, previousState));
+
+                        throw;
+                    }
                 }
                 
                 lock (_gate)
                 {
                     State = MicroEngineState.Running;
                 }
+
+                WriteTrace("Engine started.");
             }
             catch (Exception startException)
             {
                 List<Exception> rollbackErrors = [];
                 
-                foreach (MicroObject microObject in activatedObjects.AsEnumerable().Reverse())
+                foreach ((MicroObject microObject, MicroObjectState previousState) in activatedObjects.AsEnumerable().Reverse())
                 {
                     try
                     {
-                        microObject.Deactivate();
+                        microObject.RollbackToState(previousState);
                     }
                     catch (Exception ex)
                     {
@@ -163,7 +192,7 @@ public sealed class MicroEngine
                 {
                     try
                     {
-                        await service.StopInternalAsync(CancellationToken.None);
+                        await service.StopNodeAsync(CancellationToken.None);
                     }
                     catch (Exception ex)
                     {
@@ -175,6 +204,8 @@ public sealed class MicroEngine
                 {
                     State = rollbackErrors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
                 }
+
+                WriteTrace($"Engine start failed. Rollback errors: {rollbackErrors.Count}.");
                 
                 if (rollbackErrors.Count == 0)
                     throw;
@@ -217,6 +248,7 @@ public sealed class MicroEngine
                     throw new InvalidOperationException($"MicroEngine cannot stop while it is '{State}'.");
                 
                 State = MicroEngineState.Stopping;
+                WriteTrace("Engine stopping.");
                 serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
                 objectSnapshot = _objects.ToArray();
             }
@@ -248,7 +280,7 @@ public sealed class MicroEngine
                 
                 try
                 {
-                    await service.StopInternalAsync(cancellationToken);
+                    await service.StopNodeAsync(cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -262,6 +294,8 @@ public sealed class MicroEngine
             {
                 State = errors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
             }
+
+            WriteTrace(errors.Count == 0 ? "Engine stopped." : $"Engine stop completed with {errors.Count} error(s).");
             
             if (gateAcquired)
                 ExitExecutionScope();
@@ -274,7 +308,7 @@ public sealed class MicroEngine
             throw new AggregateException(errors);
     }
     
-    /// <summary>驱动一帧更新，按 Order 顺序调用所有已启动的 <see cref="MicroUpdateService"/>。</summary>
+    /// <summary>驱动一帧更新，按 Order 顺序调用所有活动服务与对象。</summary>
     public async ValueTask TickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
     {
         if (deltaTime < TimeSpan.Zero)
@@ -286,17 +320,22 @@ public sealed class MicroEngine
         EnterReentrancyScope();
         try
         {
-            MicroUpdateService[] updates;
+            MicroService[] services;
+            MicroObject[] objects;
             lock (_gate)
             {
                 if (State != MicroEngineState.Running)
                     throw new InvalidOperationException("MicroEngine must be started before ticking.");
                 
-                updates = _services.OfType<MicroUpdateService>().Where(static service => service.IsStarted).OrderBy(static service => service.Order).ToArray();
+                services = _services.Where(static service => service.IsStarted).OrderBy(static service => service.Order).ToArray();
+                objects = _objects.Where(static microObject => microObject.State == MicroObjectState.Active).ToArray();
             }
             
-            foreach (MicroUpdateService update in updates)
-                await update.TickAsync(deltaTime, cancellationToken);
+            foreach (MicroService service in services)
+                await service.TickNodeAsync(deltaTime, cancellationToken);
+
+            foreach (MicroObject microObject in objects)
+                await microObject.TickNodeAsync(deltaTime, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -340,11 +379,18 @@ public sealed class MicroEngine
                 
                 if (microObject.State == MicroObjectState.Disposed)
                     throw new ObjectDisposedException(nameof(MicroObject));
-                
-                microObject.AttachToEngine(this);
-                _objects.Add(microObject);
+
                 shouldActivate = State == MicroEngineState.Running;
             }
+
+            microObject.AttachToEngine(this);
+
+            lock (_gate)
+            {
+                _objects.Add(microObject);
+            }
+
+            WriteTrace($"Registered object {microObject.GetType().Name}.");
             
             if (shouldActivate)
             {
@@ -359,26 +405,56 @@ public sealed class MicroEngine
                 if (shouldRollback)
                 {
                     microObject.Deactivate();
+
+                    Exception? detachException = null;
+
                     lock (_gate)
                     {
                         _objects.Remove(microObject);
+                    }
+
+                    try
+                    {
                         microObject.DetachFromEngine(this);
                     }
+                    catch (Exception cleanupException)
+                    {
+                        detachException = cleanupException;
+                    }
+
+                    WriteTrace($"Rolled back object registration for {microObject.GetType().Name}.");
+
+                    if (detachException is not null)
+                        throw detachException;
+
                     return false;
                 }
             }
             
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Exception? detachException = null;
+
             lock (_gate)
             {
                 _objects.Remove(microObject);
+            }
+
+            try
+            {
                 microObject.DetachFromEngine(this);
             }
-            
-            throw;
+            catch (Exception cleanupException)
+            {
+                detachException = cleanupException;
+            }
+
+            if (detachException is null)
+                throw;
+
+            throw new AggregateException(ex, detachException);
         }
         finally
         {
@@ -420,6 +496,7 @@ public sealed class MicroEngine
             }
             
             microObject.DetachFromEngine(this);
+            WriteTrace($"Unregistered object {microObject.GetType().Name}.");
             return true;
         }
         finally
@@ -449,15 +526,23 @@ public sealed class MicroEngine
                 
                 if (_services.Contains(service))
                     return false;
-                
-                AttachService(service);
-                attached = true;
+
                 shouldStart = State == MicroEngineState.Running;
             }
+
+            service.AttachToEngine(this);
+            attached = true;
+
+            lock (_gate)
+            {
+                _services.Add(service);
+            }
+
+            WriteTrace($"Registered service {service.GetType().Name}.");
             
             if (shouldStart)
             {
-                await service.StartInternalAsync(cancellationToken);
+                await service.StartNodeAsync(cancellationToken);
                 
                 bool shouldRollback;
                 lock (_gate)
@@ -467,12 +552,29 @@ public sealed class MicroEngine
                 
                 if (shouldRollback)
                 {
-                    await service.StopInternalAsync(CancellationToken.None);
+                    await service.StopNodeAsync(CancellationToken.None);
+
+                    Exception? detachException = null;
+
                     lock (_gate)
                     {
                         _services.Remove(service);
+                    }
+
+                    try
+                    {
                         service.DetachFromEngine(this);
                     }
+                    catch (Exception cleanupException)
+                    {
+                        detachException = cleanupException;
+                    }
+
+                    WriteTrace($"Rolled back service registration for {service.GetType().Name}.");
+
+                    if (detachException is not null)
+                        throw detachException;
+
                     return false;
                 }
             }
@@ -488,7 +590,7 @@ public sealed class MicroEngine
             
             try
             {
-                await service.StopInternalAsync(CancellationToken.None);
+                await service.StopNodeAsync(CancellationToken.None);
             }
             catch (Exception rollbackException)
             {
@@ -496,12 +598,26 @@ public sealed class MicroEngine
                 MarkFaulted();
             }
             
+            bool shouldDetach = false;
+
             lock (_gate)
             {
                 if (rollbackErrors.Count == 0 || service.State == MicroServiceState.Stopped)
                 {
                     _services.Remove(service);
+                    shouldDetach = ReferenceEquals(service.Engine, this);
+                }
+            }
+
+            if (shouldDetach)
+            {
+                try
+                {
                     service.DetachFromEngine(this);
+                }
+                catch (Exception detachException)
+                {
+                    rollbackErrors.Add(detachException);
                 }
             }
             
@@ -542,7 +658,7 @@ public sealed class MicroEngine
             }
             
             if (shouldStop)
-                await service.StopInternalAsync(cancellationToken);
+                await service.StopNodeAsync(cancellationToken);
             
             lock (_gate)
             {
@@ -551,6 +667,7 @@ public sealed class MicroEngine
             }
             
             service.DetachFromEngine(this);
+            WriteTrace($"Unregistered service {service.GetType().Name}.");
             return true;
         }
         finally
@@ -693,6 +810,67 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
+
+    internal void DisposeService(MicroService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        if (IsWithinActiveExecutionScope())
+            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        bool gateAcquired;
+        lock (_gate)
+        {
+            gateAcquired = State == MicroEngineState.Starting;
+        }
+
+        if (gateAcquired)
+        {
+            EnterExecutionScope();
+        }
+        else if (!TryEnterExecutionScope())
+        {
+            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+        }
+
+        EnterReentrancyScope();
+        try
+        {
+            bool wasRegistered;
+            Exception? disposalException = null;
+
+            lock (_gate)
+            {
+                wasRegistered = _services.Contains(service);
+            }
+
+            try
+            {
+                service.DisposeCore();
+            }
+            catch (Exception ex)
+            {
+                disposalException = ex;
+            }
+
+            if (wasRegistered && service.IsDisposed)
+            {
+                lock (_gate)
+                {
+                    _services.Remove(service);
+                }
+
+                service.DetachFromEngine(this);
+            }
+
+            if (disposalException is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(disposalException).Throw();
+        }
+        finally
+        {
+            ExitExecutionScope();
+        }
+    }
     
     // 记录当前异步流进入执行作用域的嵌套深度，用于检测可重入调用。
     private sealed class ExecutionScopeState
@@ -709,5 +887,12 @@ public sealed class MicroEngine
             if (State == MicroEngineState.Running)
                 State = MicroEngineState.Faulted;
         }
+
+        WriteTrace("Engine marked faulted.");
+    }
+
+    private static void WriteTrace(string message)
+    {
+        System.Diagnostics.Trace.WriteLine($"[MicroEngine] {message}");
     }
 }
