@@ -15,7 +15,7 @@ public enum MicroObjectState
 /// </summary>
 public class MicroObject
 {
-    private readonly object _gate = new();                             // 保护组件字典及状态字段的互斥锁
+    private readonly Lock _gate = new();                             // 保护组件字典及状态字段的互斥锁
     private readonly Dictionary<Type, MicroComponent> _components = new();
     private bool _isTransitioning;                                     // 标记正在进行生命周期转换，防止并发修改
 
