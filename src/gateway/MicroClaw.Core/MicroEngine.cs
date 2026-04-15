@@ -13,6 +13,7 @@ public sealed class MicroEngine
 {
     private readonly object _gate = new();
     private readonly SemaphoreSlim _executionGate = new(1, 1);
+    private readonly AsyncLocal<ExecutionScopeState?> _executionScope = new();
     private readonly IServiceProvider _serviceProvider;
     private readonly List<MicroObject> _objects = [];
     private readonly List<MicroService> _services = [];
@@ -77,89 +78,117 @@ public sealed class MicroEngine
 
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfReentered();
+
         MicroService[] serviceSnapshot;
         MicroObject[] objectSnapshot;
+        bool gateAcquired = false;
 
-        lock (_gate)
-        {
-            if (State == MicroEngineState.Running)
-                return;
-
-            if (State != MicroEngineState.Stopped)
-                throw new InvalidOperationException($"MicroEngine cannot start while it is '{State}'.");
-
-            State = MicroEngineState.Starting;
-            serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
-            objectSnapshot = _objects.ToArray();
-        }
-
-        List<MicroService> startedServices = [];
-        List<MicroObject> activatedObjects = [];
+        await EnterExecutionScopeAsync(cancellationToken);
+        EnterReentrancyScope();
+        gateAcquired = true;
 
         try
         {
-            foreach (MicroService service in serviceSnapshot)
-            {
-                startedServices.Add(service);
-                await service.StartInternalAsync(cancellationToken);
-            }
-
-            foreach (MicroObject microObject in objectSnapshot)
-            {
-                microObject.Activate();
-                activatedObjects.Add(microObject);
-            }
-
             lock (_gate)
             {
-                State = MicroEngineState.Running;
+                if (State == MicroEngineState.Running)
+                    return;
+
+                if (State != MicroEngineState.Stopped)
+                    throw new InvalidOperationException($"MicroEngine cannot start while it is '{State}'.");
+
+                State = MicroEngineState.Starting;
+                serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
+                objectSnapshot = _objects.ToArray();
+            }
+
+            List<MicroService> startedServices = [];
+            List<MicroObject> activatedObjects = [];
+
+            try
+            {
+                foreach (MicroService service in serviceSnapshot)
+                {
+                    startedServices.Add(service);
+                    await service.StartInternalAsync(cancellationToken);
+                }
+
+                foreach (MicroObject microObject in objectSnapshot)
+                {
+                    lock (_gate)
+                    {
+                        if (!_objects.Contains(microObject) || microObject.State == MicroObjectState.Disposed)
+                            continue;
+                    }
+
+                    microObject.Activate();
+                    activatedObjects.Add(microObject);
+                }
+
+                lock (_gate)
+                {
+                    State = MicroEngineState.Running;
+                }
+            }
+            catch (Exception startException)
+            {
+                List<Exception> rollbackErrors = [];
+
+                foreach (MicroObject microObject in activatedObjects.AsEnumerable().Reverse())
+                {
+                    try
+                    {
+                        microObject.Deactivate();
+                    }
+                    catch (Exception ex)
+                    {
+                        rollbackErrors.Add(ex);
+                    }
+                }
+
+                foreach (MicroService service in startedServices.AsEnumerable().Reverse())
+                {
+                    try
+                    {
+                        await service.StopInternalAsync(CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        rollbackErrors.Add(ex);
+                    }
+                }
+
+                lock (_gate)
+                {
+                    State = rollbackErrors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
+                }
+
+                if (rollbackErrors.Count == 0)
+                    throw;
+
+                rollbackErrors.Insert(0, startException);
+                throw new AggregateException(rollbackErrors);
             }
         }
-        catch (Exception startException)
+        finally
         {
-            List<Exception> rollbackErrors = [];
-
-            foreach (MicroObject microObject in activatedObjects.AsEnumerable().Reverse())
-            {
-                try
-                {
-                    microObject.Deactivate();
-                }
-                catch (Exception ex)
-                {
-                    rollbackErrors.Add(ex);
-                }
-            }
-
-            foreach (MicroService service in startedServices.AsEnumerable().Reverse())
-            {
-                try
-                {
-                    await service.StopInternalAsync(CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    rollbackErrors.Add(ex);
-                }
-            }
-
-            lock (_gate)
-            {
-                State = rollbackErrors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
-            }
-
-            if (rollbackErrors.Count == 0)
-                throw;
-
-            rollbackErrors.Insert(0, startException);
-            throw new AggregateException(rollbackErrors);
+            if (gateAcquired)
+                ExitExecutionScope();
         }
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfReentered();
+
         MicroService[] serviceSnapshot;
         MicroObject[] objectSnapshot;
+        bool gateAcquired = false;
+
+        await EnterExecutionScopeAsync(cancellationToken);
+        EnterReentrancyScope();
+        gateAcquired = true;
 
         lock (_gate)
         {
@@ -175,68 +204,54 @@ public sealed class MicroEngine
         }
 
         List<Exception> errors = [];
-        bool gateAcquired = false;
 
         try
         {
-            try
+            foreach (MicroObject microObject in objectSnapshot.Reverse())
             {
-                await _executionGate.WaitAsync(cancellationToken);
-                gateAcquired = true;
-            }
-            catch (OperationCanceledException ex)
-            {
-                errors.Add(ex);
-            }
-
-            if (gateAcquired)
-            {
-                foreach (MicroObject microObject in objectSnapshot.Reverse())
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        errors.Add(new OperationCanceledException(cancellationToken));
-                        break;
-                    }
-
-                    try
-                    {
-                        microObject.Deactivate();
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add(ex);
-                    }
+                    errors.Add(new OperationCanceledException(cancellationToken));
+                    break;
                 }
 
-                foreach (MicroService service in serviceSnapshot.Reverse())
+                try
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        errors.Add(new OperationCanceledException(cancellationToken));
-                        break;
-                    }
+                    microObject.Deactivate();
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            }
 
-                    try
-                    {
-                        await service.StopInternalAsync(cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add(ex);
-                    }
+            foreach (MicroService service in serviceSnapshot.Reverse())
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    errors.Add(new OperationCanceledException(cancellationToken));
+                    break;
+                }
+
+                try
+                {
+                    await service.StopInternalAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
                 }
             }
         }
         finally
         {
-            if (gateAcquired)
-                _executionGate.Release();
-
             lock (_gate)
             {
                 State = errors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
             }
+
+            if (gateAcquired)
+                ExitExecutionScope();
         }
 
         if (errors.Count == 1)
@@ -251,7 +266,10 @@ public sealed class MicroEngine
         if (deltaTime < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(deltaTime), "Tick delta time must be non-negative.");
 
-        await _executionGate.WaitAsync(cancellationToken);
+        ThrowIfReentered();
+
+        await EnterExecutionScopeAsync(cancellationToken);
+        EnterReentrancyScope();
         try
         {
             MicroUpdateService[] updates;
@@ -285,7 +303,7 @@ public sealed class MicroEngine
         }
         finally
         {
-            _executionGate.Release();
+            ExitExecutionScope();
         }
     }
 
@@ -295,6 +313,8 @@ public sealed class MicroEngine
 
         if (!TryEnterExecutionScope())
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        EnterReentrancyScope();
 
         try
         {
@@ -350,7 +370,7 @@ public sealed class MicroEngine
         }
         finally
         {
-            _executionGate.Release();
+            ExitExecutionScope();
         }
     }
 
@@ -360,6 +380,8 @@ public sealed class MicroEngine
 
         if (!TryEnterExecutionScope())
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        EnterReentrancyScope();
 
         try
         {
@@ -389,7 +411,7 @@ public sealed class MicroEngine
         }
         finally
         {
-            _executionGate.Release();
+            ExitExecutionScope();
         }
     }
 
@@ -399,6 +421,8 @@ public sealed class MicroEngine
 
         if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        EnterReentrancyScope();
 
         bool attached = false;
 
@@ -475,7 +499,7 @@ public sealed class MicroEngine
         }
         finally
         {
-            _executionGate.Release();
+            ExitExecutionScope();
         }
     }
 
@@ -485,6 +509,8 @@ public sealed class MicroEngine
 
         if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        EnterReentrancyScope();
 
         try
         {
@@ -514,7 +540,7 @@ public sealed class MicroEngine
         }
         finally
         {
-            _executionGate.Release();
+            ExitExecutionScope();
         }
     }
 
@@ -533,11 +559,58 @@ public sealed class MicroEngine
             throw new InvalidOperationException($"MicroEngine cannot be mutated while it is '{State}'.");
     }
 
+    private void ThrowIfReentered()
+    {
+        if (IsWithinActiveExecutionScope())
+            throw new InvalidOperationException("MicroEngine cannot be re-entered while it is executing.");
+    }
+
+    private bool IsWithinActiveExecutionScope()
+        => _executionScope.Value is { IsActive: true, Depth: > 0 };
+
+    private void EnterReentrancyScope()
+    {
+        ExecutionScopeState? scope = _executionScope.Value;
+        if (scope is null || !scope.IsActive)
+        {
+            scope = new ExecutionScopeState();
+            _executionScope.Value = scope;
+        }
+
+        scope.Depth++;
+    }
+
     private bool TryEnterExecutionScope()
         => _executionGate.Wait(0);
 
     private ValueTask<bool> TryEnterExecutionScopeAsync(CancellationToken cancellationToken)
-        => new(_executionGate.WaitAsync(0, cancellationToken));
+        => new(TryEnterExecutionScopeAsyncCore(cancellationToken));
+
+    private async Task<bool> TryEnterExecutionScopeAsyncCore(CancellationToken cancellationToken)
+        => await _executionGate.WaitAsync(0, cancellationToken);
+
+    private async ValueTask EnterExecutionScopeAsync(CancellationToken cancellationToken)
+        => await _executionGate.WaitAsync(cancellationToken);
+
+    private void EnterExecutionScope()
+        => _executionGate.Wait();
+
+    private void ExitExecutionScope()
+    {
+        ExecutionScopeState? scope = _executionScope.Value;
+        if (scope is null || !scope.IsActive || scope.Depth <= 0)
+            throw new InvalidOperationException("MicroEngine execution scope is not active.");
+
+        scope.Depth--;
+        if (scope.Depth == 0)
+        {
+            scope.IsActive = false;
+            if (ReferenceEquals(_executionScope.Value, scope))
+                _executionScope.Value = null;
+        }
+
+        _executionGate.Release();
+    }
 
     internal void DetachDisposedObject(MicroObject microObject)
     {
@@ -547,6 +620,76 @@ public sealed class MicroEngine
         }
 
         microObject.DetachFromEngine(this);
+    }
+
+    internal void DisposeObject(MicroObject microObject)
+    {
+        ArgumentNullException.ThrowIfNull(microObject);
+
+        if (IsWithinActiveExecutionScope())
+            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+
+        bool gateAcquired;
+        lock (_gate)
+        {
+            gateAcquired = State == MicroEngineState.Starting;
+        }
+
+        if (gateAcquired)
+        {
+            EnterExecutionScope();
+        }
+        else if (!TryEnterExecutionScope())
+        {
+            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+        }
+
+        EnterReentrancyScope();
+        try
+        {
+            bool wasRegistered;
+            Exception? disposalException = null;
+
+            lock (_gate)
+            {
+                wasRegistered = _objects.Contains(microObject);
+            }
+
+            try
+            {
+                microObject.DisposeCore();
+            }
+            catch (Exception ex)
+            {
+                disposalException = ex;
+            }
+
+            if (wasRegistered && microObject.State == MicroObjectState.Disposed)
+            {
+                lock (_gate)
+                {
+                    _objects.Remove(microObject);
+                }
+
+                microObject.DetachFromEngine(this);
+            }
+
+            if (disposalException is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(disposalException).Throw();
+            }
+        }
+        finally
+        {
+            ExitExecutionScope();
+        }
+    }
+
+    private sealed class ExecutionScopeState
+    {
+        public int Depth { get; set; }
+
+        public bool IsActive { get; set; } = true;
     }
 
     internal void MarkFaulted()

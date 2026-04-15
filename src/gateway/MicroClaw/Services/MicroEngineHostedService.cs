@@ -84,10 +84,16 @@ public sealed class MicroEngineHostedService(
 
         try
         {
-            using CancellationTokenSource? engineStopCts = cancellationToken.IsCancellationRequested
-                ? new CancellationTokenSource(StopTimeout)
-                : null;
-            CancellationToken engineStopToken = engineStopCts?.Token ?? cancellationToken;
+            using CancellationTokenSource engineStopCts = new();
+            using CancellationTokenRegistration registration = cancellationToken.Register(static state =>
+            {
+                ((CancellationTokenSource)state!).CancelAfter(StopTimeout);
+            }, engineStopCts);
+
+            if (cancellationToken.IsCancellationRequested)
+                engineStopCts.CancelAfter(StopTimeout);
+
+            CancellationToken engineStopToken = engineStopCts.Token;
             await _microEngine.StopAsync(engineStopToken);
         }
         catch (Exception ex)

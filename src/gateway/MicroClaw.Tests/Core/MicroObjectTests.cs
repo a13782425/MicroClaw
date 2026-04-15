@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MicroClaw.Core;
+using System.Collections.Concurrent;
 
 namespace MicroClaw.Tests.Core;
 
@@ -64,6 +65,27 @@ public sealed class MicroObjectTests
         host.GetComponent<ThrowingComponent>().Should().BeNull();
         component.Host.Should().BeNull();
         component.State.Should().Be(MicroComponentState.Detached);
+    }
+
+    [Fact]
+    public async Task AddComponent_WhenAnotherThreadRemovesDuringAttach_RejectsConcurrentMutation()
+    {
+        var host = new MicroObject();
+        var component = new BlockingAttachComponent();
+
+        Task addTask = Task.Run(() => host.AddComponent(component));
+        await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Action act = () => host.RemoveComponent(component);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*lifecycle transition*");
+
+        component.AllowAttach();
+        await addTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingAttachComponent>().Should().BeSameAs(component);
+        component.Host.Should().BeSameAs(host);
     }
 
     [Fact]
@@ -138,6 +160,30 @@ public sealed class MicroObjectTests
         engine.Objects.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Dispose_WhenHostIsTransitioning_DoesNotDetachObjectFromEngine()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var host = new MicroObject();
+        var component = new BlockingAttachComponent();
+
+        engine.RegisterObject(host).Should().BeTrue();
+
+        Task addTask = Task.Run(() => host.AddComponent(component));
+        await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Action act = () => host.Dispose();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*transition*");
+        host.Engine.Should().BeSameAs(engine);
+        engine.Objects.Should().Contain(host);
+        host.State.Should().Be(MicroObjectState.Created);
+
+        component.AllowAttach();
+        await addTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     private sealed class NullServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
@@ -164,6 +210,22 @@ public sealed class MicroObjectTests
         protected override void OnDetached()
         {
             DetachedCount++;
+        }
+    }
+
+    private sealed class BlockingAttachComponent : MicroComponent
+    {
+        private readonly TaskCompletionSource _attachedStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim _gate = new(false);
+
+        public TaskCompletionSource AttachedStarted => _attachedStarted;
+
+        public void AllowAttach() => _gate.Set();
+
+        protected override void OnAttached()
+        {
+            _attachedStarted.TrySetResult();
+            _gate.Wait(TimeSpan.FromSeconds(5));
         }
     }
 

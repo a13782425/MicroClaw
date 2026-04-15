@@ -45,11 +45,19 @@ public class MicroObject
             ThrowIfDisposed();
             ThrowIfTransitioning();
 
+            _isTransitioning = true;
+
             if (component.Host is not null && !ReferenceEquals(component.Host, this))
+            {
+                _isTransitioning = false;
                 throw new InvalidOperationException("A component can only belong to one MicroObject at a time.");
+            }
 
             if (_components.ContainsKey(componentType))
+            {
+                _isTransitioning = false;
                 throw new InvalidOperationException($"Component type '{componentType.Name}' is already attached to this MicroObject.");
+            }
 
             _components.Add(componentType, component);
             shouldInitialize = State is MicroObjectState.Initialized or MicroObjectState.Active;
@@ -84,6 +92,13 @@ public class MicroObject
 
             rollbackErrors.Insert(0, ex);
             throw new AggregateException(rollbackErrors);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
         }
     }
 
@@ -120,11 +135,19 @@ public class MicroObject
         {
             ThrowIfTransitioning();
 
+            _isTransitioning = true;
+
             if (!TryResolveComponent(typeof(TComponent), out component))
+            {
+                _isTransitioning = false;
                 return false;
+            }
 
             if (component is null)
+            {
+                _isTransitioning = false;
                 return false;
+            }
 
             componentType = component.GetType();
             _components.Remove(componentType);
@@ -147,6 +170,13 @@ public class MicroObject
 
             throw;
         }
+        finally
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
+        }
     }
 
     public bool RemoveComponent(MicroComponent component)
@@ -158,13 +188,21 @@ public class MicroObject
         {
             ThrowIfTransitioning();
 
+            _isTransitioning = true;
+
             removed = _components.TryGetValue(component.GetType(), out MicroComponent? existing)
                 && ReferenceEquals(existing, component)
                 && _components.Remove(component.GetType());
         }
 
         if (!removed)
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
             return false;
+        }
 
         try
         {
@@ -182,6 +220,13 @@ public class MicroObject
             }
 
             throw;
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _isTransitioning = false;
+            }
         }
     }
 
@@ -313,8 +358,18 @@ public class MicroObject
 
     public void Dispose()
     {
+        if (Engine is { } engine)
+        {
+            engine.DisposeObject(this);
+            return;
+        }
+
+        DisposeCore();
+    }
+
+    internal void DisposeCore()
+    {
         MicroComponent[] snapshot;
-        MicroEngine? engine;
 
         lock (_gate)
         {
@@ -325,7 +380,6 @@ public class MicroObject
 
             _isTransitioning = true;
             snapshot = _components.Values.Reverse().ToArray();
-            engine = Engine;
             State = MicroObjectState.Disposed;
         }
 
@@ -354,8 +408,6 @@ public class MicroObject
         }
         finally
         {
-            engine?.DetachDisposedObject(this);
-
             lock (_gate)
             {
                 _isTransitioning = false;
