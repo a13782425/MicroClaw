@@ -1,23 +1,30 @@
 namespace MicroClaw.Core;
 
+/// <summary>引擎生命周期状态。</summary>
 public enum MicroEngineState
 {
     Stopped,
     Starting,
     Running,
     Stopping,
+    /// <summary>启动/停止/Tick 过程中出现异常，需手动恢复。</summary>
     Faulted,
 }
 
+/// <summary>
+/// 核心运行时，负责管理 <see cref="MicroObject"/> 和 <see cref="MicroService"/> 的生命周期。
+/// 通过执行门（execution gate）保证 Start / Stop / Tick 的线程安全。
+/// </summary>
 public sealed class MicroEngine
 {
-    private readonly object _gate = new();
-    private readonly SemaphoreSlim _executionGate = new(1, 1);
-    private readonly AsyncLocal<ExecutionScopeState?> _executionScope = new();
+    private readonly object _gate = new();                              // 保护 _objects、_services 列表及 State 字段的互斥锁
+    private readonly SemaphoreSlim _executionGate = new(1, 1);         // 限制同一时刻只有一个调用方执行引擎操作
+    private readonly AsyncLocal<ExecutionScopeState?> _executionScope = new(); // 追踪当前异步流的可重入深度
     private readonly IServiceProvider _serviceProvider;
     private readonly List<MicroObject> _objects = [];
     private readonly List<MicroService> _services = [];
 
+    /// <summary>初始化引擎并批量挂载初始服务；若任意服务挂载失败则回滚已挂载的全部服务。</summary>
     public MicroEngine(IServiceProvider serviceProvider, IEnumerable<MicroService> services)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -34,6 +41,7 @@ public sealed class MicroEngine
         }
         catch
         {
+            // 回滚：按逆序卸载已成功挂载的服务
             foreach (MicroService service in attachedServices.AsEnumerable().Reverse())
             {
                 _services.Remove(service);
@@ -44,13 +52,17 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>当前引擎状态。</summary>
     public MicroEngineState State { get; private set; } = MicroEngineState.Stopped;
 
+    /// <summary>引擎是否处于 Running 状态。</summary>
     public bool IsStarted => State == MicroEngineState.Running;
 
+    /// <summary>从 DI 容器获取指定类型的服务，不存在时返回 null。</summary>
     public T? GetService<T>() where T : class
         => _serviceProvider.GetService(typeof(T)) as T;
 
+    /// <summary>从 DI 容器获取指定类型的服务，不存在时抛出异常。</summary>
     public T GetRequiredService<T>() where T : class
         => GetService<T>() ?? throw new InvalidOperationException($"Service '{typeof(T).FullName}' is not registered.");
 
@@ -76,6 +88,10 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>
+    /// 启动引擎：按 Order 顺序启动所有服务，然后激活所有已注册对象。
+    /// 若任意步骤失败，自动回滚并将状态置为 Stopped 或 Faulted。
+    /// </summary>
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfReentered();
@@ -178,6 +194,10 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>
+    /// 停止引擎：按逆序停用所有对象，再按逆序停止所有服务。
+    /// 收集所有错误后统一抛出，保证所有清理步骤都有机会执行。
+    /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfReentered();
@@ -261,6 +281,7 @@ public sealed class MicroEngine
             throw new AggregateException(errors);
     }
 
+    /// <summary>驱动一帧更新，按 Order 顺序调用所有已启动的 <see cref="MicroUpdateService"/>。</summary>
     public async ValueTask TickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
     {
         if (deltaTime < TimeSpan.Zero)
@@ -307,6 +328,7 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>向引擎注册对象；若引擎已在运行则立即激活该对象。</summary>
     public bool RegisterObject(MicroObject microObject)
     {
         ArgumentNullException.ThrowIfNull(microObject);
@@ -374,6 +396,7 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>从引擎注销对象；若引擎正在运行则先停用该对象。</summary>
     public bool UnregisterObject(MicroObject microObject)
     {
         ArgumentNullException.ThrowIfNull(microObject);
@@ -415,6 +438,7 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>动态注册服务；若引擎已在运行则立即启动该服务，失败时自动回滚。</summary>
     public async ValueTask<bool> RegisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -503,6 +527,7 @@ public sealed class MicroEngine
         }
     }
 
+    /// <summary>动态注销服务；若引擎正在运行则先停止该服务。</summary>
     public async ValueTask<bool> UnregisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -685,6 +710,7 @@ public sealed class MicroEngine
         }
     }
 
+    // 记录当前异步流进入执行作用域的嵌套深度，用于检测可重入调用。
     private sealed class ExecutionScopeState
     {
         public int Depth { get; set; }

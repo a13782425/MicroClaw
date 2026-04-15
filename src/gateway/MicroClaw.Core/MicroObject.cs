@@ -1,5 +1,6 @@
 namespace MicroClaw.Core;
 
+/// <summary>对象生命周期状态。</summary>
 public enum MicroObjectState
 {
     Created,
@@ -8,14 +9,20 @@ public enum MicroObjectState
     Disposed,
 }
 
+/// <summary>
+/// 引擎中的实体对象，采用组件模式（Component Pattern）。
+/// 通过 <see cref="AddComponent{TComponent}()"/> 挂载功能组件，生命周期随引擎同步变更。
+/// </summary>
 public class MicroObject
 {
-    private readonly object _gate = new();
+    private readonly object _gate = new();                             // 保护组件字典及状态字段的互斥锁
     private readonly Dictionary<Type, MicroComponent> _components = new();
-    private bool _isTransitioning;
+    private bool _isTransitioning;                                     // 标记正在进行生命周期转换，防止并发修改
 
+    /// <summary>所属引擎，未注册时为 null。</summary>
     public MicroEngine? Engine { get; private set; }
 
+    /// <summary>当前对象状态。</summary>
     public MicroObjectState State { get; private set; } = MicroObjectState.Created;
 
     public IReadOnlyList<MicroComponent> Components
@@ -29,9 +36,11 @@ public class MicroObject
         }
     }
 
+    /// <summary>创建并挂载指定类型的组件（使用无参构造函数）。</summary>
     public TComponent AddComponent<TComponent>() where TComponent : MicroComponent, new()
         => AddComponent(new TComponent());
 
+    /// <summary>挂载已有组件实例；若对象已激活则同步初始化并激活该组件。</summary>
     public TComponent AddComponent<TComponent>(TComponent component) where TComponent : MicroComponent
     {
         ArgumentNullException.ThrowIfNull(component);
@@ -102,6 +111,7 @@ public class MicroObject
         }
     }
 
+    /// <summary>获取指定类型的组件，不存在时返回 null；支持按基类/接口查找（存在歧义时抛出异常）。</summary>
     public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
         => TryGetComponent<TComponent>(out TComponent? component) ? component : null;
 
@@ -230,6 +240,7 @@ public class MicroObject
         }
     }
 
+    /// <summary>激活对象及其所有组件（先初始化未初始化的组件，再逐一激活）；已激活则跳过。</summary>
     public void Activate()
     {
         MicroComponent[] snapshot;
@@ -294,6 +305,7 @@ public class MicroObject
         }
     }
 
+    /// <summary>停用对象及其所有组件（按逆序停用），状态回退到 Initialized；未激活则跳过。</summary>
     public void Deactivate()
     {
         MicroComponent[] snapshot;
@@ -356,6 +368,7 @@ public class MicroObject
         }
     }
 
+    /// <summary>释放对象；若已注册到引擎则委托引擎执行销毁，否则直接调用 <see cref="DisposeCore"/>。</summary>
     public void Dispose()
     {
         if (Engine is { } engine)

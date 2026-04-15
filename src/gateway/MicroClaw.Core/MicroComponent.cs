@@ -1,5 +1,6 @@
 namespace MicroClaw.Core;
 
+/// <summary>组件生命周期状态。</summary>
 public enum MicroComponentState
 {
     Detached,
@@ -8,14 +9,22 @@ public enum MicroComponentState
     Active,
 }
 
+/// <summary>
+/// 组件抽象基类，挂载到 <see cref="MicroObject"/> 上提供特定功能。
+/// 生命周期：Detached → Attached → Initialized → Active，销毁时逆序回退。
+/// </summary>
 public abstract class MicroComponent
 {
+    /// <summary>所属宿主对象，未挂载时为 null。</summary>
     public MicroObject? Host { get; private set; }
 
+    /// <summary>当前组件状态。</summary>
     public MicroComponentState State { get; private set; } = MicroComponentState.Detached;
 
+    /// <summary>组件是否已挂载到宿主。</summary>
     public bool IsAttached => Host is not null;
 
+    /// <summary>组件是否处于激活状态。</summary>
     public bool IsActive => State == MicroComponentState.Active;
 
     public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
@@ -220,29 +229,23 @@ public abstract class MicroComponent
     protected MicroObject GetRequiredHost()
         => Host ?? throw new InvalidOperationException("This component is not attached to a MicroObject.");
 
-    protected virtual void OnAttached()
-    {
-    }
+    /// <summary>组件挂载到宿主时触发，子类可重写执行初始绑定。</summary>
+    protected virtual void OnAttached() { }
 
-    protected virtual void OnInitialized()
-    {
-    }
+    /// <summary>组件初始化时触发，子类可重写完成资源分配。</summary>
+    protected virtual void OnInitialized() { }
 
-    protected virtual void OnActivated()
-    {
-    }
+    /// <summary>组件激活时触发，子类可重写启用运行时行为。</summary>
+    protected virtual void OnActivated() { }
 
-    protected virtual void OnDeactivated()
-    {
-    }
+    /// <summary>组件停用时触发，子类可重写暂停运行时行为。</summary>
+    protected virtual void OnDeactivated() { }
 
-    protected virtual void OnUninitialized()
-    {
-    }
+    /// <summary>组件反初始化时触发，子类可重写释放资源。</summary>
+    protected virtual void OnUninitialized() { }
 
-    protected virtual void OnDetached()
-    {
-    }
+    /// <summary>组件从宿主分离时触发，子类可重写执行清理。</summary>
+    protected virtual void OnDetached() { }
 
     private void RollbackToInitialized(List<Exception> errors)
     {
