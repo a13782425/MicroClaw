@@ -21,13 +21,4 @@ public static class MicroServiceCollectionExtensions
         services.AddSingleton<MicroService>(sp => sp.GetRequiredService<T>());
         return services;
     }
-
-    public static IServiceCollection AddMicroUpdateService<T>(this IServiceCollection services)
-        where T : MicroUpdateService
-    {
-        services.AddSingleton<T>();
-        services.AddSingleton<MicroService>(sp => sp.GetRequiredService<T>());
-        services.AddSingleton<MicroUpdateService>(sp => sp.GetRequiredService<T>());
-        return services;
-    }
 }

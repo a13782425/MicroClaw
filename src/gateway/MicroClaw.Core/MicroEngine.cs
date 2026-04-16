@@ -1,4 +1,5 @@
 namespace MicroClaw.Core;
+
 /// <summary>引擎生命周期状态。</summary>
 public enum MicroEngineState
 {
@@ -6,29 +7,33 @@ public enum MicroEngineState
     Starting,
     Running,
     Stopping,
-    /// <summary>启动/停止/Tick 过程中出现异常，需手动恢复。</summary>
+    /// <summary>启动或停止过程中出现异常，需手动恢复。</summary>
     Faulted,
 }
+
 /// <summary>
-/// 核心运行时，负责管理 <see cref="MicroObject"/> 和 <see cref="MicroService"/> 的生命周期。
-/// 通过执行门（execution gate）保证 Start / Stop / Tick 的线程安全。
+/// 核心运行时，负责管理 <see cref="MicroObject"/>、<see cref="MicroService"/> 以及内部 Tick 调度。
+/// 通过执行门（execution gate）保证 Start / Stop / 手动 Tick / Mutation 的线程安全。
 /// </summary>
 public sealed class MicroEngine
 {
-    private readonly Lock _gate = new(); // 保护 _objects、_services 列表及 State 字段的互斥锁
-    private readonly SemaphoreSlim _executionGate = new(1, 1); // 限制同一时刻只有一个调用方执行引擎操作
-    private readonly AsyncLocal<ExecutionScopeState?> _executionScope = new(); // 追踪当前异步流的可重入深度
+    private readonly Lock _gate = new();
+    private readonly SemaphoreSlim _executionGate = new(1, 1);
+    private readonly AsyncLocal<ExecutionScopeState?> _executionScope = new();
+    private readonly AsyncLocal<ObjectLifecycleGateState?> _objectLifecycleGate = new();
     private readonly IServiceProvider _serviceProvider;
     private readonly List<MicroObject> _objects = [];
     private readonly List<MicroService> _services = [];
-    
+    private readonly MicroTickSchedulerRunner _tickScheduler;
+
     /// <summary>初始化引擎并批量挂载初始服务；若任意服务挂载失败则回滚已挂载的全部服务。</summary>
     public MicroEngine(IServiceProvider serviceProvider, IEnumerable<MicroService> services)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        
+        _tickScheduler = new MicroTickSchedulerRunner(this);
+
         List<MicroService> attachedServices = [];
-        
+
         try
         {
             foreach (MicroService service in services)
@@ -41,14 +46,13 @@ public sealed class MicroEngine
         {
             List<Exception> rollbackErrors = [];
 
-            // 回滚：按逆序卸载已成功挂载的服务
             foreach (MicroService service in attachedServices.AsEnumerable().Reverse())
             {
                 _services.Remove(service);
 
                 try
                 {
-                    service.DetachFromEngine(this);
+                    service.DetachFromEngineAsync(this).AsTask().GetAwaiter().GetResult();
                 }
                 catch (Exception detachException)
                 {
@@ -63,19 +67,20 @@ public sealed class MicroEngine
             throw new AggregateException(rollbackErrors);
         }
     }
-    
+
     /// <summary>当前引擎状态。</summary>
     public MicroEngineState State { get; private set; } = MicroEngineState.Stopped;
-    
+
     /// <summary>引擎是否处于 Running 状态。</summary>
     public bool IsStarted => State == MicroEngineState.Running;
-    
+
     /// <summary>从 DI 容器获取指定类型的服务，不存在时返回 null。</summary>
     public T? GetService<T>() where T : class => _serviceProvider.GetService(typeof(T)) as T;
-    
+
     /// <summary>从 DI 容器获取指定类型的服务，不存在时抛出异常。</summary>
     public T GetRequiredService<T>() where T : class => GetService<T>() ?? throw new InvalidOperationException($"Service '{typeof(T).FullName}' is not registered.");
-    
+
+    /// <summary>获取当前已注册对象的快照。</summary>
     public IReadOnlyList<MicroObject> Objects
     {
         get
@@ -86,7 +91,8 @@ public sealed class MicroEngine
             }
         }
     }
-    
+
+    /// <summary>获取当前已注册服务的有序快照。</summary>
     public IReadOnlyList<MicroService> Services
     {
         get
@@ -97,7 +103,7 @@ public sealed class MicroEngine
             }
         }
     }
-    
+
     /// <summary>
     /// 启动引擎：按 Order 顺序启动所有服务，然后激活所有已注册对象。
     /// 若任意步骤失败，自动回滚并将状态置为 Stopped 或 Faulted。
@@ -105,34 +111,34 @@ public sealed class MicroEngine
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfReentered();
-        
+
         MicroService[] serviceSnapshot;
         MicroObject[] objectSnapshot;
         bool gateAcquired = false;
-        
+
         await EnterExecutionScopeAsync(cancellationToken);
         EnterReentrancyScope();
         gateAcquired = true;
-        
+
         try
         {
             lock (_gate)
             {
                 if (State == MicroEngineState.Running)
                     return;
-                
+
                 if (State != MicroEngineState.Stopped)
                     throw new InvalidOperationException($"MicroEngine cannot start while it is '{State}'.");
-                
+
                 State = MicroEngineState.Starting;
                 WriteTrace("Engine starting.");
                 serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
                 objectSnapshot = _objects.ToArray();
             }
-            
+
             List<MicroService> startedServices = [];
-            List<(MicroObject Object, MicroObjectState PreviousState)> activatedObjects = [];
-            
+            List<(MicroObject Object, MicroLifeCycleState PreviousState)> activatedObjects = [];
+
             try
             {
                 foreach (MicroService service in serviceSnapshot)
@@ -140,54 +146,55 @@ public sealed class MicroEngine
                     startedServices.Add(service);
                     await service.StartNodeAsync(cancellationToken);
                 }
-                
+
                 foreach (MicroObject microObject in objectSnapshot)
                 {
                     lock (_gate)
                     {
-                        if (!_objects.Contains(microObject) || microObject.State == MicroObjectState.Disposed)
+                        if (!_objects.Contains(microObject) || microObject.LifeCycleState == MicroLifeCycleState.Disposed)
                             continue;
                     }
 
-                    MicroObjectState previousState = microObject.State;
+                    MicroLifeCycleState previousState = microObject.LifeCycleState;
 
                     try
                     {
-                        microObject.Activate();
+                        await microObject.ActivateAsync(cancellationToken);
                         activatedObjects.Add((microObject, previousState));
                     }
                     catch
                     {
-                        if (microObject.State != previousState)
+                        if (microObject.LifeCycleState != previousState)
                             activatedObjects.Add((microObject, previousState));
 
                         throw;
                     }
                 }
-                
+
                 lock (_gate)
                 {
                     State = MicroEngineState.Running;
                 }
 
+                RebuildTickableRegistry();
                 WriteTrace("Engine started.");
             }
             catch (Exception startException)
             {
                 List<Exception> rollbackErrors = [];
-                
-                foreach ((MicroObject microObject, MicroObjectState previousState) in activatedObjects.AsEnumerable().Reverse())
+
+                foreach ((MicroObject microObject, MicroLifeCycleState previousState) in activatedObjects.AsEnumerable().Reverse())
                 {
                     try
                     {
-                        microObject.RollbackToState(previousState);
+                        await microObject.RollbackToStateAsync(previousState, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {
                         rollbackErrors.Add(ex);
                     }
                 }
-                
+
                 foreach (MicroService service in startedServices.AsEnumerable().Reverse())
                 {
                     try
@@ -199,17 +206,17 @@ public sealed class MicroEngine
                         rollbackErrors.Add(ex);
                     }
                 }
-                
+
                 lock (_gate)
                 {
                     State = rollbackErrors.Count == 0 ? MicroEngineState.Stopped : MicroEngineState.Faulted;
                 }
 
                 WriteTrace($"Engine start failed. Rollback errors: {rollbackErrors.Count}.");
-                
+
                 if (rollbackErrors.Count == 0)
                     throw;
-                
+
                 rollbackErrors.Insert(0, startException);
                 throw new AggregateException(rollbackErrors);
             }
@@ -220,19 +227,51 @@ public sealed class MicroEngine
                 ExitExecutionScope();
         }
     }
-    
+
     /// <summary>
-    /// 停止引擎：按逆序停用所有对象，再按逆序停止所有服务。
+    /// 启动引擎内部 Tick 循环。
+    /// 通常由宿主层在引擎启动后调用。
+    /// </summary>
+    public async Task RunAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfReentered();
+
+        Task runLoopTask;
+
+        await EnterExecutionScopeAsync(cancellationToken);
+        EnterReentrancyScope();
+
+        try
+        {
+            lock (_gate)
+            {
+                if (State != MicroEngineState.Running)
+                    throw new InvalidOperationException("MicroEngine must be started before its tick loop can run.");
+            }
+
+            runLoopTask = _tickScheduler.RunAsync(cancellationToken);
+        }
+        finally
+        {
+            ExitExecutionScope();
+        }
+
+        await runLoopTask;
+    }
+
+    /// <summary>
+    /// 停止引擎：先冻结并 drain 所有 Tickable，再按逆序停用对象与服务。
     /// 收集所有错误后统一抛出，保证所有清理步骤都有机会执行。
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfReentered();
-        
+
         MicroService[] serviceSnapshot;
         MicroObject[] objectSnapshot;
         bool gateAcquired = false;
-        
+        bool tickSchedulerStopped = false;
+
         await EnterExecutionScopeAsync(cancellationToken);
         EnterReentrancyScope();
         gateAcquired = true;
@@ -243,48 +282,62 @@ public sealed class MicroEngine
             {
                 if (State == MicroEngineState.Stopped)
                     return;
-                
+
                 if (State is not (MicroEngineState.Running or MicroEngineState.Faulted))
                     throw new InvalidOperationException($"MicroEngine cannot stop while it is '{State}'.");
-                
+
                 State = MicroEngineState.Stopping;
                 WriteTrace("Engine stopping.");
                 serviceSnapshot = _services.OrderBy(static service => service.Order).ToArray();
                 objectSnapshot = _objects.ToArray();
             }
-            foreach (MicroObject microObject in objectSnapshot.Reverse())
+
+            try
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    errors.Add(new OperationCanceledException(cancellationToken));
-                    break;
-                }
-                
-                try
-                {
-                    microObject.Deactivate();
-                }
-                catch (Exception ex)
-                {
-                    errors.Add(ex);
-                }
+                await _tickScheduler.StopAsync(cancellationToken);
+                tickSchedulerStopped = true;
             }
-            
-            foreach (MicroService service in serviceSnapshot.Reverse())
+            catch (Exception ex)
             {
-                if (cancellationToken.IsCancellationRequested)
+                errors.Add(ex);
+            }
+
+            if (tickSchedulerStopped)
+            {
+                foreach (MicroObject microObject in objectSnapshot.Reverse())
                 {
-                    errors.Add(new OperationCanceledException(cancellationToken));
-                    break;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        errors.Add(new OperationCanceledException(cancellationToken));
+                        break;
+                    }
+
+                    try
+                    {
+                        await microObject.DeactivateAsync(cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add(ex);
+                    }
                 }
-                
-                try
+
+                foreach (MicroService service in serviceSnapshot.Reverse())
                 {
-                    await service.StopNodeAsync(cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add(ex);
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        errors.Add(new OperationCanceledException(cancellationToken));
+                        break;
+                    }
+
+                    try
+                    {
+                        await service.StopNodeAsync(cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add(ex);
+                    }
                 }
             }
         }
@@ -296,94 +349,75 @@ public sealed class MicroEngine
             }
 
             WriteTrace(errors.Count == 0 ? "Engine stopped." : $"Engine stop completed with {errors.Count} error(s).");
-            
+
             if (gateAcquired)
                 ExitExecutionScope();
         }
-        
+
         if (errors.Count == 1)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
-        
+
         if (errors.Count > 1)
             throw new AggregateException(errors);
     }
-    
-    /// <summary>驱动一帧更新，按 Order 顺序调用所有活动服务与对象。</summary>
+
+    /// <summary>手动驱动一帧更新；主要用于测试和显式控制场景。</summary>
     public async ValueTask TickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
     {
         if (deltaTime < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(deltaTime), "Tick delta time must be non-negative.");
-        
+
         ThrowIfReentered();
-        
+
         await EnterExecutionScopeAsync(cancellationToken);
         EnterReentrancyScope();
         try
         {
-            MicroService[] services;
-            MicroObject[] objects;
             lock (_gate)
             {
                 if (State != MicroEngineState.Running)
                     throw new InvalidOperationException("MicroEngine must be started before ticking.");
-                
-                services = _services.Where(static service => service.IsStarted).OrderBy(static service => service.Order).ToArray();
-                objects = _objects.Where(static microObject => microObject.State == MicroObjectState.Active).ToArray();
-            }
-            
-            foreach (MicroService service in services)
-                await service.TickNodeAsync(deltaTime, cancellationToken);
 
-            foreach (MicroObject microObject in objects)
-                await microObject.TickNodeAsync(deltaTime, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            MarkFaulted();
-            throw;
-        }
-        catch
-        {
-            MarkFaulted();
-            throw;
+                if (_tickScheduler.IsRunLoopActive)
+                    throw new InvalidOperationException("MicroEngine cannot be manually ticked while its background tick loop is running.");
+            }
+
+            await _tickScheduler.DispatchAndWaitAsync(deltaTime, cancellationToken);
         }
         finally
         {
             ExitExecutionScope();
         }
     }
-    
+
     /// <summary>向引擎注册对象；若引擎已在运行则立即激活该对象。</summary>
-    public bool RegisterObject(MicroObject microObject)
+    public async ValueTask<bool> RegisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(microObject);
-        
-        if (!TryEnterExecutionScope())
+        ThrowIfReentered();
+
+        if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        
+
         EnterReentrancyScope();
-        
+
         try
         {
             bool shouldActivate;
             lock (_gate)
             {
                 ThrowIfEngineMutating();
-                
+
                 if (_objects.Contains(microObject))
                     return false;
-                
-                if (microObject.State == MicroObjectState.Disposed)
+
+                if (microObject.LifeCycleState == MicroLifeCycleState.Disposed)
                     throw new ObjectDisposedException(nameof(MicroObject));
 
                 shouldActivate = State == MicroEngineState.Running;
             }
 
-            microObject.AttachToEngine(this);
+            await microObject.AttachToEngineAsync(this, cancellationToken);
 
             lock (_gate)
             {
@@ -391,20 +425,20 @@ public sealed class MicroEngine
             }
 
             WriteTrace($"Registered object {microObject.GetType().Name}.");
-            
+
             if (shouldActivate)
             {
-                microObject.Activate();
-                
+                await microObject.ActivateAsync(cancellationToken);
+
                 bool shouldRollback;
                 lock (_gate)
                 {
                     shouldRollback = State != MicroEngineState.Running;
                 }
-                
+
                 if (shouldRollback)
                 {
-                    microObject.Deactivate();
+                    await microObject.DeactivateAsync(CancellationToken.None);
 
                     Exception? detachException = null;
 
@@ -415,7 +449,7 @@ public sealed class MicroEngine
 
                     try
                     {
-                        microObject.DetachFromEngine(this);
+                        await microObject.DetachFromEngineAsync(this, CancellationToken.None);
                     }
                     catch (Exception cleanupException)
                     {
@@ -429,8 +463,10 @@ public sealed class MicroEngine
 
                     return false;
                 }
+
+                TryRegisterTickable(microObject);
             }
-            
+
             return true;
         }
         catch (Exception ex)
@@ -444,7 +480,7 @@ public sealed class MicroEngine
 
             try
             {
-                microObject.DetachFromEngine(this);
+                await microObject.DetachFromEngineAsync(this, CancellationToken.None);
             }
             catch (Exception cleanupException)
             {
@@ -461,41 +497,56 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
-    
-    /// <summary>从引擎注销对象；若引擎正在运行则先停用该对象。</summary>
-    public bool UnregisterObject(MicroObject microObject)
+
+    /// <summary>从引擎注销对象；若引擎正在运行则先 drain 其 Tick，再停用该对象。</summary>
+    public async ValueTask<bool> UnregisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(microObject);
-        
-        if (!TryEnterExecutionScope())
+        ThrowIfReentered();
+
+        if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        
+
         EnterReentrancyScope();
-        
+
         try
         {
             bool shouldDeactivate;
-            
+
             lock (_gate)
             {
                 ThrowIfEngineMutating();
-                
+
                 if (!_objects.Contains(microObject))
                     return false;
-                
+
                 shouldDeactivate = State is MicroEngineState.Running or MicroEngineState.Faulted;
             }
-            
+
+            await DrainTickableAsync(microObject, cancellationToken);
+
             if (shouldDeactivate)
-                microObject.Deactivate();
-            
+            {
+                try
+                {
+                    await microObject.DeactivateAsync(cancellationToken);
+                }
+                catch
+                {
+                    if (microObject is IMicroTickable && microObject.LifeCycleState == MicroLifeCycleState.Active)
+                        TryRegisterTickable(microObject, clearIsolation: false);
+
+                    throw;
+                }
+            }
+
             lock (_gate)
             {
                 if (!_objects.Remove(microObject))
                     return false;
             }
-            
-            microObject.DetachFromEngine(this);
+
+            await microObject.DetachFromEngineAsync(this, CancellationToken.None);
             WriteTrace($"Unregistered object {microObject.GetType().Name}.");
             return true;
         }
@@ -504,33 +555,34 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
-    
+
     /// <summary>动态注册服务；若引擎已在运行则立即启动该服务，失败时自动回滚。</summary>
     public async ValueTask<bool> RegisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
-        
+        ThrowIfReentered();
+
         if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        
+
         EnterReentrancyScope();
-        
+
         bool attached = false;
-        
+
         try
         {
             bool shouldStart;
             lock (_gate)
             {
                 ThrowIfEngineMutating();
-                
+
                 if (_services.Contains(service))
                     return false;
 
                 shouldStart = State == MicroEngineState.Running;
             }
 
-            service.AttachToEngine(this);
+            await service.AttachToEngineAsync(this, cancellationToken);
             attached = true;
 
             lock (_gate)
@@ -539,17 +591,17 @@ public sealed class MicroEngine
             }
 
             WriteTrace($"Registered service {service.GetType().Name}.");
-            
+
             if (shouldStart)
             {
                 await service.StartNodeAsync(cancellationToken);
-                
+
                 bool shouldRollback;
                 lock (_gate)
                 {
                     shouldRollback = State != MicroEngineState.Running;
                 }
-                
+
                 if (shouldRollback)
                 {
                     await service.StopNodeAsync(CancellationToken.None);
@@ -563,7 +615,7 @@ public sealed class MicroEngine
 
                     try
                     {
-                        service.DetachFromEngine(this);
+                        await service.DetachFromEngineAsync(this, CancellationToken.None);
                     }
                     catch (Exception cleanupException)
                     {
@@ -577,17 +629,19 @@ public sealed class MicroEngine
 
                     return false;
                 }
+
+                TryRegisterTickable(service);
             }
-            
+
             return true;
         }
         catch (Exception ex)
         {
             if (!attached)
                 throw;
-            
+
             List<Exception> rollbackErrors = [];
-            
+
             try
             {
                 await service.StopNodeAsync(CancellationToken.None);
@@ -597,7 +651,7 @@ public sealed class MicroEngine
                 rollbackErrors.Add(rollbackException);
                 MarkFaulted();
             }
-            
+
             bool shouldDetach = false;
 
             lock (_gate)
@@ -613,17 +667,17 @@ public sealed class MicroEngine
             {
                 try
                 {
-                    service.DetachFromEngine(this);
+                    await service.DetachFromEngineAsync(this, CancellationToken.None);
                 }
                 catch (Exception detachException)
                 {
                     rollbackErrors.Add(detachException);
                 }
             }
-            
+
             if (rollbackErrors.Count == 0)
                 throw;
-            
+
             rollbackErrors.Insert(0, ex);
             throw new AggregateException(rollbackErrors);
         }
@@ -632,41 +686,56 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
-    
-    /// <summary>动态注销服务；若引擎正在运行则先停止该服务。</summary>
+
+    /// <summary>动态注销服务；若引擎正在运行则先 drain 其 Tick，再停止该服务。</summary>
     public async ValueTask<bool> UnregisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
-        
+        ThrowIfReentered();
+
         if (!await TryEnterExecutionScopeAsync(cancellationToken))
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        
+
         EnterReentrancyScope();
-        
+
         try
         {
             bool shouldStop;
-            
+
             lock (_gate)
             {
                 ThrowIfEngineMutating();
-                
+
                 if (!_services.Contains(service))
                     return false;
-                
+
                 shouldStop = State is MicroEngineState.Running or MicroEngineState.Faulted;
             }
-            
+
+            await DrainTickableAsync(service, cancellationToken);
+
             if (shouldStop)
-                await service.StopNodeAsync(cancellationToken);
-            
+                {
+                    try
+                    {
+                        await service.StopNodeAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        if (CanScheduleServiceTicking(service))
+                            TryRegisterTickable(service, clearIsolation: false);
+
+                        throw;
+                    }
+                }
+
             lock (_gate)
             {
                 if (!_services.Remove(service))
                     return false;
             }
-            
-            service.DetachFromEngine(this);
+
+            await service.DetachFromEngineAsync(this, CancellationToken.None);
             WriteTrace($"Unregistered service {service.GetType().Name}.");
             return true;
         }
@@ -675,58 +744,214 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
-    
+
+    /// <summary>将服务直接挂接到引擎的初始集合中。</summary>
     private void AttachService(MicroService service)
     {
         if (_services.Contains(service))
             return;
-        
-        service.AttachToEngine(this);
+
+        service.AttachToEngineAsync(this).AsTask().GetAwaiter().GetResult();
         _services.Add(service);
     }
-    
+
+    /// <summary>根据当前活动节点重建 Tickable 注册表。</summary>
+    private void RebuildTickableRegistry()
+    {
+        TickableRegistrationSnapshot[] snapshot;
+
+        lock (_gate)
+        {
+            List<TickableRegistrationSnapshot> items = [];
+
+            foreach (MicroService service in _services.Where(CanScheduleServiceTicking))
+            {
+                if (service is IMicroTickable tickable)
+                    items.Add(new TickableRegistrationSnapshot(tickable, service.Order, service.GetType().Name));
+            }
+
+            foreach (MicroObject microObject in _objects.Where(static microObject => microObject.LifeCycleState == MicroLifeCycleState.Active))
+            {
+                if (microObject is IMicroTickable tickable)
+                    items.Add(new TickableRegistrationSnapshot(tickable, 0, microObject.GetType().Name));
+            }
+
+            snapshot = items.OrderBy(static item => item.Order).ToArray();
+        }
+
+        _tickScheduler.Rebuild(snapshot);
+    }
+
+    /// <summary>尝试将活动对象或服务重新注册到调度器。</summary>
+    private void TryRegisterTickable(object candidate, bool clearIsolation = true)
+    {
+        switch (candidate)
+        {
+            case MicroService service when service is IMicroTickable tickable && CanScheduleServiceTicking(service):
+                _tickScheduler.Register(tickable, service.Order, service.GetType().Name, clearIsolation);
+                break;
+            case MicroObject { LifeCycleState: MicroLifeCycleState.Active } microObject when microObject is IMicroTickable tickable:
+                _tickScheduler.Register(tickable, 0, microObject.GetType().Name, clearIsolation);
+                break;
+        }
+    }
+
+    /// <summary>在对象保持活动状态时恢复其 Tick 注册。</summary>
+    internal void RegisterActiveObjectTicking(MicroObject microObject)
+    {
+        ArgumentNullException.ThrowIfNull(microObject);
+
+        bool shouldRegister;
+        lock (_gate)
+        {
+            shouldRegister = _objects.Contains(microObject)
+                && State is MicroEngineState.Running or MicroEngineState.Faulted;
+        }
+
+        if (shouldRegister)
+            TryRegisterTickable(microObject);
+    }
+
+    /// <summary>在对象停用前暂停并清空其 Tick 调度。</summary>
+    internal async ValueTask SuspendObjectTickingAsync(MicroObject microObject, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(microObject);
+
+        bool shouldDrain;
+        lock (_gate)
+        {
+            shouldDrain = _objects.Contains(microObject)
+                && State is MicroEngineState.Running or MicroEngineState.Faulted;
+        }
+
+        if (shouldDrain)
+            await DrainTickableAsync(microObject, cancellationToken);
+    }
+
+    /// <summary>等待指定 Tickable 排空并从调度队列移除。</summary>
+    private async ValueTask DrainTickableAsync(object candidate, CancellationToken cancellationToken)
+    {
+        if (candidate is not IMicroTickable tickable)
+            return;
+
+        await _tickScheduler.DrainAndRemoveAsync(tickable, cancellationToken);
+    }
+
+    /// <summary>判断服务当前是否仍满足 Tick 调度资格。</summary>
+    private bool CanScheduleServiceTicking(MicroService service)
+        => ReferenceEquals(service.Engine, this)
+            && !service.IsDisposed
+            && service.LifeCycleState == MicroLifeCycleState.Active;
+
+    /// <summary>在引擎处于启动或停止阶段时阻止结构变更。</summary>
     private void ThrowIfEngineMutating()
     {
         if (State is MicroEngineState.Starting or MicroEngineState.Stopping)
             throw new InvalidOperationException($"MicroEngine cannot be mutated while it is '{State}'.");
     }
-    
+
+    /// <summary>在当前异步流已持有执行门时阻止重入。</summary>
     private void ThrowIfReentered()
     {
-        if (IsWithinActiveExecutionScope())
+        if (IsWithinActiveExecutionScope() || _objectLifecycleGate.Value is { IsActive: true })
             throw new InvalidOperationException("MicroEngine cannot be re-entered while it is executing.");
     }
-    
+
+    /// <summary>判断当前异步流是否处于活动执行作用域内。</summary>
     private bool IsWithinActiveExecutionScope() => _executionScope.Value is { IsActive: true, Depth: > 0 };
-    
-    private void EnterReentrancyScope()
+
+    /// <summary>进入当前异步流的可重入执行作用域。</summary>
+    private void EnterReentrancyScope(bool ownsExecutionGate = true)
     {
         ExecutionScopeState? scope = _executionScope.Value;
         if (scope is null || !scope.IsActive)
         {
-            scope = new ExecutionScopeState();
+            scope = new ExecutionScopeState
+            {
+                OwnsExecutionGate = ownsExecutionGate,
+            };
             _executionScope.Value = scope;
         }
-        
+        else if (ownsExecutionGate)
+        {
+            scope.OwnsExecutionGate = true;
+        }
+
         scope.Depth++;
     }
-    
+
+    /// <summary>尝试同步获取执行门。</summary>
     private bool TryEnterExecutionScope() => _executionGate.Wait(0);
-    
+
+    /// <summary>尝试异步获取执行门。</summary>
     private ValueTask<bool> TryEnterExecutionScopeAsync(CancellationToken cancellationToken) => new(TryEnterExecutionScopeAsyncCore(cancellationToken));
-    
+
+    /// <summary>执行异步尝试获取执行门的实际逻辑。</summary>
     private async Task<bool> TryEnterExecutionScopeAsyncCore(CancellationToken cancellationToken) => await _executionGate.WaitAsync(0, cancellationToken);
-    
+
+    /// <summary>异步等待获取执行门。</summary>
     private async ValueTask EnterExecutionScopeAsync(CancellationToken cancellationToken) => await _executionGate.WaitAsync(cancellationToken);
-    
-    private void EnterExecutionScope() => _executionGate.Wait();
-    
+
+    /// <summary>为销毁路径获取执行门；启动中等待完成，其余状态快速失败。</summary>
+    private async ValueTask EnterDisposalExecutionScopeAsync()
+    {
+        bool waitForStartup;
+        lock (_gate)
+        {
+            waitForStartup = State == MicroEngineState.Starting;
+        }
+
+        if (waitForStartup)
+        {
+            await EnterExecutionScopeAsync(CancellationToken.None);
+            return;
+        }
+
+        if (!TryEnterExecutionScope())
+            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
+    }
+
+    /// <summary>为公开对象生命周期操作获取专用执行门。</summary>
+    internal async ValueTask<bool> EnterObjectLifecycleScopeAsync(CancellationToken cancellationToken)
+    {
+        ExecutionScopeState? scope = _executionScope.Value;
+        if (scope is { IsActive: true, Depth: > 0 })
+        {
+            if (scope.OwnsExecutionGate)
+                return false;
+
+            throw new InvalidOperationException("Registered object lifecycle cannot be changed from within tick execution.");
+        }
+
+        if (_objectLifecycleGate.Value is { IsActive: true })
+            throw new InvalidOperationException("MicroEngine cannot be re-entered while it is executing.");
+
+        await EnterExecutionScopeAsync(cancellationToken);
+        _objectLifecycleGate.Value = new ObjectLifecycleGateState();
+        return true;
+    }
+
+    /// <summary>释放对象生命周期操作持有的执行门。</summary>
+    internal void ExitObjectLifecycleScope()
+    {
+        ObjectLifecycleGateState? scope = _objectLifecycleGate.Value;
+        if (scope is not null)
+        {
+            scope.IsActive = false;
+            if (ReferenceEquals(_objectLifecycleGate.Value, scope))
+                _objectLifecycleGate.Value = null;
+        }
+
+        _executionGate.Release();
+    }
+
+    /// <summary>退出完整执行作用域并释放执行门。</summary>
     private void ExitExecutionScope()
     {
         ExecutionScopeState? scope = _executionScope.Value;
         if (scope is null || !scope.IsActive || scope.Depth <= 0)
             throw new InvalidOperationException("MicroEngine execution scope is not active.");
-        
+
         scope.Depth--;
         if (scope.Depth == 0)
         {
@@ -734,76 +959,88 @@ public sealed class MicroEngine
             if (ReferenceEquals(_executionScope.Value, scope))
                 _executionScope.Value = null;
         }
-        
+
         _executionGate.Release();
     }
-    
-    internal void DetachDisposedObject(MicroObject microObject)
+
+    /// <summary>退出不拥有执行门的重入作用域。</summary>
+    private void ExitReentrancyScopeWithoutGate()
     {
-        lock (_gate)
+        ExecutionScopeState? scope = _executionScope.Value;
+        if (scope is null || !scope.IsActive || scope.Depth <= 0)
+            throw new InvalidOperationException("MicroEngine execution scope is not active.");
+
+        scope.Depth--;
+        if (scope.Depth == 0)
         {
-            _objects.Remove(microObject);
+            scope.IsActive = false;
+            if (ReferenceEquals(_executionScope.Value, scope))
+                _executionScope.Value = null;
         }
-        
-        microObject.DetachFromEngine(this);
     }
-    
-    internal void DisposeObject(MicroObject microObject)
+
+    /// <summary>清空当前异步流继承到的执行作用域状态。</summary>
+    private void ClearExecutionScopeForCurrentFlow()
+        => _executionScope.Value = null;
+
+    /// <summary>在引擎上下文内销毁一个已注册对象。</summary>
+    internal async ValueTask DisposeObjectAsync(MicroObject microObject)
     {
         ArgumentNullException.ThrowIfNull(microObject);
-        
+
         if (IsWithinActiveExecutionScope())
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        
-        bool gateAcquired;
-        lock (_gate)
-        {
-            gateAcquired = State == MicroEngineState.Starting;
-        }
-        
-        if (gateAcquired)
-        {
-            EnterExecutionScope();
-        }
-        else if (!TryEnterExecutionScope())
-        {
-            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        }
-        
+
+        await EnterDisposalExecutionScopeAsync();
+
         EnterReentrancyScope();
         try
         {
             bool wasRegistered;
             Exception? disposalException = null;
-            
+
             lock (_gate)
             {
                 wasRegistered = _objects.Contains(microObject);
             }
-            
+
             try
             {
-                microObject.DisposeCore();
+                if (wasRegistered)
+                    await DrainTickableAsync(microObject, CancellationToken.None);
+
+                await microObject.DisposeCoreAsync();
             }
             catch (Exception ex)
             {
                 disposalException = ex;
+
+                if (wasRegistered && microObject is IMicroTickable && microObject.LifeCycleState == MicroLifeCycleState.Active)
+                    TryRegisterTickable(microObject, clearIsolation: false);
             }
-            
-            if (wasRegistered && microObject.State == MicroObjectState.Disposed)
+
+            if (wasRegistered && microObject.LifeCycleState == MicroLifeCycleState.Disposed)
             {
                 lock (_gate)
                 {
                     _objects.Remove(microObject);
                 }
-                
-                microObject.DetachFromEngine(this);
+
+                try
+                {
+                    await microObject.DetachFromEngineAsync(this, CancellationToken.None);
+                }
+                catch (Exception detachException)
+                {
+                    if (disposalException is null)
+                        disposalException = detachException;
+                    else
+                        disposalException = new AggregateException(disposalException, detachException);
+                }
             }
-            
+
             if (disposalException is not null)
-            {
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(disposalException).Throw();
-            }
         }
         finally
         {
@@ -811,27 +1048,15 @@ public sealed class MicroEngine
         }
     }
 
-    internal void DisposeService(MicroService service)
+    /// <summary>在引擎上下文内销毁一个已注册服务。</summary>
+    internal async ValueTask DisposeServiceAsync(MicroService service)
     {
         ArgumentNullException.ThrowIfNull(service);
 
         if (IsWithinActiveExecutionScope())
             throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
 
-        bool gateAcquired;
-        lock (_gate)
-        {
-            gateAcquired = State == MicroEngineState.Starting;
-        }
-
-        if (gateAcquired)
-        {
-            EnterExecutionScope();
-        }
-        else if (!TryEnterExecutionScope())
-        {
-            throw new InvalidOperationException("MicroEngine cannot be mutated while it is executing.");
-        }
+        await EnterDisposalExecutionScopeAsync();
 
         EnterReentrancyScope();
         try
@@ -846,11 +1071,17 @@ public sealed class MicroEngine
 
             try
             {
-                service.DisposeCore();
+                if (wasRegistered)
+                    await DrainTickableAsync(service, CancellationToken.None);
+
+                await service.DisposeCoreAsync();
             }
             catch (Exception ex)
             {
                 disposalException = ex;
+
+                if (wasRegistered && CanScheduleServiceTicking(service))
+                    TryRegisterTickable(service, clearIsolation: false);
             }
 
             if (wasRegistered && service.IsDisposed)
@@ -860,7 +1091,17 @@ public sealed class MicroEngine
                     _services.Remove(service);
                 }
 
-                service.DetachFromEngine(this);
+                try
+                {
+                    await service.DetachFromEngineAsync(this, CancellationToken.None);
+                }
+                catch (Exception detachException)
+                {
+                    if (disposalException is null)
+                        disposalException = detachException;
+                    else
+                        disposalException = new AggregateException(disposalException, detachException);
+                }
             }
 
             if (disposalException is not null)
@@ -871,15 +1112,513 @@ public sealed class MicroEngine
             ExitExecutionScope();
         }
     }
-    
-    // 记录当前异步流进入执行作用域的嵌套深度，用于检测可重入调用。
+
+    /// <summary>描述当前异步流的执行作用域状态。</summary>
     private sealed class ExecutionScopeState
     {
+        /// <summary>当前作用域嵌套深度。</summary>
         public int Depth { get; set; }
-        
+
+        /// <summary>该作用域当前是否仍然有效。</summary>
+        public bool IsActive { get; set; } = true;
+
+        /// <summary>当前作用域是否拥有执行门。</summary>
+        public bool OwnsExecutionGate { get; set; }
+    }
+
+    /// <summary>标记公开对象生命周期操作持有的执行门状态。</summary>
+    private sealed class ObjectLifecycleGateState
+    {
+        /// <summary>该门状态当前是否仍然有效。</summary>
         public bool IsActive { get; set; } = true;
     }
-    
+
+    /// <summary>用于批量重建调度器注册表的快照项。</summary>
+    private readonly record struct TickableRegistrationSnapshot(IMicroTickable Tickable, int Order, string DisplayName);
+
+    /// <summary>引擎内部的 Tick 调度与后台循环执行器。</summary>
+    private sealed class MicroTickSchedulerRunner
+    {
+        private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
+
+        private readonly MicroEngine _owner;
+        private readonly Lock _gate = new();
+        private readonly Dictionary<IMicroTickable, TickableRegistration> _registrations = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<IMicroTickable> _isolatedTickables = new(ReferenceEqualityComparer.Instance);
+        private Task? _runLoopTask;
+        private CancellationTokenSource? _runLoopSignal;
+        private bool _acceptFrames = true;
+        private List<Exception>? _dispatchFailures;
+
+        public MicroTickSchedulerRunner(MicroEngine owner)
+        {
+            _owner = owner;
+        }
+
+        /// <summary>使用快照内容整体重建当前注册表。</summary>
+        public void Rebuild(IEnumerable<TickableRegistrationSnapshot> registrations)
+        {
+            lock (_gate)
+            {
+                _registrations.Clear();
+                _isolatedTickables.Clear();
+                _acceptFrames = true;
+
+                foreach (TickableRegistrationSnapshot registration in registrations)
+                {
+                    _registrations[registration.Tickable] = new TickableRegistration(registration.Tickable, registration.Order, registration.DisplayName);
+                }
+            }
+        }
+
+        /// <summary>注册或更新一个可调度节点。</summary>
+        public void Register(IMicroTickable tickable, int order, string displayName, bool clearIsolation)
+        {
+            lock (_gate)
+            {
+                if (!clearIsolation && _isolatedTickables.Contains(tickable))
+                    return;
+
+                if (clearIsolation)
+                    _isolatedTickables.Remove(tickable);
+
+                if (_registrations.TryGetValue(tickable, out TickableRegistration? existing))
+                {
+                    existing.Order = order;
+                    existing.DisplayName = displayName;
+                    existing.AcceptsFrames = true;
+                    existing.LastException = null;
+                    existing.PendingDelta = TimeSpan.Zero;
+                    return;
+                }
+
+                _registrations[tickable] = new TickableRegistration(tickable, order, displayName);
+            }
+        }
+
+        /// <summary>等待指定节点排空并将其移除。</summary>
+        public async ValueTask DrainAndRemoveAsync(IMicroTickable tickable, CancellationToken cancellationToken)
+        {
+            TickableRegistration? registration;
+            Task waitTask;
+
+            lock (_gate)
+            {
+                if (!_registrations.TryGetValue(tickable, out registration))
+                    return;
+
+                registration.AcceptsFrames = false;
+                registration.PendingDelta = TimeSpan.Zero;
+                waitTask = registration.GetDrainTask();
+            }
+
+            try
+            {
+                await waitTask.WaitAsync(cancellationToken);
+            }
+            catch
+            {
+                lock (_gate)
+                {
+                    if (_registrations.TryGetValue(tickable, out TickableRegistration? existing) && ReferenceEquals(existing, registration))
+                        registration.AcceptsFrames = true;
+                }
+
+                throw;
+            }
+
+            lock (_gate)
+            {
+                if (_registrations.TryGetValue(tickable, out TickableRegistration? existing) && ReferenceEquals(existing, registration))
+                    _registrations.Remove(tickable);
+            }
+        }
+
+        /// <summary>分发一帧并等待本次帧处理完成。</summary>
+        public async ValueTask DispatchAndWaitAsync(TimeSpan deltaTime, CancellationToken cancellationToken)
+        {
+            if (deltaTime <= TimeSpan.Zero)
+                return;
+
+            TickableRegistration[] registrations;
+            Task[] waitTasks;
+
+            lock (_gate)
+            {
+                _dispatchFailures = [];
+            }
+
+            try
+            {
+                waitTasks = EnqueueFrame(deltaTime, cancellationToken, out registrations);
+                if (waitTasks.Length == 0)
+                    return;
+
+                await Task.WhenAll(waitTasks);
+
+                List<Exception> failures;
+                lock (_gate)
+                {
+                    failures = _dispatchFailures is null ? [] : [.. _dispatchFailures];
+                }
+
+                if (failures.Count == 1)
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+
+                if (failures.Count > 1)
+                    throw new AggregateException(failures);
+
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _dispatchFailures = null;
+                }
+            }
+        }
+
+        /// <summary>启动后台 Tick 循环。</summary>
+        public Task RunAsync(CancellationToken cancellationToken)
+        {
+            lock (_gate)
+            {
+                if (_runLoopTask is { IsCompleted: false })
+                    throw new InvalidOperationException("MicroEngine tick loop is already running.");
+
+                _acceptFrames = true;
+                CancellationTokenSource runLoopSignal = new();
+                _runLoopSignal = runLoopSignal;
+                _runLoopTask = RunLoopCoreAsync(runLoopSignal, cancellationToken);
+                return _runLoopTask;
+            }
+        }
+
+        /// <summary>后台 Tick 循环当前是否仍在运行。</summary>
+        public bool IsRunLoopActive
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _runLoopTask is { IsCompleted: false };
+                }
+            }
+        }
+
+        /// <summary>停止后台 Tick 循环并排空所有已注册节点。</summary>
+        public async ValueTask StopAsync(CancellationToken cancellationToken)
+        {
+            Task? runLoopTask;
+            CancellationTokenSource? runLoopSignal;
+            TickableRegistration[] drainingRegistrations;
+            Task[] drainTasks;
+
+            lock (_gate)
+            {
+                _acceptFrames = false;
+                runLoopTask = _runLoopTask;
+                runLoopSignal = _runLoopSignal;
+
+                foreach (TickableRegistration registration in _registrations.Values)
+                {
+                    registration.AcceptsFrames = false;
+                    registration.PendingDelta = TimeSpan.Zero;
+                }
+
+                drainingRegistrations = _registrations.Values.ToArray();
+                drainTasks = drainingRegistrations.Select(static registration => registration.GetDrainTask()).ToArray();
+            }
+
+            if (runLoopSignal is not null)
+            {
+                try
+                {
+                    runLoopSignal.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+
+            if (runLoopTask is not null)
+            {
+                try
+                {
+                    await runLoopTask.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            if (drainTasks.Length > 0)
+            {
+                await Task.WhenAll(drainTasks).WaitAsync(cancellationToken);
+            }
+
+            lock (_gate)
+            {
+                foreach (TickableRegistration registration in drainingRegistrations)
+                {
+                    if (_registrations.TryGetValue(registration.Tickable, out TickableRegistration? existing) && ReferenceEquals(existing, registration))
+                        _registrations.Remove(registration.Tickable);
+                }
+
+                if (_runLoopTask?.IsCompleted != false)
+                {
+                    _runLoopTask = null;
+                    _runLoopSignal?.Dispose();
+                    _runLoopSignal = null;
+                }
+            }
+        }
+
+        /// <summary>后台循环的核心执行逻辑。</summary>
+        private async Task RunLoopCoreAsync(CancellationTokenSource runLoopSignal, CancellationToken cancellationToken)
+        {
+            using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, runLoopSignal.Token);
+            CancellationToken linkedToken = linkedCts.Token;
+
+            try
+            {
+                using PeriodicTimer timer = new(TickInterval);
+                DateTimeOffset previousTick = DateTimeOffset.UtcNow;
+
+                while (!linkedToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        if (!await timer.WaitForNextTickAsync(linkedToken))
+                            break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+
+                    DateTimeOffset now = DateTimeOffset.UtcNow;
+                    TimeSpan deltaTime = now - previousTick;
+                    previousTick = now;
+
+                    EnqueueFrame(deltaTime, linkedToken);
+                }
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_runLoopSignal, runLoopSignal))
+                    {
+                        runLoopSignal.Dispose();
+                        _runLoopSignal = null;
+                    }
+                }
+            }
+        }
+
+        /// <summary>将一帧时间分发到当前活动注册项。</summary>
+        private Task[] EnqueueFrame(TimeSpan deltaTime, CancellationToken dispatchCancellationToken)
+            => EnqueueFrame(deltaTime, dispatchCancellationToken, out _);
+
+        /// <summary>将一帧时间分发到当前活动注册项，并返回等待信息。</summary>
+        private Task[] EnqueueFrame(
+            TimeSpan deltaTime,
+            CancellationToken dispatchCancellationToken,
+            out TickableRegistration[] registrations)
+        {
+            lock (_gate)
+            {
+                if (!_acceptFrames)
+                {
+                    registrations = [];
+                    return [];
+                }
+
+                registrations = _registrations.Values
+                    .Where(static registration => registration.AcceptsFrames)
+                    .OrderBy(static registration => registration.Order)
+                    .ToArray();
+
+                if (registrations.Length == 0)
+                {
+                    return [];
+                }
+
+                foreach (TickableRegistration registration in registrations)
+                {
+                    registration.PendingDelta += deltaTime;
+                    EnsureExecutionLocked(registration, dispatchCancellationToken);
+                }
+
+                return registrations.Select(static registration => registration.GetDrainTask()).ToArray();
+            }
+        }
+
+        /// <summary>确保指定注册项已经拥有正在运行的执行任务。</summary>
+        private void EnsureExecutionLocked(TickableRegistration registration, CancellationToken dispatchCancellationToken)
+        {
+            if (registration.IsExecuting || !registration.AcceptsFrames || registration.PendingDelta <= TimeSpan.Zero)
+                return;
+
+            registration.IsExecuting = true;
+            registration.EnsureBusy();
+            registration.ExecutionTask = Task.Run(() => ExecuteTickableAsync(registration, dispatchCancellationToken), CancellationToken.None);
+        }
+
+        /// <summary>执行单个注册项的实际 Tick 循环。</summary>
+        private async Task ExecuteTickableAsync(TickableRegistration registration, CancellationToken dispatchCancellationToken)
+        {
+            _owner.ClearExecutionScopeForCurrentFlow();
+
+            while (true)
+            {
+                TimeSpan deltaTime;
+
+                lock (_gate)
+                {
+                    if (!registration.AcceptsFrames)
+                    {
+                        registration.PendingDelta = TimeSpan.Zero;
+                        registration.IsExecuting = false;
+                        registration.ExecutionTask = null;
+                        registration.MarkIdle();
+                        return;
+                    }
+
+                    if (registration.PendingDelta <= TimeSpan.Zero)
+                    {
+                        registration.IsExecuting = false;
+                        registration.ExecutionTask = null;
+                        registration.MarkIdle();
+                        return;
+                    }
+
+                    deltaTime = registration.PendingDelta;
+                    registration.PendingDelta = TimeSpan.Zero;
+                }
+
+                try
+                {
+                    _owner.EnterReentrancyScope(ownsExecutionGate: false);
+                    await registration.Tickable.TickAsync(deltaTime, dispatchCancellationToken);
+                }
+                catch (OperationCanceledException) when (dispatchCancellationToken.IsCancellationRequested)
+                {
+                    lock (_gate)
+                    {
+                        registration.PendingDelta = TimeSpan.Zero;
+                        registration.IsExecuting = false;
+                        registration.ExecutionTask = null;
+                        registration.MarkIdle();
+                    }
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lock (_gate)
+                    {
+                        registration.LastException = ex;
+                        registration.AcceptsFrames = false;
+                        registration.PendingDelta = TimeSpan.Zero;
+                        registration.IsExecuting = false;
+                        registration.ExecutionTask = null;
+                        _isolatedTickables.Add(registration.Tickable);
+                        registration.MarkIdle();
+                        _dispatchFailures?.Add(ex);
+                    }
+
+                    WriteTrace($"Tickable {registration.DisplayName} failed: {ex.Message}");
+                    return;
+                }
+                finally
+                {
+                    if (_owner.IsWithinActiveExecutionScope())
+                        _owner.ExitReentrancyScopeWithoutGate();
+                }
+            }
+        }
+    }
+
+    /// <summary>调度器中单个 Tickable 的运行状态。</summary>
+    private sealed class TickableRegistration
+    {
+        private TaskCompletionSource<bool> _idleSignal = CreateCompletedSignal();
+
+        /// <summary>初始化一个新的 Tickable 注册项。</summary>
+        public TickableRegistration(IMicroTickable tickable, int order, string displayName)
+        {
+            Tickable = tickable;
+            Order = order;
+            DisplayName = displayName;
+        }
+
+        /// <summary>注册项关联的 Tickable 实例。</summary>
+        public IMicroTickable Tickable { get; }
+
+        /// <summary>调度顺序值。</summary>
+        public int Order { get; set; }
+
+        /// <summary>调试用显示名称。</summary>
+        public string DisplayName { get; set; }
+
+        /// <summary>当前是否仍接受新的帧累积。</summary>
+        public bool AcceptsFrames { get; set; } = true;
+
+        /// <summary>当前是否已有执行任务在运行。</summary>
+        public bool IsExecuting { get; set; }
+
+        /// <summary>尚未消费的累计帧时间。</summary>
+        public TimeSpan PendingDelta { get; set; }
+
+        /// <summary>最近一次执行异常。</summary>
+        public Exception? LastException { get; set; }
+
+        /// <summary>当前关联的执行任务。</summary>
+        public Task? ExecutionTask { get; set; }
+
+        /// <summary>确保当前注册项已进入忙碌状态。</summary>
+        public void EnsureBusy()
+        {
+            if (_idleSignal.Task.IsCompleted)
+                _idleSignal = CreatePendingSignal();
+        }
+
+        /// <summary>获取当前注册项进入空闲状态的等待任务。</summary>
+        public Task GetDrainTask()
+        {
+            if (!IsExecuting && PendingDelta <= TimeSpan.Zero)
+                return Task.CompletedTask;
+
+            EnsureBusy();
+            return _idleSignal.Task;
+        }
+
+        /// <summary>将当前注册项标记为空闲。</summary>
+        public void MarkIdle()
+        {
+            _idleSignal.TrySetResult(true);
+        }
+
+        /// <summary>创建一个已完成的空闲信号。</summary>
+        private static TaskCompletionSource<bool> CreateCompletedSignal()
+        {
+            TaskCompletionSource<bool> signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            signal.TrySetResult(true);
+            return signal;
+        }
+
+        /// <summary>创建一个待完成的空闲信号。</summary>
+        private static TaskCompletionSource<bool> CreatePendingSignal()
+            => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    /// <summary>将引擎状态标记为 Faulted。</summary>
     internal void MarkFaulted()
     {
         lock (_gate)
@@ -891,6 +1630,7 @@ public sealed class MicroEngine
         WriteTrace("Engine marked faulted.");
     }
 
+    /// <summary>写入引擎级跟踪日志。</summary>
     private static void WriteTrace(string message)
     {
         System.Diagnostics.Trace.WriteLine($"[MicroEngine] {message}");

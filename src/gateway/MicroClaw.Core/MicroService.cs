@@ -1,6 +1,6 @@
 namespace MicroClaw.Core;
 
-/// <summary>服务生命周期状态。</summary>
+/// <summary>服务运行状态。</summary>
 public enum MicroServiceState
 {
     Stopped,
@@ -21,43 +21,47 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
     /// <summary>所属引擎，未注册时为 null。</summary>
     public MicroEngine? Engine => Host;
 
-    /// <summary>当前服务状态。</summary>
+    /// <summary>当前服务运行状态。</summary>
     public MicroServiceState State { get; private set; } = MicroServiceState.Stopped;
 
-    /// <summary>服务是否处于 Running 状态。</summary>
+    /// <summary>服务是否处于 Running 且 Active 状态。</summary>
     public bool IsStarted => State == MicroServiceState.Running && LifeCycleState == MicroLifeCycleState.Active;
 
-    public override void Dispose()
+    /// <summary>释放服务；若已注册则交给引擎统一销毁。</summary>
+    public override async ValueTask DisposeAsync()
     {
         if (Engine is { } engine)
         {
-            engine.DisposeService(this);
+            await engine.DisposeServiceAsync(this);
             return;
         }
 
-        DisposeCore();
+        await DisposeCoreAsync();
     }
 
-    internal void AttachToEngine(MicroEngine engine)
+    /// <summary>将服务挂接到指定引擎。</summary>
+    internal ValueTask AttachToEngineAsync(MicroEngine engine, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(engine);
 
         if (Host is not null && !ReferenceEquals(Host, engine))
             throw new InvalidOperationException("A MicroService can only belong to one MicroEngine at a time.");
 
-        AttachToHost(engine);
+        return AttachToHostAsync(engine, cancellationToken);
     }
 
-    internal void DetachFromEngine(MicroEngine engine)
+    /// <summary>将服务从指定引擎分离。</summary>
+    internal async ValueTask DetachFromEngineAsync(MicroEngine engine, CancellationToken cancellationToken = default)
     {
         if (ReferenceEquals(Host, engine))
         {
-            DetachCore();
+            await DetachCoreAsync(cancellationToken: cancellationToken);
             if (State != MicroServiceState.Starting)
                 State = MicroServiceState.Stopped;
         }
     }
 
+    /// <summary>执行服务启动阶段的完整生命周期推进。</summary>
     internal override async ValueTask StartNodeAsync(CancellationToken cancellationToken = default)
     {
         if (State == MicroServiceState.Running)
@@ -76,6 +80,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
         WriteTrace($"{GetType().Name} is running.");
     }
 
+    /// <summary>执行服务停止阶段的完整生命周期回退。</summary>
     internal override async ValueTask StopNodeAsync(CancellationToken cancellationToken = default)
     {
         if (State == MicroServiceState.Stopped)
@@ -149,7 +154,8 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
         ThrowIfNeeded(errors);
     }
 
-    internal void DisposeCore()
+    /// <summary>在不回调引擎的情况下直接销毁服务本体。</summary>
+    internal async ValueTask DisposeCoreAsync()
     {
         if (IsDisposed)
             return;
@@ -159,7 +165,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
         try
         {
-            StopNodeAsync(CancellationToken.None).GetAwaiter().GetResult();
+            await StopNodeAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -171,7 +177,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
         {
             try
             {
-                UninitializeCoreAsync(CancellationToken.None).GetAwaiter().GetResult();
+                await UninitializeCoreAsync(CancellationToken.None);
             }
             catch (Exception ex)
             {
@@ -181,7 +187,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
         try
         {
-            DisposeLifeCycle(skipDetachRollback: stopFailed);
+            await DisposeLifeCycleAsync(skipDetachRollback: stopFailed);
         }
         catch (Exception ex)
         {
@@ -193,9 +199,11 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
         ThrowIfNeeded(errors);
     }
 
+    /// <summary>在生命周期激活阶段转发到服务启动逻辑。</summary>
     protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
         => StartAsync(cancellationToken);
 
+    /// <summary>在生命周期停用阶段转发到服务停止逻辑。</summary>
     protected override ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
         => StopAsync(cancellationToken);
 
@@ -205,17 +213,9 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
     /// <summary>子类重写此方法以实现停止逻辑；默认为空操作。</summary>
     protected virtual ValueTask StopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
+    /// <summary>写入服务级跟踪日志。</summary>
     private static void WriteTrace(string message)
     {
         System.Diagnostics.Trace.WriteLine($"[MicroService] {message}");
-    }
-
-    private static void ThrowIfNeeded(IReadOnlyList<Exception> errors)
-    {
-        if (errors.Count == 1)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
-
-        if (errors.Count > 1)
-            throw new AggregateException(errors);
     }
 }

@@ -1,5 +1,6 @@
 namespace MicroClaw.Core;
 
+/// <summary>通用生命周期状态。</summary>
 public enum MicroLifeCycleState
 {
     Detached,
@@ -9,37 +10,46 @@ public enum MicroLifeCycleState
     Disposed,
 }
 
-public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
+/// <summary>为对象、组件和服务提供统一生命周期管理的抽象基类。</summary>
+public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : class
 {
     private bool _activationHookEntered;
 
+    /// <summary>当前关联的宿主对象。</summary>
     public THost? Host { get; private set; }
 
+    /// <summary>当前内部生命周期状态。</summary>
     public MicroLifeCycleState LifeCycleState { get; private set; } = MicroLifeCycleState.Detached;
 
+    /// <summary>是否已经挂接到宿主。</summary>
     public bool IsAttached => Host is not null;
 
+    /// <summary>是否已经完成初始化。</summary>
     public bool IsInitialized => LifeCycleState is MicroLifeCycleState.Initialized or MicroLifeCycleState.Active;
 
+    /// <summary>是否已经进入激活状态。</summary>
     public bool IsActive => LifeCycleState == MicroLifeCycleState.Active;
 
+    /// <summary>是否已经完成释放。</summary>
     public bool IsDisposed => LifeCycleState == MicroLifeCycleState.Disposed;
 
+    /// <summary>激活钩子是否已经进入执行。</summary>
     protected bool ActivationHookEntered => _activationHookEntered;
 
+    /// <summary>直接设置内部生命周期状态。</summary>
     protected void SetLifeCycleState(MicroLifeCycleState state)
         => LifeCycleState = state;
 
+    /// <summary>推进节点完成启动流程。</summary>
     internal virtual ValueTask StartNodeAsync(CancellationToken cancellationToken = default)
         => StartNodeAsyncCore(cancellationToken);
 
+    /// <summary>推进节点完成停止流程。</summary>
     internal virtual ValueTask StopNodeAsync(CancellationToken cancellationToken = default)
         => StopNodeAsyncCore(cancellationToken);
 
-    internal virtual ValueTask TickNodeAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
-        => TickCoreAsync(deltaTime, cancellationToken);
-
-    internal void AttachToHost(THost host)
+    /// <summary>将当前节点挂接到指定宿主。</summary>
+    internal async ValueTask AttachToHostAsync(THost host, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(host);
         EnsureNotDisposed();
@@ -56,7 +66,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
 
         try
         {
-            OnAttachedAsync().GetAwaiter().GetResult();
+            await OnAttachedAsync(cancellationToken);
         }
         catch
         {
@@ -67,31 +77,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    internal void InitializeCore()
-    {
-        EnsureNotDisposed();
-
-        if (LifeCycleState is MicroLifeCycleState.Initialized or MicroLifeCycleState.Active)
-            return;
-
-        EnsureAttached();
-
-        MicroLifeCycleState previousState = LifeCycleState;
-        LifeCycleState = MicroLifeCycleState.Initialized;
-        WriteTrace($"{GetType().Name} initialized.");
-
-        try
-        {
-            OnInitializedAsync().GetAwaiter().GetResult();
-        }
-        catch
-        {
-            LifeCycleState = previousState;
-            WriteTrace($"{GetType().Name} failed during initialization.");
-            throw;
-        }
-    }
-
+    /// <summary>将当前节点推进到已初始化状态。</summary>
     internal async ValueTask InitializeCoreAsync(CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
@@ -117,32 +103,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    internal void ActivateCore()
-    {
-        EnsureNotDisposed();
-
-        if (LifeCycleState == MicroLifeCycleState.Active)
-            return;
-
-        InitializeCore();
-
-        MicroLifeCycleState previousState = LifeCycleState;
-        LifeCycleState = MicroLifeCycleState.Active;
-        WriteTrace($"{GetType().Name} activated.");
-
-        try
-        {
-            _activationHookEntered = true;
-            OnActivatedAsync().GetAwaiter().GetResult();
-        }
-        catch
-        {
-            LifeCycleState = previousState;
-            WriteTrace($"{GetType().Name} failed during activation.");
-            throw;
-        }
-    }
-
+    /// <summary>将当前节点推进到激活状态。</summary>
     internal async ValueTask ActivateCoreAsync(CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
@@ -153,13 +114,13 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         await InitializeCoreAsync(cancellationToken);
 
         MicroLifeCycleState previousState = LifeCycleState;
-        LifeCycleState = MicroLifeCycleState.Active;
-        WriteTrace($"{GetType().Name} activated.");
 
         try
         {
             _activationHookEntered = true;
             await OnActivatedAsync(cancellationToken);
+            LifeCycleState = MicroLifeCycleState.Active;
+            WriteTrace($"{GetType().Name} activated.");
         }
         catch
         {
@@ -169,25 +130,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    internal void DeactivateCore()
-    {
-        if (LifeCycleState != MicroLifeCycleState.Active)
-            return;
-
-        try
-        {
-            OnDeactivatedAsync().GetAwaiter().GetResult();
-            LifeCycleState = MicroLifeCycleState.Initialized;
-            WriteTrace($"{GetType().Name} deactivated.");
-        }
-        catch
-        {
-            LifeCycleState = MicroLifeCycleState.Active;
-            WriteTrace($"{GetType().Name} failed during deactivation.");
-            throw;
-        }
-    }
-
+    /// <summary>将当前节点从激活状态回退到已初始化状态。</summary>
     internal async ValueTask DeactivateCoreAsync(CancellationToken cancellationToken = default)
     {
         if (LifeCycleState != MicroLifeCycleState.Active)
@@ -207,25 +150,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    internal void UninitializeCore()
-    {
-        if (LifeCycleState != MicroLifeCycleState.Initialized)
-            return;
-
-        try
-        {
-            OnUninitializedAsync().GetAwaiter().GetResult();
-            LifeCycleState = MicroLifeCycleState.Attached;
-            WriteTrace($"{GetType().Name} uninitialized.");
-        }
-        catch
-        {
-            LifeCycleState = MicroLifeCycleState.Initialized;
-            WriteTrace($"{GetType().Name} failed during uninitialization.");
-            throw;
-        }
-    }
-
+    /// <summary>将当前节点从已初始化状态回退到已挂接状态。</summary>
     internal async ValueTask UninitializeCoreAsync(CancellationToken cancellationToken = default)
     {
         if (LifeCycleState != MicroLifeCycleState.Initialized)
@@ -245,10 +170,8 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    internal void DetachCore()
-        => DetachCore(skipRollback: false);
-
-    internal void DetachCore(bool skipRollback)
+    /// <summary>将当前节点从宿主上分离，并按需回滚生命周期。</summary>
+    internal async ValueTask DetachCoreAsync(bool skipRollback = false, CancellationToken cancellationToken = default)
     {
         if (Host is null)
             return;
@@ -256,14 +179,14 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         List<Exception> errors = [];
 
         if (!skipRollback && LifeCycleState == MicroLifeCycleState.Active)
-            RollbackToInitialized(errors);
+            await RollbackToInitializedAsync(errors, cancellationToken);
 
         if (!skipRollback && LifeCycleState == MicroLifeCycleState.Initialized)
-            RollbackToAttached(errors);
+            await RollbackToAttachedAsync(errors, cancellationToken);
 
         try
         {
-            OnDetachedAsync().GetAwaiter().GetResult();
+            await OnDetachedAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -279,7 +202,8 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         ThrowIfNeeded(errors);
     }
 
-    internal void RollbackToCore(MicroLifeCycleState state)
+    /// <summary>将当前节点回滚或推进到目标生命周期状态。</summary>
+    internal async ValueTask RollbackToCoreAsync(MicroLifeCycleState state, CancellationToken cancellationToken = default)
     {
         List<Exception> errors = [];
 
@@ -290,7 +214,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
                 {
                     try
                     {
-                        DetachCore();
+                        await DetachCoreAsync(cancellationToken: cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -300,18 +224,18 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
                 break;
             case MicroLifeCycleState.Attached:
                 if (LifeCycleState == MicroLifeCycleState.Active)
-                    RollbackToInitialized(errors);
+                    await RollbackToInitializedAsync(errors, cancellationToken);
                 if (LifeCycleState == MicroLifeCycleState.Initialized)
-                    RollbackToAttached(errors);
+                    await RollbackToAttachedAsync(errors, cancellationToken);
                 break;
             case MicroLifeCycleState.Initialized:
                 if (LifeCycleState == MicroLifeCycleState.Active)
-                    RollbackToInitialized(errors);
+                    await RollbackToInitializedAsync(errors, cancellationToken);
                 if (LifeCycleState == MicroLifeCycleState.Attached)
                 {
                     try
                     {
-                        InitializeCore();
+                        await InitializeCoreAsync(cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -324,7 +248,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
                 {
                     try
                     {
-                        ActivateCore();
+                        await ActivateCoreAsync(cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -335,7 +259,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
             case MicroLifeCycleState.Disposed:
                 try
                 {
-                    Dispose();
+                    await DisposeAsync();
                 }
                 catch (Exception ex)
                 {
@@ -347,34 +271,25 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         ThrowIfNeeded(errors);
     }
 
-    internal ValueTask TickCoreAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
-    {
-        if (LifeCycleState != MicroLifeCycleState.Active)
-            return ValueTask.CompletedTask;
-
-        return OnTickAsync(deltaTime, cancellationToken);
-    }
-
+    /// <summary>按启动顺序执行初始化和激活。</summary>
     private async ValueTask StartNodeAsyncCore(CancellationToken cancellationToken)
     {
         await InitializeCoreAsync(cancellationToken);
         await ActivateCoreAsync(cancellationToken);
     }
 
+    /// <summary>按停止顺序执行停用。</summary>
     private async ValueTask StopNodeAsyncCore(CancellationToken cancellationToken)
     {
         await DeactivateCoreAsync(cancellationToken);
     }
 
-    public virtual void Dispose()
-    {
-        DisposeLifeCycle();
-    }
+    /// <summary>释放当前生命周期节点。</summary>
+    public virtual ValueTask DisposeAsync()
+        => DisposeLifeCycleAsync();
 
-    internal void DisposeLifeCycle()
-        => DisposeLifeCycle(skipDetachRollback: false);
-
-    internal void DisposeLifeCycle(bool skipDetachRollback)
+    /// <summary>执行完整的生命周期释放与分离逻辑。</summary>
+    internal async ValueTask DisposeLifeCycleAsync(bool skipDetachRollback = false, CancellationToken cancellationToken = default)
     {
         if (LifeCycleState == MicroLifeCycleState.Disposed)
             return;
@@ -385,7 +300,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         {
             try
             {
-                DetachCore(skipDetachRollback);
+                await DetachCoreAsync(skipDetachRollback, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -395,7 +310,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
 
         try
         {
-            OnDisposedAsync().GetAwaiter().GetResult();
+            await OnDisposedAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -411,88 +326,55 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         ThrowIfNeeded(errors);
     }
 
+    /// <summary>获取当前必定存在的宿主对象。</summary>
     protected THost GetRequiredHost()
         => Host ?? throw new InvalidOperationException("This lifecycle node is not attached to a host.");
 
+    /// <summary>重置激活钩子进入标记。</summary>
     protected void ResetActivationHookTracking()
         => _activationHookEntered = false;
 
-    protected virtual void OnAttached() { }
+    /// <summary>挂接完成后的扩展钩子。</summary>
+    protected virtual ValueTask OnAttachedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual ValueTask OnAttachedAsync(CancellationToken cancellationToken = default)
-    {
-        OnAttached();
-        return ValueTask.CompletedTask;
-    }
+    /// <summary>初始化完成前的扩展钩子。</summary>
+    protected virtual ValueTask OnInitializedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual void OnInitialized() { }
+    /// <summary>激活阶段的扩展钩子。</summary>
+    protected virtual ValueTask OnActivatedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
-    {
-        OnInitialized();
-        return ValueTask.CompletedTask;
-    }
+    /// <summary>停用阶段的扩展钩子。</summary>
+    protected virtual ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual void OnActivated() { }
+    /// <summary>反初始化阶段的扩展钩子。</summary>
+    protected virtual ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
-    {
-        OnActivated();
-        return ValueTask.CompletedTask;
-    }
+    /// <summary>分离阶段的扩展钩子。</summary>
+    protected virtual ValueTask OnDetachedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual ValueTask OnTickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
-        => ValueTask.CompletedTask;
+    /// <summary>释放阶段的扩展钩子。</summary>
+    protected virtual ValueTask OnDisposedAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
-    protected virtual void OnDeactivated() { }
-
-    protected virtual ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
-    {
-        OnDeactivated();
-        return ValueTask.CompletedTask;
-    }
-
-    protected virtual void OnUninitialized() { }
-
-    protected virtual ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
-    {
-        OnUninitialized();
-        return ValueTask.CompletedTask;
-    }
-
-    protected virtual void OnDetached() { }
-
-    protected virtual ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
-    {
-        OnDetached();
-        return ValueTask.CompletedTask;
-    }
-
-    protected virtual void OnDisposed() { }
-
-    protected virtual ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
-    {
-        OnDisposed();
-        return ValueTask.CompletedTask;
-    }
-
+    /// <summary>确保当前节点已经挂接到宿主。</summary>
     private void EnsureAttached()
     {
         if (Host is null)
             throw new InvalidOperationException("This lifecycle node must be attached to a host before it can be initialized.");
     }
 
+    /// <summary>确保当前节点尚未被释放。</summary>
     private void EnsureNotDisposed()
     {
         if (LifeCycleState == MicroLifeCycleState.Disposed)
             throw new ObjectDisposedException(GetType().Name);
     }
 
-    private void RollbackToInitialized(List<Exception> errors)
+    /// <summary>尝试将节点回滚到已初始化状态，并记录失败。</summary>
+    private async ValueTask RollbackToInitializedAsync(List<Exception> errors, CancellationToken cancellationToken)
     {
         try
         {
-            OnDeactivatedAsync().GetAwaiter().GetResult();
+            await OnDeactivatedAsync(cancellationToken);
             LifeCycleState = MicroLifeCycleState.Initialized;
         }
         catch (Exception ex)
@@ -501,11 +383,12 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    private void RollbackToAttached(List<Exception> errors)
+    /// <summary>尝试将节点回滚到已挂接状态，并记录失败。</summary>
+    private async ValueTask RollbackToAttachedAsync(List<Exception> errors, CancellationToken cancellationToken)
     {
         try
         {
-            OnUninitializedAsync().GetAwaiter().GetResult();
+            await OnUninitializedAsync(cancellationToken);
             LifeCycleState = MicroLifeCycleState.Attached;
         }
         catch (Exception ex)
@@ -514,7 +397,8 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
         }
     }
 
-    private static void ThrowIfNeeded(IReadOnlyList<Exception> errors)
+    /// <summary>按数量重新抛出单个或聚合异常。</summary>
+    protected static void ThrowIfNeeded(IReadOnlyList<Exception> errors)
     {
         if (errors.Count == 1)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
@@ -523,6 +407,7 @@ public abstract class MicroLifeCycle<THost> : IDisposable where THost : class
             throw new AggregateException(errors);
     }
 
+    /// <summary>写入生命周期级跟踪日志。</summary>
     private static void WriteTrace(string message)
     {
         System.Diagnostics.Trace.WriteLine($"[MicroLifeCycle] {message}");

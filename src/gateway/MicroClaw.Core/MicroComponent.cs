@@ -1,39 +1,33 @@
 namespace MicroClaw.Core;
 
-/// <summary>组件生命周期状态。</summary>
-public enum MicroComponentState
-{
-    Detached,
-    Attached,
-    Initialized,
-    Active,
-}
-
 /// <summary>
 /// 组件抽象基类，挂载到 <see cref="MicroObject"/> 上提供特定功能。
 /// 生命周期：Detached → Attached → Initialized → Active，销毁时逆序回退。
 /// </summary>
 public abstract class MicroComponent : MicroLifeCycle<MicroObject>
 {
-    /// <summary>当前组件状态。</summary>
-    public MicroComponentState State => MapState(LifeCycleState);
-
+    /// <summary>获取宿主对象上的指定类型组件。</summary>
     public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
         => Host?.GetComponent<TComponent>();
 
-    public TComponent AddComponent<TComponent>(TComponent component) where TComponent : MicroComponent
-        => GetRequiredHost().AddComponent(component);
+    /// <summary>向宿主对象追加一个已有组件实例。</summary>
+    public ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
+        => GetRequiredHost().AddComponentAsync(component, cancellationToken);
 
-    public TComponent AddComponent<TComponent>() where TComponent : MicroComponent, new()
-        => GetRequiredHost().AddComponent<TComponent>();
+    /// <summary>在宿主对象上创建并追加指定类型的组件。</summary>
+    public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
+        => GetRequiredHost().AddComponentAsync<TComponent>(cancellationToken);
 
-    public bool RemoveComponent<TComponent>() where TComponent : MicroComponent
-        => GetRequiredHost().RemoveComponent<TComponent>();
+    /// <summary>从宿主对象移除指定类型的组件。</summary>
+    public ValueTask<bool> RemoveComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent
+        => GetRequiredHost().RemoveComponentAsync<TComponent>(cancellationToken);
 
-    public bool RemoveComponent(MicroComponent component)
-        => GetRequiredHost().RemoveComponent(component);
+    /// <summary>从宿主对象移除指定的组件实例。</summary>
+    public ValueTask<bool> RemoveComponentAsync(MicroComponent component, CancellationToken cancellationToken = default)
+        => GetRequiredHost().RemoveComponentAsync(component, cancellationToken);
 
-    public override void Dispose()
+    /// <summary>先从宿主移除组件，再执行组件自身释放。</summary>
+    public override async ValueTask DisposeAsync()
     {
         Exception? removalException = null;
         bool stillAttachedToHost = false;
@@ -42,7 +36,7 @@ public abstract class MicroComponent : MicroLifeCycle<MicroObject>
         {
             try
             {
-                host.RemoveComponent(this);
+                await host.RemoveComponentAsync(this);
             }
             catch (Exception ex)
             {
@@ -58,7 +52,7 @@ public abstract class MicroComponent : MicroLifeCycle<MicroObject>
 
         try
         {
-            base.Dispose();
+            await base.DisposeAsync();
         }
         catch (Exception ex)
         {
@@ -75,55 +69,38 @@ public abstract class MicroComponent : MicroLifeCycle<MicroObject>
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(disposeException).Throw();
     }
 
-    internal override ValueTask TickNodeAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
-        => TickCoreAsync(deltaTime, cancellationToken);
-
-    internal void AttachTo(MicroObject host)
+    /// <summary>将组件挂接到指定宿主对象。</summary>
+    internal ValueTask AttachToAsync(MicroObject host, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(host);
 
         if (Host is not null && !ReferenceEquals(Host, host))
             throw new InvalidOperationException("A component can only belong to one MicroObject at a time.");
 
-        AttachToHost(host);
+        return AttachToHostAsync(host, cancellationToken);
     }
 
-    internal void Initialize()
-        => InitializeCore();
+    /// <summary>推进组件到已初始化状态。</summary>
+    internal ValueTask InitializeAsync(CancellationToken cancellationToken = default)
+        => InitializeCoreAsync(cancellationToken);
 
-    internal void Activate()
-        => ActivateCore();
+    /// <summary>推进组件到激活状态。</summary>
+    internal ValueTask ActivateAsync(CancellationToken cancellationToken = default)
+        => ActivateCoreAsync(cancellationToken);
 
-    internal void Deactivate()
-        => DeactivateCore();
+    /// <summary>将组件从激活状态回退到已初始化状态。</summary>
+    internal ValueTask DeactivateAsync(CancellationToken cancellationToken = default)
+        => DeactivateCoreAsync(cancellationToken);
 
-    internal void Uninitialize()
-        => UninitializeCore();
+    /// <summary>将组件从已初始化状态回退到已挂接状态。</summary>
+    internal ValueTask UninitializeAsync(CancellationToken cancellationToken = default)
+        => UninitializeCoreAsync(cancellationToken);
 
-    internal void DetachFromHost()
-        => DetachCore();
+    /// <summary>将组件从当前宿主对象上分离。</summary>
+    internal ValueTask DetachFromHostAsync(CancellationToken cancellationToken = default)
+        => DetachCoreAsync(cancellationToken: cancellationToken);
 
-    internal void RollbackTo(MicroComponentState state)
-        => RollbackToCore(MapState(state));
-
-    private static MicroComponentState MapState(MicroLifeCycleState state)
-        => state switch
-        {
-            MicroLifeCycleState.Detached => MicroComponentState.Detached,
-            MicroLifeCycleState.Attached => MicroComponentState.Attached,
-            MicroLifeCycleState.Initialized => MicroComponentState.Initialized,
-            MicroLifeCycleState.Active => MicroComponentState.Active,
-            MicroLifeCycleState.Disposed => MicroComponentState.Detached,
-            _ => throw new ArgumentOutOfRangeException(nameof(state)),
-        };
-
-    private static MicroLifeCycleState MapState(MicroComponentState state)
-        => state switch
-        {
-            MicroComponentState.Detached => MicroLifeCycleState.Detached,
-            MicroComponentState.Attached => MicroLifeCycleState.Attached,
-            MicroComponentState.Initialized => MicroLifeCycleState.Initialized,
-            MicroComponentState.Active => MicroLifeCycleState.Active,
-            _ => throw new ArgumentOutOfRangeException(nameof(state)),
-        };
+    /// <summary>将组件回滚到指定的生命周期状态。</summary>
+    internal ValueTask RollbackToAsync(MicroLifeCycleState state, CancellationToken cancellationToken = default)
+        => RollbackToCoreAsync(state, cancellationToken);
 }

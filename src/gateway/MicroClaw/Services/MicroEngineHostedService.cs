@@ -8,7 +8,6 @@ public sealed class MicroEngineHostedService(
     MicroEngine microEngine,
     ILogger<MicroEngineHostedService> logger) : BackgroundService
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(5);
 
     private readonly MicroEngine _microEngine = microEngine;
@@ -25,43 +24,18 @@ public sealed class MicroEngineHostedService(
     {
         using CancellationTokenSource executionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _stopLoopSignal.Token);
         CancellationToken executionToken = executionCts.Token;
-        using PeriodicTimer timer = new(TickInterval);
-        DateTimeOffset previousTick = DateTimeOffset.UtcNow;
 
-        while (!executionToken.IsCancellationRequested)
+        try
         {
-            try
-            {
-                if (!await timer.WaitForNextTickAsync(executionToken))
-                    break;
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            TimeSpan deltaTime = now - previousTick;
-            previousTick = now;
-
-            try
-            {
-                await _microEngine.TickAsync(deltaTime, executionToken);
-            }
-            catch (OperationCanceledException) when (executionToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (OperationCanceledException ex)
-            {
-                _logger.LogError(ex, "MicroEngine tick was canceled unexpectedly.");
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "MicroEngine tick failed.");
-                throw;
-            }
+            await _microEngine.RunAsync(executionToken);
+        }
+        catch (OperationCanceledException) when (executionToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MicroEngine run loop failed.");
+            throw;
         }
     }
 
@@ -109,5 +83,11 @@ public sealed class MicroEngineHostedService(
 
         if (baseStopException is not null)
             throw baseStopException;
+    }
+
+    public override void Dispose()
+    {
+        _stopLoopSignal.Dispose();
+        base.Dispose();
     }
 }

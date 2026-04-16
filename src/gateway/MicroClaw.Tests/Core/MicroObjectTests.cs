@@ -6,6 +6,11 @@ namespace MicroClaw.Tests.Core;
 
 public sealed class MicroObjectTests
 {
+    private static void Await(ValueTask task) => task.AsTask().GetAwaiter().GetResult();
+
+    private static T Await<T>(ValueTask<T> task) => task.AsTask().GetAwaiter().GetResult();
+
+
     [Fact]
     public void AddComponent_ComponentAlreadyAttachedToAnotherHost_Throws()
     {
@@ -13,9 +18,9 @@ public sealed class MicroObjectTests
         var secondHost = new MicroObject();
         var component = new TrackingComponent();
 
-        firstHost.AddComponent(component);
+        Await(firstHost.AddComponentAsync(component));
 
-        Action act = () => secondHost.AddComponent(component);
+        Action act = () => Await(secondHost.AddComponentAsync(component));
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*one MicroObject*");
@@ -26,15 +31,15 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
 
-        var component = host.AddComponent<TrackingComponent>();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
 
         host.GetComponent<TrackingComponent>().Should().BeSameAs(component);
         component.GetComponent<TrackingComponent>().Should().BeSameAs(component);
 
-        host.RemoveComponent<TrackingComponent>().Should().BeTrue();
+        Await(host.RemoveComponentAsync<TrackingComponent>()).Should().BeTrue();
         host.GetComponent<TrackingComponent>().Should().BeNull();
         component.Host.Should().BeNull();
-        component.State.Should().Be(MicroComponentState.Detached);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Detached);
         component.DetachedCount.Should().Be(1);
     }
 
@@ -43,11 +48,25 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        host.Activate();
+        Await(host.ActivateAsync());
 
-        var component = host.AddComponent<TrackingComponent>();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
 
-        component.State.Should().Be(MicroComponentState.Active);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        component.InitializedCount.Should().Be(1);
+        component.ActivatedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AddComponentAsync_HostAlreadyActive_InitializesAndActivatesComponent()
+    {
+        var host = new MicroObject();
+        CreateEngineWith(host);
+        await host.ActivateAsync();
+
+        var component = await host.AddComponentAsync<TrackingComponent>();
+
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
         component.InitializedCount.Should().Be(1);
         component.ActivatedCount.Should().Be(1);
     }
@@ -57,16 +76,16 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        host.Activate();
+        Await(host.ActivateAsync());
         var component = new ThrowingComponent();
 
-        Action act = () => host.AddComponent(component);
+        Action act = () => Await(host.AddComponentAsync(component));
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("activate failed");
         host.GetComponent<ThrowingComponent>().Should().BeNull();
         component.Host.Should().BeNull();
-        component.State.Should().Be(MicroComponentState.Detached);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Detached);
     }
 
     [Fact]
@@ -75,10 +94,10 @@ public sealed class MicroObjectTests
         var host = new MicroObject();
         var component = new BlockingAttachComponent();
 
-        Task addTask = Task.Run(() => host.AddComponent(component));
+        Task addTask = Task.Run(() => Await(host.AddComponentAsync(component)));
         await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Action act = () => host.RemoveComponent(component);
+        Action act = () => Await(host.RemoveComponentAsync(component));
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*lifecycle transition*");
@@ -91,18 +110,79 @@ public sealed class MicroObjectTests
     }
 
     [Fact]
+    public async Task AddComponentAsync_WhenAttachIsInProgress_ComponentIsNotVisibleUntilCompleted()
+    {
+        var host = new MicroObject();
+        var component = new BlockingAttachComponent();
+
+        Task addTask = Task.Run(() => Await(host.AddComponentAsync(component)));
+        await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingAttachComponent>().Should().BeNull();
+        host.Components.Should().BeEmpty();
+
+        component.AllowAttach();
+        await addTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingAttachComponent>().Should().BeSameAs(component);
+        host.Components.Should().ContainSingle().Which.Should().BeSameAs(component);
+    }
+
+    [Fact]
     public void Activate_WhenComponentMutatesHost_ReentrantMutationIsRejected()
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        host.AddComponent<ReentrantComponent>();
+        Await(host.AddComponentAsync<ReentrantComponent>());
 
-        Action act = () => host.Activate();
+        Action act = () => Await(host.ActivateAsync());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*lifecycle transition*");
         host.GetComponent<TrackingComponent>().Should().BeNull();
-        host.State.Should().Be(MicroObjectState.Created);
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WhenRegisteredObjectIsActivating_RejectsConcurrentUnregister()
+    {
+        var engine = new MicroEngine(new NullServiceProvider(), []);
+        var host = new BlockingActivateObject();
+
+        Await(engine.RegisterObjectAsync(host)).Should().BeTrue();
+
+        Task activateTask = Task.Run(() => Await(host.ActivateAsync()));
+        await host.ActivationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Func<Task> act = () => engine.UnregisterObjectAsync(host).AsTask();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*executing*");
+
+        host.AllowActivation();
+        await activateTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        Await(engine.UnregisterObjectAsync(host)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WhenActivationHookIsRunning_DoesNotExposeActiveStateEarly()
+    {
+        var host = new ObservingActivateObject();
+        CreateEngineWith(host);
+
+        Task activateTask = host.ActivateAsync().AsTask();
+        await host.ActivationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.ObservedState.Should().Be(MicroLifeCycleState.Initialized);
+        host.ObservedIsActive.Should().BeFalse();
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+
+        host.AllowActivation();
+        await activateTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
     }
 
     [Fact]
@@ -110,17 +190,17 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        var rollbackFailure = host.AddComponent<RollbackFailureComponent>();
-        var failing = host.AddComponent<ThrowingComponent>();
+        var rollbackFailure = Await(host.AddComponentAsync<RollbackFailureComponent>());
+        var failing = Await(host.AddComponentAsync<ThrowingComponent>());
 
-        Action act = () => host.Activate();
+        Action act = () => Await(host.ActivateAsync());
 
         var exception = act.Should().Throw<AggregateException>().Which;
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "activate failed");
         exception.InnerExceptions.Should().Contain(ex => ex.Message == "rollback deactivate failed");
-        host.State.Should().Be(MicroObjectState.Active);
-        rollbackFailure.State.Should().Be(MicroComponentState.Active);
-        failing.State.Should().Be(MicroComponentState.Attached);
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        rollbackFailure.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        failing.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
     }
 
     [Fact]
@@ -128,15 +208,15 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        var component = host.AddComponent<OuterRollbackFailureComponent>();
+        var component = Await(host.AddComponentAsync<OuterRollbackFailureComponent>());
 
-        Action act = () => host.Activate();
+        Action act = () => Await(host.ActivateAsync());
 
         var exception = act.Should().Throw<AggregateException>().Which;
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "activate failed");
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "outer rollback failed");
-        host.State.Should().Be(MicroObjectState.Initialized);
-        component.State.Should().Be(MicroComponentState.Initialized);
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
     }
 
     [Fact]
@@ -144,40 +224,59 @@ public sealed class MicroObjectTests
     {
         var host = new MicroObject();
         CreateEngineWith(host);
-        host.Activate();
+        Await(host.ActivateAsync());
         var component = new ThrowingAndDetachFailingComponent();
 
-        Action act = () => host.AddComponent(component);
+        Action act = () => Await(host.AddComponentAsync(component));
 
         var exception = act.Should().Throw<AggregateException>().Which;
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "activate failed");
         exception.InnerExceptions.Should().ContainSingle(ex => ex.Message == "detach failed");
         host.GetComponent<ThrowingAndDetachFailingComponent>().Should().BeNull();
         component.Host.Should().BeNull();
-        component.State.Should().Be(MicroComponentState.Detached);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Detached);
     }
 
     [Fact]
     public void RemoveComponent_WhenResolutionIsAmbiguous_DoesNotLeaveHostTransitioning()
     {
         var host = new MicroObject();
-        host.AddComponent<AmbiguousComponentA>();
-        host.AddComponent<AmbiguousComponentB>();
+        Await(host.AddComponentAsync<AmbiguousComponentA>());
+        Await(host.AddComponentAsync<AmbiguousComponentB>());
 
-        Action act = () => host.RemoveComponent<AmbiguousComponentBase>();
+        Action act = () => Await(host.RemoveComponentAsync<AmbiguousComponentBase>());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*Multiple components*");
-        host.AddComponent<TrackingComponent>().Should().NotBeNull();
+        Await(host.AddComponentAsync<TrackingComponent>()).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task RemoveComponentAsync_WhenDetachIsInProgress_ComponentRemainsVisibleUntilCompleted()
+    {
+        var host = new MicroObject();
+        var component = Await(host.AddComponentAsync<BlockingDetachComponent>());
+
+        Task removeTask = Task.Run(() => Await(host.RemoveComponentAsync(component)));
+        await component.DetachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingDetachComponent>().Should().BeSameAs(component);
+        host.Components.Should().ContainSingle().Which.Should().BeSameAs(component);
+
+        component.AllowDetach();
+        await removeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        host.GetComponent<BlockingDetachComponent>().Should().BeNull();
+        host.Components.Should().BeEmpty();
     }
 
     [Fact]
     public void Dispose_ComponentInstance_RemovesItFromHostAndMarksItDisposed()
     {
         var host = new MicroObject();
-        var component = host.AddComponent<TrackingComponent>();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
 
-        component.Dispose();
+        Await(component.DisposeAsync());
 
         host.GetComponent<TrackingComponent>().Should().BeNull();
         host.Components.Should().BeEmpty();
@@ -186,19 +285,35 @@ public sealed class MicroObjectTests
         component.DetachedCount.Should().Be(1);
         component.DisposedCount.Should().Be(1);
 
-        Action act = () => host.AddComponent(component);
+        Action act = () => Await(host.AddComponentAsync(component));
 
         act.Should().Throw<ObjectDisposedException>();
-        host.AddComponent<TrackingComponent>().Should().NotBeNull();
+        Await(host.AddComponentAsync<TrackingComponent>()).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ComponentInstance_RemovesItFromHostAndMarksItDisposed()
+    {
+        var host = new MicroObject();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
+
+        await component.DisposeAsync();
+
+        host.GetComponent<TrackingComponent>().Should().BeNull();
+        host.Components.Should().BeEmpty();
+        component.Host.Should().BeNull();
+        component.IsDisposed.Should().BeTrue();
+        component.DetachedCount.Should().Be(1);
+        component.DisposedCount.Should().Be(1);
     }
 
     [Fact]
     public void Dispose_ComponentInstance_WhenDetachFails_StillMarksItDisposed()
     {
         var host = new MicroObject();
-        var component = host.AddComponent<DetachAndDisposeTrackingComponent>();
+        var component = Await(host.AddComponentAsync<DetachAndDisposeTrackingComponent>());
 
-        Action act = () => component.Dispose();
+        Action act = () => Await(component.DisposeAsync());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("detach failed");
@@ -214,10 +329,10 @@ public sealed class MicroObjectTests
         var host = new MicroObject();
         var component = new BlockingAttachComponent();
 
-        Task addTask = Task.Run(() => host.AddComponent(component));
+        Task addTask = Task.Run(() => Await(host.AddComponentAsync(component)));
         await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Action act = () => component.Dispose();
+        Action act = () => Await(component.DisposeAsync());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*transition*");
@@ -236,24 +351,24 @@ public sealed class MicroObjectTests
     {
         var engine = new MicroEngine(new NullServiceProvider(), []);
         var host = new MicroObject();
-        var tracking = host.AddComponent<TrackingComponent>();
-        var failing = host.AddComponent<DetachFailingComponent>();
+        var tracking = Await(host.AddComponentAsync<TrackingComponent>());
+        var failing = Await(host.AddComponentAsync<DetachFailingComponent>());
 
-        engine.RegisterObject(host).Should().BeTrue();
+        Await(engine.RegisterObjectAsync(host)).Should().BeTrue();
 
-        Action act = () => host.Dispose();
+        Action act = () => Await(host.DisposeAsync());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("detach failed");
-        host.State.Should().Be(MicroObjectState.Disposed);
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
         host.Engine.Should().BeNull();
         host.Components.Should().BeEmpty();
         tracking.Host.Should().BeNull();
-        tracking.State.Should().Be(MicroComponentState.Detached);
+        tracking.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
         tracking.IsDisposed.Should().BeTrue();
         tracking.DisposedCount.Should().Be(1);
         failing.Host.Should().BeNull();
-        failing.State.Should().Be(MicroComponentState.Detached);
+        failing.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
         engine.Objects.Should().BeEmpty();
     }
 
@@ -261,9 +376,9 @@ public sealed class MicroObjectTests
     public void Dispose_HostDisposesComponents_InvokesOnDisposed()
     {
         var host = new MicroObject();
-        var component = host.AddComponent<TrackingComponent>();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
 
-        host.Dispose();
+        Await(host.DisposeAsync());
 
         component.IsDisposed.Should().BeTrue();
         component.DisposedCount.Should().Be(1);
@@ -276,18 +391,18 @@ public sealed class MicroObjectTests
         var host = new MicroObject();
         var component = new BlockingAttachComponent();
 
-        engine.RegisterObject(host).Should().BeTrue();
+        Await(engine.RegisterObjectAsync(host)).Should().BeTrue();
 
-        Task addTask = Task.Run(() => host.AddComponent(component));
+        Task addTask = Task.Run(() => Await(host.AddComponentAsync(component)));
         await component.AttachedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Action act = () => host.Dispose();
+        Action act = () => Await(host.DisposeAsync());
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*transition*");
         host.Engine.Should().BeSameAs(engine);
         engine.Objects.Should().Contain(host);
-        host.State.Should().Be(MicroObjectState.Created);
+        host.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
 
         component.AllowAttach();
         await addTask.WaitAsync(TimeSpan.FromSeconds(5));
@@ -301,7 +416,7 @@ public sealed class MicroObjectTests
     private static MicroEngine CreateEngineWith(MicroObject host)
     {
         var engine = new MicroEngine(new NullServiceProvider(), []);
-        engine.RegisterObject(host).Should().BeTrue();
+        Await(engine.RegisterObjectAsync(host)).Should().BeTrue();
         return engine;
     }
 
@@ -315,24 +430,28 @@ public sealed class MicroObjectTests
 
         public int DisposedCount { get; private set; }
 
-        protected override void OnInitialized()
+        protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
         {
             InitializedCount++;
+            return ValueTask.CompletedTask;
         }
 
-        protected override void OnActivated()
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
         {
             ActivatedCount++;
+            return ValueTask.CompletedTask;
         }
 
-        protected override void OnDetached()
+        protected override ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
         {
             DetachedCount++;
+            return ValueTask.CompletedTask;
         }
 
-        protected override void OnDisposed()
+        protected override ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
         {
             DisposedCount++;
+            return ValueTask.CompletedTask;
         }
     }
 
@@ -345,53 +464,98 @@ public sealed class MicroObjectTests
 
         public void AllowAttach() => _gate.Set();
 
-        protected override void OnAttached()
+        protected override ValueTask OnAttachedAsync(CancellationToken cancellationToken = default)
         {
             _attachedStarted.TrySetResult();
-            _gate.Wait(TimeSpan.FromSeconds(5));
+            if (!_gate.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Attach gate timed out.");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingActivateObject : MicroObject
+    {
+        private readonly ManualResetEventSlim _gate = new(false);
+
+        public TaskCompletionSource ActivationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void AllowActivation() => _gate.Set();
+
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+        {
+            ActivationStarted.TrySetResult();
+            if (!_gate.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Activation gate timed out.");
+            return base.OnActivatedAsync(cancellationToken);
+        }
+    }
+
+    private sealed class ObservingActivateObject : MicroObject
+    {
+        private readonly TaskCompletionSource _activationReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ActivationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public MicroLifeCycleState ObservedState { get; private set; }
+
+        public bool ObservedIsActive { get; private set; }
+
+        public void AllowActivation() => _activationReleased.TrySetResult();
+
+        protected override async ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+        {
+            ObservedState = LifeCycleState;
+            ObservedIsActive = IsActive;
+            ActivationStarted.TrySetResult();
+            await _activationReleased.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class BlockingDetachComponent : MicroComponent
+    {
+        private readonly ManualResetEventSlim _gate = new(false);
+
+        public TaskCompletionSource DetachedStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void AllowDetach() => _gate.Set();
+
+        protected override ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
+        {
+            DetachedStarted.TrySetResult();
+            if (!_gate.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Detach gate timed out.");
+            return ValueTask.CompletedTask;
         }
     }
 
     private sealed class ThrowingComponent : MicroComponent
     {
-        protected override void OnActivated()
-        {
-            throw new InvalidOperationException("activate failed");
-        }
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("activate failed"));
     }
 
     private sealed class RollbackFailureComponent : MicroComponent
     {
-        protected override void OnDeactivated()
-        {
-            throw new InvalidOperationException("rollback deactivate failed");
-        }
+        protected override ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("rollback deactivate failed"));
     }
 
     private sealed class ThrowingAndDetachFailingComponent : MicroComponent
     {
-        protected override void OnActivated()
-        {
-            throw new InvalidOperationException("activate failed");
-        }
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("activate failed"));
 
-        protected override void OnDetached()
-        {
-            throw new InvalidOperationException("detach failed");
-        }
+        protected override ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("detach failed"));
     }
 
     private sealed class OuterRollbackFailureComponent : MicroComponent
     {
-        protected override void OnActivated()
-        {
-            throw new InvalidOperationException("activate failed");
-        }
+        protected override ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("activate failed"));
 
-        protected override void OnUninitialized()
-        {
-            throw new InvalidOperationException("outer rollback failed");
-        }
+        protected override ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("outer rollback failed"));
     }
 
     private abstract class AmbiguousComponentBase : MicroComponent;
@@ -402,32 +566,29 @@ public sealed class MicroObjectTests
 
     private sealed class DetachFailingComponent : MicroComponent
     {
-        protected override void OnDetached()
-        {
-            throw new InvalidOperationException("detach failed");
-        }
+        protected override ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("detach failed"));
     }
 
     private sealed class DetachAndDisposeTrackingComponent : MicroComponent
     {
         public int DisposedCount { get; private set; }
 
-        protected override void OnDetached()
-        {
-            throw new InvalidOperationException("detach failed");
-        }
+        protected override ValueTask OnDetachedAsync(CancellationToken cancellationToken = default)
+            => ValueTask.FromException(new InvalidOperationException("detach failed"));
 
-        protected override void OnDisposed()
+        protected override ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
         {
             DisposedCount++;
+            return ValueTask.CompletedTask;
         }
     }
 
     private sealed class ReentrantComponent : MicroComponent
     {
-        protected override void OnActivated()
+        protected override async ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
         {
-            AddComponent<TrackingComponent>();
+            await AddComponentAsync<TrackingComponent>(cancellationToken);
         }
     }
 }
