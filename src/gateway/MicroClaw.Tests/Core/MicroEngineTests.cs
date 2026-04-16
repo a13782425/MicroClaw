@@ -169,6 +169,32 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
+    public async Task StartNodeAsync_WhenCalledConcurrentlyOnSameService_RunsStartOnce()
+    {
+        var service = new BlockingStartService(order: 10);
+        var engine = new MicroEngine(new NullServiceProvider(), [service]);
+
+        service.Engine.Should().BeSameAs(engine);
+
+        Task firstStart = Task.Run(() => Await(service.StartNodeAsync()));
+        await service.Started.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Task secondStart = Task.Run(() => Await(service.StartNodeAsync()));
+        await Task.Delay(100);
+
+        service.StartCount.Should().Be(1);
+        service.State.Should().Be(MicroServiceState.Starting);
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+
+        service.Release();
+        await Task.WhenAll(firstStart, secondStart).WaitAsync(TimeSpan.FromSeconds(5));
+
+        service.State.Should().Be(MicroServiceState.Running);
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        service.StartCount.Should().Be(1);
+    }
+
+    [Fact]
     public void Dispose_WhenRegistered_RemovesObjectFromEngine()
     {
         var engine = new MicroEngine(new NullServiceProvider(), []);
@@ -701,6 +727,21 @@ public sealed class MicroEngineTests
             .Which.Message.Should().Contain("re-entered");
 
         await engine.TickAsync(TimeSpan.FromMilliseconds(10));
+        await engine.StopAsync();
+    }
+
+    [Fact]
+    public async Task TickAsync_WhenTaskRunReentersEngineStart_StillThrowsReentered()
+    {
+        var updater = new TaskRunReentrantStartUpdateService(order: 10);
+        var engine = new MicroEngine(new NullServiceProvider(), [updater]);
+
+        await engine.StartAsync();
+        await engine.TickAsync(TimeSpan.FromMilliseconds(10));
+
+        updater.ReentryException.Should().BeOfType<InvalidOperationException>()
+            .Which.Message.Should().Contain("re-entered");
+
         await engine.StopAsync();
     }
 
@@ -1492,15 +1533,19 @@ public sealed class MicroEngineTests
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _startCount;
 
         public override int Order => order;
 
         public Task Started => _started.Task;
 
+        public int StartCount => Volatile.Read(ref _startCount);
+
         public void Release() => _released.TrySetResult();
 
         protected override async ValueTask StartAsync(CancellationToken cancellationToken = default)
         {
+            Interlocked.Increment(ref _startCount);
             _started.TrySetResult();
             await _released.Task.WaitAsync(cancellationToken);
         }
@@ -1699,6 +1744,28 @@ public sealed class MicroEngineTests
             }
 
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class TaskRunReentrantStartUpdateService(int order) : MicroService, IMicroTickable
+    {
+        public override int Order => order;
+
+        public Exception? ReentryException { get; private set; }
+
+        public ValueTask TickAsync(TimeSpan deltaTime, CancellationToken cancellationToken = default)
+            => new(TickCoreAsync(cancellationToken));
+
+        private async Task TickCoreAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Run(() => Engine!.StartAsync(cancellationToken).AsTask(), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                ReentryException = ex;
+            }
         }
     }
 

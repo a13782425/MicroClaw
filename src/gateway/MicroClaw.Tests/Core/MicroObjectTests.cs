@@ -186,6 +186,30 @@ public sealed class MicroObjectTests
     }
 
     [Fact]
+    public async Task ActivateAsync_WhenCalledConcurrentlyOnSameComponent_RunsInitializeAndActivateHooksOnce()
+    {
+        var host = new MicroObject();
+        var component = Await(host.AddComponentAsync(new BlockingActivateComponent()));
+
+        Task firstActivation = Task.Run(() => Await(component.ActivateAsync()));
+        await component.ActivationStarted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Task secondActivation = Task.Run(() => Await(component.ActivateAsync()));
+        await Task.Delay(100);
+
+        component.InitializedCount.Should().Be(1);
+        component.ActivatedCount.Should().Be(1);
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+
+        component.AllowActivation();
+        await Task.WhenAll(firstActivation, secondActivation).WaitAsync(TimeSpan.FromSeconds(5));
+
+        component.LifeCycleState.Should().Be(MicroLifeCycleState.Active);
+        component.InitializedCount.Should().Be(1);
+        component.ActivatedCount.Should().Be(1);
+    }
+
+    [Fact]
     public void Activate_WhenRollbackCallbackFails_ThrowsAggregateAndPreservesFailedRollbackState()
     {
         var host = new MicroObject();
@@ -507,6 +531,35 @@ public sealed class MicroObjectTests
             ObservedState = LifeCycleState;
             ObservedIsActive = IsActive;
             ActivationStarted.TrySetResult();
+            await _activationReleased.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class BlockingActivateComponent : MicroComponent
+    {
+        private readonly TaskCompletionSource _activationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _activationReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _initializedCount;
+        private int _activatedCount;
+
+        public int InitializedCount => Volatile.Read(ref _initializedCount);
+
+        public int ActivatedCount => Volatile.Read(ref _activatedCount);
+
+        public Task ActivationStarted => _activationStarted.Task;
+
+        public void AllowActivation() => _activationReleased.TrySetResult();
+
+        protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _initializedCount);
+            return ValueTask.CompletedTask;
+        }
+
+        protected override async ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _activatedCount);
+            _activationStarted.TrySetResult();
             await _activationReleased.Task.WaitAsync(cancellationToken);
         }
     }

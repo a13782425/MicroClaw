@@ -13,6 +13,8 @@ public enum MicroLifeCycleState
 /// <summary>为对象、组件和服务提供统一生命周期管理的抽象基类。</summary>
 public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : class
 {
+    private readonly SemaphoreSlim _transitionGate = new(1, 1);
+    private readonly AsyncLocal<TransitionScopeState?> _transitionScope = new();
     private bool _activationHookEntered;
 
     /// <summary>当前关联的宿主对象。</summary>
@@ -51,224 +53,287 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     /// <summary>将当前节点挂接到指定宿主。</summary>
     internal async ValueTask AttachToHostAsync(THost host, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(host);
-        EnsureNotDisposed();
-
-        if (Host is not null && !ReferenceEquals(Host, host))
-            throw new InvalidOperationException("A lifecycle node can only belong to one host at a time.");
-
-        if (ReferenceEquals(Host, host))
-            return;
-
-        Host = host;
-        LifeCycleState = MicroLifeCycleState.Attached;
-        WriteTrace($"{GetType().Name} attached to {typeof(THost).Name}.");
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            await OnAttachedAsync(cancellationToken);
+            ArgumentNullException.ThrowIfNull(host);
+            EnsureNotDisposed();
+
+            if (Host is not null && !ReferenceEquals(Host, host))
+                throw new InvalidOperationException("A lifecycle node can only belong to one host at a time.");
+
+            if (ReferenceEquals(Host, host))
+                return;
+
+            Host = host;
+            LifeCycleState = MicroLifeCycleState.Attached;
+            WriteTrace($"{GetType().Name} attached to {typeof(THost).Name}.");
+
+            try
+            {
+                await OnAttachedAsync(cancellationToken);
+            }
+            catch
+            {
+                Host = null;
+                LifeCycleState = MicroLifeCycleState.Detached;
+                WriteTrace($"{GetType().Name} failed while attaching to {typeof(THost).Name}.");
+                throw;
+            }
         }
-        catch
+        finally
         {
-            Host = null;
-            LifeCycleState = MicroLifeCycleState.Detached;
-            WriteTrace($"{GetType().Name} failed while attaching to {typeof(THost).Name}.");
-            throw;
+            ExitTransitionScope(scope);
         }
     }
 
     /// <summary>将当前节点推进到已初始化状态。</summary>
     internal async ValueTask InitializeCoreAsync(CancellationToken cancellationToken = default)
     {
-        EnsureNotDisposed();
-
-        if (LifeCycleState is MicroLifeCycleState.Initialized or MicroLifeCycleState.Active)
-            return;
-
-        EnsureAttached();
-
-        MicroLifeCycleState previousState = LifeCycleState;
-        LifeCycleState = MicroLifeCycleState.Initialized;
-        WriteTrace($"{GetType().Name} initialized.");
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            await OnInitializedAsync(cancellationToken);
+            EnsureNotDisposed();
+
+            if (LifeCycleState is MicroLifeCycleState.Initialized or MicroLifeCycleState.Active)
+                return;
+
+            EnsureAttached();
+
+            MicroLifeCycleState previousState = LifeCycleState;
+            LifeCycleState = MicroLifeCycleState.Initialized;
+            WriteTrace($"{GetType().Name} initialized.");
+
+            try
+            {
+                await OnInitializedAsync(cancellationToken);
+            }
+            catch
+            {
+                LifeCycleState = previousState;
+                WriteTrace($"{GetType().Name} failed during initialization.");
+                throw;
+            }
         }
-        catch
+        finally
         {
-            LifeCycleState = previousState;
-            WriteTrace($"{GetType().Name} failed during initialization.");
-            throw;
+            ExitTransitionScope(scope);
         }
     }
 
     /// <summary>将当前节点推进到激活状态。</summary>
     internal async ValueTask ActivateCoreAsync(CancellationToken cancellationToken = default)
     {
-        EnsureNotDisposed();
-
-        if (LifeCycleState == MicroLifeCycleState.Active)
-            return;
-
-        await InitializeCoreAsync(cancellationToken);
-
-        MicroLifeCycleState previousState = LifeCycleState;
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            _activationHookEntered = true;
-            await OnActivatedAsync(cancellationToken);
-            LifeCycleState = MicroLifeCycleState.Active;
-            WriteTrace($"{GetType().Name} activated.");
+            EnsureNotDisposed();
+
+            if (LifeCycleState == MicroLifeCycleState.Active)
+                return;
+
+            await InitializeCoreAsync(cancellationToken);
+
+            MicroLifeCycleState previousState = LifeCycleState;
+
+            try
+            {
+                _activationHookEntered = true;
+                await OnActivatedAsync(cancellationToken);
+                LifeCycleState = MicroLifeCycleState.Active;
+                WriteTrace($"{GetType().Name} activated.");
+            }
+            catch
+            {
+                LifeCycleState = previousState;
+                WriteTrace($"{GetType().Name} failed during activation.");
+                throw;
+            }
         }
-        catch
+        finally
         {
-            LifeCycleState = previousState;
-            WriteTrace($"{GetType().Name} failed during activation.");
-            throw;
+            ExitTransitionScope(scope);
         }
     }
 
     /// <summary>将当前节点从激活状态回退到已初始化状态。</summary>
     internal async ValueTask DeactivateCoreAsync(CancellationToken cancellationToken = default)
     {
-        if (LifeCycleState != MicroLifeCycleState.Active)
-            return;
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            await OnDeactivatedAsync(cancellationToken);
-            LifeCycleState = MicroLifeCycleState.Initialized;
-            WriteTrace($"{GetType().Name} deactivated.");
+            if (LifeCycleState != MicroLifeCycleState.Active)
+                return;
+
+            try
+            {
+                await OnDeactivatedAsync(cancellationToken);
+                LifeCycleState = MicroLifeCycleState.Initialized;
+                WriteTrace($"{GetType().Name} deactivated.");
+            }
+            catch
+            {
+                LifeCycleState = MicroLifeCycleState.Active;
+                WriteTrace($"{GetType().Name} failed during deactivation.");
+                throw;
+            }
         }
-        catch
+        finally
         {
-            LifeCycleState = MicroLifeCycleState.Active;
-            WriteTrace($"{GetType().Name} failed during deactivation.");
-            throw;
+            ExitTransitionScope(scope);
         }
     }
 
     /// <summary>将当前节点从已初始化状态回退到已挂接状态。</summary>
     internal async ValueTask UninitializeCoreAsync(CancellationToken cancellationToken = default)
     {
-        if (LifeCycleState != MicroLifeCycleState.Initialized)
-            return;
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            await OnUninitializedAsync(cancellationToken);
-            LifeCycleState = MicroLifeCycleState.Attached;
-            WriteTrace($"{GetType().Name} uninitialized.");
+            if (LifeCycleState != MicroLifeCycleState.Initialized)
+                return;
+
+            try
+            {
+                await OnUninitializedAsync(cancellationToken);
+                LifeCycleState = MicroLifeCycleState.Attached;
+                WriteTrace($"{GetType().Name} uninitialized.");
+            }
+            catch
+            {
+                LifeCycleState = MicroLifeCycleState.Initialized;
+                WriteTrace($"{GetType().Name} failed during uninitialization.");
+                throw;
+            }
         }
-        catch
+        finally
         {
-            LifeCycleState = MicroLifeCycleState.Initialized;
-            WriteTrace($"{GetType().Name} failed during uninitialization.");
-            throw;
+            ExitTransitionScope(scope);
         }
     }
 
     /// <summary>将当前节点从宿主上分离，并按需回滚生命周期。</summary>
     internal async ValueTask DetachCoreAsync(bool skipRollback = false, CancellationToken cancellationToken = default)
     {
-        if (Host is null)
-            return;
-
-        List<Exception> errors = [];
-
-        if (!skipRollback && LifeCycleState == MicroLifeCycleState.Active)
-            await RollbackToInitializedAsync(errors, cancellationToken);
-
-        if (!skipRollback && LifeCycleState == MicroLifeCycleState.Initialized)
-            await RollbackToAttachedAsync(errors, cancellationToken);
-
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
         try
         {
-            await OnDetachedAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            errors.Add(ex);
+            if (Host is null)
+                return;
+
+            List<Exception> errors = [];
+
+            if (!skipRollback && LifeCycleState == MicroLifeCycleState.Active)
+                await RollbackToInitializedAsync(errors, cancellationToken);
+
+            if (!skipRollback && LifeCycleState == MicroLifeCycleState.Initialized)
+                await RollbackToAttachedAsync(errors, cancellationToken);
+
+            try
+            {
+                await OnDetachedAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+            finally
+            {
+                Host = null;
+                LifeCycleState = MicroLifeCycleState.Detached;
+            }
+
+            WriteTrace($"{GetType().Name} detached.");
+            ThrowIfNeeded(errors);
         }
         finally
         {
-            Host = null;
-            LifeCycleState = MicroLifeCycleState.Detached;
+            ExitTransitionScope(scope);
         }
-
-        WriteTrace($"{GetType().Name} detached.");
-        ThrowIfNeeded(errors);
     }
 
     /// <summary>将当前节点回滚或推进到目标生命周期状态。</summary>
     internal async ValueTask RollbackToCoreAsync(MicroLifeCycleState state, CancellationToken cancellationToken = default)
     {
-        List<Exception> errors = [];
-
-        switch (state)
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
+        try
         {
-            case MicroLifeCycleState.Detached:
-                if (Host is not null)
-                {
-                    try
-                    {
-                        await DetachCoreAsync(cancellationToken: cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add(ex);
-                    }
-                }
-                break;
-            case MicroLifeCycleState.Attached:
-                if (LifeCycleState == MicroLifeCycleState.Active)
-                    await RollbackToInitializedAsync(errors, cancellationToken);
-                if (LifeCycleState == MicroLifeCycleState.Initialized)
-                    await RollbackToAttachedAsync(errors, cancellationToken);
-                break;
-            case MicroLifeCycleState.Initialized:
-                if (LifeCycleState == MicroLifeCycleState.Active)
-                    await RollbackToInitializedAsync(errors, cancellationToken);
-                if (LifeCycleState == MicroLifeCycleState.Attached)
-                {
-                    try
-                    {
-                        await InitializeCoreAsync(cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add(ex);
-                    }
-                }
-                break;
-            case MicroLifeCycleState.Active:
-                if (LifeCycleState != MicroLifeCycleState.Active)
-                {
-                    try
-                    {
-                        await ActivateCoreAsync(cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add(ex);
-                    }
-                }
-                break;
-            case MicroLifeCycleState.Disposed:
-                try
-                {
-                    await DisposeAsync();
-                }
-                catch (Exception ex)
-                {
-                    errors.Add(ex);
-                }
-                break;
-        }
+            List<Exception> errors = [];
 
-        ThrowIfNeeded(errors);
+            switch (state)
+            {
+                case MicroLifeCycleState.Detached:
+                    if (Host is not null)
+                    {
+                        try
+                        {
+                            await DetachCoreAsync(cancellationToken: cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add(ex);
+                        }
+                    }
+                    break;
+                case MicroLifeCycleState.Attached:
+                    if (LifeCycleState == MicroLifeCycleState.Active)
+                        await RollbackToInitializedAsync(errors, cancellationToken);
+                    if (LifeCycleState == MicroLifeCycleState.Initialized)
+                        await RollbackToAttachedAsync(errors, cancellationToken);
+                    break;
+                case MicroLifeCycleState.Initialized:
+                    if (LifeCycleState == MicroLifeCycleState.Active)
+                        await RollbackToInitializedAsync(errors, cancellationToken);
+                    if (LifeCycleState == MicroLifeCycleState.Attached)
+                    {
+                        try
+                        {
+                            await InitializeCoreAsync(cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add(ex);
+                        }
+                    }
+                    break;
+                case MicroLifeCycleState.Active:
+                    if (LifeCycleState != MicroLifeCycleState.Active)
+                    {
+                        try
+                        {
+                            await ActivateCoreAsync(cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add(ex);
+                        }
+                    }
+                    break;
+                case MicroLifeCycleState.Disposed:
+                    try
+                    {
+                        await DisposeAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add(ex);
+                    }
+                    break;
+            }
+
+            ThrowIfNeeded(errors);
+        }
+        finally
+        {
+            ExitTransitionScope(scope);
+        }
     }
 
     /// <summary>按启动顺序执行初始化和激活。</summary>
@@ -291,39 +356,92 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     /// <summary>执行完整的生命周期释放与分离逻辑。</summary>
     internal async ValueTask DisposeLifeCycleAsync(bool skipDetachRollback = false, CancellationToken cancellationToken = default)
     {
-        if (LifeCycleState == MicroLifeCycleState.Disposed)
-            return;
-
-        List<Exception> errors = [];
-
-        if (Host is not null)
+        await WaitForTransitionGateIfNeededAsync(cancellationToken);
+        TransitionScopeState scope = EnterTransitionScope();
+        try
         {
+            if (LifeCycleState == MicroLifeCycleState.Disposed)
+                return;
+
+            List<Exception> errors = [];
+
+            if (Host is not null)
+            {
+                try
+                {
+                    await DetachCoreAsync(skipDetachRollback, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            }
+
             try
             {
-                await DetachCoreAsync(skipDetachRollback, cancellationToken);
+                await OnDisposedAsync(cancellationToken);
             }
             catch (Exception ex)
             {
                 errors.Add(ex);
             }
-        }
+            finally
+            {
+                Host = null;
+                LifeCycleState = MicroLifeCycleState.Disposed;
+            }
 
-        try
-        {
-            await OnDisposedAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            errors.Add(ex);
+            WriteTrace($"{GetType().Name} disposed.");
+            ThrowIfNeeded(errors);
         }
         finally
         {
-            Host = null;
-            LifeCycleState = MicroLifeCycleState.Disposed;
+            ExitTransitionScope(scope);
+        }
+    }
+
+    /// <summary>在当前异步流未持有作用域时等待生命周期转换门。</summary>
+    private async ValueTask WaitForTransitionGateIfNeededAsync(CancellationToken cancellationToken)
+    {
+        if (_transitionScope.Value is { IsActive: true })
+            return;
+
+        await _transitionGate.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>进入当前异步流的生命周期转换作用域。</summary>
+    private TransitionScopeState EnterTransitionScope()
+    {
+        TransitionScopeState? scope = _transitionScope.Value;
+        if (scope is { IsActive: true })
+        {
+            scope.Depth++;
+            return scope;
         }
 
-        WriteTrace($"{GetType().Name} disposed.");
-        ThrowIfNeeded(errors);
+        scope = new TransitionScopeState
+        {
+            Depth = 1,
+        };
+        _transitionScope.Value = scope;
+        return scope;
+    }
+
+    /// <summary>退出生命周期转换作用域并按需释放实例级门禁。</summary>
+    private void ExitTransitionScope(TransitionScopeState scope)
+    {
+        if (!scope.IsActive || scope.Depth <= 0)
+            throw new InvalidOperationException("MicroLifeCycle transition scope is not active.");
+
+        scope.Depth--;
+        if (scope.Depth == 0)
+        {
+            scope.IsActive = false;
+            if (ReferenceEquals(_transitionScope.Value, scope))
+                _transitionScope.Value = null;
+
+            _transitionGate.Release();
+        }
     }
 
     /// <summary>获取当前必定存在的宿主对象。</summary>
@@ -411,5 +529,13 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     private static void WriteTrace(string message)
     {
         System.Diagnostics.Trace.WriteLine($"[MicroLifeCycle] {message}");
+    }
+
+    /// <summary>描述当前异步流持有的生命周期转换作用域。</summary>
+    private sealed class TransitionScopeState
+    {
+        public int Depth { get; set; }
+
+        public bool IsActive { get; set; } = true;
     }
 }
