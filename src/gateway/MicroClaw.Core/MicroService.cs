@@ -304,13 +304,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
     /// <summary>子类重写此方法以实现停止逻辑；默认为空操作。</summary>
     protected virtual ValueTask StopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-    /// <summary>写入服务级跟踪日志。</summary>
-    private static void WriteTrace(string message)
-    {
-        System.Diagnostics.Trace.WriteLine($"[MicroService] {message}");
-    }
-
+    
     /// <summary>描述当前异步流持有的服务运行态转换作用域。</summary>
     private sealed class ServiceTransitionScopeState
     {

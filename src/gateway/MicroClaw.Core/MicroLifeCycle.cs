@@ -1,3 +1,5 @@
+using MicroClaw.Core.Logging;
+
 namespace MicroClaw.Core;
 
 /// <summary>通用生命周期状态。</summary>
@@ -16,6 +18,13 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
     private readonly AsyncLocal<TransitionScopeState?> _transitionScope = new();
     private bool _activationHookEntered;
+    private IMicroLogger? _logger;
+
+    /// <summary>
+    /// 当前生命周期节点的 logger，分类名取自运行时类型。惰性初始化以便宿主在启动阶段
+    /// 替换 <see cref="MicroLogger.Factory"/> 后仍能被后续实例拾取到。
+    /// </summary>
+    protected IMicroLogger Logger => _logger ??= MicroLogger.Factory.CreateLogger(GetType());
 
     /// <summary>当前关联的宿主对象。</summary>
     public THost? Host { get; private set; }
@@ -149,6 +158,7 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
             catch
             {
                 LifeCycleState = previousState;
+                    ResetActivationHookTracking();
                 WriteTrace($"{GetType().Name} failed during activation.");
                 throw;
             }
@@ -525,10 +535,11 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
             throw new AggregateException(errors);
     }
 
-    /// <summary>写入生命周期级跟踪日志。</summary>
-    private static void WriteTrace(string message)
+    /// <summary>写入生命周期级跟踪日志，同时转发到 <see cref="Logger"/> 与 <see cref="System.Diagnostics.Trace"/>。</summary>
+    protected void WriteTrace(string message)
     {
-        System.Diagnostics.Trace.WriteLine($"[MicroLifeCycle] {message}");
+        if (Logger.IsEnabled(MicroLogLevel.Debug))
+            Logger.LogDebug(message);
     }
 
     /// <summary>描述当前异步流持有的生命周期转换作用域。</summary>

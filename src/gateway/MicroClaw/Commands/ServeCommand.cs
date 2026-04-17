@@ -20,10 +20,12 @@ using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Core;
+using MicroClaw.Core.Logging;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Infrastructure.Data;
 using MicroClaw.Jobs;
+using MicroClaw.Logging;
 using MicroClaw.Providers;
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Pet;
@@ -87,6 +89,9 @@ public class ServeCommand : Command
 		ConfigureChannels(builder);
 		
 		var app = builder.Build();
+
+		MicroLogger.Factory = new MelMicroLoggerFactory(
+			app.Services.GetRequiredService<ILoggerFactory>());
 
 		ValidateStartupConfiguration(app);
 		ConfigureMiddleware(app);

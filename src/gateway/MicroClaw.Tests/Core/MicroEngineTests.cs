@@ -124,7 +124,7 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
-    public async Task StartAsync_WhenServiceStartFails_StopsHalfStartedService()
+        public async Task StartAsync_WhenServiceStartFails_DoesNotInvokeStopCallback()
     {
         var service = new ThrowingStartService(order: 10);
         var engine = new MicroEngine(new NullServiceProvider(), [service]);
@@ -133,8 +133,9 @@ public sealed class MicroEngineTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("start failed");
-        service.StopCount.Should().Be(1);
+            service.StopCount.Should().Be(0);
         service.State.Should().Be(MicroServiceState.Stopped);
+            service.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
         engine.State.Should().Be(MicroEngineState.Stopped);
     }
 
@@ -154,7 +155,7 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
-    public async Task StartAsync_WhenActivationHookFails_RunsDeactivationHookRollback()
+        public async Task StartAsync_WhenActivationHookFails_DoesNotRunDeactivationHookRollback()
     {
         var service = new ThrowingActivationHookService(order: 10);
         var engine = new MicroEngine(new NullServiceProvider(), [service]);
@@ -163,10 +164,34 @@ public sealed class MicroEngineTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("activate failed");
-        service.DeactivatedCount.Should().Be(1);
+            service.DeactivatedCount.Should().Be(0);
         service.State.Should().Be(MicroServiceState.Stopped);
+            service.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
         engine.State.Should().Be(MicroEngineState.Stopped);
     }
+
+        [Fact]
+        public async Task StopNodeAsync_AfterActivationHookFailure_DoesNotInvokeDeactivationHook()
+        {
+            var service = new ThrowingActivationHookService(order: 10);
+            var engine = new MicroEngine(new NullServiceProvider(), [service]);
+
+            Func<Task> start = () => service.StartNodeAsync().AsTask();
+
+            await start.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("activate failed");
+
+            service.State.Should().Be(MicroServiceState.Starting);
+            service.LifeCycleState.Should().Be(MicroLifeCycleState.Initialized);
+            service.Engine.Should().BeSameAs(engine);
+
+            await service.StopNodeAsync();
+
+            service.DeactivatedCount.Should().Be(0);
+            service.State.Should().Be(MicroServiceState.Stopped);
+            service.LifeCycleState.Should().Be(MicroLifeCycleState.Attached);
+            service.Engine.Should().BeSameAs(engine);
+        }
 
     [Fact]
     public async Task StartNodeAsync_WhenCalledConcurrentlyOnSameService_RunsStartOnce()
@@ -837,7 +862,7 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
-    public async Task RegisterServiceAsync_WhenRollbackStopFails_ThrowsAggregateAndKeepsBrokenServiceAttached()
+    public async Task RegisterServiceAsync_WhenServiceStartFails_RethrowsOriginalErrorAndRollsBackRegistration()
     {
         var engine = new MicroEngine(new NullServiceProvider(), []);
         var service = new ThrowingStartAndStopService(order: 10);
@@ -846,13 +871,13 @@ public sealed class MicroEngineTests
 
         Func<Task> act = () => engine.RegisterServiceAsync(service).AsTask();
 
-        var exception = await act.Should().ThrowAsync<AggregateException>();
-        exception.Which.InnerExceptions.Should().ContainSingle(ex => ex.Message == "start failed");
-        exception.Which.InnerExceptions.Should().ContainSingle(ex => ex.Message == "stop failed");
-        engine.State.Should().Be(MicroEngineState.Faulted);
-        engine.Services.Should().Contain(service);
-        service.Engine.Should().BeSameAs(engine);
-        service.State.Should().Be(MicroServiceState.Stopping);
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("start failed");
+        engine.State.Should().Be(MicroEngineState.Running);
+        engine.Services.Should().NotContain(service);
+        service.Engine.Should().BeNull();
+        service.State.Should().Be(MicroServiceState.Stopped);
+        service.LifeCycleState.Should().Be(MicroLifeCycleState.Detached);
     }
 
     [Fact]
