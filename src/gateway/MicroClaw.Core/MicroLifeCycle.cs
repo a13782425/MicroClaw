@@ -19,12 +19,18 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     private readonly AsyncLocal<TransitionScopeState?> _transitionScope = new();
     private bool _activationHookEntered;
     private IMicroLogger? _logger;
+    private bool _traceEnabled;
+    private bool _traceEnabledEvaluated;
 
     /// <summary>
     /// 当前生命周期节点的 logger，分类名取自运行时类型。惰性初始化以便宿主在启动阶段
     /// 替换 <see cref="MicroLogger.Factory"/> 后仍能被后续实例拾取到。
+    /// 使用 <see cref="LazyInitializer.EnsureInitialized{T}(ref T,Func{T})"/> 保证并发安全：
+    /// 即使多个线程同时首次访问，最终也只有一个 <see cref="IMicroLogger"/> 实例胜出并被缓存。
     /// </summary>
-    protected IMicroLogger Logger => _logger ??= MicroLogger.Factory.CreateLogger(GetType());
+    protected IMicroLogger Logger => LazyInitializer.EnsureInitialized(ref _logger, CreateLogger);
+
+    private IMicroLogger CreateLogger() => MicroLogger.Factory.CreateLogger(GetType());
 
     /// <summary>当前关联的宿主对象。</summary>
     public THost? Host { get; private set; }
@@ -535,11 +541,29 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
             throw new AggregateException(errors);
     }
 
-    /// <summary>写入生命周期级跟踪日志，同时转发到 <see cref="Logger"/> 与 <see cref="System.Diagnostics.Trace"/>。</summary>
+    /// <summary>
+    /// 写入生命周期级跟踪日志。通过缓存 <see cref="_traceEnabled"/> 快通路规避热路径上每次
+    /// 访问 <see cref="Logger"/> 属性的开销；当外部替换了 <see cref="MicroLogger.Factory"/>
+    /// 使跟踪级别首次可用时，通过 <see cref="_traceEnabledEvaluated"/> 的一次性求值保证一致性。
+    /// </summary>
     protected void WriteTrace(string message)
     {
-        if (Logger.IsEnabled(MicroLogLevel.Debug))
-            Logger.LogDebug(message);
+        if (!IsTraceEnabled())
+            return;
+
+        Logger.LogDebug(message);
+    }
+
+    private bool IsTraceEnabled()
+    {
+        if (_traceEnabledEvaluated)
+            return _traceEnabled;
+
+        IMicroLogger logger = Logger;
+        bool enabled = logger.IsEnabled(MicroLogLevel.Debug);
+        _traceEnabled = enabled;
+        Volatile.Write(ref _traceEnabledEvaluated, true);
+        return enabled;
     }
 
     /// <summary>描述当前异步流持有的生命周期转换作用域。</summary>

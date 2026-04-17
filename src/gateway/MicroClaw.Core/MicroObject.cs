@@ -660,20 +660,13 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
         }
     }
     
-    /// <summary>将主异常与回滚异常合并为一个聚合异常。</summary>
+    /// <summary>将主异常与回滚异常合并为一个扁平化聚合异常，避免嵌套的 <see cref="AggregateException"/>。</summary>
     private static AggregateException CreateAggregate(Exception primaryException, Exception rollbackException)
     {
         List<Exception> errors = [];
 
-        if (primaryException is AggregateException primaryAggregate)
-            errors.AddRange(primaryAggregate.InnerExceptions);
-        else
-            errors.Add(primaryException);
-
-        if (rollbackException is AggregateException rollbackAggregate)
-            errors.AddRange(rollbackAggregate.InnerExceptions);
-        else
-            errors.Add(rollbackException);
+        MicroEngine.FlattenInto(errors, primaryException);
+        MicroEngine.FlattenInto(errors, rollbackException);
 
         return new AggregateException(errors);
     }

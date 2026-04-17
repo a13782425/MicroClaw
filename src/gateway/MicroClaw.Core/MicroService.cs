@@ -17,6 +17,15 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 {
     private readonly SemaphoreSlim _serviceTransitionGate = new(1, 1);
     private readonly AsyncLocal<ServiceTransitionScopeState?> _serviceTransitionScope = new();
+    private bool _activationFailed;
+
+    /// <summary>
+    /// 指示最近一次启动在激活钩子进入后失败。仅在 <see cref="OnDeactivatedAsync"/>
+    /// 作为启动失败补偿被调用时可能为 <c>true</c>；用户在 <see cref="OnDeactivatedAsync"/>
+    /// 中可以根据该标志决定是否按"未启动成功"的语义跳过清理。
+    /// 在下一次启动进入前会被自动清零。
+    /// </summary>
+    protected bool ActivationFailed => _activationFailed;
 
     /// <summary>启动顺序，数值越小越先启动（停止时逆序）。</summary>
     public virtual int Order => 0;
@@ -97,6 +106,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
             State = MicroServiceState.Starting;
             ResetActivationHookTracking();
+            _activationFailed = false;
             WriteTrace($"{GetType().Name} entering start sequence.");
 
             await base.StartNodeAsync(cancellationToken);
@@ -110,7 +120,12 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
         }
     }
 
-    /// <summary>执行服务停止阶段的完整生命周期回退。</summary>
+    /// <summary>
+    /// 执行服务停止阶段的完整生命周期回退。
+    /// 若上一次启动在激活钩子已进入但最终失败，本方法会作为尽力而为的补偿调用一次
+    /// <see cref="OnDeactivatedAsync"/>；此时 <see cref="ActivationFailed"/> 为 <c>true</c>，
+    /// 子类可依此决定是否跳过"未启动成功"语义不适用的清理。
+    /// </summary>
     internal override async ValueTask StopNodeAsync(CancellationToken cancellationToken = default)
     {
         await WaitForServiceTransitionGateIfNeededAsync(cancellationToken);
@@ -142,8 +157,12 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
                     }
                 }
 
+                // 补偿窗口：启动期间已进入过 OnActivatedAsync 但最终停留在 Initialized 态，
+                // 说明激活钩子尚未完成成功路径。此时以"尽力而为"的方式调用一次 OnDeactivatedAsync
+                // 让子类对部分生效的副作用做对称回收；通过 _activationFailed 标志把语义透传给用户。
                 if (previousState == MicroServiceState.Starting && ActivationHookEntered && LifeCycleState == MicroLifeCycleState.Initialized)
                 {
+                    _activationFailed = true;
                     try
                     {
                         await OnDeactivatedAsync(cancellationToken);
@@ -170,6 +189,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
                 {
                     State = MicroServiceState.Stopped;
                     ResetActivationHookTracking();
+                    _activationFailed = false;
                     WriteTrace($"{GetType().Name} stopped.");
                 }
                 else
@@ -239,6 +259,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
             State = MicroServiceState.Stopped;
             ResetActivationHookTracking();
+            _activationFailed = false;
             ThrowIfNeeded(errors);
         }
         finally
