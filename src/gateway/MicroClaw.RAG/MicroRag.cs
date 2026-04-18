@@ -2,12 +2,12 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
-using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Providers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,8 +25,7 @@ namespace MicroClaw.RAG;
 /// </summary>
 public sealed class MicroRag : MicroObject
 {
-    private readonly IEmbeddingService _embedding;
-    private readonly IDbContextFactory<GatewayDbContext>? _statsFactory;
+    private readonly ProviderService _providerService;
     private readonly ConcurrentDictionary<string, bool> _initialized = new(StringComparer.OrdinalIgnoreCase);
 
     private double _maxStorageSizeMb;
@@ -44,7 +43,7 @@ public sealed class MicroRag : MicroObject
     /// <summary>
     /// Create a new self-contained RAG instance.
     /// </summary>
-    /// <param name="sp">Service provider for resolving <see cref="IEmbeddingService"/> and stats DB.</param>
+    /// <param name="sp">Service provider used to resolve <see cref="ProviderService"/>.</param>
     /// <param name="dbPath">Absolute path to the SQLite RAG database file.</param>
     /// <param name="parents">Optional parent RAGs whose results merge into queries.</param>
     public MicroRag(IServiceProvider sp, string dbPath, IReadOnlyList<MicroRag>? parents = null)
@@ -54,12 +53,38 @@ public sealed class MicroRag : MicroObject
 
         DbPath = dbPath;
         Parents = parents ?? [];
-        _embedding = sp.GetRequiredService<IEmbeddingService>();
-        _statsFactory = sp.GetService<IDbContextFactory<GatewayDbContext>>();
+        _providerService = sp.GetRequiredService<ProviderService>();
 
         var opts = MicroClawConfig.Get<RagOptions>();
         _maxStorageSizeMb = opts.MaxStorageSizeMb;
         _pruneTargetPercent = Math.Clamp(opts.PruneTargetPercent, 0.1, 1.0);
+    }
+
+    // ── Embedding bridge ──────────────────────────────────────────────────
+    //
+    // Uses the default <see cref="EmbeddingMicroProvider"/> resolved from
+    // <see cref="ProviderService"/>. RAG is session-less here, so we tag usage
+    // with a fixed <c>"rag"</c> sessionId via <see cref="MicroChatContext.ForSystem(string,string,CancellationToken)"/>.
+    // TODO: 当 MicroChatContext 能传递真实 Session 时，Ingest/Query 走外部 ctx 归属。
+
+    private async Task<IReadOnlyList<ReadOnlyMemory<float>>> EmbedBatchInternalAsync(
+        IEnumerable<string> inputs, CancellationToken ct)
+    {
+        var embedProvider = _providerService.GetDefaultEmbeddingProvider()
+            ?? throw new InvalidOperationException("No default embedding provider is configured.");
+        var ctx = MicroChatContext.ForSystem("rag", "rag-embed", ct);
+        var materialized = inputs as IReadOnlyList<string> ?? inputs.ToList();
+        var batch = await embedProvider.EmbedBatchAsync(ctx, materialized).ConfigureAwait(false);
+        var result = new ReadOnlyMemory<float>[batch.Count];
+        for (int i = 0; i < batch.Count; i++)
+            result[i] = batch[i].Vector;
+        return result;
+    }
+
+    private async Task<ReadOnlyMemory<float>> EmbedInternalAsync(string text, CancellationToken ct)
+    {
+        var batch = await EmbedBatchInternalAsync([text], ct).ConfigureAwait(false);
+        return batch[0];
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -74,8 +99,7 @@ public sealed class MicroRag : MicroObject
         var chunks = ChunkText(source);
         if (chunks.Count == 0) return;
 
-        var vectors = await _embedding
-            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+        var vectors = await EmbedBatchInternalAsync(chunks.Select(c => c.Content), ct)
             .ConfigureAwait(false);
 
         var sourceId = Guid.NewGuid().ToString("N");
@@ -103,8 +127,7 @@ public sealed class MicroRag : MicroObject
         var chunks = ChunkText(source);
         if (chunks.Count == 0) return;
 
-        var vectors = await _embedding
-            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+        var vectors = await EmbedBatchInternalAsync(chunks.Select(c => c.Content), ct)
             .ConfigureAwait(false);
 
         var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -127,8 +150,7 @@ public sealed class MicroRag : MicroObject
             var chunks = ChunkText(content);
             if (chunks.Count == 0) return;
 
-            var vectors = await _embedding
-                .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+            var vectors = await EmbedBatchInternalAsync(chunks.Select(c => c.Content), ct)
                 .ConfigureAwait(false);
 
             var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -158,8 +180,7 @@ public sealed class MicroRag : MicroObject
         var chunks = ChunkText(source);
         if (chunks.Count == 0) return sourceId;
 
-        var vectors = await _embedding
-            .GenerateBatchAsync(chunks.Select(c => c.Content), ct)
+        var vectors = await EmbedBatchInternalAsync(chunks.Select(c => c.Content), ct)
             .ConfigureAwait(false);
 
         var createdAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -395,38 +416,53 @@ public sealed class MicroRag : MicroObject
     //  Stats
     // ══════════════════════════════════════════════════════════════════════
 
-    /// <summary>Get aggregated query stats from the main DB.</summary>
+    /// <summary>
+    /// Read this RAG's own stat row (no parent merge, no derived values).
+    /// Returns zeros if no stat row has been written yet.
+    /// </summary>
+    internal async Task<(long TotalQueries, long HitQueries, long TotalElapsedMs, long TotalRecallCount)>
+        ReadLocalStatAsync(CancellationToken ct = default)
+    {
+        using var db = CreateDb();
+        var row = await db.SearchStats
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        return row is null
+            ? (0, 0, 0, 0)
+            : (row.TotalQueries, row.HitQueries, row.TotalElapsedMs, row.TotalRecallCount);
+    }
+
+    /// <summary>
+    /// Get aggregated query stats for this RAG, merged unidirectionally with all parents.
+    /// <para>
+    /// Only walks up to <see cref="Parents"/>; never descends to children. This mirrors the
+    /// <c>SearchMergedAsync</c> pattern and guarantees global/root RAGs stay isolated from sessions.
+    /// </para>
+    /// </summary>
     public async Task<RagQueryStats> GetQueryStatsAsync(CancellationToken ct = default)
     {
         string scopeLabel = Path.GetFileNameWithoutExtension(DbPath);
 
-        if (_statsFactory is null)
-            return new RagQueryStats(scopeLabel, 0, 0, 0, 0, 0, 0);
+        var localTask = ReadLocalStatAsync(ct);
+        var parentTasks = Parents.Select(p => p.ReadLocalStatAsync(ct)).ToList();
 
-        using var db = _statsFactory.CreateDbContext();
+        var allTasks = new List<Task<(long, long, long, long)>>(parentTasks.Count + 1) { localTask };
+        allTasks.AddRange(parentTasks);
+        await Task.WhenAll(allTasks).ConfigureAwait(false);
 
-        var stats = await db.RagSearchStats.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        long total = 0, hits = 0, elapsed = 0, recall = 0;
+        foreach (var t in allTasks)
+        {
+            var (tq, hq, tem, trc) = t.Result;
+            total += tq;
+            hits += hq;
+            elapsed += tem;
+            recall += trc;
+        }
 
-        if (stats.Count == 0)
-            return new RagQueryStats(scopeLabel, 0, 0, 0, 0, 0, 0);
-
-        long total = stats.Count;
-        long hits = stats.Count(e => e.RecallCount > 0);
-        double hitRate = (double)hits / total;
-        double avgElapsed = stats.Average(e => e.ElapsedMs);
-        double avgRecall = stats.Average(e => e.RecallCount);
-
-        long cutoff24h = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
-        long last24h = stats.Count(e => e.RecordedAtMs >= cutoff24h);
-
-        return new RagQueryStats(
-            Scope: scopeLabel,
-            TotalQueries: total,
-            HitQueries: hits,
-            HitRate: hitRate,
-            AvgElapsedMs: Math.Round(avgElapsed, 1),
-            AvgRecallCount: Math.Round(avgRecall, 2),
-            Last24hQueries: last24h);
+        return RagQueryStats.Derive(scopeLabel, total, hits, elapsed, recall);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -540,7 +576,7 @@ public sealed class MicroRag : MicroObject
         ReadOnlyMemory<float> queryVec;
         try
         {
-            queryVec = await _embedding.GenerateAsync(query, ct).ConfigureAwait(false);
+            queryVec = await EmbedInternalAsync(query, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -772,22 +808,26 @@ public sealed class MicroRag : MicroObject
 
     private void RecordStatFireAndForget(long elapsedMs, int recallCount)
     {
-        if (_statsFactory is null) return;
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        int hitDelta = recallCount > 0 ? 1 : 0;
 
         _ = Task.Run(async () =>
         {
             try
             {
-                using var db = _statsFactory.CreateDbContext();
-                db.RagSearchStats.Add(new RagSearchStatEntity
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Scope = Path.GetFileNameWithoutExtension(DbPath),
-                    ElapsedMs = elapsedMs,
-                    RecallCount = recallCount,
-                    RecordedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                });
-                await db.SaveChangesAsync().ConfigureAwait(false);
+                using var db = CreateDb();
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO search_stats
+                        (id, total_queries, hit_queries,
+                         total_elapsed_ms, total_recall_count, last_updated_at_ms)
+                    VALUES (1, 1, {hitDelta}, {elapsedMs}, {recallCount}, {nowMs})
+                    ON CONFLICT(id) DO UPDATE SET
+                        total_queries      = total_queries      + 1,
+                        hit_queries        = hit_queries        + excluded.hit_queries,
+                        total_elapsed_ms   = total_elapsed_ms   + excluded.total_elapsed_ms,
+                        total_recall_count = total_recall_count + excluded.total_recall_count,
+                        last_updated_at_ms = excluded.last_updated_at_ms;
+                """).ConfigureAwait(false);
             }
             catch
             {

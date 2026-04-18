@@ -82,15 +82,15 @@ export type RagQueryStats = {
   scope: string
   totalQueries: number
   hitQueries: number
+  totalElapsedMs: number
+  totalRecallCount: number
   hitRate: number
   avgElapsedMs: number
   avgRecallCount: number
-  last24hQueries: number
 }
 
-export async function getRagQueryStats(scope?: 'Global' | 'Session'): Promise<RagQueryStats> {
-  const params = scope ? { scope } : {}
-  const { data } = await request.get<RagQueryStats>('/api/rag/stats', { params })
+export async function getRagQueryStats(): Promise<RagQueryStats> {
+  const { data } = await request.get<RagQueryStats>('/api/rag/stats')
   return data
 }
 

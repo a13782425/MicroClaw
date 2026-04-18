@@ -1,4 +1,5 @@
-﻿using MicroClaw.Agent;
+﻿using MicroClaw.Abstractions;
+using MicroClaw.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
@@ -136,8 +137,9 @@ public sealed class DreamingJob : IScheduledJob
             }
 
             // 选择可用的 LLM Provider
-            IChatClient? client = ResolveClient(agentSessions);
-            if (client is null)
+            (ChatMicroProvider? chatProvider, IMicroSession? ownerSession) =
+                ResolveChatProvider(agentSessions);
+            if (chatProvider is null)
             {
                 _logger.LogWarning("D-2 Agent={AgentId} 无可用 Provider，跳过认知整理", agent.Id);
                 return;
@@ -145,8 +147,11 @@ public sealed class DreamingJob : IScheduledJob
 
             // 执行认知整理
             string existingMemory = _agentDnaService.GetMemory(agent.Id);
+            MicroChatContext chatCtx = ownerSession is not null
+                ? MicroChatContext.ForSystem(ownerSession, "dreaming", ct)
+                : MicroChatContext.ForSystem($"agent:{agent.Id}", "dreaming", ct);
             string dreamSummary = await BuildCognitiveDreamAsync(
-                existingMemory, memoryFragments, client, ct);
+                existingMemory, memoryFragments, chatProvider, chatCtx);
 
             if (!string.IsNullOrWhiteSpace(dreamSummary))
             {
@@ -163,22 +168,20 @@ public sealed class DreamingJob : IScheduledJob
     }
 
     /// <summary>
-    /// 选择可用的 LLM 客户端：
+    /// 选择可用的 Chat Provider：
     /// 优先从该 Agent 关联会话的 ProviderId 中找已启用的 Provider，
-    /// 否则 fallback 到第一个全局已启用 Provider。
+    /// 否则 fallback 到默认 Chat Provider。返回时一并带出对应 Session 以便构建上下文。
     /// </summary>
-    private IChatClient? ResolveClient(IReadOnlyList<IMicroSession> agentSessions)
+    private (ChatMicroProvider? Provider, IMicroSession? OwnerSession) ResolveChatProvider(
+        IReadOnlyList<IMicroSession> agentSessions)
     {
         foreach (IMicroSession session in agentSessions)
         {
-            ProviderConfig? provider = _providerService.All
-                .FirstOrDefault(p => p.Id == session.ProviderId && p.IsEnabled);
-            if (provider is not null)
-                return _providerService.CreateClient(provider);
+            ChatMicroProvider? hit = _providerService.TryGetProvider(session.ProviderId);
+            if (hit is not null) return (hit, session);
         }
 
-        ProviderConfig? fallback = _providerService.All.FirstOrDefault(p => p.IsEnabled);
-        return fallback is not null ? _providerService.CreateClient(fallback) : null;
+        return (_providerService.GetDefaultProvider(), null);
     }
 
     // ── 静态 helpers（internal 供测试调用）────────────────────────────────────
@@ -189,8 +192,8 @@ public sealed class DreamingJob : IScheduledJob
     internal static async Task<string> BuildCognitiveDreamAsync(
         string existingMemory,
         IReadOnlyList<(string SessionTitle, string Content)> memoryFragments,
-        IChatClient client,
-        CancellationToken ct)
+        ChatMicroProvider chatProvider,
+        MicroChatContext ctx)
     {
         string existing = string.IsNullOrWhiteSpace(existingMemory) ? "（暂无记忆）" : existingMemory;
         string memories = FormatSessionMemories(memoryFragments);
@@ -198,9 +201,9 @@ public sealed class DreamingJob : IScheduledJob
             .Replace("{existing}", existing)
             .Replace("{memories}", memories);
 
-        ChatResponse response = await client.GetResponseAsync(
-            [new ChatMessage(ChatRole.User, prompt)],
-            cancellationToken: ct);
+        ChatResponse response = await chatProvider.ChatAsync(
+            ctx,
+            [new ChatMessage(ChatRole.User, prompt)]);
 
         return response.Text ?? string.Empty;
     }

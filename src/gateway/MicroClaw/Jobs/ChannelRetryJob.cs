@@ -1,4 +1,5 @@
-﻿using MicroClaw.Channels;
+﻿using MicroClaw.Abstractions;
+using MicroClaw.Channels;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Configuration.Options;
@@ -101,11 +102,11 @@ public sealed class ChannelRetryJob : IScheduledJob
             else
             {
                 IMicroSession? session = _sessionService.Get(entry.SessionId);
-                string resolvedProviderId = session?.ProviderId ?? string.Empty;
-                ProviderConfig? providerConfig = string.IsNullOrWhiteSpace(resolvedProviderId)
-                    ? _providerService.GetDefault()
-                    : _providerService.All.FirstOrDefault(p => p.Id == resolvedProviderId && p.IsEnabled);
-                if (providerConfig is null || !providerConfig.IsEnabled)
+                string? resolvedProviderId = session?.ProviderId;
+                ChatMicroProvider? chatProvider = !string.IsNullOrWhiteSpace(resolvedProviderId)
+                    ? _providerService.TryGetProvider(resolvedProviderId)
+                    : _providerService.GetDefaultProvider();
+                if (chatProvider is null)
                 {
                     throw new InvalidOperationException(
                         $"找不到可用的 Provider（sessionId={entry.SessionId}）");
@@ -117,8 +118,10 @@ public sealed class ChannelRetryJob : IScheduledJob
                         m.Content))
                     .ToList();
 
-                IChatClient chatClient = _providerService.CreateClient(providerConfig);
-                ChatResponse response = await chatClient.GetResponseAsync(chatMessages, cancellationToken: ct);
+                MicroChatContext chatCtx = session is not null
+                    ? MicroChatContext.ForSystem(session, "channel-retry", ct)
+                    : MicroChatContext.ForSystem(entry.SessionId, "channel-retry", ct);
+                ChatResponse response = await chatProvider.ChatAsync(chatCtx, chatMessages);
                 aiReply = response.Text ?? "（无回复）";
             }
 

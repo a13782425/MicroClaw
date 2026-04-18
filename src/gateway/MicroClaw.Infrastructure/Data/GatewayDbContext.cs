@@ -12,7 +12,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
     public DbSet<UsageEntity> Usages => Set<UsageEntity>();
     public DbSet<ChannelRetryQueueEntity> ChannelRetryQueue => Set<ChannelRetryQueueEntity>();
     public DbSet<PainMemoryEntity> PainMemories => Set<PainMemoryEntity>();
-    public DbSet<RagSearchStatEntity> RagSearchStats => Set<RagSearchStatEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -105,19 +104,6 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             b.Property(e => e.CreatedAtMs).HasColumnName("created_at_ms");
             b.HasIndex(e => e.AgentId).HasDatabaseName("ix_pain_memories_agent_id");
             b.HasIndex(e => new { e.AgentId, e.Severity }).HasDatabaseName("ix_pain_memories_agent_severity");
-        });
-
-        modelBuilder.Entity<RagSearchStatEntity>(b =>
-        {
-            b.ToTable("rag_search_stats");
-            b.HasKey(e => e.Id);
-            b.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
-            b.Property(e => e.Scope).HasColumnName("scope").HasMaxLength(32);
-            b.Property(e => e.ElapsedMs).HasColumnName("elapsed_ms");
-            b.Property(e => e.RecallCount).HasColumnName("recall_count");
-            b.Property(e => e.RecordedAtMs).HasColumnName("recorded_at_ms");
-            b.HasIndex(e => e.RecordedAtMs).HasDatabaseName("ix_rag_search_stats_recorded_at_ms");
-            b.HasIndex(e => e.Scope).HasDatabaseName("ix_rag_search_stats_scope");
         });
 
     }

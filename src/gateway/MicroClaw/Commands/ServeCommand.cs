@@ -27,7 +27,6 @@ using MicroClaw.Infrastructure.Data;
 using MicroClaw.Jobs;
 using MicroClaw.Logging;
 using MicroClaw.Providers;
-using MicroClaw.Providers.OpenAI;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Plugins;
@@ -193,7 +192,9 @@ public class ServeCommand : Command
 		});
 
 		builder.Services.AddSingleton<ConfigService>();
-		builder.Services.AddSingleton<ProviderService>();
+		// ProviderService：依赖 IUsageTracker，按 MicroService 生命周期启动（Order=15），
+		// 取代旧的 ProviderClientFactory + 直接暴露 IChatClient 的模式。
+		builder.Services.AddMicroService<ProviderService>();
 		builder.Services.AddMicroService<SessionService>();
 		builder.Services.MapAs<ISessionService, SessionService>();
 		
@@ -205,11 +206,10 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SessionDnaService>();
 		builder.Services.AddSingleton<MemoryService>();
 		// RAG 服务
-		builder.Services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
-		builder.Services.AddSingleton<ProviderEmbeddingFactory>();
-		// EmbeddingProviderAccessor 每次调用时实时读取 DB，支持运行时热切换 Embedding Provider
-		builder.Services.AddSingleton<IEmbeddingProviderAccessor, EmbeddingProviderAccessor>();
-		builder.Services.AddSingleton<IEmbeddingService, DynamicEmbeddingService>();
+		// 旧的 IEmbeddingProvider / ProviderEmbeddingFactory / IEmbeddingProviderAccessor /
+		// IEmbeddingService（DynamicEmbeddingService）已整体下线，Embedding 统一由
+		// ProviderService.GetDefaultEmbeddingProvider() 驱动 EmbeddingMicroProvider 完成，
+		// 同时在 Provider 内部做 usage 记账，无需上层 DI 单独注册。
 		builder.Services.AddSingleton<RagReindexJobTracker>();
 		builder.Services.AddSingleton<RagReindexService>();
 		builder.Services.AddSingleton<RagRetrievalContext>();
@@ -232,8 +232,6 @@ public class ServeCommand : Command
 		builder.Services.MapAs<ISubAgentRunner, SubAgentRunnerService>();
 		builder.Services.AddSingleton<IMicroHubService, MicroHubService>();
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
-		// AIContent→StreamItem 转换管道（Handler 由 Pipeline 内部构建）
-		builder.Services.AddSingleton<MicroClaw.Agent.Streaming.AIContentPipeline>();
 		// SessionMessage → AIContent 还原服务（Restorer 由 Service 内部构建）
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.ChatContentRestorerService>();
 		builder.Services.AddService<AgentRunner>();

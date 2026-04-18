@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.RateLimit;
@@ -99,13 +100,15 @@ public sealed class PetPromptEvolver
         // ── 调用 LLM ──
         try
         {
-            var client = _providerService.CreateClient(provider);
-            var response = await client.GetResponseAsync(
+            var chatProvider = _providerService.TryGetProvider(provider.Id)
+                ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+            var chatCtx = MicroChatContext.ForSystem(sessionId, "pet-prompt-evolve", ct);
+            var response = await chatProvider.ChatAsync(
+                chatCtx,
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),
                     new ChatMessage(ChatRole.User, userPrompt),
-                ],
-                cancellationToken: ct).ConfigureAwait(false);
+                ]).ConfigureAwait(false);
 
             string responseText = (response.Text ?? string.Empty).Trim();
             _logger.LogDebug("PetPromptEvolver [{SessionId}] LLM 响应: {Response}", sessionId, responseText);

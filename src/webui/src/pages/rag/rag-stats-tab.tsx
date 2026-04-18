@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Box, Text, HStack, Spinner, NativeSelect, Card, SimpleGrid, Progress, Button,
+  Box, Text, HStack, Spinner, Card, SimpleGrid, Progress, Button,
 } from '@chakra-ui/react'
 import { RefreshCw } from 'lucide-react'
 import { toaster } from '@/components/ui/toaster'
 import { getRagQueryStats, type RagQueryStats } from '@/api/gateway'
-import { type ScopeFilter } from './rag-utils'
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -20,21 +19,20 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 export function RagStatsTab() {
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('All')
   const [stats, setStats] = useState<RagQueryStats | null>(null)
   const [loading, setLoading] = useState(false)
 
   const fetchStats = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getRagQueryStats(scopeFilter === 'All' ? undefined : scopeFilter)
+      const result = await getRagQueryStats()
       setStats(result)
     } catch {
       toaster.create({ type: 'error', title: '加载统计数据失败' })
     } finally {
       setLoading(false)
     }
-  }, [scopeFilter])
+  }, [])
 
   useEffect(() => { fetchStats() }, [fetchStats])
 
@@ -42,21 +40,7 @@ export function RagStatsTab() {
 
   return (
     <Box>
-      <HStack mb="5" gap="3" justify="space-between">
-        <HStack gap="3">
-          <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap">作用域：</Text>
-          <NativeSelect.Root size="sm" maxW="160px">
-            <NativeSelect.Field
-              value={scopeFilter}
-              onChange={(e) => setScopeFilter(e.target.value as ScopeFilter)}
-            >
-              <option value="All">全部</option>
-              <option value="Global">全局库</option>
-              <option value="Session">会话库</option>
-            </NativeSelect.Field>
-            <NativeSelect.Indicator />
-          </NativeSelect.Root>
-        </HStack>
+      <HStack mb="5" gap="3" justify="flex-end">
         <Button size="sm" variant="outline" data-mc-refresh="true" onClick={fetchStats} loading={loading}>
           <RefreshCw size={14} />
           刷新
@@ -69,9 +53,8 @@ export function RagStatsTab() {
         </Box>
       ) : stats ? (
         <Box>
-          <SimpleGrid columns={{ base: 2, md: 4 }} gap="4" mb="6">
+          <SimpleGrid columns={{ base: 1, md: 3 }} gap="4" mb="6">
             <StatCard label="总查询次数" value={stats.totalQueries} sub="历史累计" />
-            <StatCard label="近 24h 查询" value={stats.last24hQueries} sub="最近活跃度" />
             <StatCard label="平均延迟" value={`${stats.avgElapsedMs} ms`} sub="混合检索耗时" />
             <StatCard label="平均召回数" value={stats.avgRecallCount} sub="每次返回结果" />
           </SimpleGrid>

@@ -3,13 +3,15 @@ using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Configuration.Options;
 
 namespace MicroClaw.Abstractions;
 
 /// <summary>
-/// 一次 Pet 对话的请求上下文：贯穿 <see cref="MicroChatLifecyclePhase"/> 各阶段的载体。
+/// 模型调用的统一上下文：既用于 Pet 对话管线，也用于系统级（定时任务、后台审计）调用。
 /// <para>
-/// 由 <c>MicroPet</c> 在消息处理入口构造，按阶段依次交给各 <c>PetComponent</c> 回调使用。
+/// 由 <c>MicroPet</c> 在消息处理入口构造 Pet 路径所需的完整上下文；系统路径可通过
+/// <see cref="ForSystem(IMicroSession, string, CancellationToken)"/> 快速构造最小上下文。
 /// 组件之间可以通过 <see cref="Items"/> 字典进行松耦合的数据交换；对特定阶段有明确语义的字段
 /// （<see cref="FinalAssistantMessage"/> / <see cref="CurrentToolCall"/> / <see cref="LastToolResult"/>）
 /// 在对应阶段之外可能为 <c>null</c>。
@@ -20,34 +22,34 @@ namespace MicroClaw.Abstractions;
 /// </summary>
 public sealed class MicroChatContext
 {
-    /// <summary>所属会话（Pet 宿主）。</summary>
+    /// <summary>所属会话（Pet 宿主）。Provider 用来标记 usage 归属。</summary>
     public required IMicroSession Session { get; init; }
 
-    /// <summary>本次对话前已经加载的消息历史（含刚刚保存的用户消息，若调用方负责保存）。</summary>
-    public required IReadOnlyList<SessionMessage> History { get; init; }
-    
-    /// <summary>
-    /// 当前对话的宠物
-    /// </summary>
-    public required IPet Pet { get; init; }
-    
-    /// <summary>
-    /// 当前对话的渠道
-    /// </summary>
-    public required IChannel Channel { get; init; }
-    
     /// <summary>
     /// 消息来源标签，常见值：<c>"chat"</c>（前端 API）、<c>"channel"</c>（渠道 webhook）、
-    /// <c>"heartbeat"</c>（Pet 自主心跳触发，尚未启用）。
+    /// <c>"heartbeat"</c>（Pet 自主心跳触发）、<c>"rag-audit"</c>（RAG 审计）、<c>"dreaming"</c>/<c>"memory-summary"</c> 等。
     /// </summary>
     public required string Source { get; init; }
 
     /// <summary>
-    /// 流式事件写入口；Step 可以直接 <c>Output.TryWrite(item)</c> 将事件挤到调用方的 async enumerator。
-    /// <para>
-    /// 当 Pet 未启用走直通 AgentRunner 分支时，<c>MicroPet</c> 当前版本不会为该分支构造 channel，
-    /// 此字段会为 <c>null</c>；Step 实现需自行判空。Pet 启用分支由 <c>MicroPet</c> 在请求结束后负责 Complete。
-    /// </para>
+    /// 本次对话前已经加载的消息历史（含刚刚保存的用户消息，若调用方负责保存）。
+    /// 系统级调用（<see cref="ForSystem"/>）可能为 <c>null</c>。
+    /// </summary>
+    public IReadOnlyList<SessionMessage>? History { get; init; }
+
+    /// <summary>
+    /// 当前对话的宠物。系统级调用（非 Pet 编排）可能为 <c>null</c>。
+    /// </summary>
+    public IPet? Pet { get; init; }
+
+    /// <summary>
+    /// 当前对话的渠道。系统级调用（非渠道触发）可能为 <c>null</c>。
+    /// </summary>
+    public IChannel? Channel { get; init; }
+
+    /// <summary>
+    /// 流式事件写入口；<c>MicroProvider</c> 在 <c>StreamAgentAsync</c> 时将工具调用/结果事件写入此处。
+    /// Pet 启用分支由 <c>MicroPet</c> 在请求结束后负责 Complete；系统调用通常不提供此字段。
     /// </summary>
     public ChannelWriter<StreamItem>? Output { get; init; }
 
@@ -75,4 +77,79 @@ public sealed class MicroChatContext
     /// 阶段表示最近一次工具调用的结果；其它阶段为 <c>null</c>。本版本尚未接线，该字段恒为 <c>null</c>。
     /// </summary>
     public ToolResultItem? LastToolResult { get; set; }
+
+    /// <summary>
+    /// 为系统级（非 Pet 对话流程）调用构造最小上下文：定时任务、RAG 审计、后台总结等。
+    /// <para>
+    /// <see cref="History"/>/<see cref="Pet"/>/<see cref="Channel"/>/<see cref="Output"/> 保持 <c>null</c>；
+    /// Provider 会以 <see cref="Session"/>.Id 作为 usage 归属。
+    /// </para>
+    /// </summary>
+    public static MicroChatContext ForSystem(
+        IMicroSession session,
+        string source,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        return new MicroChatContext
+        {
+            Session = session,
+            Source = source,
+            Ct = ct,
+        };
+    }
+
+    /// <summary>
+    /// 仅提供 <paramref name="sessionId"/> 的便捷重载：调用方（Pet 管线、Jobs）
+    /// 没有手持 <see cref="IMicroSession"/> 聚合根时，用此构造一个最小 stub 仅用于
+    /// <see cref="IUsageTracker"/> 归属。stub 上除 <c>Id</c> 以外的字段会抛
+    /// <see cref="NotSupportedException"/>，强制上游在确需会话聚合根字段时改走
+    /// <see cref="ForSystem(IMicroSession, string, CancellationToken)"/>。
+    /// </summary>
+    public static MicroChatContext ForSystem(
+        string sessionId,
+        string source,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        return new MicroChatContext
+        {
+            Session = new SystemSession(sessionId),
+            Source = source,
+            Ct = ct,
+        };
+    }
+
+    /// <summary>
+    /// 最小化的 <see cref="IMicroSession"/> stub，仅供 <see cref="ForSystem(string,string,CancellationToken)"/>
+    /// 的系统调用场景使用：只透出 <see cref="Id"/>，其余字段默认值或抛 <see cref="NotSupportedException"/>。
+    /// </summary>
+    private sealed class SystemSession : IMicroSession
+    {
+        private readonly string _id;
+
+        public SystemSession(string id) => _id = id;
+
+        public string Id => _id;
+        public string Title => string.Empty;
+        public string ProviderId => string.Empty;
+        public bool IsApproved => false;
+        public ChannelType ChannelType => ChannelType.Web;
+        public string ChannelId => string.Empty;
+        public DateTimeOffset CreatedAt => default;
+        public string? AgentId => null;
+        public string? ApprovalReason => null;
+        public IChannel? Channel => null;
+        public IPet? Pet => null;
+
+        public SessionEntity Entity =>
+            throw new NotSupportedException(
+                "System-created MicroChatContext does not back a real SessionEntity; use ForSystem(IMicroSession,...) if the caller needs the aggregate.");
+
+        public SessionInfo ToInfo() =>
+            throw new NotSupportedException(
+                "System-created MicroChatContext does not back a real SessionInfo; use ForSystem(IMicroSession,...) if the caller needs it.");
+    }
 }

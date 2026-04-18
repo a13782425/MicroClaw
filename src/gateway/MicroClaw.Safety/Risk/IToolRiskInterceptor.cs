@@ -2,7 +2,7 @@ namespace MicroClaw.Safety;
 
 /// <summary>
 /// 工具风险前置拦截器接口。
-/// 在工具被实际调用前，由 AgentFactory 调用以决定是否允许执行。
+/// 在工具被实际调用前，由 ChatMicroProvider 的工具循环调用以决定是否允许执行。
 /// </summary>
 public interface IToolRiskInterceptor
 {

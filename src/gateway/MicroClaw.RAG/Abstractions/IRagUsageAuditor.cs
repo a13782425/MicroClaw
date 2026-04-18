@@ -10,7 +10,9 @@ public interface IRagUsageAuditor
     /// 审计一轮对话中 RAG 检索结果的实际使用情况。
     /// 对确认被 AI 使用的 chunk 执行 HitCount +1。
     /// </summary>
+    /// <param name="sessionId">发起对话的会话 ID；供 Provider 记录 usage 归属。</param>
     Task AuditAsync(
+        string sessionId,
         IReadOnlyList<RagChunkRef> retrievedChunks,
         string assistantResponse,
         CancellationToken ct = default);

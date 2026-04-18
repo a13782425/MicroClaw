@@ -6,7 +6,7 @@ namespace MicroClaw.Agent.Dev;
 /// </summary>
 public interface IDevMetricsService
 {
-    /// <summary>记录一次工具执行（由 AgentFactory.FunctionInvoker 调用）。</summary>
+    /// <summary>记录一次工具执行（TODO：目前无调用点，待 MicroProvider 内部工具循环回填）。</summary>
     void RecordToolExecution(string toolName, long elapsedMs, bool success);
 
     /// <summary>记录一次 Agent 运行完成。</summary>

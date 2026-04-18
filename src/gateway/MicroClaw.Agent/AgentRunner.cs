@@ -5,21 +5,16 @@ using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Agent.Sessions;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Agent.Middleware;
-using MicroClaw.Agent.Streaming;
-using MicroClaw.Agent.Streaming.Handlers;
 using MicroClaw.Agent.Restorers;
 using MicroClaw.RAG;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Providers;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -40,12 +35,10 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
     private readonly ProviderService _providerService;
     private readonly ISessionService _sessionReader;
     private readonly SkillToolFactory _skillToolFactory;
-    private readonly IUsageTracker _usageTracker;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IAgentStatusNotifier _agentStatusNotifier;
     private readonly ToolCollector _toolCollector;
     private readonly IDevMetricsService _devMetrics;
-    private readonly AIContentPipeline _contentPipeline;
     private readonly ChatContentRestorerService _restorerService;
     private readonly IProviderRouter? _providerRouter;
     private readonly IContextOverflowSummarizer? _contextOverflowSummarizer;
@@ -62,11 +55,9 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         _providerService = sp.GetRequiredService<ProviderService>();
         _sessionReader = sp.GetRequiredService<ISessionService>();
         _skillToolFactory = sp.GetRequiredService<SkillToolFactory>();
-        _usageTracker = sp.GetRequiredService<IUsageTracker>();
         _agentStatusNotifier = sp.GetRequiredService<IAgentStatusNotifier>();
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _devMetrics = sp.GetRequiredService<IDevMetricsService>();
-        _contentPipeline = sp.GetRequiredService<AIContentPipeline>();
         _restorerService = sp.GetRequiredService<ChatContentRestorerService>();
         _providerRouter = sp.GetService<IProviderRouter>();
         _contextOverflowSummarizer = sp.GetService<IContextOverflowSummarizer>();
@@ -277,16 +268,25 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                 _logger.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}",
                     agent.Id, toolResult.AllTools.Count, provider.Id);
 
-                // AgentFactory：创建 ChatClientAgent + 事件 Channel
+                ChatMicroProvider chatProvider = _providerService.TryGetProvider(provider.Id)
+                    ?? throw new InvalidOperationException(
+                        $"Chat provider '{provider.Id}' is not available in cache.");
+
                 ChatOptions chatOptions = BuildChatOptions(
                     toolResult.AllTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride,
                     temperatureOverride: petOverrides?.Temperature,
                     topPOverride: petOverrides?.TopP);
-                IChatClient rawClient = _providerService.CreateClient(provider);
-                var (chatAgent, eventChannel, runOptions, tracker) = AgentFactory.Create(
-                    rawClient, agent.Name, chatOptions, _loggerFactory,
-                    devMetrics: _devMetrics,
-                    hookExecutor: _hookExecutor);
+
+                // MicroChatContext：Provider 内部依此归属 usage。
+                // TODO: 待 Pet 管线接入后，通过 MicroChatContext 传递 History/Pet/Channel/Output 等。
+                IMicroSession? sessionForCtx = !string.IsNullOrWhiteSpace(sessionId)
+                    ? _sessionReader.Get(sessionId) : null;
+                MicroChatContext chatCtx = sessionForCtx is not null
+                    ? MicroChatContext.ForSystem(sessionForCtx, source, ct)
+                    : MicroChatContext.ForSystem(
+                        !string.IsNullOrWhiteSpace(sessionId) ? sessionId : $"agent:{agent.Id}",
+                        source,
+                        ct);
 
                 if (!string.IsNullOrWhiteSpace(sessionId))
                     await _agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
@@ -302,52 +302,21 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                     }, CancellationToken.None);
                 }
 
-                // AF AgentSession：将 MicroClaw Session 元数据注入 StateBag
-                AgentSession afSession = await chatAgent.CreateSessionAsync(ct);
-                if (!string.IsNullOrWhiteSpace(sessionId))
-                {
-                        IMicroSession? sessionInfo = _sessionReader.Get(sessionId);
-                }
-
-                UsageCapture usageCapture = new();
-                Task? runTask = null;
                 var runSw = System.Diagnostics.Stopwatch.StartNew();
-                UsageContentHandler.BindCapture(usageCapture);
 
                 // ── 阶段 2：Streaming（内层 try-finally 负责清理）────────────
                 try
                 {
-                    // 后台任务：运行 AF agent，通过 AIContentPipeline 将内容写入内部 eventChannel
-                    runTask = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await foreach (AgentResponseUpdate update in chatAgent.RunStreamingAsync(
-                                               messages, session: afSession, runOptions, ct))
-                            {
-                                if (!string.IsNullOrEmpty(update.MessageId))
-                                    tracker.Current = update.MessageId;
-
-                                foreach (StreamItem item in _contentPipeline.Process(update.Contents))
-                                {
-                                    item.MessageId ??= tracker.Current;
-                                    await eventChannel.Writer.WriteAsync(item, ct);
-                                }
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            // SSE 客户端断开或外部取消——静默结束
-                        }
-                        finally
-                        {
-                            eventChannel.Writer.TryComplete();
-                        }
-                    }, CancellationToken.None);
-
-                    // 主流：读取内部 eventChannel，转发到外层 output channel
+                    // Provider 内部驱动 FunctionInvokingChatClient + ChatClientAgent，
+                    // 直接生成 StreamItem（含 token / thinking / tool_call / tool_result / usage）。
                     var responseAccumulator = new System.Text.StringBuilder();
-                    await foreach (StreamItem item in eventChannel.Reader.ReadAllAsync(ct))
+                    await foreach (StreamItem item in chatProvider.StreamAgentAsync(
+                                       chatCtx,
+                                       messages,
+                                       toolResult.AllTools,
+                                       options: chatOptions,
+                                       internalToolNames: SkillToolProvider.InternalToolNames,
+                                       ct: ct))
                     {
                         anyItemWritten = true;
                         if (item is TokenItem tokenItem)
@@ -355,20 +324,22 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                         await output.Writer.WriteAsync(item, ct);
                     }
 
-                    await runTask; // 等待后台任务；异常在此抛出
                     succeeded = true;
 
                     // RAG 审计：fire-and-forget，不阻塞流式输出完成
                     if (_ragUsageAuditor is not null
                         && _ragRetrievalContext?.RetrievedChunks is { Count: > 0 } chunks
-                        && responseAccumulator.Length > 0)
+                        && responseAccumulator.Length > 0
+                        && !string.IsNullOrWhiteSpace(sessionId))
                     {
                         string response = responseAccumulator.ToString();
+                        string auditSessionId = sessionId;
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                await _ragUsageAuditor.AuditAsync(chunks, response, CancellationToken.None);
+                                await _ragUsageAuditor.AuditAsync(
+                                    auditSessionId, chunks, response, CancellationToken.None);
                             }
                             catch (Exception ex)
                             {
@@ -390,13 +361,8 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                 {
                     runSw.Stop();
                     _devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
-                    UsageContentHandler.UnbindCapture();
-                    await UsageTrackingMiddleware.TrackAsync(
-                        usageCapture, sessionId, provider, source,
-                        _usageTracker, _logger,
-                        agentId: agent.Id,
-                        monthlyBudgetUsd: agent.MonthlyBudgetUsd,
-                        ct: CancellationToken.None);
+                    // TODO: Agent 月度预算（MonthlyBudgetUsd）检查已随 UsageTrackingMiddleware 一起撤除；
+                    //       待 MicroChatContext + MicroProvider 接入预算策略后恢复。
                     if (!string.IsNullOrWhiteSpace(sessionId))
                         await _agentStatusNotifier.NotifyAsync(
                             sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
@@ -789,9 +755,6 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
 
         return string.Join("\n\n", parts);
     }
-
-    /// <summary>构建不带 UseFunctionInvocation 的客户端（供兼容方法使用，实际已被 AgentFactory 替代）。</summary>
-    private IChatClient BuildRawClient(ProviderConfig provider) => _providerService.CreateClient(provider);
 
     /// <summary>校验消息历史中的附件是否被 Provider 模态能力支持。</summary>
     private IReadOnlyList<SessionMessage> ValidateModalities(

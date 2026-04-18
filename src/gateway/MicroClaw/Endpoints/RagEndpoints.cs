@@ -41,7 +41,7 @@ public static class RagEndpoints
 
         // GET /api/rag/stats — TODO: Reimplement with MicroRag
         endpoints.MapGet("/rag/stats",
-            () => Results.Ok(new RagQueryStats("All", 0, 0, 0, 0, 0, 0)))
+            () => Results.Ok(new RagQueryStats("All", 0, 0, 0, 0, 0, 0, 0)))
             .WithTags("RAG");
 
         // GET /api/rag/config — 获取 RAG 遗忘配置

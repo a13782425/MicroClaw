@@ -1,8 +1,8 @@
 ﻿using System.Text.Json;
 using Microsoft.Extensions.AI;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Hubs;
-using MicroClaw.Infrastructure.Data;
 using MicroClaw.Providers;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -17,7 +17,6 @@ public sealed class SessionChatService(
     ISessionService repo,
     ProviderService providerService,
     IHubContext<GatewayHub> hub,
-    IUsageTracker usageTracker,
     ILogger<SessionChatService> logger)
 {
     public async Task<string?> ExecuteAsync(string sessionId, string prompt, CancellationToken ct = default)
@@ -29,8 +28,8 @@ public sealed class SessionChatService(
             return null;
         }
 
-        ProviderConfig? provider = providerService.All.FirstOrDefault(p => p.Id == session.ProviderId);
-        if (provider is null || !provider.IsEnabled)
+        ChatMicroProvider? chatProvider = providerService.TryGetProvider(session.ProviderId);
+        if (chatProvider is null)
         {
             logger.LogWarning("CronJob: provider '{ProviderId}' not found or disabled for session '{SessionId}'.",
                 session.ProviderId, sessionId);
@@ -52,67 +51,24 @@ public sealed class SessionChatService(
         IReadOnlyList<SessionMessage> history = repo.GetMessages(sessionId);
         List<ChatMessage> chatMessages = BuildChatMessages(history);
 
-        IChatClient client = providerService.CreateClient(provider);
-        try
-        {
-            ChatResponse response = await client.GetResponseAsync(chatMessages, cancellationToken: ct);
-            string assistantContent = response.Text ?? "（无回复）";
+        MicroChatContext chatCtx = MicroChatContext.ForSystem(session, "cron", ct);
+        ChatResponse response = await chatProvider.ChatAsync(chatCtx, chatMessages);
+        string assistantContent = response.Text ?? "（无回复）";
 
-            SessionMessage assistantMsg = new(
-                Id: Guid.NewGuid().ToString("N"),
-                Role: "assistant",
-                Content: assistantContent,
-                ThinkContent: null,
-                Timestamp: DateTimeOffset.UtcNow,
-                Attachments: null);
-            repo.AddMessage(sessionId, assistantMsg);
+        SessionMessage assistantMsg = new(
+            Id: Guid.NewGuid().ToString("N"),
+            Role: "assistant",
+            Content: assistantContent,
+            ThinkContent: null,
+            Timestamp: DateTimeOffset.UtcNow,
+            Attachments: null);
+        repo.AddMessage(sessionId, assistantMsg);
 
-            // 记录 Token 用量
-            if (response.Usage is { } usage)
-            {
-                try
-                {
-                    long inputTokens = usage.InputTokenCount ?? 0L;
-                    long outputTokens = usage.OutputTokenCount ?? 0L;
-                    long cachedInputTokens = usage.CachedInputTokenCount ?? 0L;
-                    long nonCachedInput = inputTokens - cachedInputTokens;
+        // 通知前端刷新该 Session 的消息
+        await hub.Clients.All.SendAsync("cronJobExecuted",
+            new { sessionId, content = assistantContent }, ct);
 
-                    decimal inputCost = nonCachedInput > 0 && provider.Capabilities.InputPricePerMToken.HasValue
-                        ? nonCachedInput * provider.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
-                    decimal outputCost = provider.Capabilities.OutputPricePerMToken.HasValue
-                        ? outputTokens * provider.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
-                    decimal cacheInputCost = cachedInputTokens > 0
-                        ? cachedInputTokens * (provider.Capabilities.CacheInputPricePerMToken ?? provider.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
-
-                    await usageTracker.TrackAsync(
-                        sessionId,
-                        provider.Id,
-                        provider.DisplayName,
-                        source: "cron",
-                        inputTokens: inputTokens,
-                        outputTokens: outputTokens,
-                        cachedInputTokens: cachedInputTokens,
-                        inputCostUsd: inputCost,
-                        outputCostUsd: outputCost,
-                        cacheInputCostUsd: cacheInputCost,
-                        ct: ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to track cron token usage for session {SessionId}", sessionId);
-                }
-            }
-
-            // 通知前端刷新该 Session 的消息
-            await hub.Clients.All.SendAsync("cronJobExecuted",
-                new { sessionId, content = assistantContent }, ct);
-
-            return assistantContent;
-        }
-        finally
-        {
-            client.Dispose();
-        }
+        return assistantContent;
     }
 
     private static List<ChatMessage> BuildChatMessages(IReadOnlyList<SessionMessage> history)

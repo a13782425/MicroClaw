@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using MicroClaw.Abstractions;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.RateLimit;
@@ -104,13 +105,15 @@ public sealed class PetStateMachine(
 
         try
         {
-            var client = _providerService.CreateClient(provider);
-            var response = await client.GetResponseAsync(
+            var chatProvider = _providerService.TryGetProvider(provider.Id)
+                ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+            var chatCtx = MicroChatContext.ForSystem(report.SessionId, "pet-heartbeat", ct);
+            var response = await chatProvider.ChatAsync(
+                chatCtx,
                 [
                     new ChatMessage(ChatRole.System, systemPrompt),
                     new ChatMessage(ChatRole.User, userPrompt),
-                ],
-                cancellationToken: ct);
+                ]);
 
             string responseText = (response.Text ?? string.Empty).Trim();
             _logger.LogDebug("Pet [{SessionId}] 状态机 LLM 响应: {Response}", report.SessionId, responseText);

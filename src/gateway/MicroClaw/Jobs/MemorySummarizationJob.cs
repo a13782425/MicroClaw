@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
@@ -112,9 +113,8 @@ public sealed class MemorySummarizationJob : IScheduledJob
                 .Where(m => m.Role is "user" or "assistant")
                 .ToList();
 
-            ProviderConfig? provider = _providerService.All
-                .FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled);
-            IChatClient? client = provider is not null ? _providerService.CreateClient(provider) : null;
+            ChatMicroProvider? chatProvider = _providerService.TryGetProvider(microSession.ProviderId);
+            MicroChatContext chatCtx = MicroChatContext.ForSystem(microSession, "memory-summary", ct);
 
             if (dayMessages.Count > 0)
             {
@@ -129,7 +129,7 @@ public sealed class MemorySummarizationJob : IScheduledJob
 
                 if (dayMessages.Count > 0)
                 {
-                    if (client is null)
+                    if (chatProvider is null)
                     {
                         _logger.LogWarning(
                             "B-02 Session={SessionId} 无可用 Provider（{ProviderId}），跳过每日记忆总结",
@@ -137,7 +137,7 @@ public sealed class MemorySummarizationJob : IScheduledJob
                     }
                     else
                     {
-                        string summary = await BuildDailySummaryAsync(dayMessages, client, ct);
+                        string summary = await BuildDailySummaryAsync(dayMessages, chatProvider, chatCtx);
                         _memoryService.WriteDailyMemory(microSession.Id, dateStr, summary);
                         _logger.LogInformation(
                             "B-02 Session={SessionId} 每日记忆已写入 {Date}，消息数={Count}",
@@ -157,11 +157,11 @@ public sealed class MemorySummarizationJob : IScheduledJob
             }
 
             // 2. 分类归纳：基于今日日记忆更新 RAG 分类 chunk 和 MEMORY.md 目录
-            if (client is not null)
+            if (chatProvider is not null)
             {
                 DailyMemoryInfo? dailyForDate = _memoryService.GetDailyMemory(microSession.Id, dateStr);
                 if (dailyForDate is not null && !string.IsNullOrWhiteSpace(dailyForDate.Content))
-                    await ClassifyToCategoriesAsync(microSession, dateStr, client, ct);
+                    await ClassifyToCategoriesAsync(microSession, dateStr, chatProvider, chatCtx);
             }
 
             // 3. 清理 3 天前的日记忆文件
@@ -177,13 +177,13 @@ public sealed class MemorySummarizationJob : IScheduledJob
     /// 将日记忆内容按主题分类，更新 Session RAG 分类 chunk 和 MEMORY.md 目录。
     /// </summary>
     private async Task ClassifyToCategoriesAsync(
-        IMicroSession microSession, string dateStr, IChatClient client, CancellationToken ct)
+        IMicroSession microSession, string dateStr, ChatMicroProvider chatProvider, MicroChatContext chatCtx)
     {
         string existingJson = _memoryService.GetCategoriesJson(microSession.Id);
         DailyMemoryInfo? daily = _memoryService.GetDailyMemory(microSession.Id, dateStr);
         if (daily is null) return;
 
-        string updatedJson = await BuildCategoryClassificationAsync(existingJson, daily.Content, client, ct);
+        string updatedJson = await BuildCategoryClassificationAsync(existingJson, daily.Content, chatProvider, chatCtx);
         if (string.IsNullOrWhiteSpace(updatedJson))
         {
             _logger.LogWarning("B-02 Session={SessionId} 分类 LLM 返回空结果，跳过", microSession.Id);
@@ -250,15 +250,15 @@ public sealed class MemorySummarizationJob : IScheduledJob
     /// <summary>调用 LLM 总结每日消息；返回摘要文本。</summary>
     internal static async Task<string> BuildDailySummaryAsync(
         IReadOnlyList<SessionMessage> messages,
-        IChatClient client,
-        CancellationToken ct)
+        ChatMicroProvider chatProvider,
+        MicroChatContext ctx)
     {
         string formatted = FormatMessages(messages);
         string prompt = DailySummaryPromptTemplate.Replace("{messages}", formatted);
 
-        ChatResponse response = await client.GetResponseAsync(
-            [new ChatMessage(ChatRole.User, prompt)],
-            cancellationToken: ct);
+        ChatResponse response = await chatProvider.ChatAsync(
+            ctx,
+            [new ChatMessage(ChatRole.User, prompt)]);
 
         return response.Text ?? string.Empty;
     }
@@ -267,17 +267,17 @@ public sealed class MemorySummarizationJob : IScheduledJob
     internal static async Task<string> BuildCategoryClassificationAsync(
         string existingCategoriesJson,
         string dailySummary,
-        IChatClient client,
-        CancellationToken ct)
+        ChatMicroProvider chatProvider,
+        MicroChatContext ctx)
     {
         string existing = string.IsNullOrWhiteSpace(existingCategoriesJson) ? "{}" : existingCategoriesJson;
         string prompt = CategoryClassificationPromptTemplate
             .Replace("{existing_categories}", existing)
             .Replace("{daily_summary}", dailySummary);
 
-        ChatResponse response = await client.GetResponseAsync(
-            [new ChatMessage(ChatRole.User, prompt)],
-            cancellationToken: ct);
+        ChatResponse response = await chatProvider.ChatAsync(
+            ctx,
+            [new ChatMessage(ChatRole.User, prompt)]);
 
         string text = (response.Text ?? string.Empty).Trim();
 

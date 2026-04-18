@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions;
 using MicroClaw.Pet.Prompt;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
@@ -236,15 +237,17 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.OrganizeMemory, false, "无可用 Provider");
 
-        var client = _providerService.CreateClient(provider);
-        var response = await client.GetResponseAsync(
+        var chatProvider = _providerService.TryGetProvider(provider.Id)
+            ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+        var organizeCtx = MicroChatContext.ForSystem(sessionId, "pet-action:organize-memory", ct);
+        var response = await chatProvider.ChatAsync(
+            organizeCtx,
             [
                 new ChatMessage(ChatRole.System,
                     "你是记忆整理助手。请将以下知识片段进行归纳总结，去除重复内容，生成精炼的知识摘要。" +
                     "输出纯文本，每个知识点一段。"),
                 new ChatMessage(ChatRole.User, knowledgeSample),
-            ],
-            cancellationToken: ct);
+            ]);
 
         string summary = (response.Text ?? string.Empty).Trim();
         if (!string.IsNullOrWhiteSpace(summary))
@@ -285,15 +288,17 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.ReflectOnSession, false, "无可用 Provider");
 
-        var client = _providerService.CreateClient(provider);
-        var response = await client.GetResponseAsync(
+        var chatProvider = _providerService.TryGetProvider(provider.Id)
+            ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+        var reflectCtx = MicroChatContext.ForSystem(sessionId, "pet-action:reflect-on-session", ct);
+        var response = await chatProvider.ChatAsync(
+            reflectCtx,
             [
                 new ChatMessage(ChatRole.System,
                     "你是会话反思助手。请根据以下会话日志，总结关键模式、用户偏好和改进建议。" +
                     "输出简洁的反思洞察（中文），每个洞察一段。"),
                 new ChatMessage(ChatRole.User, $"会话 {sessionId} 最近日志：\n{journalContext}"),
-            ],
-            cancellationToken: ct);
+            ]);
 
         string insight = (response.Text ?? string.Empty).Trim();
         if (!string.IsNullOrWhiteSpace(insight))

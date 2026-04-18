@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
@@ -53,12 +54,12 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
         IReadOnlyList<string> pendingFiles = _memoryService.ListPendingFiles(microSession.Id);
         if (pendingFiles.Count == 0) return;
 
-        // 获取 LLM 客户端（Session 绑定模型，若不可用则取第一个启用的 Provider）
-        ProviderConfig? provider =
-            _providerService.All.FirstOrDefault(p => p.Id == microSession.ProviderId && p.IsEnabled)
-            ?? _providerService.All.FirstOrDefault(p => p.IsEnabled);
+        // 获取 Provider（Session 绑定模型，若不可用则 fallback 到默认 Chat Provider）
+        ChatMicroProvider? chatProvider =
+            _providerService.TryGetProvider(microSession.ProviderId)
+            ?? _providerService.GetDefaultProvider();
 
-        if (provider is null)
+        if (chatProvider is null)
         {
             _logger.LogWarning(
                 "B-03 Session={SessionId} 无可用 Provider，跳过 pending 文件处理",
@@ -66,17 +67,16 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
             return;
         }
 
-        IChatClient client = _providerService.CreateClient(provider);
-
+        MicroChatContext chatCtx = MicroChatContext.ForSystem(microSession, "memory-pending", ct);
         foreach (string fileName in pendingFiles)
         {
             if (ct.IsCancellationRequested) break;
-            await ProcessPendingFileAsync(microSession, fileName, client, ct);
+            await ProcessPendingFileAsync(microSession, fileName, chatProvider, chatCtx);
         }
     }
 
     private async Task ProcessPendingFileAsync(
-        IMicroSession microSession, string fileName, IChatClient client, CancellationToken ct)
+        IMicroSession microSession, string fileName, ChatMicroProvider chatProvider, MicroChatContext chatCtx)
     {
         try
         {
@@ -88,7 +88,7 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
             }
 
             // 1. 生成日摘要
-            string summary = await MemorySummarizationJob.BuildDailySummaryAsync(messages, client, ct);
+            string summary = await MemorySummarizationJob.BuildDailySummaryAsync(messages, chatProvider, chatCtx);
             if (string.IsNullOrWhiteSpace(summary))
             {
                 _logger.LogWarning(
@@ -100,7 +100,7 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
             // 2. 分类归纳：合并到已有分类记忆中
             string existingJson = _memoryService.GetCategoriesJson(microSession.Id);
             string updatedJson = await MemorySummarizationJob.BuildCategoryClassificationAsync(
-                existingJson, summary, client, ct);
+                existingJson, summary, chatProvider, chatCtx);
 
             if (!string.IsNullOrWhiteSpace(updatedJson))
             {

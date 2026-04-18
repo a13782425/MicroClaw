@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MicroClaw.Abstractions;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
@@ -44,17 +45,19 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
     }
 
     public async Task AuditAsync(
+        string sessionId,
         IReadOnlyList<RagChunkRef> retrievedChunks,
         string assistantResponse,
         CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         if (retrievedChunks.Count == 0 || string.IsNullOrWhiteSpace(assistantResponse))
             return;
 
         try
         {
-            IChatClient? client = CreateAuditClient();
-            if (client is null)
+            ChatMicroProvider? chatProvider = _providerService.GetDefaultProvider();
+            if (chatProvider is null)
             {
                 _logger.LogWarning("RAG 审计：无可用 Provider，跳过审计");
                 return;
@@ -65,9 +68,10 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
                 .Replace("{chunks}", chunksText)
                 .Replace("{response}", assistantResponse);
 
-            ChatResponse response = await client.GetResponseAsync(
-                [new ChatMessage(ChatRole.User, prompt)],
-                cancellationToken: ct);
+            MicroChatContext chatCtx = MicroChatContext.ForSystem(sessionId, "rag-audit", ct);
+            ChatResponse response = await chatProvider.ChatAsync(
+                chatCtx,
+                [new ChatMessage(ChatRole.User, prompt)]);
 
             string resultText = response.Text ?? string.Empty;
             List<string> usedIds = ParseUsedIds(resultText);
@@ -81,15 +85,6 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
         {
             _logger.LogWarning(ex, "RAG 审计异常，HitCount 未更新");
         }
-    }
-
-    private IChatClient? CreateAuditClient()
-    {
-        ProviderConfig? provider = _providerService.GetDefault();
-        if (provider is null || !provider.IsEnabled)
-            provider = _providerService.All.FirstOrDefault(p => p.IsEnabled);
-
-        return provider is not null ? _providerService.CreateClient(provider) : null;
     }
 
     private static string FormatChunksForAudit(IReadOnlyList<RagChunkRef> chunks)
