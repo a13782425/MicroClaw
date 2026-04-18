@@ -46,7 +46,7 @@ public sealed class MicroEngine : IAsyncDisposable
     public MicroEngine(IServiceProvider serviceProvider, IEnumerable<MicroService> services) : this(serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(services);
-        
+        Logger?.LogDebug("MicroEngine start");
         RunSynchronously(() => InitializeServicesAsync(services, CancellationToken.None));
     }
     

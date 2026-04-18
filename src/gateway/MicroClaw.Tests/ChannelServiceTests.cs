@@ -7,6 +7,7 @@ using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Core;
 using MicroClaw.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -82,7 +83,7 @@ public sealed class ChannelServiceTests : IDisposable
             ]);
 
         var (_, _, service) = CreateSessionService();
-        await service.InitializeAsync();
+        await StartServiceAsync(service);
 
     }
 
@@ -119,7 +120,7 @@ public sealed class ChannelServiceTests : IDisposable
 
         var (_, petFactory, service) = CreateSessionService();
 
-        await service.InitializeAsync();
+        await StartServiceAsync(service);
 
         Session first = (Session)((MicroClaw.Abstractions.Sessions.ISessionService)service).Get("session-a")!;
         Session second = (Session)((MicroClaw.Abstractions.Sessions.ISessionService)service).Get("session-a")!;
@@ -149,7 +150,7 @@ public sealed class ChannelServiceTests : IDisposable
             ]);
 
         var (_, _, service) = CreateSessionService();
-        await service.InitializeAsync();
+        await StartServiceAsync(service);
 
         var repo = (MicroClaw.Abstractions.Sessions.ISessionService)service;
         Session session = (Session)repo.Get("session-a")!;
@@ -183,7 +184,7 @@ public sealed class ChannelServiceTests : IDisposable
         Directory.CreateDirectory(sessionDir);
 
         var (_, _, service) = CreateSessionService();
-        await service.InitializeAsync();
+        await StartServiceAsync(service);
 
         var repo = (MicroClaw.Abstractions.Sessions.ISessionService)service;
         repo.Delete("session-a").Should().BeTrue();
@@ -215,6 +216,17 @@ public sealed class ChannelServiceTests : IDisposable
         sp.GetService(typeof(IPetFactory)).Returns(petFactory);
 
         return (hubContext, petFactory, new MicroClaw.Sessions.SessionService(sp));
+    }
+
+    private static async Task StartServiceAsync(MicroClaw.Sessions.SessionService service)
+    {
+        var engine = new MicroEngine(new TestServiceProvider(), [service]);
+        await engine.StartAsync();
+    }
+
+    private sealed class TestServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
     }
 
     private void InitializeConfig(ChannelEntity[]? channels = null, SessionEntity[]? sessions = null)

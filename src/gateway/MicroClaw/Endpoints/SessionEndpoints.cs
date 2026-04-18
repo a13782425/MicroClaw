@@ -70,8 +70,6 @@ public static class SessionEndpoints
             if (session.Pet is IDisposable disposable)
             {
                 disposable.Dispose();
-                if (session is MicroSession mutableSession)
-                    mutableSession.DetachPet();
             }
 
             // Close Pet RAG SQLite connection to release file lock

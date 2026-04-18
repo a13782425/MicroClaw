@@ -3,8 +3,9 @@ using MicroClaw.Configuration.Options;
 namespace MicroClaw.Abstractions.Sessions;
 /// <summary>
 /// Unified session service contract: session CRUD, message persistence, and channel session management.
+/// 实现方负责将会话作为 <c>MicroObject</c> 管理，并将消息持久化委托给 <c>SessionMessagesComponent</c>。
 /// </summary>
-public interface ISessionService : IService
+public interface ISessionService
 {
     // ── Session CRUD ──────────────────────────────────────────────────────
     

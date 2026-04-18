@@ -194,7 +194,7 @@ public class ServeCommand : Command
 
 		builder.Services.AddSingleton<ConfigService>();
 		builder.Services.AddSingleton<ProviderService>();
-		builder.Services.AddService<SessionService>();
+		builder.Services.AddMicroService<SessionService>();
 		builder.Services.MapAs<ISessionService, SessionService>();
 		
 		// Agent 服务
@@ -314,7 +314,6 @@ public class ServeCommand : Command
 		builder.Services.MapAs<ICronJobScheduler, CronJobScheduler>();
 		builder.Services.AddHostedService<ServiceLifetimeHost>();
 		builder.Services.AddHostedService<CronJobStartupService>();
-		builder.Services.AddHostedService<SessionRunner>();
 		builder.Services.AddHostedService<MicroClaw.Pet.PetRunner>();
 		builder.Services.AddMicroEngine();
 

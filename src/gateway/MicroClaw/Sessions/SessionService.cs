@@ -1,15 +1,13 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using MicroClaw.Agent;
-using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Core;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
 using MicroClaw.Utils;
@@ -20,20 +18,16 @@ namespace MicroClaw.Sessions;
 /// <summary>
 /// 会话统一服务：合并了原 <c>SessionStore</c>（持久化）与 <c>ChannelSessionService</c>（渠道会话管理）的职责。
 /// <para>
-/// 实现 <see cref="ISessionService"/>（Session CRUD + 消息持久化 + 渠道会话管理）。
+/// 作为 <see cref="MicroService"/> 参与 <see cref="MicroEngine"/> 的启停：<see cref="Order"/> 保持 20；
+/// 在 <c>StartAsync</c> 阶段预热会话缓存并为每个 <see cref="MicroSession"/> 挂接
+/// <see cref="SessionMessagesComponent"/>，由组件封装消息的 jsonl 读写。
 /// </para>
 /// <para>
-/// 持久化：会话元数据写入 sessions.yaml；消息历史写入 {sessionsDir}/{id}/messages.jsonl。
+/// 持久化：会话元数据写入 sessions.yaml；消息历史写入 {sessionsDir}/{id}/messages.jsonl（由组件负责）。
 /// </para>
 /// </summary>
-public sealed class SessionService : ISessionService
+public sealed class SessionService : MicroService, ISessionService
 {
-    // ── 持久化常量 ──────────────────────────────────────────────────────────
-    private const string JsonlFileName = "messages.jsonl";
-    
-    private static readonly JsonSerializerOptions JsonLinesOptions = new() { WriteIndented = false, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-    
-    // ── 依赖字段 ────────────────────────────────────────────────────────────
     private AgentStore? agentStore;
     private IHubContext<GatewayHub>? hubContext;
     private IPetFactory? _petFactory;
@@ -45,9 +39,19 @@ public sealed class SessionService : ISessionService
         serviceProvider = sp;
     }
     
-    // ── IService ────────────────────────────────────────────────────────────
-    public int InitOrder => 20;
-    public async Task InitializeAsync(CancellationToken ct = default)
+    /// <inheritdoc />
+    public override int Order => 20;
+    
+    private readonly ReaderWriterLockSlim _metaLock = new(LockRecursionPolicy.NoRecursion);
+    
+    private static readonly ConcurrentDictionary<string, DateTimeOffset> NotifyThrottle = new();
+    private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
+    
+    /// <summary>
+    /// 服务启动：惰性解析运行时依赖、准备 sessions 目录、从 YAML 重构全部历史会话，
+    /// 并为每个 <see cref="MicroSession"/> 挂接 <see cref="SessionMessagesComponent"/>。
+    /// </summary>
+    protected override async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         agentStore ??= serviceProvider.GetRequiredService<AgentStore>();
         hubContext ??= serviceProvider.GetRequiredService<IHubContext<GatewayHub>>();
@@ -57,27 +61,42 @@ public sealed class SessionService : ISessionService
         ConcurrentDictionary<string, MicroSession> warmedSessions = new();
         foreach (SessionEntity entity in MicroClawConfig.Get<SessionsOptions>().Items)
         {
-            ct.ThrowIfCancellationRequested();
-            
-            MicroSession microSession = MicroSession.Reconstitute(entity);
-            await InitializeRuntimeDependenciesAsync(microSession, ct);
+            cancellationToken.ThrowIfCancellationRequested();
+            MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
             if (!warmedSessions.TryAdd(microSession.Id, microSession))
                 throw new InvalidOperationException($"Duplicate session id '{microSession.Id}' found while warming cache.");
         }
         
         _sessions = warmedSessions;
     }
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     
-    // ── 并发控制 ────────────────────────────────────────────────────────────
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _writeLocks = new();
-    private readonly ReaderWriterLockSlim _metaLock = new(LockRecursionPolicy.NoRecursion);
-    
-    // ── 待批准通知限流（5 分钟/session）────────────────────────────────────
-    private static readonly ConcurrentDictionary<string, DateTimeOffset> NotifyThrottle = new();
-    private static readonly TimeSpan ThrottleInterval = TimeSpan.FromMinutes(5);
-    
-    // ── ISessionService: 渠道会话管理 ──────────────────────────────────────
+    /// <summary>
+    /// 服务停止：释放全部已挂接的 <see cref="MicroSession"/> 并清空缓存。
+    /// 若在启动阶段补偿调用（<see cref="MicroService.ActivationFailed"/> 为 true），
+    /// 按同样策略尽力清理已部分挂接的 sessions。
+    /// </summary>
+    protected override async ValueTask StopAsync(CancellationToken cancellationToken = default)
+    {
+        ConcurrentDictionary<string, MicroSession> snapshot = Interlocked.Exchange(ref _sessions, new());
+        
+        List<Exception> errors = [];
+        foreach (MicroSession session in snapshot.Values)
+        {
+            try
+            {
+                await session.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
+        
+        if (errors.Count == 1)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
+        if (errors.Count > 1)
+            throw new AggregateException(errors);
+    }
     
     /// <inheritdoc/>
     public async Task<SessionInfo> FindOrCreateSession(ChannelType channelType, string channelId, string senderId, string channelDisplayName, string providerId)
@@ -88,9 +107,17 @@ public sealed class SessionService : ISessionService
         
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
-        
-        MicroSession microSession = MicroSession.Create(id: sessionId, title: title, providerId: providerId, channelType: channelType, channelId: channelId, createdAt: TimeUtils.NowOffset(), agentId: agentStore!.GetDefault()?.Id);
-        await InitializeRuntimeDependenciesAsync(microSession);
+        SessionEntity entity = new()
+        {
+            Id = sessionId,
+            Title = title,
+            ProviderId = providerId,
+            ChannelType = ChannelService.SerializeChannelType(channelType),
+            ChannelId = channelId,
+            CreatedAtMs = TimeUtils.NowMs(),
+            AgentId = agentStore!.GetDefault()?.Id,
+        };
+        MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
         AddToCacheAndPersist(microSession);
         
         SessionInfo created = microSession.ToInfo();
@@ -123,13 +150,22 @@ public sealed class SessionService : ISessionService
     /// <inheritdoc/>
     public async Task<IMicroSession> CreateSession(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? channelId = null)
     {
-        MicroSession microSession = MicroSession.Create(id: id ?? MicroClawUtils.GetUniqueId(), title: title, providerId: providerId, channelType: channelType, channelId: channelId ?? ChannelService.WebChannelId, createdAt: TimeUtils.NowOffset(), agentId: agentId);
-        await InitializeRuntimeDependenciesAsync(microSession);
+        SessionEntity entity = new()
+        {
+            Id = id ?? MicroClawUtils.GetUniqueId(),
+            Title = title,
+            ProviderId = providerId,
+            ChannelType = ChannelService.SerializeChannelType(channelType),
+            ChannelId = channelId ?? ChannelService.WebChannelId,
+            CreatedAtMs = TimeUtils.NowMs(),
+            AgentId = agentId,
+        };
+        
+        MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
         AddToCacheAndPersist(microSession);
         return microSession;
     }
     
-    // ── Session CRUD ────────────────────────────────────────────────────────
     
     public IMicroSession? Get(string id) => _sessions.TryGetValue(id, out MicroSession? microSession) ? microSession : null;
     
@@ -156,15 +192,27 @@ public sealed class SessionService : ISessionService
     
     public bool Delete(string id)
     {
+        MicroSession? removed;
         _metaLock.EnterWriteLock();
         try
         {
-            if (!_sessions.TryRemove(id, out _)) return false;
+            if (!_sessions.TryRemove(id, out removed)) return false;
             PersistCacheSnapshot();
         }
         finally
         {
             _metaLock.ExitWriteLock();
+        }
+        
+        // 释放 MicroSession + 其挂载的组件。组件的 Dispose 是纯内存同步路径，
+        // 用 sync-over-async 等待以便保持 ISessionService.Delete 的同步签名。
+        try
+        {
+            removed.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // 清理失败不应阻断上层删除流程；文件删除仍然需要执行。
         }
         
         string dir = GetSessionDir(id);
@@ -174,87 +222,33 @@ public sealed class SessionService : ISessionService
         return true;
     }
     
-    // ── Message persistence ──────────────────────────────────────────────
     
+    /// <inheritdoc />
     public void AddMessage(string sessionId, SessionMessage message)
     {
-        string dir = GetSessionDir(sessionId);
-        Directory.CreateDirectory(dir);
-        string jsonlPath = Path.Combine(dir, JsonlFileName);
-        
-        SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
-        sem.Wait();
-        try
-        {
-            string line = JsonSerializer.Serialize(MessageJson.From(message), JsonLinesOptions);
-            File.AppendAllText(jsonlPath, line + "\n");
-        }
-        finally
-        {
-            sem.Release();
-        }
+        SessionMessagesComponent component = ResolveMessages(sessionId);
+        component.AddMessage(message);
     }
     
-    public IReadOnlyList<SessionMessage> GetMessages(string sessionId) => ReadAllMessages(sessionId);
+    /// <inheritdoc />
+    public IReadOnlyList<SessionMessage> GetMessages(string sessionId) => ResolveMessages(sessionId).GetMessages();
     
-    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(string sessionId, int skip, int limit)
+    /// <inheritdoc />
+    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(string sessionId, int skip, int limit) => ResolveMessages(sessionId).GetMessagesPaged(skip, limit);
+    
+    /// <inheritdoc />
+    public void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds) => ResolveMessages(sessionId).RemoveMessages(messageIds);
+    
+    
+    private SessionMessagesComponent ResolveMessages(string sessionId)
     {
-        List<SessionMessage> all = ReadAllMessages(sessionId);
-        int total = all.Count;
-        int endIdx = Math.Max(0, total - skip);
-        int startIdx = Math.Max(0, endIdx - limit);
-        return (all.Skip(startIdx).Take(endIdx - startIdx).ToList().AsReadOnly(), total);
-    }
-    
-    public void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds)
-    {
-        if (messageIds.Count == 0) return;
+        if (!_sessions.TryGetValue(sessionId, out MicroSession? session))
+            throw new InvalidOperationException($"Session '{sessionId}' is not loaded.");
         
-        string dir = GetSessionDir(sessionId);
-        string jsonlPath = Path.Combine(dir, JsonlFileName);
-        if (!File.Exists(jsonlPath)) return;
-        
-        SemaphoreSlim sem = _writeLocks.GetOrAdd(sessionId, _ => new SemaphoreSlim(1, 1));
-        sem.Wait();
-        try
-        {
-            string[] kept = File.ReadLines(jsonlPath).Where(line => !string.IsNullOrWhiteSpace(line)).Where(line =>
-            {
-                MessageJson? m = JsonSerializer.Deserialize<MessageJson>(line, JsonLinesOptions);
-                return m is null || m.Id is null || !messageIds.Contains(m.Id);
-            }).ToArray();
-            File.WriteAllLines(jsonlPath, kept);
-        }
-        finally
-        {
-            sem.Release();
-        }
+        return session.Messages;
     }
-    
-    // ── 私有辅助 ────────────────────────────────────────────────────────────
     
     private string GetSessionDir(string id) => Path.Combine(MicroClawConfig.Env.SessionsDir, id);
-    
-    private List<SessionMessage> ReadAllMessages(string sessionId)
-    {
-        string jsonlPath = Path.Combine(GetSessionDir(sessionId), JsonlFileName);
-        if (!File.Exists(jsonlPath)) return [];
-        
-        return File.ReadLines(jsonlPath).Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => JsonSerializer.Deserialize<MessageJson>(line, JsonLinesOptions)!).Where(m => m is not null).Select(m => m.ToRecord()).ToList();
-    }
-    
-    private Task InitializeRuntimeDependenciesAsync(MicroSession microSession, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(microSession);
-        return AttachPetAsync(microSession, ct);
-    }
-    
-    private async Task AttachPetAsync(MicroSession microSession, CancellationToken ct)
-    {
-        IPet? pet = await _petFactory!.CreateOrLoadAsync(microSession, ct);
-        if (pet is not null)
-            microSession.AttachPet(pet);
-    }
     
     private void AddToCacheAndPersist(MicroSession microSession)
     {
@@ -295,42 +289,4 @@ public sealed class SessionService : ISessionService
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexStringLower(hash)[..32];
     }
-}
-
-// ── 内部 JSON 序列化辅助类 ────────────────────────────────────────────────
-internal sealed class MessageJson
-{
-    public string? Id { get; set; }
-    public string Role { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public string? ThinkContent { get; set; }
-    public DateTimeOffset Timestamp { get; set; }
-    public List<AttachmentJson>? Attachments { get; set; }
-    public string? Source { get; set; }
-    public string? MessageType { get; set; }
-    public Dictionary<string, JsonElement>? Metadata { get; set; }
-    public string? Visibility { get; set; }
-    
-    public static MessageJson From(SessionMessage m) =>
-        new()
-        {
-            Id = m.Id,
-            Role = m.Role,
-            Content = m.Content,
-            ThinkContent = m.ThinkContent,
-            Timestamp = m.Timestamp,
-            Source = m.Source,
-            MessageType = m.MessageType,
-            Metadata = m.Metadata is not null ? new Dictionary<string, JsonElement>(m.Metadata) : null,
-            Visibility = m.Visibility,
-            Attachments = m.Attachments?.Select(a => new AttachmentJson { FileName = a.FileName, MimeType = a.MimeType, Base64Data = a.Base64Data }).ToList()
-        };
-    
-    public SessionMessage ToRecord() => new(Id ?? Guid.NewGuid().ToString("N"), Role, Content, ThinkContent, Timestamp, Attachments?.Select(a => new MessageAttachment(a.FileName, a.MimeType, a.Base64Data)).ToList().AsReadOnly(), Source, MessageType, Metadata, Visibility);
-}
-internal sealed class AttachmentJson
-{
-    public string FileName { get; set; } = string.Empty;
-    public string MimeType { get; set; } = string.Empty;
-    public string Base64Data { get; set; } = string.Empty;
 }
