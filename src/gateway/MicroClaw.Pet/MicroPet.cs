@@ -49,7 +49,10 @@ internal enum PetContextState
 /// <para>
 /// 生命周期：由 <see cref="PetContextFactory"/> 在审批时创建（或在首次使用时懒加载），
 /// 通过 <c>Session.AttachPet(petCtx)</c> 挂载到会话上。
-/// 会话删除时由 <see cref="IDisposable.Dispose"/> 标记失效。
+/// 作为 <see cref="MicroClaw.Core.MicroObject"/>，在会话删除时由外层调用
+/// <see cref="System.IAsyncDisposable.DisposeAsync"/> 进入
+/// <see cref="OnDisposedAsync(System.Threading.CancellationToken)"/> 将 <see cref="State"/> 标记为
+/// <see cref="PetContextState.Disabled"/> 并同步释放已挂载的 <see cref="PetComponent"/>。
 /// </para>
 /// <para>
 /// 线程安全注意：<see cref="MarkDirty"/> 使用 volatile 保证可见性，
@@ -57,11 +60,10 @@ internal enum PetContextState
 /// 调用方应确保单一会话的并发写入通过上层协调（例如消息队列）串行化。
 /// </para>
 /// </summary>
-public sealed class MicroPet : IPet, IDisposable
+public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 {
     private PetState _petState;
     private volatile bool _isDirty;
-    private bool _disposed;
 
     // ── Subsystem references (resolved from IServiceProvider) ─────────────
     private readonly PetDecisionEngine _decisionEngine;
@@ -121,7 +123,7 @@ public sealed class MicroPet : IPet, IDisposable
     public IMicroSession MicroSession { get; }
 
     /// <inheritdoc/>
-    public bool IsEnabled => !_disposed && State == PetContextState.Active && Config.Enabled;
+    public bool IsEnabled => !IsDisposed && State == PetContextState.Active && Config.Enabled;
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Microsoft.Extensions.AI.AIFunction>> CollectChannelToolsAsync(CancellationToken cancellationToken = default)
@@ -155,7 +157,7 @@ public sealed class MicroPet : IPet, IDisposable
     /// </summary>
     public void UpdateEmotion(EmotionDelta delta)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         Emotion = Emotion.Apply(delta);
         MarkDirty();
     }
@@ -165,7 +167,7 @@ public sealed class MicroPet : IPet, IDisposable
     /// </summary>
     public void UpdateEmotion(EmotionState newEmotion)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         Emotion = newEmotion ?? throw new ArgumentNullException(nameof(newEmotion));
         MarkDirty();
     }
@@ -175,7 +177,7 @@ public sealed class MicroPet : IPet, IDisposable
     /// </summary>
     public void UpdateBehaviorState(PetBehaviorState newBehaviorState)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         _petState = _petState with
         {
             BehaviorState = newBehaviorState,
@@ -194,7 +196,7 @@ public sealed class MicroPet : IPet, IDisposable
     /// </summary>
     public void Activate()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         State = PetContextState.Active;
     }
 
@@ -232,6 +234,16 @@ public sealed class MicroPet : IPet, IDisposable
 
             string providerId = MicroSession.ProviderId;
 
+            var disabledBranchCtx = new ChatContext
+            {
+                Session = MicroSession,
+                History = history,
+                Source = "chat",
+                Output = null,
+                Ct = ct,
+            };
+            await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, disabledBranchCtx);
+
             var toolContext = BuildToolContext(agent);
             ToolCollectionResult? prebuiltTools = null;
             try
@@ -248,11 +260,26 @@ public sealed class MicroPet : IPet, IDisposable
                 if (prebuiltTools is not null)
                     await prebuiltTools.DisposeAsync();
             }
+
+            // TODO(next-round): 由具体 PetComponent（或 MicroPet 内部消息累加器）把最终 assistant 回复
+            // 聚合进 ctx.FinalAssistantMessage。本轮先置 null。
+            disabledBranchCtx.FinalAssistantMessage = null;
+            await RunPhaseAsync(ChatLifecyclePhase.AfterChat, disabledBranchCtx);
             yield break;
         }
 
         // ── 4. Pet 启用：Channel 解耦迭代器 ──
         var outputChannel = Channel.CreateUnbounded<StreamItem>();
+        var enabledBranchCtx = new ChatContext
+        {
+            Session = MicroSession,
+            History = history,
+            Source = "chat",
+            Output = outputChannel.Writer,
+            Ct = ct,
+        };
+        await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, enabledBranchCtx);
+
         Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: "chat");
 
         await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
@@ -260,6 +287,10 @@ public sealed class MicroPet : IPet, IDisposable
 
         try { await execution; }
         catch (OperationCanceledException) { /* cancelled silently */ }
+
+        // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。本轮置 null。
+        enabledBranchCtx.FinalAssistantMessage = null;
+        await RunPhaseAsync(ChatLifecyclePhase.AfterChat, enabledBranchCtx);
     }
 
     // ── IPet.HandleMessageAsync — 渠道消息处理（调用方已保存消息 & 加载历史）──
@@ -284,6 +315,16 @@ public sealed class MicroPet : IPet, IDisposable
 
             string providerId = MicroSession.ProviderId;
 
+            var disabledBranchCtx = new ChatContext
+            {
+                Session = MicroSession,
+                History = history,
+                Source = source,
+                Output = null,
+                Ct = ct,
+            };
+            await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, disabledBranchCtx);
+
             var toolContext = BuildToolContext(agent);
             ToolCollectionResult? prebuiltTools = null;
             try
@@ -300,11 +341,25 @@ public sealed class MicroPet : IPet, IDisposable
                 if (prebuiltTools is not null)
                     await prebuiltTools.DisposeAsync();
             }
+
+            // TODO(next-round): 由具体 PetComponent 聚合 assistant 最终消息。
+            disabledBranchCtx.FinalAssistantMessage = null;
+            await RunPhaseAsync(ChatLifecyclePhase.AfterChat, disabledBranchCtx);
             yield break;
         }
 
         // ── Pet 启用：Channel 解耦迭代器 ──
         var outputChannel = Channel.CreateUnbounded<StreamItem>();
+        var enabledBranchCtx = new ChatContext
+        {
+            Session = MicroSession,
+            History = history,
+            Source = source,
+            Output = outputChannel.Writer,
+            Ct = ct,
+        };
+        await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, enabledBranchCtx);
+
         Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: source);
 
         await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
@@ -312,6 +367,10 @@ public sealed class MicroPet : IPet, IDisposable
 
         try { await execution; }
         catch (OperationCanceledException) { /* cancelled silently */ }
+
+        // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。
+        enabledBranchCtx.FinalAssistantMessage = null;
+        await RunPhaseAsync(ChatLifecyclePhase.AfterChat, enabledBranchCtx);
     }
 
     /// <summary>
@@ -607,16 +666,50 @@ public sealed class MicroPet : IPet, IDisposable
         CallingAgentId: agent.Id,
         AllowedSubAgentIds: agent.AllowedSubAgentIds);
 
-    // ── IDisposable ───────────────────────────────────────────────────────────
+    // ── 对话生命周期编排 ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// 将 PetContext 标记为已释放（Disabled）。
-    /// 会话删除时调用，防止此后继续使用已失效的状态。
+    /// 按指定 <see cref="ChatLifecyclePhase"/> 依次回调已挂载的 <see cref="PetComponent"/>，按
+    /// <see cref="PetComponent.Order"/> 升序串行执行。没有任何组件时零开销直接返回。
+    /// <para>
+    /// 异常不在此处吞掉：按调用点（当前为 <c>HandleChatAsync</c>/<c>HandleMessageAsync</c>）的
+    /// 语义决定是否捕获。本轮尚未提供任何 <see cref="PetComponent"/> 子类，故所有 Phase 实际都是 no-op。
+    /// </para>
     /// </summary>
-    public void Dispose()
+    private async ValueTask RunPhaseAsync(ChatLifecyclePhase phase, ChatContext ctx)
     {
-        if (_disposed) return;
-        _disposed = true;
+        PetComponent[] components = Components
+            .OfType<PetComponent>()
+            .OrderBy(c => c.Order)
+            .ToArray();
+
+        if (components.Length == 0)
+            return;
+
+        foreach (PetComponent component in components)
+        {
+            ValueTask invocation = phase switch
+            {
+                ChatLifecyclePhase.BeforeChat => component.OnBeforeChatAsync(ctx),
+                ChatLifecyclePhase.AfterChat => component.OnAfterChatAsync(ctx),
+                ChatLifecyclePhase.BeforeToolCall => component.OnBeforeToolCallAsync(ctx),
+                ChatLifecyclePhase.AfterToolCall => component.OnAfterToolCallAsync(ctx),
+                _ => ValueTask.CompletedTask,
+            };
+            await invocation;
+        }
+    }
+
+    // ── MicroObject 生命周期回调 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// 对象释放时把 Pet 标记为 <see cref="PetContextState.Disabled"/>，防止此后再被外部错误地当成活对象使用。
+    /// 其余生命周期回调（Initialize / Activate / Deactivate / Uninitialize）沿用 <see cref="MicroClaw.Core.MicroObject"/>
+    /// 的默认实现，会把已挂载的 <see cref="PetComponent"/> 同步推进/回退。
+    /// </summary>
+    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    {
         State = PetContextState.Disabled;
+        await base.OnDisposedAsync(cancellationToken);
     }
 }

@@ -67,7 +67,11 @@ public static class SessionEndpoints
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
             // Release Pet context before deletion
-            if (session.Pet is IDisposable disposable)
+            if (session.Pet is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync();
+            }
+            else if (session.Pet is IDisposable disposable)
             {
                 disposable.Dispose();
             }
