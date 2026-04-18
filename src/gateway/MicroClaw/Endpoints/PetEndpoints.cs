@@ -1,7 +1,6 @@
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Prompt;
-using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Abstractions.Sessions;
@@ -114,7 +113,6 @@ public static class PetEndpoints
             string id,
             ISessionService repo,
             PetStateStore stateStore,
-            PetRagScope ragScope,
             CancellationToken ct) =>
         {
             if (repo.Get(id) is null)
@@ -124,11 +122,8 @@ public static class PetEndpoints
             if (state is null)
                 return Results.NotFound(new { success = false, message = $"Pet not found for session '{id}'.", errorCode = "NOT_FOUND" });
 
-            int chunkCount = await ragScope.GetChunkCountAsync(id, ct);
-            string dbPath = ragScope.GetDatabasePath(id);
-            long dbSizeBytes = File.Exists(dbPath) ? new FileInfo(dbPath).Length : 0;
-
-            return Results.Ok(new PetKnowledgeDto(chunkCount, dbSizeBytes));
+            // TODO: Reimplement with MicroRag
+            return Results.Ok(new PetKnowledgeDto(0, 0));
         })
         .WithTags("Pet");
 

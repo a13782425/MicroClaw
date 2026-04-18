@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -8,7 +9,6 @@ using AgentEntity = MicroClaw.Agent.Agent;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Observer;
-using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
@@ -70,7 +70,6 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     private readonly IEmotionStore _emotionStore;
     private readonly IEmotionRuleEngine _emotionRuleEngine;
     private readonly IEmotionBehaviorMapper _emotionBehaviorMapper;
-    private readonly PetRagScope _petRagScope;
     private readonly PetStateStore _stateStore;
     private readonly PetSessionObserver _sessionObserver;
     private readonly PetRateLimiter _rateLimiter;
@@ -101,7 +100,6 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         _emotionStore = sp.GetRequiredService<IEmotionStore>();
         _emotionRuleEngine = sp.GetRequiredService<IEmotionRuleEngine>();
         _emotionBehaviorMapper = sp.GetRequiredService<IEmotionBehaviorMapper>();
-        _petRagScope = sp.GetRequiredService<PetRagScope>();
         _stateStore = sp.GetRequiredService<PetStateStore>();
         _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
@@ -216,7 +214,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             Role: "user",
             Content: request.Content,
             ThinkContent: null,
-            Timestamp: DateTimeOffset.UtcNow,
+            Timestamp: TimeUtils.NowOffset(),
             Attachments: request.Attachments);
         _sessionService.AddMessage(sessionId, userMessage);
 
@@ -234,64 +232,68 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
             string providerId = MicroSession.ProviderId;
 
-            var disabledBranchCtx = new ChatContext
+            var disabledBranchCtx = new MicroChatContext
             {
                 Session = MicroSession,
                 History = history,
                 Source = "chat",
                 Output = null,
+                Pet = this,
+                Channel = MicroSession.Channel!,
                 Ct = ct,
             };
-            await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, disabledBranchCtx);
+        await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, disabledBranchCtx);
 
-            var toolContext = BuildToolContext(agent);
-            ToolCollectionResult? prebuiltTools = null;
-            try
+        var toolContext = BuildToolContext(agent);
+        ToolCollectionResult? prebuiltTools = null;
+        try
+        {
+            prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+            await foreach (var item in _agentRunner.StreamReActAsync(
+                agent, providerId, history, sessionId, ct, source: "chat", prebuiltTools: prebuiltTools))
             {
-                prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
-                await foreach (var item in _agentRunner.StreamReActAsync(
-                    agent, providerId, history, sessionId, ct, source: "chat", prebuiltTools: prebuiltTools))
-                {
-                    yield return item;
-                }
+                yield return item;
             }
-            finally
-            {
-                if (prebuiltTools is not null)
-                    await prebuiltTools.DisposeAsync();
-            }
-
-            // TODO(next-round): 由具体 PetComponent（或 MicroPet 内部消息累加器）把最终 assistant 回复
-            // 聚合进 ctx.FinalAssistantMessage。本轮先置 null。
-            disabledBranchCtx.FinalAssistantMessage = null;
-            await RunPhaseAsync(ChatLifecyclePhase.AfterChat, disabledBranchCtx);
-            yield break;
+        }
+        finally
+        {
+            if (prebuiltTools is not null)
+                await prebuiltTools.DisposeAsync();
         }
 
-        // ── 4. Pet 启用：Channel 解耦迭代器 ──
-        var outputChannel = Channel.CreateUnbounded<StreamItem>();
-        var enabledBranchCtx = new ChatContext
-        {
-            Session = MicroSession,
-            History = history,
-            Source = "chat",
-            Output = outputChannel.Writer,
-            Ct = ct,
-        };
-        await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, enabledBranchCtx);
-
-        Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: "chat");
-
-        await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
-            yield return item;
-
-        try { await execution; }
-        catch (OperationCanceledException) { /* cancelled silently */ }
-
-        // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。本轮置 null。
-        enabledBranchCtx.FinalAssistantMessage = null;
-        await RunPhaseAsync(ChatLifecyclePhase.AfterChat, enabledBranchCtx);
+        // TODO(next-round): 由具体 PetComponent（或 MicroPet 内部消息累加器）把最终 assistant 回复
+        // 聚合进 ctx.FinalAssistantMessage。本轮先置 null。
+        disabledBranchCtx.FinalAssistantMessage = null;
+        await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, disabledBranchCtx);
+        yield break;
     }
+
+    // ── 4. Pet 启用：Channel 解耦迭代器 ──
+    var outputChannel = Channel.CreateUnbounded<StreamItem>();
+    var enabledBranchCtx = new MicroChatContext
+    {
+        Session = MicroSession,
+        History = history,
+        Source = "chat",
+        Output = outputChannel.Writer,
+        Pet = this,
+        Channel = MicroSession.Channel!,
+        Ct = ct,
+    };
+    await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, enabledBranchCtx);
+
+    Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: "chat");
+
+    await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+        yield return item;
+
+    try { await execution; }
+    catch (OperationCanceledException) { /* cancelled silently */ }
+
+    // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。本轮置 null。
+    enabledBranchCtx.FinalAssistantMessage = null;
+    await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, enabledBranchCtx);
+}
 
     // ── IPet.HandleMessageAsync — 渠道消息处理（调用方已保存消息 & 加载历史）──
 
@@ -315,63 +317,67 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
             string providerId = MicroSession.ProviderId;
 
-            var disabledBranchCtx = new ChatContext
+            var disabledBranchCtx = new MicroChatContext
             {
                 Session = MicroSession,
                 History = history,
                 Source = source,
                 Output = null,
                 Ct = ct,
+                Pet = this,
+                Channel = MicroSession.Channel!
             };
-            await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, disabledBranchCtx);
+        await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, disabledBranchCtx);
 
-            var toolContext = BuildToolContext(agent);
-            ToolCollectionResult? prebuiltTools = null;
-            try
+        var toolContext = BuildToolContext(agent);
+        ToolCollectionResult? prebuiltTools = null;
+        try
+        {
+            prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+            await foreach (var item in _agentRunner.StreamReActAsync(
+                agent, providerId, history, sessionId, ct, source: source, prebuiltTools: prebuiltTools))
             {
-                prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
-                await foreach (var item in _agentRunner.StreamReActAsync(
-                    agent, providerId, history, sessionId, ct, source: source, prebuiltTools: prebuiltTools))
-                {
-                    yield return item;
-                }
+                yield return item;
             }
-            finally
-            {
-                if (prebuiltTools is not null)
-                    await prebuiltTools.DisposeAsync();
-            }
-
-            // TODO(next-round): 由具体 PetComponent 聚合 assistant 最终消息。
-            disabledBranchCtx.FinalAssistantMessage = null;
-            await RunPhaseAsync(ChatLifecyclePhase.AfterChat, disabledBranchCtx);
-            yield break;
+        }
+        finally
+        {
+            if (prebuiltTools is not null)
+                await prebuiltTools.DisposeAsync();
         }
 
-        // ── Pet 启用：Channel 解耦迭代器 ──
-        var outputChannel = Channel.CreateUnbounded<StreamItem>();
-        var enabledBranchCtx = new ChatContext
-        {
-            Session = MicroSession,
-            History = history,
-            Source = source,
-            Output = outputChannel.Writer,
-            Ct = ct,
-        };
-        await RunPhaseAsync(ChatLifecyclePhase.BeforeChat, enabledBranchCtx);
-
-        Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: source);
-
-        await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
-            yield return item;
-
-        try { await execution; }
-        catch (OperationCanceledException) { /* cancelled silently */ }
-
-        // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。
-        enabledBranchCtx.FinalAssistantMessage = null;
-        await RunPhaseAsync(ChatLifecyclePhase.AfterChat, enabledBranchCtx);
+        // TODO(next-round): 由具体 PetComponent 聚合 assistant 最终消息。
+        disabledBranchCtx.FinalAssistantMessage = null;
+        await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, disabledBranchCtx);
+        yield break;
     }
+
+    // ── Pet 启用：Channel 解耦迭代器 ──
+    var outputChannel = Channel.CreateUnbounded<StreamItem>();
+    var enabledBranchCtx = new MicroChatContext
+    {
+        Session = MicroSession,
+        History = history,
+        Source = source,
+        Output = outputChannel.Writer,
+        Ct = ct,
+        Pet = this,
+        Channel = MicroSession.Channel!
+    };
+    await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, enabledBranchCtx);
+
+    Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: source);
+
+    await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+        yield return item;
+
+    try { await execution; }
+    catch (OperationCanceledException) { /* cancelled silently */ }
+
+    // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。
+    enabledBranchCtx.FinalAssistantMessage = null;
+    await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, enabledBranchCtx);
+}
 
     /// <summary>
     /// Pet 编排核心逻辑（非迭代器，可自由使用 try-catch）。
@@ -503,16 +509,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         string userMessage = ExtractUserMessage(history);
         if (!string.IsNullOrWhiteSpace(userMessage))
         {
-            try
-            {
-                string ragResult = await _petRagScope.QueryAsync(userMessage, sessionId, topK: 3, ct);
-                if (!string.IsNullOrWhiteSpace(ragResult))
-                    petRagKnowledge = ragResult;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Pet [{SessionId}] RAG 检索失败，跳过", sessionId);
-            }
+            // TODO: Reimplement with MicroRag — Pet RAG query temporarily disabled
         }
 
         // ── 构建决策上下文 ──
@@ -669,14 +666,14 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     // ── 对话生命周期编排 ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// 按指定 <see cref="ChatLifecyclePhase"/> 依次回调已挂载的 <see cref="PetComponent"/>，按
+    /// 按指定 <see cref="MicroChatLifecyclePhase"/> 依次回调已挂载的 <see cref="PetComponent"/>，按
     /// <see cref="PetComponent.Order"/> 升序串行执行。没有任何组件时零开销直接返回。
     /// <para>
     /// 异常不在此处吞掉：按调用点（当前为 <c>HandleChatAsync</c>/<c>HandleMessageAsync</c>）的
     /// 语义决定是否捕获。本轮尚未提供任何 <see cref="PetComponent"/> 子类，故所有 Phase 实际都是 no-op。
     /// </para>
     /// </summary>
-    private async ValueTask RunPhaseAsync(ChatLifecyclePhase phase, ChatContext ctx)
+    private async ValueTask RunPhaseAsync(MicroChatLifecyclePhase phase, MicroChatContext ctx)
     {
         PetComponent[] components = Components
             .OfType<PetComponent>()
@@ -690,10 +687,14 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         {
             ValueTask invocation = phase switch
             {
-                ChatLifecyclePhase.BeforeChat => component.OnBeforeChatAsync(ctx),
-                ChatLifecyclePhase.AfterChat => component.OnAfterChatAsync(ctx),
-                ChatLifecyclePhase.BeforeToolCall => component.OnBeforeToolCallAsync(ctx),
-                ChatLifecyclePhase.AfterToolCall => component.OnAfterToolCallAsync(ctx),
+                MicroChatLifecyclePhase.Decorate => component.OnDecorateAsync(ctx),
+                MicroChatLifecyclePhase.BeforeDispatch => component.OnBeforeDispatchAsync(ctx),
+                MicroChatLifecyclePhase.PreToolUse => component.OnPreToolUseAsync(ctx),
+                MicroChatLifecyclePhase.PostToolUse => component.OnPostToolUseAsync(ctx),
+                MicroChatLifecyclePhase.ToolUseFailure => component.OnToolUseFailureAsync(ctx),
+                MicroChatLifecyclePhase.AfterDispatch => component.OnAfterDispatchAsync(ctx),
+                MicroChatLifecyclePhase.OnError => component.OnErrorAsync(ctx),
+                MicroChatLifecyclePhase.OnCanceled => component.OnCanceledAsync(ctx),
                 _ => ValueTask.CompletedTask,
             };
             await invocation;

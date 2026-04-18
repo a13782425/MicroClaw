@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
     <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
   </ItemGroup>
 

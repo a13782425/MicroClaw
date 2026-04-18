@@ -2,7 +2,6 @@
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
-using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,7 +20,6 @@ public sealed class MemorySummarizationJob : IScheduledJob
     private readonly ISessionService _repo;
     private readonly ProviderService _providerService;
     private readonly MemoryService _memoryService;
-    private readonly IRagService _ragService;
     private readonly ILogger<MemorySummarizationJob> _logger;
 
     public MemorySummarizationJob(IServiceProvider sp)
@@ -29,7 +27,6 @@ public sealed class MemorySummarizationJob : IScheduledJob
         _repo = sp.GetRequiredService<ISessionService>();
         _providerService = sp.GetRequiredService<ProviderService>();
         _memoryService = sp.GetRequiredService<MemoryService>();
-        _ragService = sp.GetRequiredService<IRagService>();
         _logger = sp.GetRequiredService<ILogger<MemorySummarizationJob>>();
     }
     // 每天凌晨 2 点（UTC）执行
@@ -207,19 +204,8 @@ public sealed class MemorySummarizationJob : IScheduledJob
 
         if (categories is null || categories.Count == 0) return;
 
-        foreach (var (categoryName, content) in categories)
-        {
-            try
-            {
-                await _ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
-                await _ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogError(ex, "B-02 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
-                    microSession.Id, categoryName);
-            }
-        }
+        // TODO: Reimplement with MicroRag — write categories to RAG
+        // Category RAG ingestion temporarily disabled during MicroRag migration
 
         string newJson = JsonSerializer.Serialize(categories, new JsonSerializerOptions { WriteIndented = true });
         _memoryService.WriteCategoriesJson(microSession.Id, newJson);

@@ -57,7 +57,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService repo, MicroClaw.Pet.Rag.PetRagScope petRagScope, SessionDnaService sessionDna, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService repo, SessionDnaService sessionDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -76,8 +76,7 @@ public static class SessionEndpoints
                 disposable.Dispose();
             }
 
-            // Close Pet RAG SQLite connection to release file lock
-            petRagScope.CloseDatabase(req.Id);
+            // TODO: Close MicroRag database when session is deleted
 
             // Delete session DNA files (USER.md / AGENTS.md)
             sessionDna.DeleteSessionDnaFiles(req.Id);

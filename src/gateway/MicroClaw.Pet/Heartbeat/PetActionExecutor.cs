@@ -1,5 +1,4 @@
 using MicroClaw.Pet.Prompt;
-using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
@@ -47,7 +46,6 @@ public interface IPetNotifier
 /// </summary>
 public sealed class PetActionExecutor
 {
-    private readonly PetRagScope _petRagScope;
     private readonly PetPromptEvolver _promptEvolver;
     private readonly PetStateStore _stateStore;
     private readonly PetRateLimiter _rateLimiter;
@@ -59,7 +57,6 @@ public sealed class PetActionExecutor
 
     public PetActionExecutor(IServiceProvider sp)
     {
-        _petRagScope = sp.GetRequiredService<PetRagScope>();
         _promptEvolver = sp.GetRequiredService<PetPromptEvolver>();
         _stateStore = sp.GetRequiredService<PetStateStore>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
@@ -72,7 +69,6 @@ public sealed class PetActionExecutor
 
     /// <summary>仅供测试使用：可注入 null 的 notifier/httpClientFactory。</summary>
     internal PetActionExecutor(
-        PetRagScope petRagScope,
         PetPromptEvolver promptEvolver,
         PetStateStore stateStore,
         PetRateLimiter rateLimiter,
@@ -83,7 +79,6 @@ public sealed class PetActionExecutor
         ILogger<PetActionExecutor> logger,
         bool _ = false)  // disambiguator
     {
-        _petRagScope = petRagScope;
         _promptEvolver = promptEvolver;
         _stateStore = stateStore;
         _rateLimiter = rateLimiter;
@@ -194,10 +189,10 @@ public sealed class PetActionExecutor
         if (content.Length > maxLength)
             content = content[..maxLength];
 
-        // 写入 Pet RAG
-        await _petRagScope.IngestAsync(content, sessionId, sourceId: $"fetch:{url}", ct);
+        // TODO: Reimplement with MicroRag — write fetched content to Pet RAG
+        // await petRag.IngestAsync(content, sourceId: $"fetch:{url}");
 
-        _logger.LogInformation("Pet [{SessionId}] FetchWeb 完成: {Url}, {Length} 字符",
+        _logger.LogInformation("Pet [{SessionId}] FetchWeb 完成: {Url}, {Length} 字符 (写入 RAG 暂时禁用)",
             sessionId, url, content.Length);
         return new ActionExecutionResult(PetActionType.FetchWeb, true);
     }
@@ -211,9 +206,10 @@ public sealed class PetActionExecutor
         if (string.IsNullOrWhiteSpace(content))
             return new ActionExecutionResult(PetActionType.SummarizeToMemory, false, "未提供摘要内容");
 
-        await _petRagScope.IngestAsync(content, sessionId, ct: ct);
+        // TODO: Reimplement with MicroRag — write summary to Pet RAG
+        // await petRag.IngestAsync(content);
 
-        _logger.LogInformation("Pet [{SessionId}] SummarizeToMemory 完成, {Length} 字符",
+        _logger.LogInformation("Pet [{SessionId}] SummarizeToMemory 完成, {Length} 字符 (写入 RAG 暂时禁用)",
             sessionId, content.Length);
         return new ActionExecutionResult(PetActionType.SummarizeToMemory, true);
     }
@@ -228,13 +224,13 @@ public sealed class PetActionExecutor
         if (!acquired)
             return new ActionExecutionResult(PetActionType.OrganizeMemory, false, "速率超限，跳过整理");
 
-        // 查询现有知识概要
-        int chunkCount = await _petRagScope.GetChunkCountAsync(sessionId, ct);
+        // TODO: Reimplement with MicroRag
+        int chunkCount = 0;
         if (chunkCount == 0)
             return new ActionExecutionResult(PetActionType.OrganizeMemory, true, "知识库为空，无需整理");
 
-        // 获取知识样本用于 LLM 整理
-        string knowledgeSample = await _petRagScope.QueryAsync("概要 总结 摘要", sessionId, topK: 10, ct);
+        // TODO: Reimplement — Get knowledge sample from MicroRag
+        string knowledgeSample = "";
 
         var provider = _modelSelector.Select(PetModelScenario.Reflecting);
         if (provider is null)
@@ -253,11 +249,12 @@ public sealed class PetActionExecutor
         string summary = (response.Text ?? string.Empty).Trim();
         if (!string.IsNullOrWhiteSpace(summary))
         {
-            await _petRagScope.IngestAsync(summary, sessionId, sourceId: $"organize:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct);
+            // TODO: Reimplement with MicroRag
+            // await petRag.IngestAsync(summary, sourceId: $"organize:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}");
         }
 
-        // 剪枝
-        await _petRagScope.PruneIfNeededAsync(sessionId, ct: ct);
+        // TODO: Reimplement pruning with MicroRag
+        // await petRag.PruneIfNeededAsync();
 
         _logger.LogInformation("Pet [{SessionId}] OrganizeMemory 完成, 原有 {Count} 块",
             sessionId, chunkCount);
@@ -301,8 +298,8 @@ public sealed class PetActionExecutor
         string insight = (response.Text ?? string.Empty).Trim();
         if (!string.IsNullOrWhiteSpace(insight))
         {
-            await _petRagScope.IngestAsync(insight, sessionId,
-                sourceId: $"reflect:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}", ct);
+            // TODO: Reimplement with MicroRag
+            // await petRag.IngestAsync(insight, sourceId: $"reflect:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}");
         }
 
         _logger.LogInformation("Pet [{SessionId}] ReflectOnSession 完成", sessionId);
@@ -355,9 +352,7 @@ public sealed class PetActionExecutor
 
     private string GetSessionsDir()
     {
-        // 从 PetStateStore 的存储路径推导（PetRagScope 已知 sessionsDir）
-        return Path.GetDirectoryName(Path.GetDirectoryName(
-            _petRagScope.GetDatabasePath("_probe")))!;
+        return MicroClaw.Configuration.MicroClawConfig.Env.SessionsDir;
     }
 
     private async Task SafeAppendJournalAsync(string sessionId, string eventType, string detail, CancellationToken ct)

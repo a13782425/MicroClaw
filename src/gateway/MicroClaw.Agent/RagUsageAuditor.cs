@@ -7,12 +7,11 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Agent;
 
 /// <summary>
-/// RagUsageAuditor 实现：使用 LLM 比对检索到的 chunk 与 AI 实际回复，
-/// 确定真正被使用的 chunk 并精确更新 HitCount。
+/// RagUsageAuditor: uses LLM to compare retrieved chunks vs AI response,
+/// identifies actually used chunks. HitCount updates temporarily disabled during MicroRag migration.
 /// </summary>
 public sealed class RagUsageAuditor : IRagUsageAuditor
 {
-    private readonly IRagService _ragService;
     private readonly ProviderService _providerService;
     private readonly ILogger<RagUsageAuditor> _logger;
 
@@ -37,11 +36,9 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
         """;
 
     public RagUsageAuditor(
-        IRagService ragService,
         ProviderService providerService,
         ILogger<RagUsageAuditor> logger)
     {
-        _ragService = ragService ?? throw new ArgumentNullException(nameof(ragService));
         _providerService = providerService ?? throw new ArgumentNullException(nameof(providerService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -59,8 +56,7 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
             IChatClient? client = CreateAuditClient();
             if (client is null)
             {
-                _logger.LogWarning("RAG 审计：无可用 Provider，跳过审计，回退到全量 HitCount 更新");
-                await FallbackIncrementAllAsync(retrievedChunks, ct);
+                _logger.LogWarning("RAG 审计：无可用 Provider，跳过审计");
                 return;
             }
 
@@ -76,31 +72,14 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
             string resultText = response.Text ?? string.Empty;
             List<string> usedIds = ParseUsedIds(resultText);
 
-            if (usedIds.Count == 0)
-            {
-                _logger.LogDebug("RAG 审计：AI 判定无 chunk 被实际使用");
-                return;
-            }
-
-            // Group by scope+sessionId to batch updates
-            var groups = retrievedChunks
-                .Where(c => usedIds.Contains(c.Id))
-                .GroupBy(c => (c.Scope, c.SessionId));
-
-            foreach (var group in groups)
-            {
-                var ids = group.Select(c => c.Id).ToList();
-                await _ragService.IncrementHitCountAsync(ids, group.Key.Scope, group.Key.SessionId, ct);
-            }
-
+            // TODO: Use MicroRag.IncrementHitCountAsync to update HitCount for used chunks
             _logger.LogInformation(
-                "RAG 审计完成：{Total} 个检索 chunk 中 {Used} 个被确认使用",
+                "RAG 审计完成：{Total} 个检索 chunk 中 {Used} 个被确认使用 (HitCount 更新暂时禁用)",
                 retrievedChunks.Count, usedIds.Count);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "RAG 审计异常，回退到全量 HitCount 更新");
-            await FallbackIncrementAllAsync(retrievedChunks, ct);
+            _logger.LogWarning(ex, "RAG 审计异常，HitCount 未更新");
         }
     }
 
@@ -145,24 +124,6 @@ public sealed class RagUsageAuditor : IRagUsageAuditor
         catch (JsonException)
         {
             return [];
-        }
-    }
-
-    private async Task FallbackIncrementAllAsync(
-        IReadOnlyList<RagChunkRef> chunks, CancellationToken ct)
-    {
-        try
-        {
-            var groups = chunks.GroupBy(c => (c.Scope, c.SessionId));
-            foreach (var group in groups)
-            {
-                var ids = group.Select(c => c.Id).ToList();
-                await _ragService.IncrementHitCountAsync(ids, group.Key.Scope, group.Key.SessionId, ct);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "RAG 审计回退更新也失败，HitCount 未更新");
         }
     }
 }

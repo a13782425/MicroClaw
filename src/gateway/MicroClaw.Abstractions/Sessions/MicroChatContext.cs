@@ -1,29 +1,41 @@
 using System.Threading.Channels;
+using MicroClaw.Abstractions.Channel;
+using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 
-namespace MicroClaw.Abstractions.Pet;
+namespace MicroClaw.Abstractions;
 
 /// <summary>
-/// 一次 Pet 对话的请求上下文：贯穿 <see cref="ChatLifecyclePhase"/> 四个阶段的载体。
+/// 一次 Pet 对话的请求上下文：贯穿 <see cref="MicroChatLifecyclePhase"/> 各阶段的载体。
 /// <para>
-/// 由 <c>MicroPet</c> 在消息处理入口构造，传给每个 <see cref="IChatLifecycleStep"/>。
+/// 由 <c>MicroPet</c> 在消息处理入口构造，按阶段依次交给各 <c>PetComponent</c> 回调使用。
 /// 组件之间可以通过 <see cref="Items"/> 字典进行松耦合的数据交换；对特定阶段有明确语义的字段
 /// （<see cref="FinalAssistantMessage"/> / <see cref="CurrentToolCall"/> / <see cref="LastToolResult"/>）
 /// 在对应阶段之外可能为 <c>null</c>。
 /// </para>
 /// <para>
-/// 本类型不是线程安全的——单次请求内通常由编排器串行驱动 steps，组件需要后台并行时自行同步。
+/// 本类型不是线程安全的——单次请求内通常由编排器串行驱动各组件，组件需要后台并行时自行同步。
 /// </para>
 /// </summary>
-public sealed class ChatContext
+public sealed class MicroChatContext
 {
     /// <summary>所属会话（Pet 宿主）。</summary>
     public required IMicroSession Session { get; init; }
 
     /// <summary>本次对话前已经加载的消息历史（含刚刚保存的用户消息，若调用方负责保存）。</summary>
     public required IReadOnlyList<SessionMessage> History { get; init; }
-
+    
+    /// <summary>
+    /// 当前对话的宠物
+    /// </summary>
+    public required IPet Pet { get; init; }
+    
+    /// <summary>
+    /// 当前对话的渠道
+    /// </summary>
+    public required IChannel Channel { get; init; }
+    
     /// <summary>
     /// 消息来源标签，常见值：<c>"chat"</c>（前端 API）、<c>"channel"</c>（渠道 webhook）、
     /// <c>"heartbeat"</c>（Pet 自主心跳触发，尚未启用）。
@@ -46,21 +58,21 @@ public sealed class ChatContext
     public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>(StringComparer.Ordinal);
 
     /// <summary>
-    /// 对话结束时的 assistant 最终消息；<see cref="ChatLifecyclePhase.AfterChat"/> 步骤开始前由编排器写入。
+    /// 本次 dispatch 的 assistant 最终消息；在 <see cref="MicroChatLifecyclePhase.AfterDispatch"/> 阶段开始前由编排器写入。
     /// 本版本 <c>MicroPet</c> 不累加 token，故本字段当前恒为 <c>null</c>；下一轮接入具体组件（如转发组件）
     /// 时再实现 token 聚合。
     /// </summary>
     public SessionMessage? FinalAssistantMessage { get; set; }
 
     /// <summary>
-    /// <see cref="ChatLifecyclePhase.BeforeToolCall"/> 阶段表示正在调用的工具请求；其它阶段为 <c>null</c>。
+    /// <see cref="MicroChatLifecyclePhase.PreToolUse"/> 阶段表示正在调用的工具请求；其它阶段为 <c>null</c>。
     /// 本版本尚未接线到 <c>AgentRunner</c> 的工具钩子，该字段恒为 <c>null</c>。
     /// </summary>
     public ToolCallItem? CurrentToolCall { get; set; }
 
     /// <summary>
-    /// <see cref="ChatLifecyclePhase.AfterToolCall"/> 阶段表示最近一次工具调用的结果；其它阶段为 <c>null</c>。
-    /// 本版本尚未接线，该字段恒为 <c>null</c>。
+    /// <see cref="MicroChatLifecyclePhase.PostToolUse"/>/<see cref="MicroChatLifecyclePhase.ToolUseFailure"/>
+    /// 阶段表示最近一次工具调用的结果；其它阶段为 <c>null</c>。本版本尚未接线，该字段恒为 <c>null</c>。
     /// </summary>
     public ToolResultItem? LastToolResult { get; set; }
 }

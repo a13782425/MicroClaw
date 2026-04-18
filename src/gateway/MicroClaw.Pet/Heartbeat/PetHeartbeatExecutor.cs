@@ -1,4 +1,3 @@
-using MicroClaw.Pet.Rag;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +25,6 @@ public sealed class PetHeartbeatExecutor
     private readonly PetStateStore _stateStore;
     private readonly PetStateMachine _stateMachine;
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
-    private readonly PetRagScope _petRagScope;
     private readonly PetActionExecutor _actionExecutor;
     private readonly IPetNotifier _petNotifier;
     private readonly ILogger<PetHeartbeatExecutor> _logger;
@@ -36,7 +34,6 @@ public sealed class PetHeartbeatExecutor
         _stateStore = sp.GetRequiredService<PetStateStore>();
         _stateMachine = sp.GetRequiredService<PetStateMachine>();
         _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
-        _petRagScope = sp.GetRequiredService<PetRagScope>();
         _actionExecutor = sp.GetRequiredService<PetActionExecutor>();
         _petNotifier = sp.GetRequiredService<IPetNotifier>();
         _logger = sp.GetRequiredService<ILogger<PetHeartbeatExecutor>>();
@@ -80,14 +77,7 @@ public sealed class PetHeartbeatExecutor
         {
             // ── 4. 构建自我感知报告 ──
             int ragChunkCount = 0;
-            try
-            {
-                ragChunkCount = await _petRagScope.GetChunkCountAsync(sessionId, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Pet [{SessionId}] RAG 分块数查询失败", sessionId);
-            }
+            // TODO: Reimplement with MicroRag
 
             var report = await _reportBuilder.BuildAsync(
                 sessionId,

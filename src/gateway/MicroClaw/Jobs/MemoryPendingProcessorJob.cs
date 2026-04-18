@@ -2,7 +2,6 @@
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
-using MicroClaw.RAG;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,7 +21,6 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
     private readonly ISessionService _repo;
     private readonly ProviderService _providerService;
     private readonly MemoryService _memoryService;
-    private readonly IRagService _ragService;
     private readonly ILogger<MemoryPendingProcessorJob> _logger;
 
     public MemoryPendingProcessorJob(IServiceProvider sp)
@@ -30,7 +28,6 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
         _repo = sp.GetRequiredService<ISessionService>();
         _providerService = sp.GetRequiredService<ProviderService>();
         _memoryService = sp.GetRequiredService<MemoryService>();
-        _ragService = sp.GetRequiredService<IRagService>();
         _logger = sp.GetRequiredService<ILogger<MemoryPendingProcessorJob>>();
     }
     public string JobName => "memory-pending-processor";
@@ -122,21 +119,8 @@ public sealed class MemoryPendingProcessorJob : IScheduledJob
 
                 if (categories is not null && categories.Count > 0)
                 {
-                    // 3. 写入 RAG 分类 chunk + 更新 MEMORY.md
-                    foreach (var (categoryName, content) in categories)
-                    {
-                        try
-                        {
-                            await _ragService.DeleteBySourceIdAsync(categoryName, RagScope.Session, microSession.Id, ct);
-                            await _ragService.IngestAsync(content, categoryName, RagScope.Session, microSession.Id, ct);
-                        }
-                        catch (Exception ex) when (ex is not OperationCanceledException)
-                        {
-                            _logger.LogError(ex,
-                                "B-03 Session={SessionId} 分类 '{Category}' 写入 RAG 异常",
-                                microSession.Id, categoryName);
-                        }
-                    }
+                    // 3. TODO: Reimplement with MicroRag — write categories to RAG
+                    // Category RAG ingestion temporarily disabled during MicroRag migration
 
                     string newJson = JsonSerializer.Serialize(
                         categories, new JsonSerializerOptions { WriteIndented = true });

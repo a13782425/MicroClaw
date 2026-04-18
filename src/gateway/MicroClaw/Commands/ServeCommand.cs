@@ -207,13 +207,9 @@ public class ServeCommand : Command
 		// RAG 服务
 		builder.Services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
 		builder.Services.AddSingleton<ProviderEmbeddingFactory>();
-		builder.Services.AddSingleton<RagDbContextFactory>();
 		// EmbeddingProviderAccessor 每次调用时实时读取 DB，支持运行时热切换 Embedding Provider
 		builder.Services.AddSingleton<IEmbeddingProviderAccessor, EmbeddingProviderAccessor>();
 		builder.Services.AddSingleton<IEmbeddingService, DynamicEmbeddingService>();
-		builder.Services.AddSingleton<HybridSearchService>();
-		builder.Services.AddSingleton<IRagPruner, RagPruner>();
-		builder.Services.AddSingleton<IRagService, RagService>();
 		builder.Services.AddSingleton<RagReindexJobTracker>();
 		builder.Services.AddSingleton<RagReindexService>();
 		builder.Services.AddSingleton<RagRetrievalContext>();
@@ -324,8 +320,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<ChannelRetryQueueService>();
 		builder.Services.MapAs<IChannelRetryQueue, ChannelRetryQueueService>();
 		builder.Services.AddSingleton<IScheduledJob, ChannelRetryJob>();
-		// P-E-1: Pet 私有 RAG（每 Session 独立的 knowledge.db，供 RagPruneJob 清理使用）
-		builder.Services.AddSingleton<MicroClaw.Pet.Rag.PetRagScope>();
+		// P-E-1: Pet 私有 RAG — PetRagScope removed, replaced by MicroRag instances
 		// 2-A-11: RAG 定期容量清理（每日 UTC 01:00，早于记忆总结和做梦模式）
 		builder.Services.AddSingleton<IScheduledJob, RagPruneJob>();
 		// P-B-7: Pet 情绪自然衰减 — 暂禁用，待 Pet 系统重构后适配恢复
