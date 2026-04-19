@@ -17,7 +17,7 @@ namespace MicroClaw.Providers;
 /// <list type="bullet">
 ///   <item>同步单轮对话 <see cref="ChatAsync"/> + 自动 usage 追踪；</item>
 ///   <item>
-///     流式 Agent 循环 <see cref="StreamAgentAsync"/>：内部组合
+///     流式 Agent 循环 <see cref="AgentStreamAsync"/>：内部组合
 ///     <see cref="FunctionInvokingChatClient"/> + <see cref="ChatClientAgent"/>，
 ///     在每次工具调用前后写入 <see cref="ToolCallItem"/> / <see cref="ToolResultItem"/>，
 ///     并在结束时汇总 <see cref="UsageDetails"/> 上报追踪器；
@@ -116,7 +116,7 @@ public abstract class ChatMicroProvider : MicroProvider
     ///     <see cref="MessageVisibility.LlmOnly"/>，避免前端展示。
     /// </param>
     /// <param name="ct">取消令牌；与 <paramref name="ctx"/>.Ct 通常一致。</param>
-    public virtual async IAsyncEnumerable<StreamItem> StreamAgentAsync(
+    public virtual async IAsyncEnumerable<StreamItem> AgentStreamAsync(
         MicroChatContext ctx,
         IEnumerable<ChatMessage> messages,
         IReadOnlyList<AITool> tools,
