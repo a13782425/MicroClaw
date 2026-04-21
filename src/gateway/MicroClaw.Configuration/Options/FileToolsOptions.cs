@@ -6,7 +6,8 @@ namespace MicroClaw.Configuration;
 /// 文件操作工具的限额配置。沙箱目录由 FileToolProvider 根据 sessionId 自动计算。
 /// 通过配置节 "filesystem" 绑定。
 /// </summary>
-public sealed class FileToolsOptions
+[MicroClawYamlConfig("filesystem")]
+public sealed class FileToolsOptions : IMicroClawConfigOptions
 {
     /// <summary>单次读取返回的最大字符数（默认 100,000）。</summary>
     [ConfigurationKeyName("max_read_chars")]

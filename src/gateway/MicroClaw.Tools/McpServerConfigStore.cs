@@ -7,102 +7,180 @@ using MicroClaw.Utils;
 namespace MicroClaw.Tools;
 
 /// <summary>
-/// 全局 MCP Server 配置的 CRUD 存储，基于 YAML 文件（内存缓存 + 写时落盘）。
+/// 全局 MCP Server 配置的 CRUD 存储，基于 MicroClaw 配置系统的 YAML 持久化。
 /// </summary>
 public sealed class McpServerConfigStore()
-    : YamlFileStore<McpServerConfigEntity>(Path.Combine(MicroClawConfig.Env.ConfigDir, "mcp-servers.yaml"), e => e.Id)
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = false };
 
-    public IReadOnlyList<McpServerConfig> All
-        => GetAll().OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
+    private readonly object _sync = new();
 
-    /// <summary>杩斿洖鎵€鏈?IsEnabled=true 鐨?MCP Server锛岀敤浜庣┖ EnabledMcpServerIds 鏃剁殑榛樿鍏ㄩ噺鍔犺浇銆?/summary>
+    public IReadOnlyList<McpServerConfig> All
+        => GetOptions().Items.OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
+
+    /// <summary>返回所有已启用的 MCP Server 配置。</summary>
     public IReadOnlyList<McpServerConfig> AllEnabled
-        => GetAll().Where(e => e.IsEnabled).OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
+        => GetOptions().Items.Where(e => e.IsEnabled).OrderBy(e => e.CreatedAtMs).Select(ToConfig).ToList().AsReadOnly();
 
     public McpServerConfig? GetById(string id)
-        => GetYamlById(id) is { } e ? ToConfig(e) : null;
+        => GetOptions().Items.FirstOrDefault(e => e.Id == id) is { } entity ? ToConfig(entity) : null;
 
     public McpServerConfig Add(McpServerConfig config)
     {
-        McpServerConfig toAdd = config with
+        ArgumentNullException.ThrowIfNull(config);
+
+        lock (_sync)
         {
-            Id = Guid.NewGuid().ToString("N"),
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-        };
-        McpServerConfigEntity entity = ToEntity(toAdd);
-        SetYaml(entity);
-        return ToConfig(entity);
+            McpServerConfig toAdd = config with
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            };
+
+            McpServerConfigEntity entity = ToEntity(toAdd);
+            SaveOptions(new McpServersOptions
+            {
+                Items = [.. GetOptions().Items, entity]
+            });
+
+            return ToConfig(entity);
+        }
     }
 
     public McpServerConfig? Update(string id, McpServerConfig incoming)
     {
-        var updated = MutateYaml(id, e =>
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(incoming);
+
+        lock (_sync)
         {
-            e.Name          = incoming.Name;
-            e.TransportType = SerializeTransport(incoming.TransportType);
-            e.Command       = incoming.Command;
-            e.ArgsJson      = incoming.Args is not null ? JsonSerializer.Serialize(incoming.Args, JsonOpts) : null;
-            e.EnvJson       = incoming.Env is not null  ? JsonSerializer.Serialize(incoming.Env, JsonOpts)  : null;
-            e.Url           = incoming.Url;
-            e.HeadersJson   = incoming.Headers is not null ? JsonSerializer.Serialize(incoming.Headers, JsonOpts) : null;
-            e.IsEnabled     = incoming.IsEnabled;
-        });
-        return updated is null ? null : ToConfig(updated);
+            McpServersOptions options = GetOptions();
+            McpServerConfigEntity? existing = options.Items.FirstOrDefault(e => e.Id == id);
+            if (existing is null)
+                return null;
+
+            McpServerConfigEntity updated = new()
+            {
+                Id = existing.Id,
+                Name = incoming.Name,
+                TransportType = SerializeTransport(incoming.TransportType),
+                Command = incoming.Command,
+                ArgsJson = incoming.Args is not null ? JsonSerializer.Serialize(incoming.Args, JsonOpts) : null,
+                EnvJson = incoming.Env is not null ? JsonSerializer.Serialize(incoming.Env, JsonOpts) : null,
+                Url = incoming.Url,
+                HeadersJson = incoming.Headers is not null ? JsonSerializer.Serialize(incoming.Headers, JsonOpts) : null,
+                IsEnabled = incoming.IsEnabled,
+                CreatedAtMs = existing.CreatedAtMs,
+                Source = existing.Source,
+                PluginId = existing.PluginId,
+                PluginName = existing.PluginName,
+            };
+
+            SaveOptions(new McpServersOptions
+            {
+                Items = options.Items.Select(item => item.Id == id ? updated : item).ToList()
+            });
+
+            return ToConfig(updated);
+        }
     }
 
-    public bool Delete(string id) => RemoveYaml(id);
+    public bool Delete(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-    /// <summary>鎸?ID 鍒楄〃杩斿洖鍚敤鐨?MCP Server 閰嶇疆锛堢敤浜?Agent 寮曠敤杩囨护锛夈€?/summary>
+        lock (_sync)
+        {
+            McpServersOptions options = GetOptions();
+            List<McpServerConfigEntity> remaining = options.Items.Where(item => item.Id != id).ToList();
+            if (remaining.Count == options.Items.Count)
+                return false;
+
+            SaveOptions(new McpServersOptions { Items = remaining });
+            return true;
+        }
+    }
+
+    /// <summary>按 ID 列表返回已启用的 MCP Server 配置。</summary>
     public IReadOnlyList<McpServerConfig> GetEnabledByIds(IEnumerable<string> ids)
     {
         HashSet<string> idSet = ids.ToHashSet();
-        return GetAll()
+        return GetOptions().Items
             .Where(e => e.IsEnabled && idSet.Contains(e.Id))
             .Select(ToConfig)
             .ToList()
             .AsReadOnly();
     }
 
-    /// <summary>鎻掑叆鎴栨洿鏂颁竴涓?MCP Server 閰嶇疆锛堜富瑕佺敤浜庢彃浠舵敞鍐岋級銆?/summary>
+    /// <summary>插入或更新一个 MCP Server 配置，主要用于插件注册。</summary>
     public McpServerConfig Upsert(McpServerConfig config)
     {
-        McpServerConfigEntity? result = null;
-        ExecuteWrite(items =>
+        ArgumentNullException.ThrowIfNull(config);
+
+        lock (_sync)
         {
-            if (items.TryGetValue(config.Id, out McpServerConfigEntity? existing))
+            McpServersOptions options = GetOptions();
+            McpServerConfigEntity? existing = options.Items.FirstOrDefault(item => item.Id == config.Id);
+            McpServerConfigEntity result;
+
+            if (existing is not null)
             {
-                existing.Name          = config.Name;
-                existing.TransportType = SerializeTransport(config.TransportType);
-                existing.Command       = config.Command;
-                existing.ArgsJson      = config.Args is not null ? JsonSerializer.Serialize(config.Args, JsonOpts) : null;
-                existing.EnvJson       = config.Env is not null  ? JsonSerializer.Serialize(config.Env, JsonOpts)  : null;
-                existing.Url           = config.Url;
-                existing.HeadersJson   = config.Headers is not null ? JsonSerializer.Serialize(config.Headers, JsonOpts) : null;
-                existing.IsEnabled     = config.IsEnabled;
-                existing.Source        = (int)config.Source;
-                existing.PluginId      = config.PluginId;
-                existing.PluginName    = config.PluginName;
-                result = existing;
+                result = new McpServerConfigEntity
+                {
+                    Id = existing.Id,
+                    Name = config.Name,
+                    TransportType = SerializeTransport(config.TransportType),
+                    Command = config.Command,
+                    ArgsJson = config.Args is not null ? JsonSerializer.Serialize(config.Args, JsonOpts) : null,
+                    EnvJson = config.Env is not null ? JsonSerializer.Serialize(config.Env, JsonOpts) : null,
+                    Url = config.Url,
+                    HeadersJson = config.Headers is not null ? JsonSerializer.Serialize(config.Headers, JsonOpts) : null,
+                    IsEnabled = config.IsEnabled,
+                    CreatedAtMs = existing.CreatedAtMs,
+                    Source = (int)config.Source,
+                    PluginId = config.PluginId,
+                    PluginName = config.PluginName,
+                };
+
+                SaveOptions(new McpServersOptions
+                {
+                    Items = options.Items.Select(item => item.Id == config.Id ? result : item).ToList()
+                });
             }
             else
             {
                 McpServerConfig toAdd = config.CreatedAtUtc == default
                     ? config with { CreatedAtUtc = DateTimeOffset.UtcNow }
                     : config;
-                McpServerConfigEntity entity = ToEntity(toAdd);
-                items[entity.Id] = entity;
-                result = entity;
+                result = ToEntity(toAdd);
+
+                SaveOptions(new McpServersOptions
+                {
+                    Items = [.. options.Items, result]
+                });
             }
-            return true;
-        });
-        return ToConfig(result!);
+
+            return ToConfig(result);
+        }
     }
 
-    /// <summary>鎸夋彃浠?ID 鍒犻櫎璇ユ彃浠舵敞鍐岀殑鎵€鏈?MCP Server銆?/summary>
-    public int DeleteByPluginId(string pluginId) =>
-        RemoveAllYaml(e => e.PluginId == pluginId);
+    /// <summary>按插件 ID 删除该插件注册的所有 MCP Server。</summary>
+    public int DeleteByPluginId(string pluginId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pluginId);
+
+        lock (_sync)
+        {
+            McpServersOptions options = GetOptions();
+            List<McpServerConfigEntity> remaining = options.Items.Where(item => item.PluginId != pluginId).ToList();
+            int deletedCount = options.Items.Count - remaining.Count;
+            if (deletedCount == 0)
+                return 0;
+
+            SaveOptions(new McpServersOptions { Items = remaining });
+            return deletedCount;
+        }
+    }
 
     private static McpServerConfig ToConfig(McpServerConfigEntity e) => new(
         Id: e.Id,
@@ -157,4 +235,8 @@ public sealed class McpServerConfigStore()
             McpTransportType.Http => "http",
             _                     => "stdio",
         };
+
+    private static McpServersOptions GetOptions() => MicroClawConfig.Get<McpServersOptions>();
+
+    private static void SaveOptions(McpServersOptions options) => MicroClawConfig.Save(options);
 }

@@ -7,7 +7,8 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <c>agents.yaml</c> 持久化，通过 <see cref="MicroClawConfig.Get{T}"/> 读取，
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
-public sealed class AgentsOptions
+[MicroClawYamlConfig("agents", FileName = "agents.yaml", IsWritable = true)]
+public sealed class AgentsOptions : IMicroClawConfigOptions
 {
     [ConfigurationKeyName("sub_agent_max_depth")]
     public int SubAgentMaxDepth { get; set; } = 3;

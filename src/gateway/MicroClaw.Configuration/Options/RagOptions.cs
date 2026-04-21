@@ -5,7 +5,8 @@ namespace MicroClaw.Configuration;
 /// <summary>
 /// RAG auto-forget configuration. Mapped to YAML section "rag".
 /// </summary>
-public sealed class RagOptions
+[MicroClawYamlConfig("rag", FileName = "rag.yaml", IsWritable = true)]
+public sealed class RagOptions : IMicroClawConfigOptions
 {
     /// <summary>Maximum storage size (MB) per session RAG DB. When exceeded, low-HitCount chunks are pruned.</summary>
     [ConfigurationKeyName("max_storage_size_mb")]

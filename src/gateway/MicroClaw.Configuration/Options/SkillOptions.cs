@@ -4,7 +4,8 @@ namespace MicroClaw.Configuration;
 /// <summary>
 /// Skills 模块配置选项，从配置文件 skills: 节点读取。
 /// </summary>
-public sealed class SkillOptions
+[MicroClawYamlConfig("skills", FileName = "skills.yaml", IsWritable = true)]
+public sealed class SkillOptions : IMicroClawConfigOptions
 {
     /// <summary>
     /// 是否允许在技能指令中执行 !`command` shell 命令注入。

@@ -7,47 +7,91 @@ using MicroClaw.Utils;
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>
-/// 工作流配置的 CRUD 存储，基于 YAML 文件（内存缓存 + 写时落盘）。
+/// 工作流配置的 CRUD 存储，基于 MicroClaw 配置系统的 YAML 持久化。
 /// </summary>
 public sealed class WorkflowStore()
-    : YamlFileStore<WorkflowConfigEntity>(Path.Combine(MicroClawConfig.Env.ConfigDir, "workflows.yaml"), e => e.Id)
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private readonly object _sync = new();
+
     public IReadOnlyList<WorkflowConfig> All
-        => GetAll().Select(ToConfig).ToList().AsReadOnly();
+        => GetOptions().Items.Select(ToConfig).ToList().AsReadOnly();
 
     public WorkflowConfig? GetById(string id)
-        => GetYamlById(id) is { } e ? ToConfig(e) : null;
+        => GetOptions().Items.FirstOrDefault(e => e.Id == id) is { } entity ? ToConfig(entity) : null;
 
     public WorkflowConfig Add(WorkflowConfig config)
     {
-        WorkflowConfigEntity entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
-        SetYaml(entity);
-        return ToConfig(entity);
+        ArgumentNullException.ThrowIfNull(config);
+
+        lock (_sync)
+        {
+            WorkflowsOptions options = GetOptions();
+            long now = TimeUtils.NowMs();
+            WorkflowConfigEntity entity = ToEntity(config with
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                CreatedAtUtc = TimeUtils.FromMs(now),
+                UpdatedAtUtc = TimeUtils.FromMs(now)
+            });
+
+            SaveOptions(new WorkflowsOptions
+            {
+                Items = [.. options.Items, entity]
+            });
+
+            return ToConfig(entity);
+        }
     }
 
     public WorkflowConfig? Update(string id, WorkflowConfig config)
     {
-        long now = TimeUtils.ToMs(DateTimeOffset.UtcNow);
-        var updated = MutateYaml(id, e =>
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(config);
+
+        lock (_sync)
         {
-            e.Name = config.Name;
-            e.Description = config.Description;
-            e.IsEnabled = config.IsEnabled;
-            e.NodesJson = config.Nodes.Count > 0 ? JsonSerializer.Serialize(config.Nodes, JsonOpts) : null;
-            e.EdgesJson = config.Edges.Count > 0 ? JsonSerializer.Serialize(config.Edges, JsonOpts) : null;
-            e.EntryNodeId = config.EntryNodeId;
-            e.DefaultProviderId = config.DefaultProviderId;
-            e.UpdatedAtMs = now;
-        });
-        return updated is null ? null : ToConfig(updated);
+            WorkflowsOptions options = GetOptions();
+            WorkflowConfigEntity? existing = options.Items.FirstOrDefault(e => e.Id == id);
+            if (existing is null)
+                return null;
+
+            long now = TimeUtils.NowMs();
+            WorkflowConfigEntity updated = ToEntity(config with
+            {
+                Id = existing.Id,
+                CreatedAtUtc = TimeUtils.FromMs(existing.CreatedAtMs),
+                UpdatedAtUtc = TimeUtils.FromMs(now)
+            });
+
+            SaveOptions(new WorkflowsOptions
+            {
+                Items = options.Items.Select(item => item.Id == id ? updated : item).ToList()
+            });
+
+            return ToConfig(updated);
+        }
     }
 
-    public bool Delete(string id) => RemoveYaml(id);
+    public bool Delete(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+
+        lock (_sync)
+        {
+            WorkflowsOptions options = GetOptions();
+            List<WorkflowConfigEntity> remaining = options.Items.Where(item => item.Id != id).ToList();
+            if (remaining.Count == options.Items.Count)
+                return false;
+
+            SaveOptions(new WorkflowsOptions { Items = remaining });
+            return true;
+        }
+    }
 
     // 鈹€鈹€ 绉佹湁鏄犲皠 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
@@ -78,7 +122,6 @@ public sealed class WorkflowStore()
 
     private static WorkflowConfigEntity ToEntity(WorkflowConfig c)
     {
-        long now = TimeUtils.ToMs(DateTimeOffset.UtcNow);
         return new WorkflowConfigEntity
         {
             Id = c.Id,
@@ -89,8 +132,12 @@ public sealed class WorkflowStore()
             EdgesJson = c.Edges.Count > 0 ? JsonSerializer.Serialize(c.Edges, JsonOpts) : null,
             EntryNodeId = c.EntryNodeId,
             DefaultProviderId = c.DefaultProviderId,
-            CreatedAtMs = now,
-            UpdatedAtMs = now
+            CreatedAtMs = TimeUtils.ToMs(c.CreatedAtUtc),
+            UpdatedAtMs = TimeUtils.ToMs(c.UpdatedAtUtc)
         };
     }
+
+    private static WorkflowsOptions GetOptions() => MicroClawConfig.Get<WorkflowsOptions>();
+
+    private static void SaveOptions(WorkflowsOptions options) => MicroClawConfig.Save(options);
 }

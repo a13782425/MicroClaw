@@ -2,7 +2,8 @@ using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration;
 
-public sealed class AuthOptions
+[MicroClawYamlConfig("auth", FileName = "auth.yaml")]
+public sealed class AuthOptions : IMicroClawConfigOptions
 {
     [ConfigurationKeyName("username")]
     public string Username { get; set; } = "admin";
