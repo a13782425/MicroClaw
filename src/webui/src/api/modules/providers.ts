@@ -4,18 +4,14 @@ export type ProviderProtocol = 'openai' | 'anthropic'
 
 export type ModelType = 'chat' | 'embedding'
 
+export type InputModality = 'Text' | 'Image' | 'Audio' | 'Video' | 'File'
+export type OutputModality = 'Text' | 'Image' | 'Audio' | 'Video'
+export type ProviderFeature = 'FunctionCalling' | 'ResponsesApi'
+
 export type ProviderCapabilities = {
-  inputText: boolean
-  inputImage: boolean
-  inputAudio: boolean
-  inputVideo: boolean
-  inputFile: boolean
-  outputText: boolean
-  outputImage: boolean
-  outputAudio: boolean
-  outputVideo: boolean
-  supportsFunctionCalling: boolean
-  supportsResponsesApi: boolean
+  inputs: InputModality[]
+  outputs: OutputModality[]
+  features: ProviderFeature[]
   inputPricePerMToken: number | null
   outputPricePerMToken: number | null
   cacheInputPricePerMToken: number | null

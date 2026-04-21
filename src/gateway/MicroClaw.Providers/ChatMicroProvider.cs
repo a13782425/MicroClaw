@@ -2,10 +2,11 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Providers;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Core.Logging;
-using MicroClaw.Infrastructure.Data;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -34,11 +35,14 @@ public abstract class ChatMicroProvider : MicroProvider
 
     private readonly object _clientLock = new();
     private IChatClient? _client;
-
+    
+    protected ProviderConfig Config { get; init; }
+    
     /// <summary>创建 Chat 类 Provider。</summary>
-    protected ChatMicroProvider(ProviderConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker)
+    protected ChatMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
+        : base(configEntity, usageTracker)
     {
+        Config = configEntity.ToConfig();
     }
 
     /// <summary>懒加载的底层 <see cref="IChatClient"/>。同一实例内复用。</summary>
@@ -57,11 +61,34 @@ public abstract class ChatMicroProvider : MicroProvider
 
     /// <summary>构造底层 <see cref="IChatClient"/> 的工厂方法，由具体 Provider 子类实现。</summary>
     protected abstract IChatClient BuildClient();
-
+    
+    public override async Task TrackUsageAsync(MicroChatContext ctx, long inputTokens, long outputTokens = 0L, long cachedInputTokens = 0L)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        if (inputTokens <= 0 && outputTokens <= 0) return;
+        
+        long nonCachedInput = Math.Max(0L, inputTokens - cachedInputTokens);
+        decimal inputCost = nonCachedInput > 0 && Config.Capabilities.InputPricePerMToken.HasValue ? nonCachedInput * Config.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal outputCost = outputTokens > 0 && Config.Capabilities.OutputPricePerMToken.HasValue ? outputTokens * Config.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal cacheInputCost = cachedInputTokens > 0 ? cachedInputTokens * (Config.Capabilities.CacheInputPricePerMToken ?? Config.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
+        
+        try
+        {
+            await UsageTracker.TrackAsync(ctx.Session.Id, Config.Id, Config.DisplayName, ctx.Source, inputTokens, outputTokens, cachedInputTokens, inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
+                // TODO: 在 MicroChatContext 增加 AgentId / MonthlyBudgetUsd 字段后透传，
+                //       当前 Agent 预算告警暂时走不到，等 AgentRunner 迁移完整补回。
+                agentId: null, monthlyBudgetUsd: null, ct: CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Usage tracking failed for provider {ProviderId} session {SessionId}", Config.Id, ctx.Session.Id);
+        }
+    }
+    
     /// <summary>
     /// 使用默认 <see cref="ChatOptions"/>（ModelId/MaxOutputTokens 取自 <see cref="MicroProvider.Config"/>）
     /// 发送一次非流式对话，并在响应可观测到 <see cref="UsageDetails"/> 时自动调用
-    /// <see cref="MicroProvider.TrackChatUsageAsync"/>。
+    /// <see cref="MicroProvider.TrackUsageAsync"/>。
     /// </summary>
     /// <param name="ctx">统一调用上下文（提供 Session/Source/Ct）。</param>
     /// <param name="messages">完整消息序列（包含 system / user / assistant / tool 等）。</param>
@@ -70,7 +97,7 @@ public abstract class ChatMicroProvider : MicroProvider
     ///     <see cref="BuildDefaultChatOptions"/> 的默认值；传入非 null 时按原值下发，
     ///     基类不再强制覆盖 ModelId / MaxOutputTokens。
     /// </param>
-    public virtual async Task<ChatResponse> ChatAsync(
+    public override async Task<ChatResponse> ChatAsync(
         MicroChatContext ctx,
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null)
@@ -84,7 +111,7 @@ public abstract class ChatMicroProvider : MicroProvider
 
         if (response.Usage is { } usage)
         {
-            await TrackChatUsageAsync(
+            await TrackUsageAsync(
                 ctx,
                 usage.InputTokenCount ?? 0L,
                 usage.OutputTokenCount ?? 0L,
@@ -133,7 +160,7 @@ public abstract class ChatMicroProvider : MicroProvider
         const int maxIterations = 10;
 
         ChatOptions resolvedOptions = options ?? BuildDefaultChatOptions();
-        if (resolvedOptions.Tools is null && tools.Count > 0 && Config.Capabilities.SupportsFunctionCalling)
+        if (resolvedOptions.Tools is null && tools.Count > 0 && Config.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
             resolvedOptions.Tools = [.. tools];
 
         Channel<StreamItem> output = Channel.CreateUnbounded<StreamItem>(
@@ -211,7 +238,7 @@ public abstract class ChatMicroProvider : MicroProvider
 
             if (usage.Last is { } usageDetails)
             {
-                await TrackChatUsageAsync(
+                await TrackUsageAsync(
                     ctx,
                     usageDetails.InputTokenCount ?? 0L,
                     usageDetails.OutputTokenCount ?? 0L,

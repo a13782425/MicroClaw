@@ -1,5 +1,11 @@
 import { createListCollection } from '@chakra-ui/react'
-import type { ProviderCapabilities, ProviderProtocol } from '@/api/gateway'
+import type {
+  InputModality,
+  OutputModality,
+  ProviderCapabilities,
+  ProviderFeature,
+  ProviderProtocol,
+} from '@/api/gateway'
 
 export function protocolLabel(p: ProviderProtocol): string {
   return p === 'openai' ? 'OpenAI / 兼容' : 'Anthropic'
@@ -48,18 +54,18 @@ export function latencyTierFg(tier: string): string {
   return 'var(--mc-primary)'
 }
 
-export const INPUT_MODALITIES = [
-  { key: 'inputImage', label: '图片' },
-  { key: 'inputAudio', label: '音频' },
-  { key: 'inputVideo', label: '视频' },
-  { key: 'inputFile', label: '文件' },
-] as const
+export const INPUT_MODALITIES: { key: InputModality; label: string }[] = [
+  { key: 'Image', label: '图片' },
+  { key: 'Audio', label: '音频' },
+  { key: 'Video', label: '视频' },
+  { key: 'File', label: '文件' },
+]
 
-export const OUTPUT_MODALITIES = [
-  { key: 'outputImage', label: '图片' },
-  { key: 'outputAudio', label: '音频' },
-  { key: 'outputVideo', label: '视频' },
-] as const
+export const OUTPUT_MODALITIES: { key: OutputModality; label: string }[] = [
+  { key: 'Image', label: '图片' },
+  { key: 'Audio', label: '音频' },
+  { key: 'Video', label: '视频' },
+]
 
 export function defaultChatForm() {
   return {
@@ -70,15 +76,9 @@ export function defaultChatForm() {
     modelName: '',
     maxOutputTokens: 8192,
     isEnabled: true,
-    inputImage: false,
-    inputAudio: false,
-    inputVideo: false,
-    inputFile: false,
-    outputImage: false,
-    outputAudio: false,
-    outputVideo: false,
-    supportsFunctionCalling: true,
-    supportsResponsesApi: false,
+    inputs: ['Text'] as InputModality[],
+    outputs: ['Text'] as OutputModality[],
+    features: ['FunctionCalling'] as ProviderFeature[],
     inputPricePerMToken: '',
     outputPricePerMToken: '',
     cacheInputPricePerMToken: '',
@@ -109,9 +109,11 @@ export type EmbeddingFormState = ReturnType<typeof defaultEmbeddingForm>
 
 export function hasNonDefaultCapabilities(caps: ProviderCapabilities | undefined | null): boolean {
   if (!caps) return false
-  return caps.inputImage || caps.inputAudio || caps.inputVideo || caps.inputFile
-    || caps.outputImage || caps.outputAudio || caps.outputVideo
-    || caps.supportsFunctionCalling || caps.supportsResponsesApi
+  // 任何非 Text 输入/输出，或任何特殊能力，均视为非默认
+  const nonDefaultInputs = (caps.inputs ?? []).some((m) => m !== 'Text')
+  const nonDefaultOutputs = (caps.outputs ?? []).some((m) => m !== 'Text')
+  const hasFeatures = (caps.features ?? []).length > 0
+  return nonDefaultInputs || nonDefaultOutputs || hasFeatures
 }
 
 export function hasNonDefaultPricing(caps: ProviderCapabilities | undefined | null): boolean {
@@ -123,15 +125,9 @@ export function hasNonDefaultPricing(caps: ProviderCapabilities | undefined | nu
 
 export function buildChatCapabilities(form: ChatFormState): Partial<ProviderCapabilities> {
   return {
-    inputImage: form.inputImage,
-    inputAudio: form.inputAudio,
-    inputVideo: form.inputVideo,
-    inputFile: form.inputFile,
-    outputImage: form.outputImage,
-    outputAudio: form.outputAudio,
-    outputVideo: form.outputVideo,
-    supportsFunctionCalling: form.supportsFunctionCalling,
-    supportsResponsesApi: form.supportsResponsesApi,
+    inputs: form.inputs,
+    outputs: form.outputs,
+    features: form.features,
     inputPricePerMToken: parseFloat(form.inputPricePerMToken) || null,
     outputPricePerMToken: parseFloat(form.outputPricePerMToken) || null,
     cacheInputPricePerMToken: parseFloat(form.cacheInputPricePerMToken) || null,

@@ -42,10 +42,10 @@ public static class ModalityValidationMiddleware
 
                 bool supported = dc.MediaType?.ToLowerInvariant() switch
                 {
-                    { } m when m.StartsWith("image/", StringComparison.Ordinal) => caps.InputImage,
-                    { } m when m.StartsWith("audio/", StringComparison.Ordinal) => caps.InputAudio,
-                    { } m when m.StartsWith("video/", StringComparison.Ordinal) => caps.InputVideo,
-                    _ => caps.InputFile
+                    { } m when m.StartsWith("image/", StringComparison.Ordinal) => caps.Inputs.HasFlag(InputModality.Image),
+                    { } m when m.StartsWith("audio/", StringComparison.Ordinal) => caps.Inputs.HasFlag(InputModality.Audio),
+                    { } m when m.StartsWith("video/", StringComparison.Ordinal) => caps.Inputs.HasFlag(InputModality.Video),
+                    _ => caps.Inputs.HasFlag(InputModality.File)
                 };
 
                 if (supported)

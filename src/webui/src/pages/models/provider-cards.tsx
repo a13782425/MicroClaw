@@ -42,15 +42,15 @@ export function ChatCard({ p, onEdit, onDelete, onToggle, onSetDefault }: {
         )}
 
         <Flex gap="1" flexWrap="wrap" mb="3">
-          {p.capabilities?.inputImage && <Badge size="sm" bg="var(--mc-info-soft)" color="var(--mc-info)">图片输入</Badge>}
-          {p.capabilities?.inputAudio && <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">音频输入</Badge>}
-          {p.capabilities?.inputVideo && <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">视频输入</Badge>}
-          {p.capabilities?.inputFile && <Badge size="sm" bg="var(--mc-card-hover)" color="var(--mc-text-muted)">文件</Badge>}
-          {p.capabilities?.outputImage && <Badge size="sm" variant="outline" borderColor="var(--mc-info)" color="var(--mc-info)">图片输出</Badge>}
-          {p.capabilities?.outputAudio && <Badge size="sm" variant="outline" borderColor="var(--mc-accent)" color="var(--mc-accent)">音频输出</Badge>}
-          {p.capabilities?.outputVideo && <Badge size="sm" variant="outline" borderColor="var(--mc-primary)" color="var(--mc-primary)">视频输出</Badge>}
-          {p.capabilities?.supportsFunctionCalling && <Badge size="sm" bg="var(--mc-warning-soft)" color="var(--mc-warning)">Functions</Badge>}
-          {p.capabilities?.supportsResponsesApi && <Badge size="sm" bg="var(--mc-success-soft)" color="var(--mc-success)">Responses</Badge>}
+          {p.capabilities?.inputs?.includes('Image') && <Badge size="sm" bg="var(--mc-info-soft)" color="var(--mc-info)">图片输入</Badge>}
+          {p.capabilities?.inputs?.includes('Audio') && <Badge size="sm" bg="var(--mc-accent-soft)" color="var(--mc-accent)">音频输入</Badge>}
+          {p.capabilities?.inputs?.includes('Video') && <Badge size="sm" bg="var(--mc-primary-soft)" color="var(--mc-primary)">视频输入</Badge>}
+          {p.capabilities?.inputs?.includes('File') && <Badge size="sm" bg="var(--mc-card-hover)" color="var(--mc-text-muted)">文件</Badge>}
+          {p.capabilities?.outputs?.includes('Image') && <Badge size="sm" variant="outline" borderColor="var(--mc-info)" color="var(--mc-info)">图片输出</Badge>}
+          {p.capabilities?.outputs?.includes('Audio') && <Badge size="sm" variant="outline" borderColor="var(--mc-accent)" color="var(--mc-accent)">音频输出</Badge>}
+          {p.capabilities?.outputs?.includes('Video') && <Badge size="sm" variant="outline" borderColor="var(--mc-primary)" color="var(--mc-primary)">视频输出</Badge>}
+          {p.capabilities?.features?.includes('FunctionCalling') && <Badge size="sm" bg="var(--mc-warning-soft)" color="var(--mc-warning)">Functions</Badge>}
+          {p.capabilities?.features?.includes('ResponsesApi') && <Badge size="sm" bg="var(--mc-success-soft)" color="var(--mc-success)">Responses</Badge>}
           {(p.capabilities?.inputPricePerMToken || p.capabilities?.outputPricePerMToken) && (
             <Badge size="sm" variant="outline" borderColor="var(--mc-accent)" color="var(--mc-accent)">
               ${p.capabilities.inputPricePerMToken ?? '?'}/{p.capabilities.outputPricePerMToken ?? '?'}/M

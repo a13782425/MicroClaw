@@ -1,6 +1,7 @@
 using System.ClientModel;
+using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Core.Logging;
-using MicroClaw.Infrastructure.Data;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
@@ -14,8 +15,8 @@ namespace MicroClaw.Providers.OpenAI;
 public sealed class OpenAIEmbeddingMicroProvider : EmbeddingMicroProvider
 {
     /// <summary>通过 <see cref="ProviderConfig"/> 构造 OpenAI Embedding Provider。</summary>
-    public OpenAIEmbeddingMicroProvider(ProviderConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker)
+    public OpenAIEmbeddingMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
+        : base(configEntity, usageTracker)
     {
     }
 

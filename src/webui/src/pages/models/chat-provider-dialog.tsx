@@ -7,8 +7,11 @@ import { ChevronDown } from 'lucide-react'
 import {
   createProvider,
   updateProvider,
+  type InputModality,
+  type OutputModality,
   type ProviderConfig,
   type ProviderCreateRequest,
+  type ProviderFeature,
   type ProviderProtocol,
   type ProviderUpdateRequest,
 } from '@/api/gateway'
@@ -51,15 +54,9 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
           modelName: editing.modelName,
           maxOutputTokens: editing.maxOutputTokens,
           isEnabled: editing.isEnabled,
-          inputImage: caps?.inputImage ?? false,
-          inputAudio: caps?.inputAudio ?? false,
-          inputVideo: caps?.inputVideo ?? false,
-          inputFile: caps?.inputFile ?? false,
-          outputImage: caps?.outputImage ?? false,
-          outputAudio: caps?.outputAudio ?? false,
-          outputVideo: caps?.outputVideo ?? false,
-          supportsFunctionCalling: caps?.supportsFunctionCalling ?? false,
-          supportsResponsesApi: caps?.supportsResponsesApi ?? false,
+          inputs: caps?.inputs ?? ['Text'],
+          outputs: caps?.outputs ?? ['Text'],
+          features: caps?.features ?? [],
           inputPricePerMToken: caps?.inputPricePerMToken?.toString() ?? '',
           outputPricePerMToken: caps?.outputPricePerMToken?.toString() ?? '',
           cacheInputPricePerMToken: caps?.cacheInputPricePerMToken?.toString() ?? '',
@@ -77,6 +74,13 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
   if (!open) return null
 
   const set = (key: keyof ChatFormState, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }))
+
+  function toggleFlag<T extends string>(arr: T[], value: T, on: boolean): T[] {
+    const has = arr.includes(value)
+    if (on && !has) return [...arr, value]
+    if (!on && has) return arr.filter((v) => v !== value)
+    return arr
+  }
 
   const handleSave = async () => {
     if (!form.displayName.trim() || !form.modelName.trim()) {
@@ -219,7 +223,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
         </Collapsible.Trigger>
         <Collapsible.Content>
           <Box borderWidth="1px" rounded="md" p="3" mb="3">
-            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输入模态</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输入模态（Text 默认开启）</Text>
             <Flex gap="3" flexWrap="wrap" mb="3">
               {INPUT_MODALITIES.map((modality) => (
                 <CheckboxCard.Root
@@ -227,8 +231,8 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                   variant="subtle"
                   size="sm"
                   colorPalette="blue"
-                  checked={form[modality.key as keyof ChatFormState] as boolean}
-                  onCheckedChange={(e) => set(modality.key as keyof ChatFormState, !!e.checked)}
+                  checked={form.inputs.includes(modality.key as InputModality)}
+                  onCheckedChange={(e) => set('inputs', toggleFlag<InputModality>(form.inputs, modality.key as InputModality, !!e.checked))}
                 >
                   <CheckboxCard.HiddenInput />
                   <CheckboxCard.Control>
@@ -239,7 +243,7 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
               ))}
             </Flex>
 
-            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输出模态</Text>
+            <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">输出模态（Text 默认开启）</Text>
             <Flex gap="3" flexWrap="wrap" mb="3">
               {OUTPUT_MODALITIES.map((modality) => (
                 <CheckboxCard.Root
@@ -247,8 +251,8 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
                   variant="subtle"
                   size="sm"
                   colorPalette="blue"
-                  checked={form[modality.key as keyof ChatFormState] as boolean}
-                  onCheckedChange={(e) => set(modality.key as keyof ChatFormState, !!e.checked)}
+                  checked={form.outputs.includes(modality.key as OutputModality)}
+                  onCheckedChange={(e) => set('outputs', toggleFlag<OutputModality>(form.outputs, modality.key as OutputModality, !!e.checked))}
                 >
                   <CheckboxCard.HiddenInput />
                   <CheckboxCard.Control>
@@ -261,12 +265,20 @@ export function ChatProviderDialog({ open, editing, onClose, onSaved }: ChatProv
 
             <Text fontSize="xs" color="var(--mc-text-muted)" mb="2">特殊能力</Text>
             <Flex gap="4">
-              <Switch.Root size="sm" checked={form.supportsFunctionCalling} onCheckedChange={(details) => set('supportsFunctionCalling', details.checked)}>
+              <Switch.Root
+                size="sm"
+                checked={form.features.includes('FunctionCalling')}
+                onCheckedChange={(details) => set('features', toggleFlag<ProviderFeature>(form.features, 'FunctionCalling', details.checked))}
+              >
                 <Switch.HiddenInput />
                 <Switch.Control><Switch.Thumb /></Switch.Control>
                 <Switch.Label fontSize="xs">Function Calling</Switch.Label>
               </Switch.Root>
-              <Switch.Root size="sm" checked={form.supportsResponsesApi} onCheckedChange={(details) => set('supportsResponsesApi', details.checked)}>
+              <Switch.Root
+                size="sm"
+                checked={form.features.includes('ResponsesApi')}
+                onCheckedChange={(details) => set('features', toggleFlag<ProviderFeature>(form.features, 'ResponsesApi', details.checked))}
+              >
                 <Switch.HiddenInput />
                 <Switch.Control><Switch.Thumb /></Switch.Control>
                 <Switch.Label fontSize="xs">Responses API</Switch.Label>

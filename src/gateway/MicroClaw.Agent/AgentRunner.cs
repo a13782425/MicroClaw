@@ -310,7 +310,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
                     // Provider 内部驱动 FunctionInvokingChatClient + ChatClientAgent，
                     // 直接生成 StreamItem（含 token / thinking / tool_call / tool_result / usage）。
                     var responseAccumulator = new System.Text.StringBuilder();
-                    await foreach (StreamItem item in chatProvider.StreamAgentAsync(
+                    await foreach (StreamItem item in chatProvider.AgentStreamAsync(
                                        chatCtx,
                                        messages,
                                        toolResult.AllTools,
@@ -780,10 +780,10 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
             {
                 bool supported = att.MimeType switch
                 {
-                    string m when m.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => caps.InputImage,
-                    string m when m.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => caps.InputAudio,
-                    string m when m.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => caps.InputVideo,
-                    _ => caps.InputFile, // 其他类型视为文件
+                    string m when m.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => caps.Inputs.HasFlag(InputModality.Image),
+                    string m when m.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => caps.Inputs.HasFlag(InputModality.Audio),
+                    string m when m.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => caps.Inputs.HasFlag(InputModality.Video),
+                    _ => caps.Inputs.HasFlag(InputModality.File), // 其他类型视为文件
                 };
 
                 if (supported)
@@ -823,7 +823,7 @@ public sealed class AgentRunner : IAgentMessageHandler, IService
         if (!string.IsNullOrWhiteSpace(effortOverride))
             options.AdditionalProperties ??= new() { ["thinking_effort"] = effortOverride };
         // 仅在 Provider 声明支持 Function Calling 时附加工具
-        if (tools.Count > 0 && provider.Capabilities.SupportsFunctionCalling)
+        if (tools.Count > 0 && provider.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
             options.Tools = [.. tools];
         options.ToolMode = ChatToolMode.Auto;
         options.AllowMultipleToolCalls = true;

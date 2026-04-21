@@ -1,5 +1,6 @@
 using Anthropic;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Abstractions;
+using MicroClaw.Configuration.Options;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Providers.Claude;
@@ -12,8 +13,8 @@ namespace MicroClaw.Providers.Claude;
 public sealed class AnthropicChatMicroProvider : ChatMicroProvider
 {
     /// <summary>通过 <see cref="ProviderConfig"/> 构造 Anthropic Chat Provider。</summary>
-    public AnthropicChatMicroProvider(ProviderConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker)
+    public AnthropicChatMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
+        : base(configEntity, usageTracker)
     {
     }
 
