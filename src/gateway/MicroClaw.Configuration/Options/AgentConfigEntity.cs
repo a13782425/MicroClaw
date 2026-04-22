@@ -2,50 +2,98 @@ using YamlDotNet.Serialization;
 
 namespace MicroClaw.Configuration.Options;
 
+/// <summary>
+/// 单个 Agent 的持久化配置实体。
+/// </summary>
 public sealed record AgentConfigEntity
 {
-    [YamlMember(Alias = "id")]
+    /// <summary>
+    /// Agent 的唯一标识。
+    /// </summary>
+    [YamlMember(Alias = "id", Description = "Agent 的唯一标识。")]
     public string Id { get; set; } = string.Empty;
 
-    [YamlMember(Alias = "name")]
+    /// <summary>
+    /// Agent 的展示名称。
+    /// </summary>
+    [YamlMember(Alias = "name", Description = "Agent 的展示名称。")]
     public string Name { get; set; } = string.Empty;
 
-    [YamlMember(Alias = "description")]
+    /// <summary>
+    /// Agent 的功能描述，用于说明职责和用途。
+    /// </summary>
+    [YamlMember(Alias = "description", Description = "Agent 的功能描述，用于说明职责和用途。")]
     public string Description { get; set; } = string.Empty;
 
-    [YamlMember(Alias = "is_enabled")]
+    /// <summary>
+    /// 指示 Agent 当前是否启用。
+    /// </summary>
+    [YamlMember(Alias = "is_enabled", Description = "指示 Agent 当前是否启用。")]
     public bool IsEnabled { get; set; } = true;
 
-    [YamlMember(Alias = "disabled_skill_ids_json")]
+    /// <summary>
+    /// 被禁用的技能 ID 列表，使用 JSON 字符串持久化。
+    /// </summary>
+    [YamlMember(Alias = "disabled_skill_ids_json", Description = "被禁用的技能 ID 列表，使用 JSON 字符串持久化。")]
     public string? DisabledSkillIdsJson { get; set; }
 
-    [YamlMember(Alias = "disabled_mcp_server_ids_json")]
+    /// <summary>
+    /// 被禁用的 MCP 服务器 ID 列表，使用 JSON 字符串持久化。
+    /// </summary>
+    [YamlMember(Alias = "disabled_mcp_server_ids_json", Description = "被禁用的 MCP 服务器 ID 列表，使用 JSON 字符串持久化。")]
     public string? DisabledMcpServerIdsJson { get; set; }
 
-    [YamlMember(Alias = "tool_group_configs_json")]
+    /// <summary>
+    /// 工具分组配置，使用 JSON 字符串持久化。
+    /// </summary>
+    [YamlMember(Alias = "tool_group_configs_json", Description = "工具分组配置，使用 JSON 字符串持久化。")]
     public string? ToolGroupConfigsJson { get; set; }
 
-    [YamlMember(Alias = "created_at_ms")]
+    /// <summary>
+    /// 创建时间的 Unix 毫秒时间戳。
+    /// </summary>
+    [YamlMember(Alias = "created_at_ms", Description = "创建时间的 Unix 毫秒时间戳。")]
     public long CreatedAtMs { get; set; }
 
-    [YamlMember(Alias = "is_default")]
+    /// <summary>
+    /// 指示该 Agent 是否为系统默认 Agent。
+    /// </summary>
+    [YamlMember(Alias = "is_default", Description = "指示该 Agent 是否为系统默认 Agent。")]
     public bool IsDefault { get; set; }
 
-    [YamlMember(Alias = "context_window_messages")]
+    /// <summary>
+    /// 上下文窗口中保留的消息条数上限。
+    /// </summary>
+    [YamlMember(Alias = "context_window_messages", Description = "上下文窗口中保留的消息条数上限。")]
     public int? ContextWindowMessages { get; set; }
 
-    [YamlMember(Alias = "expose_as_a2a")]
+    /// <summary>
+    /// 指示该 Agent 是否暴露为 A2A 可发现节点。
+    /// </summary>
+    [YamlMember(Alias = "expose_as_a2a", Description = "指示该 Agent 是否暴露为 A2A 可发现节点。")]
     public bool ExposeAsA2A { get; set; }
 
-    [YamlMember(Alias = "allowed_sub_agent_ids_json")]
+    /// <summary>
+    /// 允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。
+    /// </summary>
+    [YamlMember(Alias = "allowed_sub_agent_ids_json", Description = "允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。")]
     public string? AllowedSubAgentIdsJson { get; set; }
 
-    [YamlMember(Alias = "routing_strategy")]
+    /// <summary>
+    /// Provider 路由策略名称。
+    /// </summary>
+    [YamlMember(Alias = "routing_strategy", Description = "Provider 路由策略名称。")]
     public string? RoutingStrategy { get; set; }
 
-    [YamlMember(Alias = "monthly_budget_usd")]
+    /// <summary>
+    /// 每月预算上限，单位为美元。
+    /// </summary>
+    [YamlMember(Alias = "monthly_budget_usd", Description = "每月预算上限，单位为美元。")]
     public decimal? MonthlyBudgetUsd { get; set; }
 
-    [YamlMember(Alias = "source_plugin")]
+    /// <summary>
+    /// 来源插件 ID，用于标识该 Agent 是否由插件注入。
+    /// </summary>
+    [YamlMember(Alias = "source_plugin", Description = "来源插件 ID，用于标识该 Agent 是否由插件注入。")]
     public string? SourcePlugin { get; set; }
 }

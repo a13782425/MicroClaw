@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
+using YamlDotNet.Serialization;
 
 namespace MicroClaw.Tests.Core;
 

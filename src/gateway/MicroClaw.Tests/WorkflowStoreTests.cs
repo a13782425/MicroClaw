@@ -3,7 +3,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using MicroClaw.Agent.Workflows;
 using MicroClaw.Configuration;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
 
 namespace MicroClaw.Tests;
@@ -19,6 +19,22 @@ public sealed class WorkflowStoreTests : IDisposable
         Directory.CreateDirectory(_configDir);
         Environment.SetEnvironmentVariable("MICROCLAW_HOME", _tempRoot);
         MicroClawConfig.Reset();
+    }
+
+    [Fact]
+    public void All_WhenSectionMissing_MaterializesWorkflowTemplate()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        WorkflowStore store = new();
+
+        store.All.Should().BeEmpty();
+        File.Exists(Path.Combine(_configDir, "workflows.yaml")).Should().BeTrue();
+        File.ReadAllText(Path.Combine(_configDir, "workflows.yaml")).Should().Contain("workflows:");
     }
 
     [Fact]

@@ -8,6 +8,6 @@ namespace MicroClaw.Configuration;
 public sealed class SandboxOptions : IMicroClawConfigOptions
 {
     /// <summary>下载 Token 的有效期（分钟），默认 60 分钟。</summary>
-    [YamlMember(Alias = "token_expiry_minutes")]
+    [YamlMember(Alias = "token_expiry_minutes", Description = "下载 Token 的有效期，单位为分钟。")]
     public int TokenExpiryMinutes { get; set; } = 60;
 }

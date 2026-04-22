@@ -1,7 +1,6 @@
 ﻿using System.Text.Json;
 using MicroClaw.Configuration;
-using MicroClaw.Infrastructure;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Utils;
 
 namespace MicroClaw.Agent.Workflows;

@@ -9,10 +9,16 @@ namespace MicroClaw.Configuration.Options;
 [MicroClawYamlConfig("agents", FileName = "agents.yaml", IsWritable = true)]
 public sealed class AgentsOptions : IMicroClawConfigTemplate
 {
-    [YamlMember(Alias = "sub_agent_max_depth")]
+    /// <summary>
+    /// 子 Agent 递归调用的最大深度，防止多级委派无限扩张。
+    /// </summary>
+    [YamlMember(Alias = "sub_agent_max_depth", Description = "子 Agent 递归调用的最大深度，防止多级委派无限扩张。")]
     public int SubAgentMaxDepth { get; set; } = 3;
 
-    [YamlMember(Alias = "items")]
+    /// <summary>
+    /// 当前系统中持久化的 Agent 配置列表。
+    /// </summary>
+    [YamlMember(Alias = "items", Description = "当前系统中持久化的 Agent 配置列表。")]
     public List<AgentConfigEntity> Items { get; set; } = [];
 
     public IMicroClawConfigOptions CreateDefaultTemplate() => new AgentsOptions();

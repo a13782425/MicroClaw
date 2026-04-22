@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using MicroClaw.Configuration;
-using MicroClaw.Infrastructure.Data;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Tools;
 using MicroClaw.Utils;
 

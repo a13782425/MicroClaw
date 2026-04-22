@@ -15,6 +15,8 @@ public sealed class HomeInitializerTests : IDisposable
         File.Exists(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "channels.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "logging.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().BeFalse();
     }
 
     [Fact]
@@ -27,6 +29,8 @@ public sealed class HomeInitializerTests : IDisposable
         File.ReadAllText(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().Contain("jwt_secret: please-change-this-secret-key-min-32-chars!!");
         File.ReadAllText(Path.Combine(_tempRoot, "config", "channels.yaml")).Should().Contain("channel:");
         File.ReadAllText(Path.Combine(_tempRoot, "config", "logging.yaml")).Should().Contain("serilog:");
+        File.ReadAllText(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().Contain("mcp_servers:");
+        File.ReadAllText(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().Contain("workflows:");
     }
 
     [Fact]
@@ -44,6 +48,41 @@ public sealed class HomeInitializerTests : IDisposable
         HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
 
         File.Exists(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void EnsureInitialized_WhenMainConfigAlreadyDefinesMcpServers_DoesNotCreateMcpTemplate()
+    {
+        Directory.CreateDirectory(_tempRoot);
+        File.WriteAllText(Path.Combine(_tempRoot, "microclaw.yaml"), """
+            mcp_servers:
+              items:
+                - id: existing-server
+                  name: Existing Server
+                  transport_type: stdio
+            """);
+
+        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
+
+        File.Exists(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void EnsureInitialized_WhenMainConfigAlreadyDefinesWorkflows_DoesNotCreateWorkflowTemplate()
+    {
+        Directory.CreateDirectory(_tempRoot);
+        File.WriteAllText(Path.Combine(_tempRoot, "microclaw.yaml"), """
+            workflows:
+              items:
+                - id: existing-workflow
+                  name: Existing Workflow
+                  description: Existing workflow description
+                  is_enabled: true
+            """);
+
+        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
+
+        File.Exists(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().BeFalse();
     }
 
     [Fact]

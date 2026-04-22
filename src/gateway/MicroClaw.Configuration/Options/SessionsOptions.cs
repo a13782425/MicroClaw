@@ -10,7 +10,10 @@ namespace MicroClaw.Configuration.Options;
 [MicroClawYamlConfig("sessions", FileName = "sessions.yaml", IsWritable = true)]
 public sealed class SessionsOptions : IMicroClawConfigTemplate
 {
-    [YamlMember(Alias = "items")]
+    /// <summary>
+    /// 当前系统中保存的会话元数据列表。
+    /// </summary>
+    [YamlMember(Alias = "items", Description = "当前系统中保存的会话元数据列表。")]
     public List<SessionEntity> Items { get; set; } = [];
 
     public IMicroClawConfigOptions CreateDefaultTemplate() => new SessionsOptions();

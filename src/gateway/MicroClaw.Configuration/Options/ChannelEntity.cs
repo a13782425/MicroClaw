@@ -22,18 +22,33 @@ public enum ChannelType
 /// </summary>
 public sealed class ChannelEntity
 {
-    [YamlMember(Alias = "id")]
+    /// <summary>
+    /// 渠道实例的唯一标识。
+    /// </summary>
+    [YamlMember(Alias = "id", Description = "渠道实例的唯一标识。")]
     public string Id { get; set; } = string.Empty;
 
-    [YamlMember(Alias = "display_name")]
+    /// <summary>
+    /// 渠道实例的展示名称。
+    /// </summary>
+    [YamlMember(Alias = "display_name", Description = "渠道实例的展示名称。")]
     public string DisplayName { get; set; } = string.Empty;
 
-    [YamlMember(Alias = "channel_type")]
+    /// <summary>
+    /// 渠道类型，例如 Web、飞书、企微或微信。
+    /// </summary>
+    [YamlMember(Alias = "channel_type", Description = "渠道类型，例如 Web、飞书、企微或微信。")]
     public ChannelType ChannelType { get; set; }
 
-    [YamlMember(Alias = "is_enabled")]
+    /// <summary>
+    /// 指示该渠道是否启用。
+    /// </summary>
+    [YamlMember(Alias = "is_enabled", Description = "指示该渠道是否启用。")]
     public bool IsEnabled { get; set; } = true;
 
-    [YamlMember(Alias = "setting_json")]
+    /// <summary>
+    /// 渠道特定配置，使用 JSON 字符串持久化。
+    /// </summary>
+    [YamlMember(Alias = "setting_json", Description = "渠道特定配置，使用 JSON 字符串持久化。")]
     public string SettingJson { get; set; } = "{}";
 }
