@@ -244,6 +244,27 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
+    public void Get_WhenAuthSectionMissing_MaterializesAuthTemplateFile()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        AuthOptions options = MicroClawConfig.Get<AuthOptions>();
+
+        options.Password.Should().Be(AuthOptions.DefaultPassword);
+        options.JwtSecret.Should().Be(AuthOptions.DefaultJwtSecret);
+
+        string filePath = Path.Combine(_configDir, "auth.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("auth:");
+        File.ReadAllText(filePath).Should().Contain($"password: {AuthOptions.DefaultPassword}");
+        File.ReadAllText(filePath).Should().Contain($"jwt_secret: {AuthOptions.DefaultJwtSecret}");
+    }
+
+    [Fact]
     public void Get_WhenTemplateSectionExists_DoesNotMaterializeTemplateFile()
     {
         IConfiguration configuration = new ConfigurationBuilder()

@@ -8,99 +8,42 @@ public sealed class HomeInitializerTests : IDisposable
     private readonly string _tempRoot = Path.Combine(Path.GetTempPath(), "microclaw-home-init-tests", Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void EnsureInitialized_WhenTemplateMaterializationDisabled_DoesNotCreateManagedYamlFiles()
+    public void EnsureInitialized_WhenCalled_CreatesBaseFilesWithoutManagedYamlFiles()
     {
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: false);
+        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null);
+
+        File.Exists(Path.Combine(_tempRoot, "microclaw.yaml")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempRoot, ".env")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempRoot, "config")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempRoot, "logs")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempRoot, "workspace", "sessions")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempRoot, "workspace", "skills")).Should().BeTrue();
+        Directory.Exists(Path.Combine(_tempRoot, "workspace", "cron")).Should().BeTrue();
 
         File.Exists(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "agents.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "channels.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "emotion.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "logging.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "providers.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "rag.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "sessions.yaml")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempRoot, "config", "skills.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().BeFalse();
     }
 
     [Fact]
-    public void EnsureInitialized_WhenTemplateMaterializationEnabled_CreatesManagedYamlFilesFromTemplates()
-    {
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
-
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().Contain("auth:");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().Contain("password: changeme");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().Contain("jwt_secret: please-change-this-secret-key-min-32-chars!!");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "channels.yaml")).Should().Contain("channel:");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "logging.yaml")).Should().Contain("serilog:");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().Contain("mcp_servers:");
-        File.ReadAllText(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().Contain("workflows:");
-    }
-
-    [Fact]
-    public void EnsureInitialized_WhenMainConfigAlreadyDefinesSection_DoesNotCreateOverridingChildTemplate()
-    {
-        Directory.CreateDirectory(_tempRoot);
-        File.WriteAllText(Path.Combine(_tempRoot, "microclaw.yaml"), """
-            auth:
-              username: existing-admin
-              password: existing-password
-              jwt_secret: existing-secret-key-min-32-chars!!
-              expires_hours: 12
-            """);
-
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
-
-        File.Exists(Path.Combine(_tempRoot, "config", "auth.yaml")).Should().BeFalse();
-    }
-
-    [Fact]
-    public void EnsureInitialized_WhenMainConfigAlreadyDefinesMcpServers_DoesNotCreateMcpTemplate()
-    {
-        Directory.CreateDirectory(_tempRoot);
-        File.WriteAllText(Path.Combine(_tempRoot, "microclaw.yaml"), """
-            mcp_servers:
-              items:
-                - id: existing-server
-                  name: Existing Server
-                  transport_type: stdio
-            """);
-
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
-
-        File.Exists(Path.Combine(_tempRoot, "config", "mcp-servers.yaml")).Should().BeFalse();
-    }
-
-    [Fact]
-    public void EnsureInitialized_WhenMainConfigAlreadyDefinesWorkflows_DoesNotCreateWorkflowTemplate()
-    {
-        Directory.CreateDirectory(_tempRoot);
-        File.WriteAllText(Path.Combine(_tempRoot, "microclaw.yaml"), """
-            workflows:
-              items:
-                - id: existing-workflow
-                  name: Existing Workflow
-                  description: Existing workflow description
-                  is_enabled: true
-            """);
-
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null, materializeTemplateConfigs: true);
-
-        File.Exists(Path.Combine(_tempRoot, "config", "workflows.yaml")).Should().BeFalse();
-    }
-
-    [Fact]
-    public void EnsureInitialized_WhenCustomMainConfigFileProvided_UsesItForTemplateConflictChecks()
+    public void EnsureInitialized_WhenCustomMainConfigFileProvided_WritesMainConfigAtCustomPath()
     {
         Directory.CreateDirectory(_tempRoot);
         string customConfigPath = Path.Combine(_tempRoot, "custom-main.yaml");
-        File.WriteAllText(customConfigPath, string.Join('\n',
-            "serilog:",
-            "  minimum_level:",
-            "    default: error",
-            string.Empty));
 
-        HomeInitializer.EnsureInitialized(_tempRoot, customConfigPath, materializeTemplateConfigs: true);
+        HomeInitializer.EnsureInitialized(_tempRoot, customConfigPath);
 
         File.Exists(Path.Combine(_tempRoot, "microclaw.yaml")).Should().BeFalse();
-        File.Exists(Path.Combine(_tempRoot, "config", "logging.yaml")).Should().BeFalse();
         File.Exists(customConfigPath).Should().BeTrue();
+        File.ReadAllText(customConfigPath).Should().Contain("$imports:");
     }
 
     [Fact]

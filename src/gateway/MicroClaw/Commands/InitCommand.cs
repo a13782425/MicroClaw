@@ -14,7 +14,7 @@ public class InitCommand : Command
 
 		var forceOption = new Option<bool>("--force")
 		{
-			Description = "覆盖已存在的配置文件"
+			Description = "覆盖已存在的主配置文件和 .env 示例文件"
 		};
 		forceOption.Aliases.Add("-f");
 
@@ -33,10 +33,10 @@ public class InitCommand : Command
 			Console.WriteLine($"初始化工作目录：{resolvedHome}");
 			Console.WriteLine();
 
-			HomeInitializer.EnsureInitialized(home, configFile, force, verbose: true, materializeTemplateConfigs: true);
+			HomeInitializer.EnsureInitialized(home, configFile, force, verbose: true);
 
 			Console.WriteLine();
-			Console.WriteLine("完成。请编辑 config/auth.yaml 修改默认密码和 JWT Secret。");
+			Console.WriteLine("完成。首次启动 serve 或首次读取认证配置时会自动生成 config/auth.yaml，请修改其中的默认 password 和 jwt_secret。");
 			return await Task.FromResult(0);
 		});
 	}

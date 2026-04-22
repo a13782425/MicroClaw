@@ -10,7 +10,9 @@
 dotnet run --project src/gateway/MicroClaw -- init
 ```
 
-这会在当前目录下创建 `.microclaw/` 并写入默认配置文件。
+这会在当前目录下创建 `.microclaw/`、目录骨架、主配置文件和 `.env` 示例文件。
+
+缺失的 `config/*.yaml` 会在首次读取对应配置时按需自动生成；例如首次启动 `serve` 会生成 `auth.yaml`。
 
 ### 方式二：手动从 example 复制
 
@@ -27,7 +29,7 @@ cp .microclaw/.env.example .microclaw/.env
 .microclaw/
 ├── microclaw.yaml          # 主配置文件（通过 $imports 导入 config/*.yaml）
 ├── .env                    # 环境变量（不提交到 Git）
-├── config/
+├── config/                 # 配置文件目录（可从 example 复制，或在首次使用时按需自动生成）
 │   ├── auth.yaml           # 认证配置（用户名、密码、JWT Secret）
 │   ├── channels.yaml       # 功能开关（启用的 Provider 和 Channel）
 │   ├── logging.yaml        # 日志配置（Serilog）

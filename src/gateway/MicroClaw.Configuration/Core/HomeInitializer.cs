@@ -1,8 +1,5 @@
 namespace MicroClaw.Configuration;
 
-using MicroClaw.Configuration.Options;
-using Microsoft.Extensions.Configuration;
-
 /// <summary>
 /// 共享初始化逻辑：解析工作目录、创建子目录、写入默认配置文件。
 /// </summary>
@@ -11,21 +8,6 @@ public static class HomeInitializer
     private static readonly (string RelativePath, string Content)[] ConfigFiles =
     [
         (".env",           InitDefaults.DotEnvExample),
-    ];
-
-    private static readonly Type[] TemplateConfigTypes =
-    [
-        typeof(AuthOptions),
-        typeof(ChannelOptions),
-        typeof(LoggingOptions),
-        typeof(McpServersOptions),
-        typeof(ProvidersOptions),
-        typeof(AgentsOptions),
-        typeof(SessionsOptions),
-        typeof(WorkflowsOptions),
-        typeof(SkillOptions),
-        typeof(EmotionOptions),
-        typeof(RagOptions),
     ];
 
     private static readonly string[] SubDirectories =
@@ -79,12 +61,10 @@ public static class HomeInitializer
         string? home,
         string? configFile,
         bool force = false,
-        bool verbose = false,
-        bool materializeTemplateConfigs = false)
+        bool verbose = false)
     {
         string homeDir = ResolveHome(home, configFile);
         string mainConfigPath = ResolveMainConfigPath(homeDir, configFile);
-        IConfiguration? existingConfiguration = null;
 
         // 创建所有子目录
         foreach (string subDir in SubDirectories)
@@ -113,17 +93,6 @@ public static class HomeInitializer
             File.WriteAllText(fullPath, content);
             if (verbose)
                 Console.WriteLine($"  created  {relativePath}");
-        }
-
-        if (!materializeTemplateConfigs)
-            return;
-
-        if (File.Exists(mainConfigPath))
-            existingConfiguration = new ConfigurationBuilder().AddMicroClawYaml(mainConfigPath).Build();
-
-        foreach (Type optionType in TemplateConfigTypes)
-        {
-            WriteTemplateConfigFile(homeDir, existingConfiguration, optionType, force, verbose);
         }
     }
 
@@ -154,38 +123,4 @@ public static class HomeInitializer
             Console.WriteLine($"  skipped  {relativePath}");
     }
 
-    private static void WriteTemplateConfigFile(string homeDir, IConfiguration? existingConfiguration, Type optionType, bool force, bool verbose)
-    {
-        MicroClawYamlConfigAttribute metadata = optionType.GetCustomAttributes(typeof(MicroClawYamlConfigAttribute), inherit: false)
-            .OfType<MicroClawYamlConfigAttribute>()
-            .Single();
-
-        if (string.IsNullOrWhiteSpace(metadata.FileName))
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少 FileName，无法用于初始化模板文件。");
-
-        if (Activator.CreateInstance(optionType) is not IMicroClawConfigTemplate templateProvider)
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 无法实例化模板提供器。");
-
-        if (existingConfiguration?.GetSection(metadata.SectionKey).Exists() == true && !force)
-        {
-            if (verbose)
-                Console.WriteLine($"  skipped  config/{metadata.FileName} (section already defined)");
-            return;
-        }
-
-        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate()
-            ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板不能为空。");
-
-        string fullPath = Path.Combine(homeDir, "config", metadata.FileName);
-        if (File.Exists(fullPath) && !force)
-        {
-            if (verbose)
-                Console.WriteLine($"  skipped  config/{metadata.FileName}");
-            return;
-        }
-
-        YamlSectionWriter.Write(fullPath, metadata.SectionKey, template);
-        if (verbose)
-            Console.WriteLine($"  created  config/{metadata.FileName}");
-    }
 }
