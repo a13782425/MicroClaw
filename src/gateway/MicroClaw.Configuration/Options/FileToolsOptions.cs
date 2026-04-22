@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration;
 
@@ -10,10 +9,10 @@ namespace MicroClaw.Configuration;
 public sealed class FileToolsOptions : IMicroClawConfigOptions
 {
     /// <summary>单次读取返回的最大字符数（默认 100,000）。</summary>
-    [ConfigurationKeyName("max_read_chars")]
+    [YamlMember(Alias = "max_read_chars")]
     public int MaxReadChars { get; set; } = 100_000;
 
     /// <summary>单次写入的最大字节数（默认 10 MB）。</summary>
-    [ConfigurationKeyName("max_file_write_bytes")]
+    [YamlMember(Alias = "max_file_write_bytes")]
     public long MaxFileWriteBytes { get; set; } = 10_000_000;
 }

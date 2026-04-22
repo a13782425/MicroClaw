@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using MicroClaw.Configuration;
 
 namespace MicroClaw.Configuration.Options;
@@ -9,8 +8,10 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
 [MicroClawYamlConfig("sessions", FileName = "sessions.yaml", IsWritable = true)]
-public sealed class SessionsOptions : IMicroClawConfigOptions
+public sealed class SessionsOptions : IMicroClawConfigTemplate
 {
-    [ConfigurationKeyName("items")]
+    [YamlMember(Alias = "items")]
     public List<SessionEntity> Items { get; set; } = [];
+
+    public IMicroClawConfigOptions CreateDefaultTemplate() => new SessionsOptions();
 }

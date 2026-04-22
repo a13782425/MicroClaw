@@ -78,6 +78,8 @@ public class ServeCommand : Command
 		string? configFile = MicroClawConfig.Env.Get(MICROCLAW_CONFIG_FILE);
 		if (!string.IsNullOrWhiteSpace(configFile))
 			builder.Configuration.AddMicroClawYaml(configFile);
+		builder.Configuration.AddEnvironmentVariables();
+		builder.Configuration.AddEnvironmentVariables("DOTNET_");
 
 		// 初始化静态配置门面（必须在 YAML 加载之后、使用配置之前）
 		MicroClawConfig.Initialize(builder.Configuration, MicroClawConfig.Env.ConfigDir);
@@ -105,27 +107,55 @@ public class ServeCommand : Command
 		builder.Host.UseSerilog((ctx, lc) =>
 		{
 			IConfiguration cfg = ctx.Configuration;
-			string logFilePath = MicroClawConfig.Env.LogFilePath;
-			string consoleTemplate = cfg["serilog:write_to:0:args:output_template"]
-				?? "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
-			string fileTemplate = cfg["serilog:write_to:1:args:output_template"]
-				?? "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+			LoggingOptions options = MicroClawConfig.Get<LoggingOptions>();
+			IReadOnlyList<LoggingSinkOptions> sinks = cfg.GetSection("serilog:write_to").Exists()
+				? options.WriteTo
+				: LoggingOptions.CreateDefaultSinks();
+			if (!sinks.Any(static sink => string.Equals(sink.Name, "console", StringComparison.OrdinalIgnoreCase) || string.Equals(sink.Name, "file", StringComparison.OrdinalIgnoreCase)))
+			{
+				sinks = LoggingOptions.CreateDefaultSinks();
+			}
 
-			lc.MinimumLevel.Is(ParseLevel(cfg["serilog:minimum_level:default"], LogEventLevel.Information))
+			IReadOnlyList<string> enrichers = cfg.GetSection("serilog:enrich").Exists()
+				? options.Enrich
+				: LoggingOptions.CreateDefaultEnrichers();
+			LoggingSinkOptions? consoleSink = GetLoggingSink(sinks, "console");
+			LoggingSinkOptions? fileSink = GetLoggingSink(sinks, "file");
+			string consoleTemplate = consoleSink?.Args.OutputTemplate
+				?? "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+			string fileTemplate = fileSink?.Args.OutputTemplate
+				?? "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+			string logFilePath = ResolveLogFilePath(fileSink?.Args.Path);
+			int retainedFileCountLimit = fileSink?.Args.RetainedFileCountLimit ?? 7;
+			RollingInterval rollingInterval = ParseRollingInterval(fileSink?.Args.RollingInterval, RollingInterval.Day);
+
+			lc.MinimumLevel.Is(ParseLevel(options.MinimumLevel.Default, LogEventLevel.Information))
 			  .MinimumLevel.Override("Microsoft.AspNetCore",
-				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.aspnetcore"], LogEventLevel.Warning))
+				  ParseLevel(options.MinimumLevel.Override.MicrosoftAspNetCore, LogEventLevel.Warning))
 			  .MinimumLevel.Override("Microsoft.Extensions.AI",
-				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.extensions.ai"], LogEventLevel.Debug))
+				  ParseLevel(options.MinimumLevel.Override.MicrosoftExtensionsAi, LogEventLevel.Debug))
 			  .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command",
-				  ParseLevel(cfg["serilog:minimum_level:override:microsoft.entityframeworkcore.database.command"], LogEventLevel.Warning))
-			  .Enrich.FromLogContext()
-			  .Enrich.WithMachineName()
-			  .Enrich.WithThreadId()
-			  .WriteTo.Console(outputTemplate: consoleTemplate)
-			  .WriteTo.File(logFilePath,
-				  rollingInterval: RollingInterval.Day,
-				  retainedFileCountLimit: 7,
-				  outputTemplate: fileTemplate);
+				  ParseLevel(options.MinimumLevel.Override.MicrosoftEntityFrameworkCoreDatabaseCommand, LogEventLevel.Warning));
+
+			if (enrichers.Contains("from_log_context", StringComparer.OrdinalIgnoreCase))
+				lc.Enrich.FromLogContext();
+			if (enrichers.Contains("with_machine_name", StringComparer.OrdinalIgnoreCase))
+				lc.Enrich.WithMachineName();
+			if (enrichers.Contains("with_thread_id", StringComparer.OrdinalIgnoreCase))
+				lc.Enrich.WithThreadId();
+
+			if (consoleSink is not null)
+			{
+				lc.WriteTo.Console(outputTemplate: consoleTemplate);
+			}
+
+			if (fileSink is not null)
+			{
+				lc.WriteTo.File(logFilePath,
+					rollingInterval: rollingInterval,
+					retainedFileCountLimit: retainedFileCountLimit,
+					outputTemplate: fileTemplate);
+			}
 		});
 	}
 
@@ -359,17 +389,8 @@ public class ServeCommand : Command
 	/// <summary>校验关键配置项安全性，不满足要求时记录 Warning 级别日志。</summary>
 	private static void ValidateStartupConfiguration(WebApplication app)
 	{
-		var logger = app.Logger;
-
-		string jwtSecret = MicroClawConfig.Get<AuthOptions>().JwtSecret;
-		int jwtSecretBytes = Encoding.UTF8.GetByteCount(jwtSecret);
-		if (jwtSecretBytes < 32)
-		{
-			logger.LogWarning(
-				"JWT secret 强度不足（当前 {Bytes} 字节，要求 ≥32 字节）。" +
-				"请在配置项 auth:jwt_secret 中设置 32 个字符以上的强密钥，否则存在被暴力破解的安全风险。",
-				jwtSecretBytes);
-		}
+		AuthOptions authOptions = MicroClawConfig.Get<AuthOptions>();
+		EnsureAuthConfigurationIsSafe(authOptions);
 	}
 
 	/// <summary>配置中间件管道：请求日志、认证授权、Swagger UI、默认文件、Brotli 预压缩及静态文件服务。</summary>
@@ -476,6 +497,45 @@ public class ServeCommand : Command
 	/// <summary>将字符串解析为 Serilog 日志级别，解析失败时返回 fallback。</summary>
 	private static LogEventLevel ParseLevel(string? value, LogEventLevel fallback) =>
 		Enum.TryParse<LogEventLevel>(value, ignoreCase: true, out LogEventLevel result)
+			? result
+			: fallback;
+
+	internal static void EnsureAuthConfigurationIsSafe(AuthOptions options)
+	{
+		if (string.Equals(options.Password, AuthOptions.DefaultPassword, StringComparison.Ordinal) ||
+			string.Equals(options.JwtSecret, AuthOptions.DefaultJwtSecret, StringComparison.Ordinal))
+		{
+			throw new InvalidOperationException(
+				"检测到默认认证占位值。请先在 auth.yaml 或环境变量中设置自定义 password 和 jwt_secret，再启动服务。");
+		}
+
+		int jwtSecretBytes = Encoding.UTF8.GetByteCount(options.JwtSecret);
+		if (jwtSecretBytes < 32)
+		{
+			throw new InvalidOperationException(
+				$"JWT secret 强度不足（当前 {jwtSecretBytes} 字节，要求 ≥32 字节）。请在配置项 auth:jwt_secret 中设置 32 个字符以上的强密钥后再启动服务。");
+		}
+	}
+
+	private static LoggingSinkOptions? GetLoggingSink(IEnumerable<LoggingSinkOptions> sinks, string sinkName)
+	{
+		return sinks.FirstOrDefault(sink => string.Equals(sink.Name, sinkName, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string ResolveLogFilePath(string? configuredPath)
+	{
+		if (string.IsNullOrWhiteSpace(configuredPath))
+			return MicroClawConfig.Env.LogFilePath;
+
+		if (Path.IsPathRooted(configuredPath))
+			return configuredPath;
+
+		string normalizedRelativePath = configuredPath.Replace('/', Path.DirectorySeparatorChar);
+		return Path.Combine(MicroClawConfig.Env.Home, normalizedRelativePath);
+	}
+
+	private static RollingInterval ParseRollingInterval(string? value, RollingInterval fallback) =>
+		Enum.TryParse<RollingInterval>(value, ignoreCase: true, out RollingInterval result)
 			? result
 			: fallback;
 }

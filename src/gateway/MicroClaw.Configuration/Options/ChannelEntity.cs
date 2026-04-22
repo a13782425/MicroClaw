@@ -1,5 +1,4 @@
-﻿using System.Text.Json.Serialization;
-using Microsoft.Extensions.Configuration;
+using System.Text.Json.Serialization;
 namespace MicroClaw.Configuration.Options;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -23,14 +22,18 @@ public enum ChannelType
 /// </summary>
 public sealed class ChannelEntity
 {
-    [ConfigurationKeyName("id")]
+    [YamlMember(Alias = "id")]
     public string Id { get; set; } = string.Empty;
-    [ConfigurationKeyName("display_name")]
+
+    [YamlMember(Alias = "display_name")]
     public string DisplayName { get; set; } = string.Empty;
-    [ConfigurationKeyName("channel_type")]
+
+    [YamlMember(Alias = "channel_type")]
     public ChannelType ChannelType { get; set; }
-    [ConfigurationKeyName("is_enabled")]
+
+    [YamlMember(Alias = "is_enabled")]
     public bool IsEnabled { get; set; } = true;
-    [ConfigurationKeyName("setting_json")]
+
+    [YamlMember(Alias = "setting_json")]
     public string SettingJson { get; set; } = "{}";
 }

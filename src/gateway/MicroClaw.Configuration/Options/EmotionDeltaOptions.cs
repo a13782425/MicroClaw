@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration;
 
@@ -9,18 +8,18 @@ namespace MicroClaw.Configuration;
 public sealed class EmotionDeltaOptions
 {
     /// <summary>警觉度变化量（正加负减，null=不变）。</summary>
-    [ConfigurationKeyName("alertness")]
+    [YamlMember(Alias = "alertness")]
     public int? Alertness { get; set; }
 
     /// <summary>心情变化量（正加负减，null=不变）。</summary>
-    [ConfigurationKeyName("mood")]
+    [YamlMember(Alias = "mood")]
     public int? Mood { get; set; }
 
     /// <summary>好奇心变化量（正加负减，null=不变）。</summary>
-    [ConfigurationKeyName("curiosity")]
+    [YamlMember(Alias = "curiosity")]
     public int? Curiosity { get; set; }
 
     /// <summary>信心变化量（正加负减，null=不变）。</summary>
-    [ConfigurationKeyName("confidence")]
+    [YamlMember(Alias = "confidence")]
     public int? Confidence { get; set; }
 }

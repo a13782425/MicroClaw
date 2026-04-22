@@ -225,6 +225,41 @@ public sealed class MicroClawConfigTests : IDisposable
         MicroClawConfig.IsOptionCached<TestInvalidFileNameOptions>().Should().BeFalse();
     }
 
+    [Fact]
+    public void Get_WhenTemplateSectionMissing_MaterializesTemplateFileUsingYamlMemberAliases()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        TestTemplateOptions options = MicroClawConfig.Get<TestTemplateOptions>();
+
+        options.Value.Should().Be("template-value");
+        string filePath = Path.Combine(_configDir, "test-template.yaml");
+        File.ReadAllText(filePath).Should().Contain("test_template:");
+        File.ReadAllText(filePath).Should().Contain("custom_value: template-value");
+    }
+
+    [Fact]
+    public void Get_WhenTemplateSectionExists_DoesNotMaterializeTemplateFile()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["test_template:custom_value"] = "configured-value",
+            })
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        TestTemplateOptions options = MicroClawConfig.Get<TestTemplateOptions>();
+
+        options.Value.Should().Be("configured-value");
+        File.Exists(Path.Combine(_configDir, "test-template.yaml")).Should().BeFalse();
+    }
+
     private void InitializeTestOptions(string? configDir = null)
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -241,48 +276,53 @@ public sealed class MicroClawConfigTests : IDisposable
     [MicroClawYamlConfig("test_writable", FileName = "test-writable.yaml", IsWritable = true)]
     private sealed class TestWritableOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 
     [MicroClawYamlConfig("test_readonly", FileName = "test-readonly.yaml", IsWritable = false)]
     private sealed class TestReadOnlyOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 
     [MicroClawYamlConfig("test_attribute_only", FileName = "test-attribute-only.yaml", IsWritable = true)]
     private sealed class TestAttributeOnlyOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 
     [MicroClawYamlConfig("test_writable", FileName = "test-duplicate.yaml", IsWritable = true)]
     private sealed class TestDuplicateSectionOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 
     [MicroClawYamlConfig("test_duplicate_file", FileName = "test-readonly.yaml", IsWritable = true)]
     private sealed class TestDuplicateFileOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 
     [MicroClawYamlConfig("test_invalid_file", FileName = "../invalid.yaml", IsWritable = true)]
     private sealed class TestInvalidFileNameOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
+    }
+
+    [MicroClawYamlConfig("test_template", FileName = "test-template.yaml", IsWritable = true)]
+    private sealed class TestTemplateOptions : IMicroClawConfigTemplate
+    {
+        [YamlMember(Alias = "custom_value")]
+        public string Value { get; set; } = string.Empty;
+
+        public IMicroClawConfigOptions CreateDefaultTemplate() => new TestTemplateOptions
+        {
+            Value = "template-value"
+        };
     }
 
     private sealed class TestInterfaceOnlyOptions : IMicroClawConfigOptions
     {
-        [ConfigurationKeyName("value")]
         public string Value { get; set; } = string.Empty;
     }
 }

@@ -49,9 +49,11 @@ public sealed class ConfigService
 
     public void UpdateSkillsConfig(SkillsConfigSection section)
     {
+        SkillOptions current = MicroClawConfig.Get<SkillOptions>();
+
         var filePath = Path.Combine(_configDir, "skills.yaml");
         if (!File.Exists(filePath))
-            throw new FileNotFoundException($"配置文件未找到: {filePath}");
+            MicroClawConfig.Save(current);
 
         var yaml = LoadYaml(filePath);
         var root = EnsureMappingRoot(yaml);
@@ -64,12 +66,23 @@ public sealed class ConfigService
         skillsNode.Children[new YamlScalarNode("additional_folders")] = seqNode;
 
         BackupAndSave(filePath, yaml);
+
+        MicroClawConfig.Update(new SkillOptions
+        {
+            AllowCommandInjection = current.AllowCommandInjection,
+            CatalogCharBudget = current.CatalogCharBudget,
+            DefaultFolder = current.DefaultFolder,
+            AdditionalFolders = [.. section.AdditionalFolders]
+        });
     }
 
     public void UpdateEmotionConfig(EmotionConfigSection section)
     {
+        EmotionOptions current = MicroClawConfig.Get<EmotionOptions>();
+
         var filePath = Path.Combine(_configDir, "emotion.yaml");
-        EnsureFileExists(filePath, "emotion:\n  cautious_alertness_threshold: 70\n");
+        if (!File.Exists(filePath))
+            MicroClawConfig.Save(current);
 
         var yaml = LoadYaml(filePath);
         var root = EnsureMappingRoot(yaml);
@@ -169,12 +182,6 @@ public sealed class ConfigService
         parent.Children[new YamlScalarNode(key)] = node;
     }
 
-    private static void EnsureFileExists(string filePath, string defaultContent)
-    {
-        if (File.Exists(filePath)) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
-        File.WriteAllText(filePath, defaultContent);
-    }
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────

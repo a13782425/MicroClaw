@@ -1,5 +1,8 @@
 namespace MicroClaw.Configuration;
 
+using MicroClaw.Configuration.Options;
+using Microsoft.Extensions.Configuration;
+
 /// <summary>
 /// 共享初始化逻辑：解析工作目录、创建子目录、写入默认配置文件。
 /// </summary>
@@ -7,16 +10,20 @@ public static class HomeInitializer
 {
     private static readonly (string RelativePath, string Content)[] ConfigFiles =
     [
-        ("microclaw.yaml",         InitDefaults.MicroclawYaml),
-        ("config/auth.yaml",       InitDefaults.AuthYaml),
-        ("config/channels.yaml",   InitDefaults.ChannelsYaml),
-        ("config/logging.yaml",    InitDefaults.LoggingYaml),
-        ("config/skills.yaml",     InitDefaults.SkillsYaml),
-        ("config/emotion.yaml",    InitDefaults.EmotionYaml),
-        ("config/agents.yaml",     InitDefaults.AgentsYaml),
-        ("config/sessions.yaml",   InitDefaults.SessionsYaml),
-        ("config/providers.yaml",  InitDefaults.ProvidersYaml),
         (".env",           InitDefaults.DotEnvExample),
+    ];
+
+    private static readonly Type[] TemplateConfigTypes =
+    [
+        typeof(AuthOptions),
+        typeof(ChannelOptions),
+        typeof(LoggingOptions),
+        typeof(ProvidersOptions),
+        typeof(AgentsOptions),
+        typeof(SessionsOptions),
+        typeof(SkillOptions),
+        typeof(EmotionOptions),
+        typeof(RagOptions),
     ];
 
     private static readonly string[] SubDirectories =
@@ -43,6 +50,23 @@ public static class HomeInitializer
     }
 
     /// <summary>
+    /// Validates that HOME and CONFIG_FILE resolve to the same working directory when both are provided.
+    /// </summary>
+    public static void EnsureConsistentHomeAndConfigFile(string? home, string? configFile)
+    {
+        if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(configFile))
+            return;
+
+        string normalizedHome = Path.GetFullPath(home);
+        string normalizedConfigDirectory = Path.GetDirectoryName(Path.GetFullPath(configFile))!;
+        if (!string.Equals(normalizedHome, normalizedConfigDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "MICROCLAW_HOME 与 MICROCLAW_CONFIG_FILE 必须指向同一工作目录。请保持主配置文件位于 HOME 目录下，或仅设置其中一个环境变量。");
+        }
+    }
+
+    /// <summary>
     /// 确保工作目录存在并包含所有必要的子目录和默认配置文件。
     /// </summary>
     /// <param name="home">MICROCLAW_HOME 环境变量值（可为 null）</param>
@@ -53,9 +77,12 @@ public static class HomeInitializer
         string? home,
         string? configFile,
         bool force = false,
-        bool verbose = false)
+        bool verbose = false,
+        bool materializeTemplateConfigs = false)
     {
         string homeDir = ResolveHome(home, configFile);
+        string mainConfigPath = ResolveMainConfigPath(homeDir, configFile);
+        IConfiguration? existingConfiguration = null;
 
         // 创建所有子目录
         foreach (string subDir in SubDirectories)
@@ -63,6 +90,8 @@ public static class HomeInitializer
             string fullPath = Path.Combine(homeDir, subDir);
             Directory.CreateDirectory(fullPath);
         }
+
+        WriteMainConfigFile(homeDir, mainConfigPath, force, verbose);
 
         // 写入默认配置文件
         foreach ((string relativePath, string content) in ConfigFiles)
@@ -83,5 +112,78 @@ public static class HomeInitializer
             if (verbose)
                 Console.WriteLine($"  created  {relativePath}");
         }
+
+        if (!materializeTemplateConfigs)
+            return;
+
+        if (File.Exists(mainConfigPath))
+            existingConfiguration = new ConfigurationBuilder().AddMicroClawYaml(mainConfigPath).Build();
+
+        foreach (Type optionType in TemplateConfigTypes)
+        {
+            WriteTemplateConfigFile(homeDir, existingConfiguration, optionType, force, verbose);
+        }
+    }
+
+    private static string ResolveMainConfigPath(string homeDir, string? configFile)
+    {
+        if (!string.IsNullOrWhiteSpace(configFile))
+            return Path.GetFullPath(configFile);
+
+        return Path.Combine(homeDir, "microclaw.yaml");
+    }
+
+    private static void WriteMainConfigFile(string homeDir, string mainConfigPath, bool force, bool verbose)
+    {
+        string? configDirectory = Path.GetDirectoryName(mainConfigPath);
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+            Directory.CreateDirectory(configDirectory);
+
+        string relativePath = Path.GetRelativePath(homeDir, mainConfigPath).Replace('\\', '/');
+        if (!File.Exists(mainConfigPath) || force)
+        {
+            File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
+            if (verbose)
+                Console.WriteLine($"  created  {relativePath}");
+            return;
+        }
+
+        if (verbose)
+            Console.WriteLine($"  skipped  {relativePath}");
+    }
+
+    private static void WriteTemplateConfigFile(string homeDir, IConfiguration? existingConfiguration, Type optionType, bool force, bool verbose)
+    {
+        MicroClawYamlConfigAttribute metadata = optionType.GetCustomAttributes(typeof(MicroClawYamlConfigAttribute), inherit: false)
+            .OfType<MicroClawYamlConfigAttribute>()
+            .Single();
+
+        if (string.IsNullOrWhiteSpace(metadata.FileName))
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少 FileName，无法用于初始化模板文件。");
+
+        if (Activator.CreateInstance(optionType) is not IMicroClawConfigTemplate templateProvider)
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 无法实例化模板提供器。");
+
+        if (existingConfiguration?.GetSection(metadata.SectionKey).Exists() == true && !force)
+        {
+            if (verbose)
+                Console.WriteLine($"  skipped  config/{metadata.FileName} (section already defined)");
+            return;
+        }
+
+        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate()
+            ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板不能为空。");
+
+        string fullPath = Path.Combine(homeDir, "config", metadata.FileName);
+        if (File.Exists(fullPath) && !force)
+        {
+            if (verbose)
+                Console.WriteLine($"  skipped  config/{metadata.FileName}");
+            return;
+        }
+
+        YamlSectionWriter.Write(fullPath, metadata.SectionKey, template);
+        if (verbose)
+            Console.WriteLine($"  created  config/{metadata.FileName}");
     }
 }

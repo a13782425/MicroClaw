@@ -10,11 +10,15 @@ public static class DotEnvLoader
     public static void Load()
     {
         var home = Environment.GetEnvironmentVariable(MICROCLAW_HOME);
+        var configFile = Environment.GetEnvironmentVariable(MICROCLAW_CONFIG_FILE);
         if (string.IsNullOrWhiteSpace(home))
         {
-            home = Path.Combine(Directory.GetCurrentDirectory(), "../.microclaw");
+            home = HomeInitializer.ResolveHome(home: null, configFile: configFile);
             Environment.SetEnvironmentVariable(MICROCLAW_HOME, home);
         }
+
+        HomeInitializer.EnsureConsistentHomeAndConfigFile(home, configFile);
+
         string envPath = Path.Combine(home, ".env");
         if (File.Exists(envPath))
         {
@@ -26,7 +30,9 @@ public static class DotEnvLoader
                 var idx = trimmed.IndexOf('=');
                 var key = trimmed[..idx].Trim();
                 if (key == MICROCLAW_HOME)
-                    continue;
+                    throw new InvalidOperationException("MICROCLAW_HOME 不能定义在 .env 中。请在启动进程前通过外部环境变量设置它。");
+                if (key == MICROCLAW_CONFIG_FILE)
+                    throw new InvalidOperationException("MICROCLAW_CONFIG_FILE 不能定义在 .env 中。请在启动进程前通过外部环境变量设置它。");
                 var value = trimmed[(idx + 1)..].Trim().Trim('"').Trim('\'');
                 
                 if (!string.IsNullOrEmpty(key) && Environment.GetEnvironmentVariable(key) is null)
@@ -38,6 +44,7 @@ public static class DotEnvLoader
         // 确保工作目录和默认配置文件存在（不覆盖用户已有文件）
         HomeInitializer.EnsureInitialized(Environment.GetEnvironmentVariable(MICROCLAW_HOME), Environment.GetEnvironmentVariable(MICROCLAW_CONFIG_FILE));
     }
+
     private static void InitDefaultEnv()
     {
         var home = Environment.GetEnvironmentVariable(MICROCLAW_HOME);

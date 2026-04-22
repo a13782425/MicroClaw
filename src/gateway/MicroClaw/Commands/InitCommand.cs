@@ -25,13 +25,15 @@ public class InitCommand : Command
 		{
 			string? home = result.GetValue(homeOption)
 				?? Environment.GetEnvironmentVariable("MICROCLAW_HOME");
+			string? configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
+			HomeInitializer.EnsureConsistentHomeAndConfigFile(home, configFile);
 			bool force = result.GetValue(forceOption);
 
-			string resolvedHome = HomeInitializer.ResolveHome(home, configFile: null);
+			string resolvedHome = HomeInitializer.ResolveHome(home, configFile);
 			Console.WriteLine($"初始化工作目录：{resolvedHome}");
 			Console.WriteLine();
 
-			HomeInitializer.EnsureInitialized(home, configFile: null, force, verbose: true);
+			HomeInitializer.EnsureInitialized(home, configFile, force, verbose: true, materializeTemplateConfigs: true);
 
 			Console.WriteLine();
 			Console.WriteLine("完成。请编辑 config/auth.yaml 修改默认密码和 JWT Secret。");

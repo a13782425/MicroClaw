@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using MicroClaw.Configuration;
 
 namespace MicroClaw.Configuration.Options;
@@ -9,8 +8,10 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
 [MicroClawYamlConfig("providers", FileName = "providers.yaml", IsWritable = true)]
-public sealed class ProvidersOptions : IMicroClawConfigOptions
+public sealed class ProvidersOptions : IMicroClawConfigTemplate
 {
-    [ConfigurationKeyName("items")]
+    [YamlMember(Alias = "items")]
     public List<ProviderConfigEntity> Items { get; set; } = [];
+
+    public IMicroClawConfigOptions CreateDefaultTemplate() => new ProvidersOptions();
 }

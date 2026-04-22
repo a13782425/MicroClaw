@@ -1,7 +1,7 @@
 namespace MicroClaw.Configuration;
 
 /// <summary>
-/// 各配置文件的默认内容，用于 init 命令和 serve 自动初始化。
+/// 仍需由初始化器直接写入的默认内容。
 /// </summary>
 public static class InitDefaults
 {
@@ -14,60 +14,6 @@ public static class InitDefaults
 
         $imports:
           - ./config/*.yaml
-        """;
-
-    public const string AuthYaml = """
-        # 认证配置
-        # 敏感字段建议通过环境变量覆盖，例如：
-        #   DOTNET_auth__password=your-password
-        #   DOTNET_auth__jwt_secret=your-secret
-
-        auth:
-          username: "admin"
-          password: "changeme"
-          jwt_secret: "please-change-this-secret-key-min-32-chars!!"
-          expires_hours: 8
-        """;
-
-    public const string ChannelsYaml = """
-        # 功能开关：启用的 Provider 和 Channel
-        # 支持的 providers: openai, claude
-        # 支持的 channels: feishu, wecom, wechat
-
-        features:
-          providers:
-            - openai
-            - claude
-          channels:
-            - feishu
-            - wecom
-            - wechat
-        """;
-
-    public const string LoggingYaml = """
-        # Serilog 日志配置
-        # microsoft.extensions.ai 设为 debug 可查看 AI 请求/响应日志
-
-        serilog:
-          minimum_level:
-            default: information
-            override:
-              microsoft.aspnetcore: warning
-              microsoft.extensions.ai: debug
-          write_to:
-            - name: console
-              args:
-                output_template: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"
-            - name: file
-              args:
-                path: "logs/microclaw-.log"
-                rolling_interval: day
-                retained_file_count_limit: 7
-                output_template: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
-          enrich:
-            - from_log_context
-            - with_machine_name
-            - with_thread_id
         """;
 
     public const string ProvidersYaml = """
@@ -179,11 +125,11 @@ public static class InitDefaults
         # MicroClaw 环境变量示例
         # 复制为 .env 并填入实际值，服务启动时会自动加载
 
-        # 工作目录（覆盖默认的 .microclaw/）
-        # MICROCLAW_HOME=/path/to/.microclaw
+        # 工作目录需在启动进程前通过外部环境变量设置，不能写在 .env 中
+        # 示例（PowerShell）：$env:MICROCLAW_HOME = "/path/to/.microclaw"
 
-        # 主配置文件路径（覆盖默认的 $MICROCLAW_HOME/microclaw.yaml）
-        # MICROCLAW_CONFIG_FILE=/path/to/microclaw.yaml
+        # 主配置文件路径也需在启动进程前通过外部环境变量设置，不能写在 .env 中
+        # 示例（PowerShell）：$env:MICROCLAW_CONFIG_FILE = "/path/to/microclaw.yaml"
 
         # 服务监听地址与端口（默认 localhost:5080）
         # GATEWAY_HOST=0.0.0.0

@@ -16,6 +16,11 @@ public sealed class MicroClawYamlConfigAttribute(string sectionKey) : Attribute
     /// Gets or sets the YAML file name used by <see cref="MicroClawConfig.Save{T}(T)"/>.
     /// </summary>
     public string? FileName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the header comment that should be emitted before the YAML document.
+    /// </summary>
+    public string? HeaderComment { get; set; }
     
     /// <summary>
     /// Gets or sets a value indicating whether the option type supports YAML write-back.

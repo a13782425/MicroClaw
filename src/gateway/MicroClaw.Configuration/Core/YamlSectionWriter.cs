@@ -1,5 +1,6 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using System.Reflection;
 
 namespace MicroClaw.Configuration;
 
@@ -26,7 +27,7 @@ public static class YamlSectionWriter
 
         // Wrap in section key so the output is:  sectionKey:\n  field: value
         var wrapper = new Dictionary<string, object> { { sectionKey, value } };
-        string yaml = Serializer.Serialize(wrapper);
+        string yaml = BuildDocument(value.GetType(), Serializer.Serialize(wrapper));
 
         const int maxRetries = 5;
         const int retryDelayMs = 20;
@@ -45,5 +46,19 @@ public static class YamlSectionWriter
                 Thread.Sleep(retryDelayMs);
             }
         }
+    }
+
+    private static string BuildDocument(Type valueType, string body)
+    {
+        MicroClawYamlConfigAttribute? metadata = valueType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false);
+        if (string.IsNullOrWhiteSpace(metadata?.HeaderComment))
+            return body;
+
+        var commentLines = metadata.HeaderComment
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Select(static line => string.IsNullOrWhiteSpace(line) ? "#" : $"# {line}");
+
+        return string.Join(Environment.NewLine, commentLines) + Environment.NewLine + Environment.NewLine + body;
     }
 }

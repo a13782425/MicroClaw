@@ -1,11 +1,10 @@
-using Microsoft.Extensions.Configuration;
 namespace MicroClaw.Configuration;
 
 /// <summary>
 /// Skills 模块配置选项，从配置文件 skills: 节点读取。
 /// </summary>
 [MicroClawYamlConfig("skills", FileName = "skills.yaml", IsWritable = true)]
-public sealed class SkillOptions : IMicroClawConfigOptions
+public sealed class SkillOptions : IMicroClawConfigTemplate
 {
     /// <summary>
     /// 是否允许在技能指令中执行 !`command` shell 命令注入。
@@ -14,7 +13,7 @@ public sealed class SkillOptions : IMicroClawConfigOptions
     /// 并将输出替换进指令文本后再发送给 Claude。
     /// 仅在完全信任技能来源时开启；生产环境建议保持关闭。
     /// </summary>
-    [ConfigurationKeyName("allow_command_injection")]
+    [YamlMember(Alias = "allow_command_injection")]
     public bool AllowCommandInjection { get; set; } = false;
 
     /// <summary>
@@ -22,7 +21,7 @@ public sealed class SkillOptions : IMicroClawConfigOptions
     /// 超出预算时将截断末尾条目并附加 "[truncated]" 提示。
     /// 默认 16000 字符；设为 0 表示不限制。
     /// </summary>
-    [ConfigurationKeyName("catalog_char_budget")]
+    [YamlMember(Alias = "catalog_char_budget")]
     public int CatalogCharBudget { get; set; } = 16_000;
 
     /// <summary>
@@ -31,13 +30,15 @@ public sealed class SkillOptions : IMicroClawConfigOptions
     /// 默认值 "skills" 对应 {workspaceRoot}/skills/。
     /// 新技能（通过 AI 创建）将写入此文件夹。
     /// </summary>
-    [ConfigurationKeyName("default_folder")]
+    [YamlMember(Alias = "default_folder")]
     public string DefaultFolder { get; set; } = "skills";
 
     /// <summary>
     /// 附加技能文件夹路径列表（相对 workspaceRoot 或绝对路径）。
     /// 这些文件夹在扫描和查找时会一并考虑，但新技能不会写入这些文件夹。
     /// </summary>
-    [ConfigurationKeyName("additional_folders")]
+    [YamlMember(Alias = "additional_folders")]
     public List<string> AdditionalFolders { get; set; } = [];
+
+    public IMicroClawConfigOptions CreateDefaultTemplate() => new SkillOptions();
 }

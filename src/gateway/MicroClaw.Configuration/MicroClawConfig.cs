@@ -265,9 +265,42 @@ public static class MicroClawConfig
         return new Lazy<object>(() =>
         {
             object instance = Activator.CreateInstance(descriptor.OptionsType)!;
-            configuration.GetSection(descriptor.SectionKey).Bind(instance);
-            return instance;
+            IConfigurationSection section = configuration.GetSection(descriptor.SectionKey);
+            YamlAwareBinder.Bind(section, instance);
+
+            if (instance is not IMicroClawConfigTemplate templateProvider)
+                return instance;
+
+            bool sectionMissing = !section.Exists();
+            if (!sectionMissing)
+                return instance;
+
+            return MaterializeTemplate(descriptor, templateProvider);
         }, LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    private static object MaterializeTemplate(MicroClawConfigTypeDescriptor descriptor, IMicroClawConfigTemplate templateProvider)
+    {
+        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate()
+            ?? throw new InvalidOperationException($"配置类型 {descriptor.OptionsType.Name} 的默认模板不能为空。");
+
+        if (!descriptor.OptionsType.IsInstanceOfType(template))
+        {
+            throw new InvalidOperationException(
+                $"配置类型 {descriptor.OptionsType.Name} 的默认模板实例类型必须与 {descriptor.OptionsType.Name} 兼容。");
+        }
+
+        string filePath = GetDescriptorFilePath(descriptor);
+        YamlSectionWriter.Write(filePath, descriptor.SectionKey, template);
+        return template;
+    }
+
+    private static string GetDescriptorFilePath(MicroClawConfigTypeDescriptor descriptor)
+    {
+        if (string.IsNullOrWhiteSpace(descriptor.FileName))
+            throw new InvalidOperationException($"配置类型 {descriptor.OptionsType.Name} 缺少可落盘的 FileName 元数据。");
+
+        return Path.Combine(_configDir!, descriptor.FileName);
     }
     
     private static Lazy<object> CreateValueLazy(object value)

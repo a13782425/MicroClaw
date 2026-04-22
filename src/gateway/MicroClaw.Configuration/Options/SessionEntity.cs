@@ -1,33 +1,32 @@
-using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration.Options;
 public sealed record SessionEntity
 {
-    [ConfigurationKeyName("id")]
+    [YamlMember(Alias = "id")]
     public string Id { get; set; } = string.Empty;
     
-    [ConfigurationKeyName("title")]
+    [YamlMember(Alias = "title")]
     public string Title { get; set; } = string.Empty;
     
-    [ConfigurationKeyName("provider_id")]
+    [YamlMember(Alias = "provider_id")]
     public string ProviderId { get; set; } = string.Empty;
     
-    [ConfigurationKeyName("is_approved")]
+    [YamlMember(Alias = "is_approved")]
     public bool IsApproved { get; set; }
     
-    [ConfigurationKeyName("channel_type")]
+    [YamlMember(Alias = "channel_type")]
     public string ChannelType { get; set; } = "web";
     
-    [ConfigurationKeyName("channel_id")]
+    [YamlMember(Alias = "channel_id")]
     public string ChannelId { get; set; } = "web";
     
-    [ConfigurationKeyName("created_at_ms")]
+    [YamlMember(Alias = "created_at_ms")]
     public long CreatedAtMs { get; set; }
     
-    [ConfigurationKeyName("agent_id")]
+    [YamlMember(Alias = "agent_id")]
     public string? AgentId { get; set; }
     
-    [ConfigurationKeyName("approval_reason")]
+    [YamlMember(Alias = "approval_reason")]
     public string? ApprovalReason { get; set; }
     
     public SessionEntity DeepClone() =>

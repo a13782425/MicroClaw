@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration.Options;
 
@@ -8,11 +7,13 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
 [MicroClawYamlConfig("agents", FileName = "agents.yaml", IsWritable = true)]
-public sealed class AgentsOptions : IMicroClawConfigOptions
+public sealed class AgentsOptions : IMicroClawConfigTemplate
 {
-    [ConfigurationKeyName("sub_agent_max_depth")]
+    [YamlMember(Alias = "sub_agent_max_depth")]
     public int SubAgentMaxDepth { get; set; } = 3;
 
-    [ConfigurationKeyName("items")]
+    [YamlMember(Alias = "items")]
     public List<AgentConfigEntity> Items { get; set; } = [];
+
+    public IMicroClawConfigOptions CreateDefaultTemplate() => new AgentsOptions();
 }
