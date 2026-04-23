@@ -20,33 +20,34 @@ public static class HomeInitializer
     ];
 
     /// <summary>
-    /// 解析工作目录路径，优先级：MICROCLAW_HOME > configFile 同级目录 > ./.microclaw
+    /// 解析工作目录路径，优先级：MICROCLAW_HOME > ./.microclaw
     /// </summary>
-    public static string ResolveHome(string? home, string? configFile)
+    public static string ResolveHome(string? home)
     {
         if (!string.IsNullOrWhiteSpace(home))
             return Path.GetFullPath(home);
-
-        if (!string.IsNullOrWhiteSpace(configFile))
-            return Path.GetDirectoryName(Path.GetFullPath(configFile))!;
 
         return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw");
     }
 
     /// <summary>
-    /// Validates that HOME and CONFIG_FILE resolve to the same working directory when both are provided.
+    /// 无兼容模式下，旧主配置契约必须显式失败，避免静默回退到错误工作目录。
     /// </summary>
-    public static void EnsureConsistentHomeAndConfigFile(string? home, string? configFile)
+    public static void EnsureLegacyConfigContractIsAbsent(string? home)
     {
-        if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(configFile))
-            return;
-
-        string normalizedHome = Path.GetFullPath(home);
-        string normalizedConfigDirectory = Path.GetDirectoryName(Path.GetFullPath(configFile))!;
-        if (!string.Equals(normalizedHome, normalizedConfigDirectory, StringComparison.OrdinalIgnoreCase))
+        string? legacyConfigFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
+        if (!string.IsNullOrWhiteSpace(legacyConfigFile))
         {
             throw new InvalidOperationException(
-                "MICROCLAW_HOME 与 MICROCLAW_CONFIG_FILE 必须指向同一工作目录。请保持主配置文件位于 HOME 目录下，或仅设置其中一个环境变量。");
+                "MICROCLAW_CONFIG_FILE 已废弃。请改用 MICROCLAW_HOME 指向工作目录，并将配置迁移到 HOME/config/*.yaml。");
+        }
+
+        string homeDir = ResolveHome(home);
+        string legacyMainConfigPath = Path.Combine(homeDir, "microclaw.yaml");
+        if (File.Exists(legacyMainConfigPath))
+        {
+            throw new InvalidOperationException(
+                "microclaw.yaml 主配置已废弃。请将配置迁移到 HOME/config/*.yaml 后再启动。");
         }
     }
 
@@ -54,17 +55,14 @@ public static class HomeInitializer
     /// 确保工作目录存在并包含所有必要的子目录和默认配置文件。
     /// </summary>
     /// <param name="home">MICROCLAW_HOME 环境变量值（可为 null）</param>
-    /// <param name="configFile">MICROCLAW_CONFIG_FILE 环境变量值（可为 null）</param>
     /// <param name="force">true 时覆盖已存在的配置文件</param>
     /// <param name="verbose">true 时向控制台输出 created/skipped 信息</param>
     public static void EnsureInitialized(
         string? home,
-        string? configFile,
         bool force = false,
         bool verbose = false)
     {
-        string homeDir = ResolveHome(home, configFile);
-        string mainConfigPath = ResolveMainConfigPath(homeDir, configFile);
+        string homeDir = ResolveHome(home);
 
         // 创建所有子目录
         foreach (string subDir in SubDirectories)
@@ -72,8 +70,6 @@ public static class HomeInitializer
             string fullPath = Path.Combine(homeDir, subDir);
             Directory.CreateDirectory(fullPath);
         }
-
-        WriteMainConfigFile(homeDir, mainConfigPath, force, verbose);
 
         // 写入默认配置文件
         foreach ((string relativePath, string content) in ConfigFiles)
@@ -95,32 +91,4 @@ public static class HomeInitializer
                 Console.WriteLine($"  created  {relativePath}");
         }
     }
-
-    private static string ResolveMainConfigPath(string homeDir, string? configFile)
-    {
-        if (!string.IsNullOrWhiteSpace(configFile))
-            return Path.GetFullPath(configFile);
-
-        return Path.Combine(homeDir, "microclaw.yaml");
-    }
-
-    private static void WriteMainConfigFile(string homeDir, string mainConfigPath, bool force, bool verbose)
-    {
-        string? configDirectory = Path.GetDirectoryName(mainConfigPath);
-        if (!string.IsNullOrWhiteSpace(configDirectory))
-            Directory.CreateDirectory(configDirectory);
-
-        string relativePath = Path.GetRelativePath(homeDir, mainConfigPath).Replace('\\', '/');
-        if (!File.Exists(mainConfigPath) || force)
-        {
-            File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
-            if (verbose)
-                Console.WriteLine($"  created  {relativePath}");
-            return;
-        }
-
-        if (verbose)
-            Console.WriteLine($"  skipped  {relativePath}");
-    }
-
 }

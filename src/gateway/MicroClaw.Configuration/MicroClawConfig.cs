@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
+using YamlDotNet.RepresentationModel;
 
 namespace MicroClaw.Configuration;
 /// <summary>
@@ -9,6 +10,10 @@ namespace MicroClaw.Configuration;
 /// </summary>
 public static class MicroClawConfig
 {
+    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder()
+        .AddInMemoryCollection([])
+        .Build();
+
     private static MicroClawConfigEnv? _env;
     private static IConfiguration? _configuration;
     private static ConcurrentDictionary<Type, Lazy<object>>? _options;
@@ -291,18 +296,114 @@ public static class MicroClawConfig
         return new Lazy<object>(() =>
         {
             object instance = Activator.CreateInstance(descriptor.OptionsType)!;
-            IConfigurationSection section = configuration.GetSection(descriptor.SectionKey);
-            YamlAwareBinder.Bind(section, instance);
+            IConfigurationSection runtimeSection = configuration.GetSection(descriptor.SectionKey);
+            (Dictionary<string, string?> dedicatedValues, bool dedicatedSectionExists) = LoadDedicatedValues(descriptor);
+            bool runtimeSectionExists = runtimeSection.Exists();
+            if (dedicatedSectionExists || runtimeSectionExists)
+            {
+                IConfigurationSection effectiveSection = BuildEffectiveSection(descriptor.SectionKey, dedicatedValues, runtimeSection, runtimeSectionExists);
+                YamlAwareBinder.Bind(effectiveSection, instance);
+            }
 
             if (instance is not IMicroClawConfigTemplate templateProvider)
                 return instance;
 
-            bool sectionMissing = !section.Exists();
-            if (!sectionMissing)
+            if (dedicatedSectionExists || runtimeSectionExists)
                 return instance;
 
             return MaterializeTemplate(descriptor, templateProvider);
         }, LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    private static (Dictionary<string, string?> Values, bool Exists) LoadDedicatedValues(MicroClawConfigTypeDescriptor descriptor)
+    {
+        if (string.IsNullOrWhiteSpace(descriptor.FileName))
+            return ([], false);
+
+        string filePath = GetDescriptorFilePath(descriptor);
+        if (!File.Exists(filePath))
+            return ([], false);
+
+        Dictionary<string, string?> values = ParseYamlFile(filePath);
+        IConfiguration dedicatedConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+
+        IConfigurationSection section = dedicatedConfiguration.GetSection(descriptor.SectionKey);
+        return (values, section.Exists());
+    }
+
+    private static IConfigurationSection BuildEffectiveSection(
+        string sectionKey,
+        Dictionary<string, string?> dedicatedValues,
+        IConfigurationSection runtimeSection,
+        bool runtimeSectionExists)
+    {
+        var mergedValues = new Dictionary<string, string?>(dedicatedValues, StringComparer.OrdinalIgnoreCase);
+
+        if (runtimeSectionExists)
+        {
+            foreach ((string key, string? value) in runtimeSection.AsEnumerable())
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                mergedValues[key] = value;
+            }
+        }
+
+        IConfiguration mergedConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(mergedValues)
+            .Build();
+
+        return mergedConfiguration.GetSection(sectionKey);
+    }
+
+    private static Dictionary<string, string?> ParseYamlFile(string filePath)
+    {
+        using var reader = new StreamReader(filePath);
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+
+        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (yaml.Documents.Count == 0)
+            return result;
+
+        if (yaml.Documents[0].RootNode is YamlMappingNode root)
+            FlattenNode(root, string.Empty, result);
+
+        return result;
+    }
+
+    private static void FlattenNode(YamlNode node, string prefix, Dictionary<string, string?> result)
+    {
+        switch (node)
+        {
+            case YamlMappingNode mapping:
+                foreach (var entry in mapping.Children)
+                {
+                    var key = ((YamlScalarNode)entry.Key).Value!;
+                    var fullKey = string.IsNullOrEmpty(prefix)
+                        ? key
+                        : ConfigurationPath.Combine(prefix, key);
+                    FlattenNode(entry.Value, fullKey, result);
+                }
+                break;
+
+            case YamlSequenceNode sequence:
+                int index = 0;
+                foreach (var item in sequence.Children)
+                {
+                    var fullKey = ConfigurationPath.Combine(prefix, index.ToString());
+                    FlattenNode(item, fullKey, result);
+                    index++;
+                }
+                break;
+
+            case YamlScalarNode scalar:
+                result[prefix] = scalar.Value;
+                break;
+        }
     }
 
     private static object MaterializeTemplate(MicroClawConfigTypeDescriptor descriptor, IMicroClawConfigTemplate templateProvider)

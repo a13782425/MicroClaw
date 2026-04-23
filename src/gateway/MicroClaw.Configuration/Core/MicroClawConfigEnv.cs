@@ -9,9 +9,6 @@ public sealed class MicroClawConfigEnv
     /// <summary>MICROCLAW_HOME 工作目录。</summary>
     public string Home { get; }
 
-    /// <summary>主配置文件路径（microclaw.yaml）。</summary>
-    public string? ConfigFile { get; }
-
     /// <summary>SQLite 数据库文件完整路径。</summary>
     public string DbPath { get; }
 
@@ -36,17 +33,15 @@ public sealed class MicroClawConfigEnv
     internal MicroClawConfigEnv()
     {
         string? home = Get(MICROCLAW_HOME);
-        string? configFile = Get(MICROCLAW_CONFIG_FILE);
         
-        Home = HomeInitializer.ResolveHome(home, configFile);
-        ConfigFile = configFile;
+        Home = HomeInitializer.ResolveHome(home);
 
-        DbPath = ResolveDatabasePath(home, configFile);
-        SessionsDir = ResolveSessionsDir(home, configFile);
-        WorkspaceRoot = ResolveWorkspaceRoot(home, configFile);
+        DbPath = ResolveDatabasePath(home);
+        SessionsDir = ResolveSessionsDir(home);
+        WorkspaceRoot = ResolveWorkspaceRoot(home);
         AgentsDir = Path.Combine(WorkspaceRoot, "agents");
         PluginsDir = Path.Combine(WorkspaceRoot, "plugins");
-        LogFilePath = ResolveLogFilePath(home, configFile);
+        LogFilePath = ResolveLogFilePath(home);
         ConfigDir = Path.Combine(Home, "config");
     }
 
@@ -57,13 +52,11 @@ public sealed class MicroClawConfigEnv
 
     // ── 路径解析逻辑（从 ServeCommand 迁入） ─────────────────────────────────
 
-    private static string ResolveDatabasePath(string? home, string? configFile)
+    private static string ResolveDatabasePath(string? home)
     {
         string dir;
         if (!string.IsNullOrWhiteSpace(home))
             dir = home;
-        else if (!string.IsNullOrWhiteSpace(configFile))
-            dir = Path.GetDirectoryName(Path.GetFullPath(configFile))!;
         else
             dir = Path.Combine(Directory.GetCurrentDirectory(), ".microclaw");
 
@@ -71,31 +64,25 @@ public sealed class MicroClawConfigEnv
         return Path.Combine(dir, "microclaw.db");
     }
 
-    private static string ResolveSessionsDir(string? home, string? configFile)
+    private static string ResolveSessionsDir(string? home)
     {
         if (!string.IsNullOrWhiteSpace(home))
             return Path.Combine(home, "workspace", "sessions");
-        if (!string.IsNullOrWhiteSpace(configFile))
-            return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace", "sessions");
         return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace", "sessions");
     }
 
-    private static string ResolveWorkspaceRoot(string? home, string? configFile)
+    private static string ResolveWorkspaceRoot(string? home)
     {
         if (!string.IsNullOrWhiteSpace(home))
             return Path.Combine(home, "workspace");
-        if (!string.IsNullOrWhiteSpace(configFile))
-            return Path.Combine(Path.GetDirectoryName(configFile)!, "workspace");
         return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "workspace");
     }
 
-    private static string ResolveLogFilePath(string? home, string? configFile)
+    private static string ResolveLogFilePath(string? home)
     {
         string logsDir;
         if (!string.IsNullOrWhiteSpace(home))
             logsDir = Path.Combine(home, "logs");
-        else if (!string.IsNullOrWhiteSpace(configFile))
-            logsDir = Path.Combine(Path.GetDirectoryName(configFile)!, "logs");
         else
             logsDir = Path.Combine(Directory.GetCurrentDirectory(), ".microclaw", "logs");
 

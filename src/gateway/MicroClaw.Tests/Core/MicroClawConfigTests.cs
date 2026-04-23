@@ -258,11 +258,8 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
-    public void Save_WhenTypeDeclaresDirectoryPath_CanBeReloadedFromMainConfiguration()
+    public void Save_WhenTypeDeclaresDirectoryPath_CanBeReloadedFromDedicatedFileWithoutAggregatedConfiguration()
     {
-        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
-        File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
-
         IConfiguration initialConfiguration = new ConfigurationBuilder()
             .AddInMemoryCollection([])
             .Build();
@@ -273,7 +270,7 @@ public sealed class MicroClawConfigTests : IDisposable
         MicroClawConfig.Reset();
 
         IConfiguration reloadedConfiguration = new ConfigurationBuilder()
-            .AddMicroClawYaml(mainConfigPath)
+            .AddInMemoryCollection([])
             .Build();
 
         MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
@@ -284,9 +281,6 @@ public sealed class MicroClawConfigTests : IDisposable
     [Fact]
     public void Save_WhenTypeDeclaresDirectoryPath_CanBeReloadedWithoutImports()
     {
-        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
-        File.WriteAllText(mainConfigPath, "root: true\n");
-
         IConfiguration initialConfiguration = new ConfigurationBuilder()
             .AddInMemoryCollection([])
             .Build();
@@ -297,7 +291,7 @@ public sealed class MicroClawConfigTests : IDisposable
         MicroClawConfig.Reset();
 
         IConfiguration reloadedConfiguration = new ConfigurationBuilder()
-            .AddMicroClawYaml(mainConfigPath)
+            .AddInMemoryCollection([])
             .Build();
 
         MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
@@ -306,13 +300,8 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
-    public void Save_WhenHomeDiffersFromMainConfigDirectory_ReloadStillUsesHomeRoot()
+    public void Save_WhenHomeDiffersFromOtherDirectories_ReloadStillUsesHomeRoot()
     {
-        string externalConfigRoot = Path.Combine(_tempRoot, "external-config-root");
-        Directory.CreateDirectory(externalConfigRoot);
-        string mainConfigPath = Path.Combine(externalConfigRoot, "microclaw.yaml");
-        File.WriteAllText(mainConfigPath, "root: true\n");
-
         IConfiguration initialConfiguration = new ConfigurationBuilder()
             .AddInMemoryCollection([])
             .Build();
@@ -325,7 +314,7 @@ public sealed class MicroClawConfigTests : IDisposable
         MicroClawConfig.RegisterConfigType<TestDirectoryTemplateOptions>();
 
         IConfiguration reloadedConfiguration = new ConfigurationBuilder()
-            .AddMicroClawYaml(mainConfigPath)
+            .AddInMemoryCollection([])
             .Build();
 
         MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
@@ -334,19 +323,22 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
-    public void AddMicroClawYaml_WhenTypeOmitsFileName_DoesNotAutoImportImplicitDefaultFile()
+    public void Get_WhenSandboxSectionMissing_MaterializesSandboxTemplateFile()
     {
-        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
-        File.WriteAllText(mainConfigPath, "sandbox:\n  token_expiry_minutes: 60\n");
-        File.WriteAllText(Path.Combine(_configDir, "sandboxoptions.yaml"), "sandbox:\n  token_expiry_minutes: 999\n");
-
         IConfiguration configuration = new ConfigurationBuilder()
-            .AddMicroClawYaml(mainConfigPath)
+            .AddInMemoryCollection([])
             .Build();
 
         MicroClawConfig.Initialize(configuration, _configDir);
 
-        MicroClawConfig.Get<SandboxOptions>().TokenExpiryMinutes.Should().Be(60);
+        SandboxOptions options = MicroClawConfig.Get<SandboxOptions>();
+
+        options.TokenExpiryMinutes.Should().Be(60);
+
+        string filePath = Path.Combine(_configDir, "sandbox.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("sandbox:");
+        File.ReadAllText(filePath).Should().Contain("token_expiry_minutes: 60");
     }
 
     [Fact]
@@ -395,7 +387,7 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
-    public void Save_WhenTypeOmitsFileName_DoesNotCreateImplicitYamlFile()
+    public void Save_WhenSandboxOptionsSaved_WritesSandboxYamlAndCachesProvidedInstance()
     {
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection([])
@@ -403,12 +395,106 @@ public sealed class MicroClawConfigTests : IDisposable
 
         MicroClawConfig.Initialize(configuration, _configDir);
 
-        Action action = () => MicroClawConfig.Save(new SandboxOptions { TokenExpiryMinutes = 999 });
+        SandboxOptions saved = new() { TokenExpiryMinutes = 999 };
 
-        action.Should().Throw<InvalidOperationException>()
-            .WithMessage("*未声明为可写 YAML*");
-        File.Exists(Path.Combine(_configDir, "sandboxoptions.yaml")).Should().BeFalse();
+        MicroClawConfig.Save(saved);
+
+        string filePath = Path.Combine(_configDir, "sandbox.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("sandbox:");
+        File.ReadAllText(filePath).Should().Contain("token_expiry_minutes: 999");
+        MicroClawConfig.Get<SandboxOptions>().Should().BeSameAs(saved);
     }
+
+    [Fact]
+    public void Get_WhenFilesystemSectionMissing_MaterializesFilesystemTemplateFile()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        FileToolsOptions options = MicroClawConfig.Get<FileToolsOptions>();
+
+        options.MaxReadChars.Should().Be(100_000);
+        options.MaxFileWriteBytes.Should().Be(10_000_000);
+
+        string filePath = Path.Combine(_configDir, "filesystem.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("filesystem:");
+        File.ReadAllText(filePath).Should().Contain("max_read_chars: 100000");
+        File.ReadAllText(filePath).Should().Contain("max_file_write_bytes: 10000000");
+    }
+
+    [Fact]
+    public void Get_WhenSandboxYamlExistsWithoutAggregatedConfiguration_LoadsFromDedicatedFile()
+    {
+        File.WriteAllText(Path.Combine(_configDir, "sandbox.yaml"), "sandbox:\n  token_expiry_minutes: 999\n");
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        SandboxOptions options = MicroClawConfig.Get<SandboxOptions>();
+
+        options.TokenExpiryMinutes.Should().Be(999);
+        File.ReadAllText(Path.Combine(_configDir, "sandbox.yaml")).Should().Contain("token_expiry_minutes: 999");
+    }
+
+    [Fact]
+    public void Get_WhenSandboxYamlExists_RuntimeConfigurationStillOverridesDedicatedFile()
+    {
+        File.WriteAllText(Path.Combine(_configDir, "sandbox.yaml"), "sandbox:\n  token_expiry_minutes: 999\n");
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["sandbox:token_expiry_minutes"] = "123",
+            })
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        SandboxOptions options = MicroClawConfig.Get<SandboxOptions>();
+
+        options.TokenExpiryMinutes.Should().Be(123);
+        File.ReadAllText(Path.Combine(_configDir, "sandbox.yaml")).Should().Contain("token_expiry_minutes: 999");
+    }
+
+        [Fact]
+        public void Get_WhenRuntimeOverridesSingleListField_PreservesDedicatedListEntries()
+        {
+                File.WriteAllText(Path.Combine(_configDir, "logging.yaml"),
+                        "serilog:\n" +
+                        "  write_to:\n" +
+                        "    - name: console\n" +
+                        "      args:\n" +
+                        "        output_template: console-template\n" +
+                        "    - name: file\n" +
+                        "      args:\n" +
+                        "        path: logs/original-.log\n" +
+                        "        rolling_interval: day\n");
+
+                IConfiguration configuration = new ConfigurationBuilder()
+                        .AddInMemoryCollection(new Dictionary<string, string?>
+                        {
+                                ["serilog:write_to:1:args:path"] = "logs/override-.log",
+                        })
+                        .Build();
+
+                MicroClawConfig.Initialize(configuration, _configDir);
+
+                LoggingOptions options = MicroClawConfig.Get<LoggingOptions>();
+
+                options.WriteTo.Should().HaveCount(2);
+                options.WriteTo[0].Name.Should().Be("console");
+                options.WriteTo[1].Name.Should().Be("file");
+                options.WriteTo[1].Args.Path.Should().Be("logs/override-.log");
+                options.WriteTo[1].Args.RollingInterval.Should().Be("day");
+        }
 
     [Fact]
     public void Get_WhenTemplateTypeOmitsFileName_ThrowsAndDoesNotCache()
@@ -467,11 +553,8 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
-    public void Get_WhenTemplateTypeDeclaresDirectoryPath_CanBeReloadedFromMainConfiguration()
+    public void Get_WhenTemplateTypeDeclaresDirectoryPath_CanBeReloadedFromDedicatedFileWithoutAggregatedConfiguration()
     {
-        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
-        File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
-
         IConfiguration initialConfiguration = new ConfigurationBuilder()
             .AddInMemoryCollection([])
             .Build();
@@ -482,7 +565,7 @@ public sealed class MicroClawConfigTests : IDisposable
         MicroClawConfig.Reset();
 
         IConfiguration reloadedConfiguration = new ConfigurationBuilder()
-            .AddMicroClawYaml(mainConfigPath)
+            .AddInMemoryCollection([])
             .Build();
 
         MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
@@ -536,6 +619,26 @@ public sealed class MicroClawConfigTests : IDisposable
         File.ReadAllText(filePath).Should().Contain("auth:");
         File.ReadAllText(filePath).Should().Contain($"password: {AuthOptions.DefaultPassword}");
         File.ReadAllText(filePath).Should().Contain($"jwt_secret: {AuthOptions.DefaultJwtSecret}");
+    }
+
+    [Fact]
+    public void Get_WhenAuthYamlExistsWithoutAggregatedConfiguration_LoadsFromDedicatedFile()
+    {
+        string filePath = Path.Combine(_configDir, "auth.yaml");
+        File.WriteAllText(filePath, "auth:\n  username: file-user\n  password: file-password\n  jwt_secret: this-is-a-file-jwt-secret-with-32-chars\n  expires_hours: 24\n");
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        AuthOptions options = MicroClawConfig.Get<AuthOptions>();
+
+        options.Username.Should().Be("file-user");
+        options.Password.Should().Be("file-password");
+        options.JwtSecret.Should().Be("this-is-a-file-jwt-secret-with-32-chars");
+        options.ExpiresHours.Should().Be(24);
     }
 
     [Fact]

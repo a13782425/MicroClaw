@@ -10,14 +10,13 @@ public static class DotEnvLoader
     public static void Load()
     {
         var home = Environment.GetEnvironmentVariable(MICROCLAW_HOME);
-        var configFile = Environment.GetEnvironmentVariable(MICROCLAW_CONFIG_FILE);
         if (string.IsNullOrWhiteSpace(home))
         {
-            home = HomeInitializer.ResolveHome(home: null, configFile: configFile);
+            home = HomeInitializer.ResolveHome(home: null);
             Environment.SetEnvironmentVariable(MICROCLAW_HOME, home);
         }
 
-        HomeInitializer.EnsureConsistentHomeAndConfigFile(home, configFile);
+        HomeInitializer.EnsureLegacyConfigContractIsAbsent(home);
 
         string envPath = Path.Combine(home, ".env");
         if (File.Exists(envPath))
@@ -31,8 +30,8 @@ public static class DotEnvLoader
                 var key = trimmed[..idx].Trim();
                 if (key == MICROCLAW_HOME)
                     throw new InvalidOperationException("MICROCLAW_HOME 不能定义在 .env 中。请在启动进程前通过外部环境变量设置它。");
-                if (key == MICROCLAW_CONFIG_FILE)
-                    throw new InvalidOperationException("MICROCLAW_CONFIG_FILE 不能定义在 .env 中。请在启动进程前通过外部环境变量设置它。");
+                if (key == "MICROCLAW_CONFIG_FILE")
+                    throw new InvalidOperationException("MICROCLAW_CONFIG_FILE 已废弃。请改用 MICROCLAW_HOME 指向工作目录，并将配置迁移到 HOME/config/*.yaml。");
                 var value = trimmed[(idx + 1)..].Trim().Trim('"').Trim('\'');
                 
                 if (!string.IsNullOrEmpty(key) && Environment.GetEnvironmentVariable(key) is null)
@@ -41,8 +40,8 @@ public static class DotEnvLoader
         }
         
         InitDefaultEnv();
-        // 确保工作目录和默认配置文件存在（不覆盖用户已有文件）
-        HomeInitializer.EnsureInitialized(Environment.GetEnvironmentVariable(MICROCLAW_HOME), Environment.GetEnvironmentVariable(MICROCLAW_CONFIG_FILE));
+        // 确保工作目录和默认文件存在（不覆盖用户已有文件）
+        HomeInitializer.EnsureInitialized(Environment.GetEnvironmentVariable(MICROCLAW_HOME));
     }
 
     private static void InitDefaultEnv()
@@ -53,12 +52,6 @@ public static class DotEnvLoader
             Environment.SetEnvironmentVariable(GATEWAY_HOST, "localhost");
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(GATEWAY_PORT)))
             Environment.SetEnvironmentVariable(GATEWAY_PORT, "5080");
-        var configFile = Environment.GetEnvironmentVariable(MICROCLAW_CONFIG_FILE);
-        if (string.IsNullOrWhiteSpace(configFile) && !string.IsNullOrWhiteSpace(home))
-        {
-            configFile = Path.Combine(home, "microclaw.yaml");
-            Environment.SetEnvironmentVariable(MICROCLAW_CONFIG_FILE, configFile);
-        }
         
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(MICROCLAW_WEBUI_PATH)))
             Environment.SetEnvironmentVariable(MICROCLAW_WEBUI_PATH, Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"));

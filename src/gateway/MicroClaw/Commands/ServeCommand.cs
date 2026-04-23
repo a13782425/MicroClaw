@@ -75,13 +75,10 @@ public class ServeCommand : Command
 			opts.ValidateScopes = true;
 			opts.ValidateOnBuild = true;
 		});
-		string? configFile = MicroClawConfig.Env.Get(MICROCLAW_CONFIG_FILE);
-		if (!string.IsNullOrWhiteSpace(configFile))
-			builder.Configuration.AddMicroClawYaml(configFile);
 		builder.Configuration.AddEnvironmentVariables();
 		builder.Configuration.AddEnvironmentVariables("DOTNET_");
 
-		// 初始化静态配置门面（必须在 YAML 加载之后、使用配置之前）
+		// 初始化静态配置门面（运行时覆盖配置必须先于首次 Get<T>() 注入）
 		MicroClawConfig.Initialize(builder.Configuration, MicroClawConfig.Env.ConfigDir);
 
 		ConfigureLogging(builder);
@@ -106,17 +103,14 @@ public class ServeCommand : Command
 	{
 		builder.Host.UseSerilog((ctx, lc) =>
 		{
-			IConfiguration cfg = ctx.Configuration;
 			LoggingOptions options = MicroClawConfig.Get<LoggingOptions>();
-			IReadOnlyList<LoggingSinkOptions> sinks = cfg.GetSection("serilog:write_to").Exists()
-				? options.WriteTo
-				: LoggingOptions.CreateDefaultSinks();
+			IReadOnlyList<LoggingSinkOptions> sinks = options.WriteTo;
 			if (!sinks.Any(static sink => string.Equals(sink.Name, "console", StringComparison.OrdinalIgnoreCase) || string.Equals(sink.Name, "file", StringComparison.OrdinalIgnoreCase)))
 			{
 				sinks = LoggingOptions.CreateDefaultSinks();
 			}
 
-			IReadOnlyList<string> enrichers = cfg.GetSection("serilog:enrich").Exists()
+			IReadOnlyList<string> enrichers = options.Enrich.Count > 0
 				? options.Enrich
 				: LoggingOptions.CreateDefaultEnrichers();
 			LoggingSinkOptions? consoleSink = GetLoggingSink(sinks, "console");

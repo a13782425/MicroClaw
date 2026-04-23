@@ -7,10 +7,6 @@ public static class ConfigDefine
     /// </summary>
     public const string MICROCLAW_HOME = "MICROCLAW_HOME";
     /// <summary>
-    /// 运行配置文件
-    /// </summary>
-    public const string MICROCLAW_CONFIG_FILE = "MICROCLAW_CONFIG_FILE";
-    /// <summary>
     /// 网关Host
     /// </summary>
     public const string GATEWAY_HOST = "GATEWAY_HOST";

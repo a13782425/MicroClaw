@@ -14,7 +14,7 @@ public class InitCommand : Command
 
 		var forceOption = new Option<bool>("--force")
 		{
-			Description = "覆盖已存在的主配置文件和 .env 示例文件"
+			Description = "覆盖已存在的 .env 示例文件"
 		};
 		forceOption.Aliases.Add("-f");
 
@@ -25,15 +25,14 @@ public class InitCommand : Command
 		{
 			string? home = result.GetValue(homeOption)
 				?? Environment.GetEnvironmentVariable("MICROCLAW_HOME");
-			string? configFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
-			HomeInitializer.EnsureConsistentHomeAndConfigFile(home, configFile);
+			HomeInitializer.EnsureLegacyConfigContractIsAbsent(home);
 			bool force = result.GetValue(forceOption);
 
-			string resolvedHome = HomeInitializer.ResolveHome(home, configFile);
+			string resolvedHome = HomeInitializer.ResolveHome(home);
 			Console.WriteLine($"初始化工作目录：{resolvedHome}");
 			Console.WriteLine();
 
-			HomeInitializer.EnsureInitialized(home, configFile, force, verbose: true);
+			HomeInitializer.EnsureInitialized(home, force, verbose: true);
 
 			Console.WriteLine();
 			Console.WriteLine("完成。首次启动 serve 或首次读取认证配置时会自动生成 config/auth.yaml，请修改其中的默认 password 和 jwt_secret。");

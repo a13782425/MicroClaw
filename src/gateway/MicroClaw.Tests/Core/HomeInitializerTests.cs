@@ -8,11 +8,11 @@ public sealed class HomeInitializerTests : IDisposable
     private readonly string _tempRoot = Path.Combine(Path.GetTempPath(), "microclaw-home-init-tests", Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void EnsureInitialized_WhenCalled_CreatesBaseFilesWithoutManagedYamlFiles()
+    public void EnsureInitialized_WhenCalled_CreatesBaseFilesWithoutMainConfigOrManagedYamlFiles()
     {
-        HomeInitializer.EnsureInitialized(_tempRoot, configFile: null);
+        HomeInitializer.EnsureInitialized(_tempRoot);
 
-        File.Exists(Path.Combine(_tempRoot, "microclaw.yaml")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempRoot, "microclaw.yaml")).Should().BeFalse();
         File.Exists(Path.Combine(_tempRoot, ".env")).Should().BeTrue();
         Directory.Exists(Path.Combine(_tempRoot, "config")).Should().BeTrue();
         Directory.Exists(Path.Combine(_tempRoot, "logs")).Should().BeTrue();
@@ -34,30 +34,15 @@ public sealed class HomeInitializerTests : IDisposable
     }
 
     [Fact]
-    public void EnsureInitialized_WhenCustomMainConfigFileProvided_WritesMainConfigAtCustomPath()
+    public void EnsureInitialized_WhenForceIsFalse_DoesNotOverwriteExistingDotEnvExample()
     {
         Directory.CreateDirectory(_tempRoot);
-        string customConfigPath = Path.Combine(_tempRoot, "custom-main.yaml");
+        string envPath = Path.Combine(_tempRoot, ".env");
+        File.WriteAllText(envPath, "EXISTING=1");
 
-        HomeInitializer.EnsureInitialized(_tempRoot, customConfigPath);
+        HomeInitializer.EnsureInitialized(_tempRoot, force: false);
 
-        File.Exists(Path.Combine(_tempRoot, "microclaw.yaml")).Should().BeFalse();
-        File.Exists(customConfigPath).Should().BeTrue();
-        File.ReadAllText(customConfigPath).Should().Contain("$imports:");
-    }
-
-    [Fact]
-    public void EnsureConsistentHomeAndConfigFile_WhenDirectoriesDiffer_Throws()
-    {
-        string otherRoot = Path.Combine(_tempRoot, "other-root");
-        Directory.CreateDirectory(_tempRoot);
-        Directory.CreateDirectory(otherRoot);
-        string customConfigPath = Path.Combine(otherRoot, "microclaw.yaml");
-
-        Action action = () => HomeInitializer.EnsureConsistentHomeAndConfigFile(_tempRoot, customConfigPath);
-
-        action.Should().Throw<InvalidOperationException>()
-            .WithMessage("*MICROCLAW_HOME 与 MICROCLAW_CONFIG_FILE 必须指向同一工作目录*");
+        File.ReadAllText(envPath).Should().Be("EXISTING=1");
     }
 
     [Fact]
@@ -69,7 +54,7 @@ public sealed class HomeInitializerTests : IDisposable
 
         try
         {
-            string resolvedHome = HomeInitializer.ResolveHome("relative-home", configFile: null);
+            string resolvedHome = HomeInitializer.ResolveHome("relative-home");
 
             resolvedHome.Should().Be(Path.Combine(_tempRoot, "relative-home"));
         }
