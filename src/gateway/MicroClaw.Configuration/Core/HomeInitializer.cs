@@ -25,7 +25,7 @@ public static class HomeInitializer
     public static string ResolveHome(string? home, string? configFile)
     {
         if (!string.IsNullOrWhiteSpace(home))
-            return home;
+            return Path.GetFullPath(home);
 
         if (!string.IsNullOrWhiteSpace(configFile))
             return Path.GetDirectoryName(Path.GetFullPath(configFile))!;

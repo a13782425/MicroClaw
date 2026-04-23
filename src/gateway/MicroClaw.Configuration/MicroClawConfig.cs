@@ -55,6 +55,25 @@ public static class MicroClawConfig
             }
         }
     }
+
+    /// <summary>
+    /// Registers an additional configuration type for startup-time auto-discovery.
+    /// Call this before building configuration when the type lives outside the core configuration assembly.
+    /// </summary>
+    public static void RegisterConfigType<T>() where T : class
+    {
+        MicroClawConfigTypeRegistry.RegisterType(typeof(T));
+    }
+
+    /// <summary>
+    /// Registers an additional configuration type for startup-time auto-discovery.
+    /// Call this before building configuration when the type lives outside the core configuration assembly.
+    /// </summary>
+    public static void RegisterConfigType(Type optionType)
+    {
+        ArgumentNullException.ThrowIfNull(optionType);
+        MicroClawConfigTypeRegistry.RegisterType(optionType);
+    }
     
     /// <summary>
     /// Hot-update a registered options instance in memory (does NOT persist to YAML).
@@ -96,8 +115,8 @@ public static class MicroClawConfig
         {
             throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少可写 YAML 的 FileName 元数据。");
         }
-        
-        string filePath = Path.Combine(_configDir!, descriptor.FileName);
+
+        string filePath = GetDescriptorFilePath(descriptor);
         
         lock (OptionsCacheLock)
         {
@@ -221,17 +240,28 @@ public static class MicroClawConfig
         {
             throw new InvalidOperationException($"配置类型 {optionType.Name} 的 SectionKey 不能为空。");
         }
-        
-        string? fileName = string.IsNullOrWhiteSpace(metadata.FileName) ? optionType.Name.ToLower() + ".yaml" : metadata.FileName.Trim();
-        
-        EnsureSafeFileName(optionType, fileName);
-        
-        if (metadata.IsWritable && string.IsNullOrWhiteSpace(fileName))
+
+        if (!string.IsNullOrWhiteSpace(metadata.DirectoryPath) && string.IsNullOrWhiteSpace(metadata.FileName))
         {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 被标记为可写，但未声明 FileName。");
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 声明了 DirectoryPath 时必须同时声明 FileName。");
         }
         
-        return new MicroClawConfigTypeDescriptor(optionType, sectionKey, fileName, metadata.IsWritable);
+        string? fileName = string.IsNullOrWhiteSpace(metadata.FileName) ? null : metadata.FileName.Trim();
+        string? directoryPath = string.IsNullOrWhiteSpace(metadata.DirectoryPath)
+            ? null
+            : MicroClawConfigPathResolver.NormalizeDirectoryPath(optionType, metadata.DirectoryPath, Env.Home);
+
+        if (typeof(IMicroClawConfigTemplate).IsAssignableFrom(optionType) && string.IsNullOrWhiteSpace(fileName))
+        {
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 实现了 {nameof(IMicroClawConfigTemplate)}，必须显式声明 FileName。");
+        }
+        
+        if (fileName is not null)
+            MicroClawConfigPathResolver.EnsureSafeFileName(optionType, fileName);
+
+        bool isWritable = metadata.IsWritable && !string.IsNullOrWhiteSpace(fileName);
+        
+        return new MicroClawConfigTypeDescriptor(optionType, sectionKey, fileName, directoryPath, isWritable);
     }
     
     private static void EnsureNoDescriptorConflict(MicroClawConfigTypeDescriptor descriptor)
@@ -243,20 +273,16 @@ public static class MicroClawConfig
                 throw new InvalidOperationException($"配置节 '{descriptor.SectionKey}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
             }
             
-            if (descriptor.FileName is { } fileName && existingDescriptor.FileName is { } existingFileName && string.Equals(existingFileName, fileName, StringComparison.OrdinalIgnoreCase))
+            if (descriptor.FileName is { } fileName && existingDescriptor.FileName is not null)
             {
-                throw new InvalidOperationException($"YAML 文件 '{fileName}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
+                string descriptorPath = GetDescriptorFilePath(descriptor);
+                string existingFilePath = GetDescriptorFilePath(existingDescriptor);
+
+                if (string.Equals(existingFilePath, descriptorPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"YAML 文件 '{fileName}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
+                }
             }
-        }
-    }
-    
-    private static void EnsureSafeFileName(Type optionType, string fileName)
-    {
-        string extension = Path.GetExtension(fileName);
-        
-        if (Path.IsPathRooted(fileName) || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || fileName.Contains(':', StringComparison.Ordinal) || fileName.EndsWith(' ') || fileName.EndsWith('.') || (!string.Equals(extension, ".yaml", StringComparison.OrdinalIgnoreCase) && !string.Equals(extension, ".yml", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 的 FileName 必须是配置目录下安全的单个 .yaml/.yml 文件名。");
         }
     }
     
@@ -297,10 +323,7 @@ public static class MicroClawConfig
 
     private static string GetDescriptorFilePath(MicroClawConfigTypeDescriptor descriptor)
     {
-        if (string.IsNullOrWhiteSpace(descriptor.FileName))
-            throw new InvalidOperationException($"配置类型 {descriptor.OptionsType.Name} 缺少可落盘的 FileName 元数据。");
-
-        return Path.Combine(_configDir!, descriptor.FileName);
+        return MicroClawConfigPathResolver.ResolveFilePath(_configDir!, descriptor.OptionsType, descriptor.FileName, descriptor.DirectoryPath);
     }
     
     private static Lazy<object> CreateValueLazy(object value)

@@ -60,6 +60,25 @@ public sealed class HomeInitializerTests : IDisposable
             .WithMessage("*MICROCLAW_HOME 与 MICROCLAW_CONFIG_FILE 必须指向同一工作目录*");
     }
 
+    [Fact]
+    public void ResolveHome_WhenHomeIsRelative_ReturnsAbsolutePath()
+    {
+        string originalCurrentDirectory = Environment.CurrentDirectory;
+        Directory.CreateDirectory(_tempRoot);
+        Environment.CurrentDirectory = _tempRoot;
+
+        try
+        {
+            string resolvedHome = HomeInitializer.ResolveHome("relative-home", configFile: null);
+
+            resolvedHome.Should().Be(Path.Combine(_tempRoot, "relative-home"));
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCurrentDirectory;
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempRoot))

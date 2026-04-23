@@ -16,12 +16,16 @@ public sealed class MicroClawConfigTests : IDisposable
         _configDir = Path.Combine(_tempRoot, "config");
         Directory.CreateDirectory(_configDir);
         Environment.SetEnvironmentVariable("MICROCLAW_HOME", _tempRoot);
+        MicroClawConfigTypeRegistry.ResetForTests();
+        MicroClawConfig.RegisterConfigType<TestDirectoryPathOptions>();
+        MicroClawConfig.RegisterConfigType<TestDirectoryTemplateOptions>();
         MicroClawConfig.Reset();
     }
 
     public void Dispose()
     {
         MicroClawConfig.Reset();
+        MicroClawConfigTypeRegistry.ResetForTests();
         Environment.SetEnvironmentVariable("MICROCLAW_HOME", null);
 
         if (Directory.Exists(_tempRoot))
@@ -197,6 +201,155 @@ public sealed class MicroClawConfigTests : IDisposable
     }
 
     [Fact]
+    public void Save_WhenTypeDeclaresDirectoryPath_WritesSectionWrappedYamlToDirectoryPath()
+    {
+        InitializeTestOptions();
+
+        TestDirectoryPathOptions saved = new() { Value = "saved" };
+
+        MicroClawConfig.Save(saved);
+
+        string filePath = Path.Combine(_tempRoot, "custom-config", "test-directory.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("test_directory:");
+        File.ReadAllText(filePath).Should().Contain("value: saved");
+        File.Exists(Path.Combine(_configDir, "test-directory.yaml")).Should().BeFalse();
+        MicroClawConfig.Get<TestDirectoryPathOptions>().Should().BeSameAs(saved);
+    }
+
+    [Fact]
+    public void Save_WhenTypeDeclaresRelativeDirectoryPath_ResolvesAgainstHomeInsteadOfCurrentDirectory()
+    {
+        string originalCurrentDirectory = Environment.CurrentDirectory;
+        string otherCurrentDirectory = Path.Combine(_tempRoot, "other-cwd");
+        Directory.CreateDirectory(otherCurrentDirectory);
+
+        try
+        {
+            Environment.CurrentDirectory = otherCurrentDirectory;
+            InitializeTestOptions();
+
+            MicroClawConfig.Save(new TestDirectoryPathOptions { Value = "saved" });
+
+            File.Exists(Path.Combine(_tempRoot, "custom-config", "test-directory.yaml")).Should().BeTrue();
+            File.Exists(Path.Combine(otherCurrentDirectory, "custom-config", "test-directory.yaml")).Should().BeFalse();
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCurrentDirectory;
+        }
+    }
+
+    [Fact]
+    public void Save_WhenConfigDirUsesDifferentRoot_RelativeDirectoryPathStillResolvesAgainstHome()
+    {
+        string alternateConfigDir = Path.Combine(_tempRoot, "alternate-root", "config");
+        Directory.CreateDirectory(alternateConfigDir);
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, alternateConfigDir);
+        MicroClawConfig.Save(new TestDirectoryPathOptions { Value = "saved" });
+
+        File.Exists(Path.Combine(_tempRoot, "custom-config", "test-directory.yaml")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempRoot, "alternate-root", "custom-config", "test-directory.yaml")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Save_WhenTypeDeclaresDirectoryPath_CanBeReloadedFromMainConfiguration()
+    {
+        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
+        File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
+
+        IConfiguration initialConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(initialConfiguration, _configDir);
+        MicroClawConfig.Save(new TestDirectoryPathOptions { Value = "persisted" });
+
+        MicroClawConfig.Reset();
+
+        IConfiguration reloadedConfiguration = new ConfigurationBuilder()
+            .AddMicroClawYaml(mainConfigPath)
+            .Build();
+
+        MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
+
+        MicroClawConfig.Get<TestDirectoryPathOptions>().Value.Should().Be("persisted");
+    }
+
+    [Fact]
+    public void Save_WhenTypeDeclaresDirectoryPath_CanBeReloadedWithoutImports()
+    {
+        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
+        File.WriteAllText(mainConfigPath, "root: true\n");
+
+        IConfiguration initialConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(initialConfiguration, _configDir);
+        MicroClawConfig.Save(new TestDirectoryPathOptions { Value = "persisted-without-imports" });
+
+        MicroClawConfig.Reset();
+
+        IConfiguration reloadedConfiguration = new ConfigurationBuilder()
+            .AddMicroClawYaml(mainConfigPath)
+            .Build();
+
+        MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
+
+        MicroClawConfig.Get<TestDirectoryPathOptions>().Value.Should().Be("persisted-without-imports");
+    }
+
+    [Fact]
+    public void Save_WhenHomeDiffersFromMainConfigDirectory_ReloadStillUsesHomeRoot()
+    {
+        string externalConfigRoot = Path.Combine(_tempRoot, "external-config-root");
+        Directory.CreateDirectory(externalConfigRoot);
+        string mainConfigPath = Path.Combine(externalConfigRoot, "microclaw.yaml");
+        File.WriteAllText(mainConfigPath, "root: true\n");
+
+        IConfiguration initialConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(initialConfiguration, _configDir);
+        MicroClawConfig.Save(new TestDirectoryPathOptions { Value = "persisted-from-home-root" });
+
+        MicroClawConfig.Reset();
+        MicroClawConfig.RegisterConfigType<TestDirectoryPathOptions>();
+        MicroClawConfig.RegisterConfigType<TestDirectoryTemplateOptions>();
+
+        IConfiguration reloadedConfiguration = new ConfigurationBuilder()
+            .AddMicroClawYaml(mainConfigPath)
+            .Build();
+
+        MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
+
+        MicroClawConfig.Get<TestDirectoryPathOptions>().Value.Should().Be("persisted-from-home-root");
+    }
+
+    [Fact]
+    public void AddMicroClawYaml_WhenTypeOmitsFileName_DoesNotAutoImportImplicitDefaultFile()
+    {
+        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
+        File.WriteAllText(mainConfigPath, "sandbox:\n  token_expiry_minutes: 60\n");
+        File.WriteAllText(Path.Combine(_configDir, "sandboxoptions.yaml"), "sandbox:\n  token_expiry_minutes: 999\n");
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddMicroClawYaml(mainConfigPath)
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        MicroClawConfig.Get<SandboxOptions>().TokenExpiryMinutes.Should().Be(60);
+    }
+
+    [Fact]
     public void Save_WhenWriteFails_DoesNotCacheProvidedInstance()
     {
         string invalidConfigDir = _configDir + '\0' + "invalid";
@@ -219,11 +372,61 @@ public sealed class MicroClawConfigTests : IDisposable
         Action action = () => MicroClawConfig.Save(new TestInvalidFileNameOptions { Value = "blocked" });
 
         action.Should().Throw<InvalidOperationException>()
-            .WithMessage("*FileName 必须是配置目录下安全的单个 .yaml/.yml 文件名*");
+            .WithMessage("*FileName 必须是安全的单个 .yaml/.yml 文件名*");
         MicroClawConfig.CachedDescriptorCount.Should().Be(0);
         MicroClawConfig.CachedOptionsCount.Should().Be(0);
         MicroClawConfig.IsDescriptorCached<TestInvalidFileNameOptions>().Should().BeFalse();
         MicroClawConfig.IsOptionCached<TestInvalidFileNameOptions>().Should().BeFalse();
+    }
+
+    [Fact]
+    public void Save_WhenTypeUsesDirectoryPathWithoutFileName_ThrowsAndDoesNotCache()
+    {
+        InitializeTestOptions();
+
+        Action action = () => MicroClawConfig.Save(new TestDirectoryPathWithoutFileNameOptions { Value = "blocked" });
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*声明了 DirectoryPath 时必须同时声明 FileName*");
+        MicroClawConfig.CachedDescriptorCount.Should().Be(0);
+        MicroClawConfig.CachedOptionsCount.Should().Be(0);
+        MicroClawConfig.IsDescriptorCached<TestDirectoryPathWithoutFileNameOptions>().Should().BeFalse();
+        MicroClawConfig.IsOptionCached<TestDirectoryPathWithoutFileNameOptions>().Should().BeFalse();
+    }
+
+    [Fact]
+    public void Save_WhenTypeOmitsFileName_DoesNotCreateImplicitYamlFile()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        Action action = () => MicroClawConfig.Save(new SandboxOptions { TokenExpiryMinutes = 999 });
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*未声明为可写 YAML*");
+        File.Exists(Path.Combine(_configDir, "sandboxoptions.yaml")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Get_WhenTemplateTypeOmitsFileName_ThrowsAndDoesNotCache()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        Action action = () => MicroClawConfig.Get<TestTemplateWithoutFileNameOptions>();
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*实现了 IMicroClawConfigTemplate，必须显式声明 FileName*");
+        MicroClawConfig.CachedDescriptorCount.Should().Be(0);
+        MicroClawConfig.CachedOptionsCount.Should().Be(0);
+        MicroClawConfig.IsDescriptorCached<TestTemplateWithoutFileNameOptions>().Should().BeFalse();
+        MicroClawConfig.IsOptionCached<TestTemplateWithoutFileNameOptions>().Should().BeFalse();
     }
 
     [Fact]
@@ -241,6 +444,77 @@ public sealed class MicroClawConfigTests : IDisposable
         string filePath = Path.Combine(_configDir, "test-template.yaml");
         File.ReadAllText(filePath).Should().Contain("test_template:");
         File.ReadAllText(filePath).Should().Contain("custom_value: template-value");
+    }
+
+    [Fact]
+    public void Get_WhenTemplateTypeDeclaresDirectoryPath_MaterializesTemplateFileToDirectoryPath()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(configuration, _configDir);
+
+        TestDirectoryTemplateOptions options = MicroClawConfig.Get<TestDirectoryTemplateOptions>();
+
+        options.Value.Should().Be("template-directory-value");
+
+        string filePath = Path.Combine(_tempRoot, "template-config", "test-directory-template.yaml");
+        File.Exists(filePath).Should().BeTrue();
+        File.ReadAllText(filePath).Should().Contain("test_directory_template:");
+        File.ReadAllText(filePath).Should().Contain("custom_value: template-directory-value");
+        File.Exists(Path.Combine(_configDir, "test-directory-template.yaml")).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Get_WhenTemplateTypeDeclaresDirectoryPath_CanBeReloadedFromMainConfiguration()
+    {
+        string mainConfigPath = Path.Combine(_tempRoot, "microclaw.yaml");
+        File.WriteAllText(mainConfigPath, InitDefaults.MicroclawYaml);
+
+        IConfiguration initialConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([])
+            .Build();
+
+        MicroClawConfig.Initialize(initialConfiguration, _configDir);
+        _ = MicroClawConfig.Get<TestDirectoryTemplateOptions>();
+
+        MicroClawConfig.Reset();
+
+        IConfiguration reloadedConfiguration = new ConfigurationBuilder()
+            .AddMicroClawYaml(mainConfigPath)
+            .Build();
+
+        MicroClawConfig.Initialize(reloadedConfiguration, _configDir);
+
+        MicroClawConfig.Get<TestDirectoryTemplateOptions>().Value.Should().Be("template-directory-value");
+    }
+
+    [Fact]
+    public void Get_WhenTypesUseSameFileNameInDifferentDirectoryPaths_DoesNotThrow()
+    {
+        InitializeTestOptions();
+
+        TestDirectoryScopedAOptions first = MicroClawConfig.Get<TestDirectoryScopedAOptions>();
+        TestDirectoryScopedBOptions second = MicroClawConfig.Get<TestDirectoryScopedBOptions>();
+
+        first.Should().NotBeNull();
+        second.Should().NotBeNull();
+        MicroClawConfig.CachedDescriptorCount.Should().Be(2);
+        MicroClawConfig.CachedOptionsCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Get_WhenTypesResolveToSameFinalPath_ThrowsOnFirstAccess()
+    {
+        InitializeTestOptions();
+
+        _ = MicroClawConfig.Get<TestDefaultConfigDirectoryOptions>();
+
+        Action action = () => MicroClawConfig.Get<TestExplicitConfigDirectoryOptions>();
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*YAML 文件 'same-target.yaml'*重复声明*");
     }
 
     [Fact]
@@ -331,6 +605,12 @@ public sealed class MicroClawConfigTests : IDisposable
         public string Value { get; set; } = string.Empty;
     }
 
+    [MicroClawYamlConfig("test_directory_without_file", DirectoryPath = "custom-config", IsWritable = true)]
+    private sealed class TestDirectoryPathWithoutFileNameOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
     [MicroClawYamlConfig("test_template", FileName = "test-template.yaml", IsWritable = true)]
     private sealed class TestTemplateOptions : IMicroClawConfigTemplate
     {
@@ -341,6 +621,59 @@ public sealed class MicroClawConfigTests : IDisposable
         {
             Value = "template-value"
         };
+    }
+
+    [MicroClawYamlConfig("test_template_without_file")]
+    private sealed class TestTemplateWithoutFileNameOptions : IMicroClawConfigTemplate
+    {
+        public string Value { get; set; } = string.Empty;
+
+        public IMicroClawConfigOptions CreateDefaultTemplate() => new TestTemplateWithoutFileNameOptions
+        {
+            Value = "template-value"
+        };
+    }
+
+    [MicroClawYamlConfig("test_directory", FileName = "test-directory.yaml", DirectoryPath = "custom-config", IsWritable = true)]
+    private sealed class TestDirectoryPathOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
+    [MicroClawYamlConfig("test_directory_template", FileName = "test-directory-template.yaml", DirectoryPath = "template-config", IsWritable = true)]
+    private sealed class TestDirectoryTemplateOptions : IMicroClawConfigTemplate
+    {
+        [YamlMember(Alias = "custom_value")]
+        public string Value { get; set; } = string.Empty;
+
+        public IMicroClawConfigOptions CreateDefaultTemplate() => new TestDirectoryTemplateOptions
+        {
+            Value = "template-directory-value"
+        };
+    }
+
+    [MicroClawYamlConfig("test_directory_scoped_a", FileName = "shared.yaml", DirectoryPath = "dir-a", IsWritable = true)]
+    private sealed class TestDirectoryScopedAOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
+    [MicroClawYamlConfig("test_directory_scoped_b", FileName = "shared.yaml", DirectoryPath = "dir-b", IsWritable = true)]
+    private sealed class TestDirectoryScopedBOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
+    [MicroClawYamlConfig("test_default_config_directory", FileName = "same-target.yaml", IsWritable = true)]
+    private sealed class TestDefaultConfigDirectoryOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
+    [MicroClawYamlConfig("test_explicit_config_directory", FileName = "same-target.yaml", DirectoryPath = "config", IsWritable = true)]
+    private sealed class TestExplicitConfigDirectoryOptions : IMicroClawConfigOptions
+    {
+        public string Value { get; set; } = string.Empty;
     }
 
     private sealed class TestInterfaceOnlyOptions : IMicroClawConfigOptions

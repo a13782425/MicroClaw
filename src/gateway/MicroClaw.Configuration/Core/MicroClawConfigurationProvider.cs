@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileSystemGlobbing;
 using YamlDotNet.RepresentationModel;
@@ -25,14 +26,16 @@ public sealed class MicroClawConfigurationProvider : ConfigurationProvider
 
         var mainData = ParseYamlFile(_filePath);
         var importPatterns = ExtractImports(mainData);
+        var resolvedFiles = ResolveGlobs(importPatterns)
+            .Concat(DiscoverManagedConfigFiles())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        if (importPatterns.Count == 0)
+        if (resolvedFiles.Count == 0)
         {
             Data = mainData;
             return;
         }
-
-        var resolvedFiles = ResolveGlobs(importPatterns).ToList();
 
         var importedDicts = resolvedFiles
             .Select(f => (Path: f, Data: ParseYamlFile(f)))
@@ -106,6 +109,27 @@ public sealed class MicroClawConfigurationProvider : ConfigurationProvider
                 if (File.Exists(fullPath))
                     yield return fullPath;
             }
+        }
+    }
+
+    private IEnumerable<string> DiscoverManagedConfigFiles()
+    {
+        string homeRoot = HomeInitializer.ResolveHome(Environment.GetEnvironmentVariable("MICROCLAW_HOME"), _filePath);
+        string configDir = Path.Combine(homeRoot, "config");
+
+        foreach (Type optionType in MicroClawConfigTypeRegistry.GetManagedConfigTypes())
+        {
+            MicroClawYamlConfigAttribute? metadata = optionType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false);
+            if (metadata is null || string.IsNullOrWhiteSpace(metadata.FileName) || string.IsNullOrWhiteSpace(metadata.DirectoryPath))
+                continue;
+
+            string? fileName = metadata.FileName.Trim();
+            MicroClawConfigPathResolver.EnsureSafeFileName(optionType, fileName);
+            string? directoryPath = MicroClawConfigPathResolver.NormalizeDirectoryPath(optionType, metadata.DirectoryPath, homeRoot);
+            string filePath = MicroClawConfigPathResolver.ResolveFilePath(configDir, optionType, fileName, directoryPath);
+
+            if (File.Exists(filePath))
+                yield return filePath;
         }
     }
 
