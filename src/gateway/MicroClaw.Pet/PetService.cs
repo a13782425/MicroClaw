@@ -21,14 +21,14 @@ public sealed class PetService : IPetService, IService
 {
     private readonly ISessionService _sessionRepo;
     private readonly PetContextFactory _petContextFactory;
-    private readonly AgentStore _agentStore;
+    private readonly IAgentRepository _agentRepo;
     private readonly ILogger<PetService> _logger;
 
     public PetService(IServiceProvider sp)
     {
         _sessionRepo = sp.GetRequiredService<ISessionService>();
         _petContextFactory = sp.GetRequiredService<PetContextFactory>();
-        _agentStore = sp.GetRequiredService<AgentStore>();
+        _agentRepo = sp.GetRequiredService<IAgentRepository>();
         _logger = sp.GetRequiredService<ILogger<PetService>>();
     }
 
@@ -82,7 +82,7 @@ public sealed class PetService : IPetService, IService
     /// <summary>检查是否有启用的默认 Agent（渠道消息路由前置检查）。</summary>
     public bool HasAgentForChannel(string channelId)
     {
-        AgentEntity? main = _agentStore.GetDefault();
+        AgentEntity? main = _agentRepo.GetDefault();
         return main is { IsEnabled: true };
     }
 

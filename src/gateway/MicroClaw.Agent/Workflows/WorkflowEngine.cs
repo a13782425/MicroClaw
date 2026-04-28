@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,16 +14,15 @@ namespace MicroClaw.Agent.Workflows;
 /// </summary>
 public sealed class WorkflowEngine
 {
-    private readonly AgentStore _agentStore;
+    private readonly IAgentRepository _agentRepo;
     private readonly ProviderService _providerStore;
-    private readonly AgentRunner _agentRunner;
+    // TODO P5-01: Replace with IMicroAgentService after re-integration
     private readonly ILogger<WorkflowEngine> _logger;
 
     public WorkflowEngine(IServiceProvider sp)
     {
-        _agentStore = sp.GetRequiredService<AgentStore>();
+        _agentRepo = sp.GetRequiredService<IAgentRepository>();
         _providerStore = sp.GetRequiredService<ProviderService>();
-        _agentRunner = sp.GetRequiredService<AgentRunner>();
         _logger = sp.GetRequiredService<ILogger<WorkflowEngine>>();
     }
     public async IAsyncEnumerable<StreamItem> ExecuteAsync(
@@ -43,7 +43,7 @@ public sealed class WorkflowEngine
         }
 
         // ����ʱ�����ģ�������ģ���ڽڵ�䴫��
-        string? currentAgentId = _agentStore.GetDefault()?.Id;
+        string? currentAgentId = _agentRepo.GetDefault()?.Id;
         string? currentProviderId = workflow.DefaultProviderId ?? _providerStore.GetDefault()?.Id;
 
         Dictionary<string, string> nodeOutputs = new();
@@ -163,21 +163,19 @@ public sealed class WorkflowEngine
         string providerId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        AgentDto? agent = _agentStore.GetById(effectiveAgentId);
-        if (agent is null || !agent.IsEnabled)
+        // TODO P5-01: Re-integrate ExecuteAgentNodeAsync with IMicroAgentService + MicroChatContext
+        // WorkflowEngine is temporarily disabled (P4-02) pending P5-01 re-integration.
+        AgentDto? agentDto = _agentRepo.GetById(effectiveAgentId);
+        if (agentDto is null || !agentDto.IsEnabled)
         {
-            _logger.LogWarning("�������ڵ� {NodeId} ���õ� Agent '{AgentId}' �����ڻ��ѽ��ã�������",
+            _logger.LogWarning("Agent node {NodeId} references Agent '{AgentId}' which is missing or disabled.",
                 node.NodeId, effectiveAgentId);
             yield break;
         }
 
-        var history = new List<MicroClaw.Abstractions.Sessions.SessionMessage>
-        {
-            new(Id: Guid.NewGuid().ToString("N"), Role: "user", Content: input, ThinkContent: null, Timestamp: DateTimeOffset.UtcNow, Attachments: null)
-        };
-
-        await foreach (StreamItem item in _agentRunner.StreamReActAsync(agent, providerId, history, sessionId: null, ct, "workflow"))
-            yield return item;
+        // Agent streaming requires MicroChatContext (P5-01 work); emit placeholder item.
+        _logger.LogWarning("WorkflowEngine.ExecuteAgentNodeAsync disabled pending P5-01 re-integration.");
+        yield return new WorkflowErrorItem("", node.NodeId, "WorkflowEngine requires P5-01 re-integration.");
     }
 
     private static string ExecuteFunctionNode(WorkflowNodeConfig node, string input)
@@ -199,24 +197,10 @@ public sealed class WorkflowEngine
         string? currentAgentId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        string toolName = node.FunctionName ?? string.Empty;
-        string? toolAgentId = node.Config?.GetValueOrDefault("toolAgentId");
-
-        if (string.IsNullOrWhiteSpace(toolAgentId))
-        {
-            _logger.LogWarning("������ Tool �ڵ� {NodeId} δ���� toolAgentId��", node.NodeId);
-            yield return new TokenItem(input);
-            yield break;
-        }
-
-        if (!string.IsNullOrWhiteSpace(currentAgentId) && toolAgentId != currentAgentId)
-        {
-            yield return new WorkflowWarningItem(executionId, node.NodeId,
-                $"Tool �ڵ�ʹ�õ� Agent '{toolAgentId}' �뵱ǰ������ Agent '{currentAgentId}' ��һ�¡�");
-        }
-
-        string result = await _agentRunner.InvokeToolAsync(toolAgentId, toolName, node.Config, input, ct);
-        yield return new TokenItem(result);
+        // TODO P5-01: Re-integrate ExecuteToolNodeAsync with IMicroAgentService
+        // WorkflowEngine is temporarily disabled (P4-02) pending P5-01 re-integration.
+        _logger.LogWarning("WorkflowEngine.ExecuteToolNodeAsync disabled pending P5-01 re-integration.");
+        yield return new TokenItem(input);
     }
 
     /// <summary>��������Kahn �㷨��BFS ���򣩡�</summary>

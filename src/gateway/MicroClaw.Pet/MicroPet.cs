@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -80,11 +81,11 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     private readonly PetSessionObserver _sessionObserver;
     private readonly PetRateLimiter _rateLimiter;
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
-    private readonly AgentStore _agentStore;
+    private readonly IAgentRepository _agentRepo;
     private readonly ProviderService _providerStore;
     private readonly IProviderRouter? _providerRouter;
     private readonly ISessionService _sessionService;
-    private readonly AgentRunner _agentRunner;
+    private readonly IMicroAgentService _agentService;
     private readonly ChatMessageAssembler _messageAssembler;
     private readonly ToolCollector _toolCollector;
     private readonly ILogger _logger;
@@ -112,11 +113,11 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
         _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
-        _agentStore = sp.GetRequiredService<AgentStore>();
+        _agentRepo = sp.GetRequiredService<IAgentRepository>();
         _providerStore = sp.GetRequiredService<ProviderService>();
         _providerRouter = sp.GetService<IProviderRouter>();
         _sessionService = sp.GetRequiredService<ISessionService>();
-        _agentRunner = sp.GetRequiredService<AgentRunner>();
+        _agentService = sp.GetRequiredService<IMicroAgentService>();
         _messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
@@ -426,7 +427,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             {
                 // Resolve Agent / Provider from dispatch or session defaults
                 AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId)
-                    ? _agentStore.GetById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId)
+                    ? _agentRepo.GetById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId)
                     : ResolveAgent(MicroSession.AgentId);
                 if (agent is null || !agent.IsEnabled)
                     throw new InvalidOperationException("No enabled agent found for this session.");
@@ -464,9 +465,9 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
                     var dispatchCanceled = new StrongBox<bool>(false);
                     using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
                     {
-                        await foreach (var item in _agentRunner.StreamReActAsync(
-                            agent,
-                            chatCtx))
+                        IMicroAgent runtimeAgent = _agentService.GetById(agent.Id)
+                            ?? throw new InvalidOperationException($"Agent '{agent.Id}' not found in runtime cache.");
+                        await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
                         {
                             if (HasDispatchLifecycleStarted(chatCtx))
                                 await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);
@@ -653,7 +654,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
     private IReadOnlyList<AgentSummary> BuildAgentSummaries(PetConfig config)
     {
-        var agents = _agentStore.All.Where(a => a.IsEnabled);
+        var agents = _agentRepo.GetAll().Where(a => a.IsEnabled);
         if (config.AllowedAgentIds is { Count: > 0 })
         {
             var allowed = new HashSet<string>(config.AllowedAgentIds);
@@ -683,8 +684,8 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
     private AgentEntity? ResolveAgent(string? agentId) =>
         string.IsNullOrWhiteSpace(agentId)
-            ? _agentStore.GetDefault()
-            : _agentStore.GetById(agentId) ?? _agentStore.GetDefault();
+            ? _agentRepo.GetDefault()
+            : _agentRepo.GetById(agentId) ?? _agentRepo.GetDefault();
 
     private static AgentEntity CreateRuntimeToolOverrideAgent(
         AgentEntity agent,
@@ -839,9 +840,9 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             var dispatchCanceled = new StrongBox<bool>(false);
             using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
             {
-                await foreach (var item in _agentRunner.StreamReActAsync(
-                    agent,
-                    chatCtx))
+                IMicroAgent runtimeAgent = _agentService.GetById(agent.Id)
+                    ?? throw new InvalidOperationException($"Agent '{agent.Id}' not found in runtime cache.");
+                await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
                 {
                     if (HasDispatchLifecycleStarted(chatCtx))
                         await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);

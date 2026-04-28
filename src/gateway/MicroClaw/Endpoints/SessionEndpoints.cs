@@ -4,6 +4,7 @@ using MicroClaw.Agent;
 using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -27,7 +28,7 @@ public static class SessionEndpoints
         endpoints.MapGet("/sessions", (ISessionService repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
         
         // POST /api/sessions— 创建会话
-        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderService providerStore, AgentStore agentStore, ChannelService channelStore, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderService providerStore, IMicroAgentService agentService, ChannelService channelStore, SessionDnaService sessionDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Title))
                 return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
@@ -47,8 +48,8 @@ public static class SessionEndpoints
                 return Results.NotFound(new { success = false, message = $"Channel '{channelId}' not found.", errorCode = "NOT_FOUND" });
             
             // 解析 AgentId：默认使用 main agent
-            string? agentId = string.IsNullOrWhiteSpace(req.AgentId) ? agentStore.GetDefault()?.Id : req.AgentId;
-            if (!string.IsNullOrWhiteSpace(req.AgentId) && agentStore.GetById(req.AgentId) is null)
+            string? agentId = string.IsNullOrWhiteSpace(req.AgentId) ? agentService.GetDefault()?.Id : req.AgentId;
+            if (!string.IsNullOrWhiteSpace(req.AgentId) && agentService.GetById(req.AgentId) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
             
             IMicroSession created = await sessions.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent;
 using AgentEntity = MicroClaw.Agent.AgentDto;
 using MicroClaw.Abstractions;
@@ -10,7 +11,11 @@ using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Providers;
+using MicroClaw.Skills;
+using MicroClaw.Tools;
 using MicroClaw.Utils;
+using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Sessions;
 
@@ -23,8 +28,11 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
 {
     private int MaxSubAgentDepth => MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth;
     private ISessionService Sessions => sp.GetRequiredService<ISessionService>();
-    private AgentStore AgentStore => sp.GetRequiredService<AgentStore>();
-    private AgentRunner AgentRunner => sp.GetRequiredService<AgentRunner>();
+    private IMicroAgentService AgentService => sp.GetRequiredService<IMicroAgentService>();
+    private IAgentRepository AgentRepo => sp.GetRequiredService<IAgentRepository>();
+    private ProviderService ProviderSvc => sp.GetRequiredService<ProviderService>();
+    private ChatMessageAssembler MessageAssembler => sp.GetRequiredService<ChatMessageAssembler>();
+    private ToolCollector ToolCollector => sp.GetRequiredService<ToolCollector>();
 
     public async Task<string> RunSubAgentAsync(
         string agentId,
@@ -32,11 +40,15 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
         string sessionId,
         CancellationToken ct = default)
     {
-        AgentEntity? agent = AgentStore.GetById(agentId);
-        if (agent is null)
+        IMicroAgent? runtimeAgent = AgentService.GetById(agentId);
+        if (runtimeAgent is null)
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
-        if (!agent.IsEnabled)
-            throw new InvalidOperationException($"子代理 '{agent.Name}' 未启用。");
+        if (!runtimeAgent.IsEnabled)
+            throw new InvalidOperationException($"子代理 '{runtimeAgent.Name}' 未启用。");
+
+        AgentEntity? agentDto = AgentRepo.GetById(agentId);
+        if (agentDto is null)
+            throw new InvalidOperationException($"子代理 '{agentId}' 配置不存在。");
         
         SubAgentRunContext? currentRunContext = SubAgentRunScope.Current;
         IReadOnlyList<string> ancestorAgentIds = currentRunContext?.AgentChain ?? Array.Empty<string>();
@@ -49,7 +61,9 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
 
         // 获取父会话 ProviderId（子运行默认继承当前会话模型）
         IMicroSession? session = Sessions.Get(sessionId);
-        string providerId = session?.ProviderId ?? string.Empty;
+        string primaryProviderId = !string.IsNullOrWhiteSpace(session?.ProviderId)
+            ? session.ProviderId
+            : ProviderSvc.GetDefault()?.Id ?? string.Empty;
         string rootSessionId = currentRunContext?.RootSessionId ?? sessionId;
         string runId = Guid.NewGuid().ToString("N");
         var nestedRunContext = new SubAgentRunContext(rootSessionId, [.. ancestorAgentIds, agentId]);
@@ -59,62 +73,112 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
         {
             SessionMessage userMsg = new(Guid.NewGuid().ToString("N"), "user", task, null, DateTimeOffset.UtcNow, null,
                 Source: $"sub-agent:{agentId}");
-            var rootUserMeta = BuildSubAgentMetadata(agentId, agent.Name, runId);
+            var rootUserMeta = BuildSubAgentMetadata(agentId, runtimeAgent.Name, runId);
             Sessions.AddMessage(rootSessionId,
                 userMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootUserMeta, Visibility = MessageVisibility.Internal });
 
             ChannelWriter<StreamItem>? parentWriter = SubAgentEventBridge.Current;
 
             if (parentWriter is not null)
-                await parentWriter.WriteAsync(new SubAgentStartItem(agentId, agent.Name, task, runId), ct);
+                await parentWriter.WriteAsync(new SubAgentStartItem(agentId, runtimeAgent.Name, task, runId), ct);
 
             var sw = Stopwatch.StartNew();
             StringBuilder textBuilder = new();
             StringBuilder thinkBuilder = new();
             List<ResponseAttachment> attachmentsList = [];
 
-            SubAgentRunScope.Current = nestedRunContext;
+            // 获取 ProviderConfig 用于消息装配
+            ProviderConfig? providerCfg = ProviderSvc.GetById(primaryProviderId)
+                ?? ProviderSvc.GetDefault();
+            if (providerCfg is null)
+                throw new InvalidOperationException("找不到可用的模型提供方。");
+
+            // 装配消息
+            ChatMessageAssemblyResult assembly = await MessageAssembler.AssembleAsync(
+                agentDto, providerCfg, [userMsg], rootSessionId, ct: ct);
+
+            // 收集工具（含子代理工具，传入祖先链）
+            var toolCtx = new ToolCreationContext(
+                SessionId: rootSessionId,
+                CallingAgentId: agentId,
+                DisabledSkillIds: agentDto.DisabledSkillIds,
+                AllowedSubAgentIds: runtimeAgent.AllowedSubAgentIds,
+                AncestorAgentIds: ancestorAgentIds);
+
+            ToolCollectionResult? toolResult = null;
             try
             {
-                await foreach (StreamItem item in AgentRunner.StreamReActAsync(
-                    agent,
-                    providerId,
-                    [userMsg],
-                    rootSessionId,
-                    ct,
-                    source: "subagent",
-                    ancestorAgentIdsOverride: ancestorAgentIds).WithCancellation(ct))
+                toolResult = await ToolCollector.CollectToolsAsync(agentDto, toolCtx, ct);
+
+                // 计算内部工具名称集
+                var availableToolNames = toolResult.AllTools
+                    .Select(static t => t.Name)
+                    .Where(static n => !string.IsNullOrWhiteSpace(n))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                IReadOnlySet<string> internalToolNames = SkillToolProvider.InternalToolNames
+                    .Where(availableToolNames.Contains)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                // 构建 ChatOptions
+                ChatOptions executionOptions = ChatExecutionOptionsFactory.Build(toolResult.AllTools, providerCfg);
+
+                // 构建完整 MicroChatContext
+                IMicroSession contextSession = session ?? MicroChatContext.ForSystem(rootSessionId, "subagent", ct).Session;
+                var chatContext = new MicroChatContext
                 {
-                    switch (item)
+                    Session = contextSession,
+                    Source = "subagent",
+                    History = [userMsg],
+                    Ct = ct,
+                    TargetProviderId = providerCfg.Id,
+                    AncestorAgentIds = ancestorAgentIds,
+                    AssembledMessages = assembly.Messages,
+                    AssembledTools = toolResult.AllTools,
+                    InternalToolNames = internalToolNames,
+                    ExecutionOptions = executionOptions,
+                };
+
+                SubAgentRunScope.Current = nestedRunContext;
+                try
+                {
+                    await foreach (StreamItem item in runtimeAgent.StreamAsync(chatContext).WithCancellation(ct))
                     {
-                        case TokenItem token:
-                            textBuilder.Append(token.Content);
-                            break;
+                        switch (item)
+                        {
+                            case TokenItem token:
+                                textBuilder.Append(token.Content);
+                                break;
 
-                        case ThinkingItem thinking:
-                            thinkBuilder.Append(thinking.Content);
-                            break;
+                            case ThinkingItem thinking:
+                                thinkBuilder.Append(thinking.Content);
+                                break;
 
-                        case DataContentItem data:
-                            attachmentsList.Add(new ResponseAttachment(data.MimeType, data.Data));
-                            break;
+                            case DataContentItem data:
+                                attachmentsList.Add(new ResponseAttachment(data.MimeType, data.Data));
+                                break;
 
-                        case ToolCallItem toolCall when parentWriter is not null:
-                            await parentWriter.WriteAsync(
-                                new SubAgentProgressItem(agentId, $"调用工具: {toolCall.ToolName}", runId), ct);
-                            break;
+                            case ToolCallItem toolCall when parentWriter is not null:
+                                await parentWriter.WriteAsync(
+                                    new SubAgentProgressItem(agentId, $"调用工具: {toolCall.ToolName}", runId), ct);
+                                break;
 
-                        case ToolResultItem toolResult when parentWriter is not null:
-                            string status = toolResult.Success ? $"✓ {toolResult.DurationMs}ms" : "✗ 失败";
-                            await parentWriter.WriteAsync(
-                                new SubAgentProgressItem(agentId, $"{toolResult.ToolName} {status}", runId), ct);
-                            break;
+                            case ToolResultItem toolResultItem when parentWriter is not null:
+                                string status = toolResultItem.Success ? $"✓ {toolResultItem.DurationMs}ms" : "✗ 失败";
+                                await parentWriter.WriteAsync(
+                                    new SubAgentProgressItem(agentId, $"{toolResultItem.ToolName} {status}", runId), ct);
+                                break;
+                        }
                     }
+                }
+                finally
+                {
+                    SubAgentRunScope.Current = previousRunContext;
                 }
             }
             finally
             {
-                SubAgentRunScope.Current = previousRunContext;
+                if (toolResult is not null)
+                    await toolResult.DisposeAsync();
             }
 
             sw.Stop();
@@ -126,7 +190,7 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
 
             if (parentWriter is not null)
                 await parentWriter.WriteAsync(
-                    new SubAgentResultItem(agentId, agent.Name, main, sw.ElapsedMilliseconds, runId), ct);
+                    new SubAgentResultItem(agentId, runtimeAgent.Name, main, sw.ElapsedMilliseconds, runId), ct);
 
             List<MessageAttachment>? attachments = attachmentsList.Count > 0
                 ? attachmentsList.Select(a => new MessageAttachment(
@@ -135,7 +199,7 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
             
             SessionMessage assistantMsg = new(Guid.NewGuid().ToString("N"), "assistant", main, think,
                 DateTimeOffset.UtcNow, attachments, Source: $"sub-agent:{agentId}");
-            var rootAssistantMeta = BuildSubAgentMetadata(agentId, agent.Name, runId);
+            var rootAssistantMeta = BuildSubAgentMetadata(agentId, runtimeAgent.Name, runId);
             Sessions.AddMessage(rootSessionId,
                 assistantMsg with { Id = Guid.NewGuid().ToString("N"), Metadata = rootAssistantMeta, Visibility = MessageVisibility.Internal });
 

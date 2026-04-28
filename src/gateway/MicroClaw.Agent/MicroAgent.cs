@@ -1,7 +1,17 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Agent.Dev;
 using MicroClaw.Core;
+using MicroClaw.Plugins.Hooks;
+using MicroClaw.Providers;
+using MicroClaw.RAG;
+using MicroClaw.Tools;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent;
 
@@ -13,14 +23,27 @@ namespace MicroClaw.Agent;
 /// 构造保持 <c>private</c>，外部只能通过 <see cref="Create"/> 工厂方法创建实例。
 /// </para>
 /// <para>
-/// 本轮骨架阶段（P1-01）：属性委托内部 <see cref="AgentDto"/> 实体；
-/// 运行时依赖（ProviderService、ToolCollector 等）在 P1-02 的 <c>OnInitializedAsync</c> 中惰性解析；
+/// 运行时依赖（ProviderService、ToolCollector 等）在 <c>OnInitializedAsync</c> 中惰性解析；
+/// MicroAgentService.StartAsync 通过 <see cref="InitializeAsync"/> 触发初始化，
+/// 无需将 MicroAgent 注册到 MicroEngine（参见 KD-3）。
 /// ReAct 执行逻辑在 P1-03 <c>StreamAsync</c> 中迁入；工具直调逻辑在 P1-04 迁入。
 /// </para>
 /// </summary>
 public sealed class MicroAgent : MicroObject, IMicroAgent
 {
     private readonly IServiceProvider _sp;
+
+    // ── 运行时依赖（InitializeAsync 后填充，StreamAsync/InvokeToolAsync 前只读） ──
+
+    private ILogger<MicroAgent>? _agentLogger;
+    private ProviderService? _providerService;
+    private ToolCollector? _toolCollector;
+    private IAgentStatusNotifier? _agentStatusNotifier;
+    private IDevMetricsService? _devMetrics;
+    private IProviderRouter? _providerRouter;
+    private IHookExecutor? _hookExecutor;
+    private IRagUsageAuditor? _ragUsageAuditor;
+    private RagRetrievalContext? _ragRetrievalContext;
 
     private MicroAgent(AgentDto entity, IServiceProvider sp)
     {
@@ -42,32 +65,331 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     public string Name => Entity.Name;
 
     /// <inheritdoc/>
+    public string Description => Entity.Description;
+
+    /// <inheritdoc/>
     public bool IsEnabled => Entity.IsEnabled;
 
     /// <inheritdoc/>
     public bool IsDefault => Entity.IsDefault;
 
+    /// <inheritdoc/>
+    public IReadOnlyList<string>? AllowedSubAgentIds => Entity.AllowedSubAgentIds;
+
     // ── 工厂方法 ──────────────────────────────────────────────────────────
 
     /// <summary>
     /// 根据持久化 <paramref name="entity"/> 创建运行时 MicroAgent 实例。
-    /// 此阶段仅分配数据字段，IO/依赖解析推迟至 <c>OnInitializedAsync</c>（P1-02 实现）。
+    /// 此阶段仅分配数据字段，依赖解析推迟至 <see cref="InitializeAsync"/>。
     /// </summary>
     public static MicroAgent Create(AgentDto entity, IServiceProvider sp) => new(entity, sp);
 
-    // ── IMicroAgent 方法（待 P1-03 / P1-04 实现） ─────────────────────────
+    // ── 初始化 ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// MicroClaw.Core 生命周期钩子：从 DI 容器惰性解析所有运行时依赖。
+    /// 不在构造函数中执行以遵循 "no IO in ctor" 约定。
+    /// </summary>
+    protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    {
+        _agentLogger = _sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroAgent>();
+        _providerService = _sp.GetRequiredService<ProviderService>();
+        _toolCollector = _sp.GetRequiredService<ToolCollector>();
+        _agentStatusNotifier = _sp.GetRequiredService<IAgentStatusNotifier>();
+        _devMetrics = _sp.GetRequiredService<IDevMetricsService>();
+        _providerRouter = _sp.GetService<IProviderRouter>();
+        _hookExecutor = _sp.GetService<IHookExecutor>();
+        _ragUsageAuditor = _sp.GetService<IRagUsageAuditor>();
+        _ragRetrievalContext = _sp.GetService<RagRetrievalContext>();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// 由 <c>MicroAgentService.StartAsync</c> 调用，触发运行时依赖解析。
+    /// MicroAgent 不注册到引擎（KD-3），因此通过此 internal 方法代替引擎驱动的生命周期。
+    /// </summary>
+    internal ValueTask InitializeAsync(CancellationToken ct = default)
+        => OnInitializedAsync(ct);
+
+    // ── IMicroAgent 执行方法 ───────────────────────────────────────────────
 
     /// <inheritdoc/>
-    /// <remarks>P1-03 实现：迁移 AgentRunner.ExecutePreparedStreamingCoreAsync 逻辑。</remarks>
     public IAsyncEnumerable<StreamItem> StreamAsync(MicroChatContext context)
-        => throw new NotImplementedException("StreamAsync will be implemented in P1-03.");
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var outputChannel = Channel.CreateUnbounded<StreamItem>();
+        Task execution = StreamingCoreAsync(context, outputChannel);
+
+        return ReadOutputAsync(outputChannel, execution, context.Ct);
+    }
+
+    private async IAsyncEnumerable<StreamItem> ReadOutputAsync(
+        Channel<StreamItem> outputChannel,
+        Task execution,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        try
+        {
+            await foreach (StreamItem item in outputChannel.Reader.ReadAllAsync(ct))
+                yield return item;
+        }
+        finally
+        {
+            try { await execution; }
+            catch (OperationCanceledException) { }
+            catch { }
+        }
+    }
+
+    private async Task StreamingCoreAsync(MicroChatContext chatContext, Channel<StreamItem> output)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+        ArgumentNullException.ThrowIfNull(output);
+
+        string primaryProviderId = ResolveExecutionProviderId(chatContext);
+        IReadOnlyList<ProviderConfig> chain = BuildPreparedFallbackChain(chatContext);
+        if (chain.Count == 0)
+        {
+            output.Writer.TryComplete(new InvalidOperationException($"Provider '{primaryProviderId}' not found or disabled."));
+            return;
+        }
+
+        IReadOnlyList<ChatMessage> messages = RequirePreparedMessages(chatContext);
+        IReadOnlyList<AITool> effectiveTools = RequirePreparedTools(chatContext);
+        IReadOnlySet<string> internalToolNames = RequirePreparedInternalToolNames(chatContext);
+        ChatOptions preparedOptions = RequirePreparedExecutionOptions(chatContext);
+        string? sessionId = string.IsNullOrWhiteSpace(chatContext.Session.Id) ? null : chatContext.Session.Id;
+
+        Exception? lastException = null;
+
+        try
+        {
+            for (int attempt = 0; attempt < chain.Count; attempt++)
+            {
+                ProviderConfig provider = chain[attempt];
+                bool isLastAttempt = attempt == chain.Count - 1;
+                bool anyItemWritten = false;
+
+                if (chatContext.Ct.IsCancellationRequested)
+                {
+                    output.Writer.TryComplete();
+                    return;
+                }
+
+                if (attempt > 0)
+                    _agentLogger!.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
+
+                bool succeeded = false;
+                Exception? streamingException = null;
+
+                try
+                {
+                    chatContext.TargetAgentId ??= Entity.Id;
+                    chatContext.TargetAgentName ??= Entity.Name;
+                    chatContext.TargetProviderId = provider.Id;
+
+                    _agentLogger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Entity.Id, effectiveTools.Count, provider.Id);
+
+                    ChatMicroProvider chatProvider = _providerService!.TryGetProvider(provider.Id)
+                        ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available in cache.");
+
+                    if (!string.IsNullOrWhiteSpace(sessionId))
+                        await _agentStatusNotifier!.NotifyAsync(sessionId, Entity.Id, "running", chatContext.Ct);
+
+                    if (_hookExecutor is not null)
+                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionStart, SessionId = sessionId, AgentId = Entity.Id }, CancellationToken.None);
+
+                    var runSw = System.Diagnostics.Stopwatch.StartNew();
+                    try
+                    {
+                        var responseAccumulator = new System.Text.StringBuilder();
+                        await foreach (StreamItem item in chatProvider.AgentStreamAsync(chatContext, messages, effectiveTools, options: preparedOptions, internalToolNames: internalToolNames, ct: chatContext.Ct))
+                        {
+                            anyItemWritten = true;
+                            if (item is TokenItem tokenItem)
+                                responseAccumulator.Append(tokenItem.Content);
+                            await output.Writer.WriteAsync(item, chatContext.Ct);
+                        }
+
+                        succeeded = true;
+
+                        if (_ragUsageAuditor is not null && _ragRetrievalContext?.RetrievedChunks is { Count: > 0 } chunks && responseAccumulator.Length > 0 && !string.IsNullOrWhiteSpace(sessionId))
+                        {
+                            string response = responseAccumulator.ToString();
+                            string auditSessionId = sessionId;
+                            _ = Task.Run(async () =>
+                            {
+                                try { await _ragUsageAuditor.AuditAsync(auditSessionId, chunks, response, CancellationToken.None); }
+                                catch (Exception ex) { _agentLogger!.LogWarning(ex, "RAG 审计后台任务失败"); }
+                            }, CancellationToken.None);
+                        }
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
+                    {
+                        streamingException = ex;
+                    }
+                    finally
+                    {
+                        runSw.Stop();
+                        _devMetrics!.RecordAgentRun(Entity.Id, succeeded, runSw.ElapsedMilliseconds);
+                        if (!string.IsNullOrWhiteSpace(sessionId))
+                            await _agentStatusNotifier!.NotifyAsync(sessionId, Entity.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+                    }
+
+                    if (streamingException is not null)
+                    {
+                        lastException = streamingException;
+                        _agentLogger!.LogWarning(streamingException, "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                        continue;
+                    }
+
+                    output.Writer.TryComplete();
+
+                    if (_hookExecutor is not null)
+                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionEnd, SessionId = sessionId, AgentId = Entity.Id }, CancellationToken.None);
+
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    output.Writer.TryComplete();
+                    return;
+                }
+                catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
+                {
+                    lastException = ex;
+                    _agentLogger!.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                }
+            }
+
+            output.Writer.TryComplete(lastException ?? new InvalidOperationException("All providers in fallback chain failed."));
+        }
+        catch (Exception ex)
+        {
+            _agentLogger!.LogError(ex, "StreamingCoreAsync 遭遇未预期异常，关闭 output Channel");
+            output.Writer.TryComplete(ex);
+
+            if (_hookExecutor is not null)
+                _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.OnError, SessionId = sessionId, ErrorMessage = ex.Message }, CancellationToken.None);
+        }
+    }
+
+    // ── StreamAsync 辅助方法 ──────────────────────────────────────────────
+
+    private static string ResolveExecutionProviderId(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        if (!string.IsNullOrWhiteSpace(chatContext.TargetProviderId))
+            return chatContext.TargetProviderId;
+
+        throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.TargetProviderId to be populated.");
+    }
+
+    private IReadOnlyList<ProviderConfig> BuildPreparedFallbackChain(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        List<string> preferredIds = [];
+        if (!string.IsNullOrWhiteSpace(chatContext.TargetProviderId))
+            preferredIds.Add(chatContext.TargetProviderId);
+
+        if (chatContext.ProviderFallbackIds is { Count: > 0 })
+            preferredIds.AddRange(chatContext.ProviderFallbackIds.Where(static id => !string.IsNullOrWhiteSpace(id)));
+
+        if (preferredIds.Count == 0)
+            return [];
+
+        Dictionary<string, ProviderConfig> providersById = _providerService!.All
+            .Where(static p => p.IsEnabled && p.ModelType == ModelType.Chat)
+            .GroupBy(static p => p.Id, StringComparer.Ordinal)
+            .ToDictionary(static g => g.Key, static g => g.First(), StringComparer.Ordinal);
+
+        List<ProviderConfig> plannedChain = [];
+        HashSet<string> seenIds = new(StringComparer.Ordinal);
+        foreach (string providerId in preferredIds)
+        {
+            if (!seenIds.Add(providerId)) continue;
+            if (providersById.TryGetValue(providerId, out ProviderConfig? p))
+                plannedChain.Add(p);
+        }
+
+        return plannedChain.AsReadOnly();
+    }
+
+    private static IReadOnlyList<ChatMessage> RequirePreparedMessages(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        if (chatContext.AssembledMessages is null)
+            throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.AssembledMessages to be populated.");
+
+        if (chatContext.AssembledMessages.Count == 0)
+            throw new InvalidOperationException("Dispatch message assembly produced an explicit empty message list; MicroAgent will not invoke the provider.");
+
+        return chatContext.AssembledMessages;
+    }
+
+    private static IReadOnlyList<AITool> RequirePreparedTools(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        if (chatContext.AssembledTools is not null)
+            return chatContext.AssembledTools;
+
+        throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.AssembledTools to be populated.");
+    }
+
+    private static IReadOnlySet<string> RequirePreparedInternalToolNames(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        return chatContext.InternalToolNames ?? throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.InternalToolNames to be populated.");
+    }
+
+    private static ChatOptions RequirePreparedExecutionOptions(MicroChatContext chatContext)
+    {
+        ArgumentNullException.ThrowIfNull(chatContext);
+
+        return chatContext.ExecutionOptions ?? throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.ExecutionOptions to be populated.");
+    }
+
+    // ── P1-04 InvokeToolAsync ─────────────────────────────────────────────
 
     /// <inheritdoc/>
-    /// <remarks>P1-04 实现：迁移工具直调逻辑。</remarks>
-    public Task<string> InvokeToolAsync(
+    public async Task<string> InvokeToolAsync(
         string toolName,
         IReadOnlyDictionary<string, string>? args,
         string fallbackInput,
         CancellationToken ct)
-        => throw new NotImplementedException("InvokeToolAsync will be implemented in P1-04.");
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+
+        // Build arguments: if caller provides none, fall back to { "input": fallbackInput }
+        var arguments = new Dictionary<string, object?>();
+        if (args is not null)
+        {
+            foreach (var kv in args)
+                arguments[kv.Key] = kv.Value;
+        }
+        if (arguments.Count == 0)
+            arguments["input"] = fallbackInput;
+
+        var toolContext = new ToolCreationContext(CallingAgentId: Entity.Id);
+        await using ToolCollectionResult toolResult = await _toolCollector!.CollectToolsAsync(Entity, toolContext, ct);
+
+        AITool? tool = toolResult.AllTools.FirstOrDefault(t => t.Name == toolName)
+            ?? toolResult.AllTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
+
+        if (tool is AIFunction fn)
+        {
+            object? result = await fn.InvokeAsync(new AIFunctionArguments(arguments), ct);
+            return result?.ToString() ?? string.Empty;
+        }
+
+        _agentLogger!.LogWarning("InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.", toolName, Entity.Id);
+        return fallbackInput;
+    }
 }

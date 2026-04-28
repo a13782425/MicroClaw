@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Tools;
@@ -12,7 +13,8 @@ namespace MicroClaw.Agent;
 /// 为当前代理动态生成可调用的子代理工具函数，并附加 Agent 管理工具集。
 /// </summary>
 public sealed class SubAgentToolProvider(
-    AgentStore agentStore,
+    IMicroAgentService agentService,
+    IAgentRepository agentRepo,
     ISubAgentRunner subAgentRunner,
     AgentDnaService agentDnaService) : IToolProvider
 {
@@ -42,7 +44,7 @@ public sealed class SubAgentToolProvider(
             ? new HashSet<string>(context.AllowedSubAgentIds, StringComparer.Ordinal)
             : null;
 
-        foreach (AgentDto subAgent in agentStore.All.Where(a => a.IsEnabled))
+        foreach (IMicroAgent subAgent in agentService.All.Where(a => a.IsEnabled))
         {
             // 排除自身和祖先链
             if (excludedIds.Contains(subAgent.Id)) continue;
@@ -76,7 +78,7 @@ public sealed class SubAgentToolProvider(
         }
 
         // 固定追加 Agent 管理工具集
-        tools.AddRange(SubAgentTools.CreateAgentManagementTools(agentStore, agentDnaService));
+        tools.AddRange(SubAgentTools.CreateAgentManagementTools(agentRepo, agentDnaService));
 
         return Task.FromResult(new ToolProviderResult(tools));
     }

@@ -1,11 +1,17 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
+using MicroClaw.Skills;
+using MicroClaw.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent.A2A;
@@ -33,9 +39,9 @@ public static class A2AEndpoints
     public static IEndpointRouteBuilder MapA2AEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // ���� Agent Card�����ֶ˵㣩����������������������������������������������������������������������������������������
-        endpoints.MapGet("/a2a/agent/{agentId}", (string agentId, HttpContext ctx, AgentStore store) =>
+        endpoints.MapGet("/a2a/agent/{agentId}", (string agentId, HttpContext ctx, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = store.GetById(agentId);
+            AgentDto? agent = agentRepo.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
                 return Results.NotFound(new JsonRpcError(-32001, "Agent not found or A2A not enabled."));
 
@@ -59,14 +65,15 @@ public static class A2AEndpoints
         endpoints.MapPost("/a2a/agent/{agentId}", async (
             string agentId,
             HttpContext ctx,
-            AgentStore store,
-            AgentRunner runner,
+            IAgentRepository agentRepo,
+            IMicroAgentService agentService,
             ProviderService providerStore,
+            IServiceProvider sp,
             ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("A2A");
 
-            AgentDto? agent = store.GetById(agentId);
+            AgentDto? agent = agentRepo.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
             {
                 ctx.Response.StatusCode = 404;
@@ -106,7 +113,7 @@ public static class A2AEndpoints
             switch (rpc.Method)
             {
                 case "tasks/send":
-                    await HandleTaskSendAsync(ctx, agent, rpc, runner, providerStore, logger);
+                    await HandleTaskSendAsync(ctx, agent, rpc, agentService, providerStore, sp, logger);
                     break;
 
                 case "tasks/get":
@@ -138,8 +145,9 @@ public static class A2AEndpoints
         HttpContext ctx,
         AgentDto agent,
         JsonRpcRequest rpc,
-        AgentRunner runner,
+        IMicroAgentService agentService,
         ProviderService providerStore,
+        IServiceProvider sp,
         ILogger logger)
     {
         // ���� tasks/send ����
@@ -180,7 +188,20 @@ public static class A2AEndpoints
         }
 
         string taskId = taskParams.Id ?? Guid.NewGuid().ToString("N");
-        string providerId = providerStore.GetDefault()?.Id ?? string.Empty;
+        ProviderConfig? providerCfg = providerStore.GetDefault();
+        string providerId = providerCfg?.Id ?? string.Empty;
+        if (providerCfg is null)
+        {
+            ctx.Response.StatusCode = 503;
+            await ctx.Response.WriteAsJsonAsync(
+                BuildRpcError(rpc.Id, -32099, "No provider available.", JsonOpts),
+                JsonOpts,
+                ctx.RequestAborted);
+            return;
+        }
+
+        IMicroAgent runtimeAgent = agentService.GetById(agent.Id)
+            ?? throw new InvalidOperationException($"Agent '{agent.Id}' not found in runtime cache.");
 
         var history = new List<SessionMessage>
         {
@@ -205,55 +226,97 @@ public static class A2AEndpoints
 
         var textBuffer = new System.Text.StringBuilder();
 
+        // Assemble messages
+        var messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
+        ChatMessageAssemblyResult assembly = await messageAssembler.AssembleAsync(
+            agent, providerCfg, history, taskId, ct: ct);
+
+        // Collect tools and build MicroChatContext
+        var toolCollector = sp.GetRequiredService<ToolCollector>();
+        var toolCtx = new ToolCreationContext(SessionId: taskId, CallingAgentId: agent.Id);
+        ToolCollectionResult? toolResult = null;
         try
         {
-            await foreach (StreamItem item in runner.StreamReActAsync(agent, providerId, history, taskId, ct, source: "a2a"))
+            toolResult = await toolCollector.CollectToolsAsync(agent, toolCtx, ct);
+
+            var availableToolNames = toolResult.AllTools
+                .Select(static t => t.Name)
+                .Where(static n => !string.IsNullOrWhiteSpace(n))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            IReadOnlySet<string> internalToolNames = SkillToolProvider.InternalToolNames
+                .Where(availableToolNames.Contains)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            ChatOptions executionOptions = ChatExecutionOptionsFactory.Build(toolResult.AllTools, providerCfg);
+            IMicroSession a2aSession = MicroChatContext.ForSystem(taskId, "a2a", ct).Session;
+            var chatCtx = new MicroChatContext
             {
-                if (item is TokenItem token)
-                {
-                    textBuffer.Append(token.Content);
+                Session = a2aSession,
+                Source = "a2a",
+                History = history,
+                Ct = ct,
+                TargetProviderId = providerCfg.Id,
+                AssembledMessages = assembly.Messages,
+                AssembledTools = toolResult.AllTools,
+                InternalToolNames = internalToolNames,
+                ExecutionOptions = executionOptions,
+            };
 
-                    await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskArtifactUpdateEvent(
-                        Type: "TaskArtifactUpdateEvent",
-                        TaskId: taskId,
-                        Artifact: new TaskArtifact(
-                            Name: "response",
-                            Parts: [new TextPart(Type: "text", Text: token.Content)]),
-                        Final: false), JsonOpts, ct);
-                }
-            }
-
-            // ������completed ״̬
-            await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskStatusUpdateEvent(
-                Type: "TaskStatusUpdateEvent",
-                TaskId: taskId,
-                Status: new A2ATaskStatus(State: "completed"),
-                Final: true), JsonOpts, ct);
-
-            await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
-        }
-        catch (OperationCanceledException)
-        {
-            // �ͻ��˶Ͽ�����Ĭ����
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "A2A tasks/send failed for agent {AgentId}, task {TaskId}", agent.Id, taskId);
             try
             {
+                await foreach (StreamItem item in runtimeAgent.StreamAsync(chatCtx))
+                {
+                    if (item is TokenItem token)
+                    {
+                        textBuffer.Append(token.Content);
+
+                        await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskArtifactUpdateEvent(
+                            Type: "TaskArtifactUpdateEvent",
+                            TaskId: taskId,
+                            Artifact: new TaskArtifact(
+                                Name: "response",
+                                Parts: [new TextPart(Type: "text", Text: token.Content)]),
+                            Final: false), JsonOpts, ct);
+                    }
+                }
+
+                // ������completed ״̬
                 await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskStatusUpdateEvent(
                     Type: "TaskStatusUpdateEvent",
                     TaskId: taskId,
-                    Status: new A2ATaskStatus(State: "failed", Message: ex.Message),
-                    Final: true), JsonOpts, CancellationToken.None);
+                    Status: new A2ATaskStatus(State: "completed"),
+                    Final: true), JsonOpts, ct);
 
-                await ctx.Response.WriteAsync("data: [DONE]\n\n", CancellationToken.None);
-                await ctx.Response.Body.FlushAsync(CancellationToken.None);
+                await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // ��Ӧ�ѹرգ�����
+                // �ͻ��˶Ͽ�����Ĭ����
             }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "A2A tasks/send failed for agent {AgentId}, task {TaskId}", agent.Id, taskId);
+                try
+                {
+                    await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskStatusUpdateEvent(
+                        Type: "TaskStatusUpdateEvent",
+                        TaskId: taskId,
+                        Status: new A2ATaskStatus(State: "failed", Message: ex.Message),
+                        Final: true), JsonOpts, CancellationToken.None);
+
+                    await ctx.Response.WriteAsync("data: [DONE]\n\n", CancellationToken.None);
+                    await ctx.Response.Body.FlushAsync(CancellationToken.None);
+                }
+                catch
+                {
+                    // ��Ӧ�ѹرգ�����
+                }
+            }
+        }
+        finally
+        {
+            if (toolResult is not null)
+                await toolResult.DisposeAsync();
         }
     }
 

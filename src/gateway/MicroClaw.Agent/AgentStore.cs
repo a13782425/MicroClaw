@@ -1,21 +1,18 @@
 ﻿using System.Text.Json;
-using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Plugins;
-using MicroClaw.Agent.Memory;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Infrastructure;
 using MicroClaw.Providers;
 using MicroClaw.Tools;
 using MicroClaw.Utils;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Agent;
 
 /// <summary>
 /// Agent 配置的 CRUD 存储，基于 MicroClawConfig AgentsOptions（内存 + 写时落盘到 agents.yaml）。
 /// </summary>
-public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IService
+public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -29,23 +26,6 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
 
     /// <summary>仅供测试使用的无参构造函数。</summary>
     internal AgentStore() { _sp = null!; }
-
-    // ── IService ─────────────────────────────────────────────────────────
-
-    /// <inheritdoc/>
-    public int InitOrder => 10;
-
-    /// <summary>确保默认 Agent（main）存在，并初始化其 DNA 目录。</summary>
-    public Task InitializeAsync(CancellationToken ct = default)
-    {
-        AgentDto main = EnsureMainAgent();
-        var agentDna = _sp.GetRequiredService<AgentDnaService>();
-        agentDna.InitializeAgent(main.Id);
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc/>
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // ── Queries ─────────────────────────────────────────────────────────
 
@@ -85,21 +65,6 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
                 : null;
         }
         finally { _lock.ExitReadLock(); }
-    }
-
-    /// <summary>
-    /// 确保存在默认代理（main）。幂等，多次调用不会创建重复记录。
-    /// </summary>
-    public AgentDto EnsureMainAgent()
-    {
-        AgentDto? existing = GetDefault();
-        if (existing is not null) return existing;
-
-        return Add(AgentDto.Create(
-            name: "main",
-            description: string.Empty,
-            isEnabled: true,
-            isDefault: true));
     }
 
     // ── Commands ─────────────────────────────────────────────────────────

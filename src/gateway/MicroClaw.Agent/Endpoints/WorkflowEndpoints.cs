@@ -101,7 +101,8 @@ public static class WorkflowEndpoints
         .WithTags("Workflows");
 
         // POST /api/workflows/{id}/execute — SSE 流式执行
-        endpoints.MapPost("/workflows/{id}/execute", async (string id, WorkflowExecuteRequest req, WorkflowStore store, WorkflowEngine engine, HttpContext ctx) =>
+        // TODO P4-02: execute 端点暂时屏蔽（WorkflowEngine 依赖 AgentRunner 已移除），待 P5-01 重新接入
+        /* endpoints.MapPost("/workflows/{id}/execute", async (string id, WorkflowExecuteRequest req, WorkflowStore store, WorkflowEngine engine, HttpContext ctx) =>
         {
             WorkflowConfig? wf = store.GetById(id);
             if (wf is null)
@@ -170,7 +171,7 @@ public static class WorkflowEndpoints
                 }
             }
         })
-        .WithTags("Workflows");
+        .WithTags("Workflows"); */
 
         return endpoints;
     }

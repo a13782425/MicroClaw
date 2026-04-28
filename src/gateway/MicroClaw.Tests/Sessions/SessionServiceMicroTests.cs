@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Configuration;
@@ -168,10 +169,10 @@ public sealed class SessionServiceMicroTests : IDisposable
         petFactory.CreateOrLoadAsync(Arg.Any<IMicroSession>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IPet?>(null));
 
-        MicroClaw.Agent.AgentStore agentStore = new();
+        IMicroAgentService agentService = Substitute.For<IMicroAgentService>();
 
         IServiceProvider sp = Substitute.For<IServiceProvider>();
-        sp.GetService(typeof(MicroClaw.Agent.AgentStore)).Returns(agentStore);
+        sp.GetService(typeof(IMicroAgentService)).Returns(agentService);
         sp.GetService(typeof(IHubContext<GatewayHub>)).Returns(hubContext);
         sp.GetService(typeof(IPetFactory)).Returns(petFactory);
 

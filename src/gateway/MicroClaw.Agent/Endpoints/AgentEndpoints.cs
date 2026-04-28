@@ -27,14 +27,14 @@ public static class AgentEndpoints
             Results.Ok(agentRepo.GetAll().Select(ToDto)))
             .WithTags("Agents");
 
-        endpoints.MapGet("/agents/{id}", (string id, AgentStore store) =>
+        endpoints.MapGet("/agents/{id}", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             return agent is null ? Results.NotFound() : Results.Ok(ToDto(agent));
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents", (AgentCreateRequest req, AgentStore store, AgentDnaService agentDna) =>
+        endpoints.MapPost("/agents", async (AgentCreateRequest req, IAgentRepository agentRepo, MicroAgentService agentService, AgentDnaService agentDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
@@ -50,8 +50,9 @@ public static class AgentEndpoints
                 allowedSubAgentIds: req.AllowedSubAgentIds);
             try
             {
-                AgentDto created = ((IAgentRepository)store).Save(newAgent);
+                AgentDto created = agentRepo.Save(newAgent);
                 agentDna.InitializeAgent(created.Id);
+                await agentService.RefreshAgentAsync(created, ct);
                 return Results.Ok(new { created.Id });
             }
             catch (InvalidOperationException ex)
@@ -61,12 +62,12 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/update", (AgentUpdateRequest req, AgentStore store) =>
+        endpoints.MapPost("/agents/update", async (AgentUpdateRequest req, IAgentRepository agentRepo, MicroAgentService agentService, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentDto? existing = store.GetById(req.Id);
+            AgentDto? existing = agentRepo.GetById(req.Id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -87,7 +88,8 @@ public static class AgentEndpoints
 
             try
             {
-                AgentDto saved = ((IAgentRepository)store).Save(existing);
+                AgentDto saved = agentRepo.Save(existing);
+                await agentService.RefreshAgentAsync(saved, ct);
                 return Results.Ok(new { saved.Id });
             }
             catch (InvalidOperationException ex)
@@ -97,37 +99,38 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/delete", (AgentDeleteRequest req, AgentStore store, AgentDnaService agentDna) =>
+        endpoints.MapPost("/agents/delete", async (AgentDeleteRequest req, IAgentRepository agentRepo, MicroAgentService agentService, AgentDnaService agentDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentDto? agent = store.GetById(req.Id);
+            AgentDto? agent = agentRepo.GetById(req.Id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             if (agent.IsDefault)
                 return Results.BadRequest(new { success = false, message = "Cannot delete the default agent.", errorCode = "BAD_REQUEST" });
 
-            store.Delete(req.Id);
+            agentRepo.Delete(req.Id);
             agentDna.DeleteAgentFiles(req.Id);
+            await agentService.RemoveAgentAsync(req.Id);
             return Results.Ok();
         })
         .WithTags("Agents");
 
         // ── 全局 MCP Server 引用管理 ────────────────────────────────────────────────────────────────────────────
 
-        endpoints.MapGet("/agents/{id}/mcp-servers", (string id, AgentStore store) =>
+        endpoints.MapGet("/agents/{id}/mcp-servers", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             return agent is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
                 : Results.Ok(agent.DisabledMcpServerIds);
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/{id}/mcp-servers", (string id, AgentMcpServersRequest req, AgentStore store, McpServerConfigStore mcpStore) =>
+        endpoints.MapPost("/agents/{id}/mcp-servers", async (string id, AgentMcpServersRequest req, IAgentRepository agentRepo, MicroAgentService agentService, McpServerConfigStore mcpStore, CancellationToken ct) =>
         {
-            AgentDto? existing = store.GetById(id);
+            AgentDto? existing = agentRepo.GetById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -142,16 +145,17 @@ public static class AgentEndpoints
                 });
 
             existing.UpdateDisabledMcpServerIds(mcpIds);
-            ((IAgentRepository)store).Save(existing);
-            return Results.Ok(new { existing.Id });
+            AgentDto saved = agentRepo.Save(existing);
+            await agentService.RefreshAgentAsync(saved, ct);
+            return Results.Ok(new { saved.Id });
         })
         .WithTags("Agents");
 
         // ── 工具列表（内置分组 + 渠道 + MCP 分组，含启用状态）────────────
 
-        endpoints.MapGet("/agents/{id}/tools", async (string id, AgentStore store, ToolCollector toolCollector, CancellationToken ct) =>
+        endpoints.MapGet("/agents/{id}/tools", async (string id, IAgentRepository agentRepo, ToolCollector toolCollector, CancellationToken ct) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -162,9 +166,9 @@ public static class AgentEndpoints
 
         // ── 更新工具分组启用配置 ─────────────────────────────────────────────
 
-        endpoints.MapPost("/agents/{id}/tools/settings", (string id, IReadOnlyList<ToolGroupConfigRequest> req, AgentStore store) =>
+        endpoints.MapPost("/agents/{id}/tools/settings", async (string id, IReadOnlyList<ToolGroupConfigRequest> req, IAgentRepository agentRepo, MicroAgentService agentService, CancellationToken ct) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -174,27 +178,27 @@ public static class AgentEndpoints
                 .AsReadOnly();
 
             agent.UpdateToolGroupConfigs(configs);
-            ((IAgentRepository)store).Save(agent);
-            return Results.Ok(new { agent.Id });
+            AgentDto saved = agentRepo.Save(agent);
+            await agentService.RefreshAgentAsync(saved, ct);
+            return Results.Ok(new { saved.Id });
         })
         .WithTags("Agents");
 
         // ── 技能绑定管�?─────────────────────────────────────────────────────
 
-        endpoints.MapGet("/agents/{id}/skills", (string id, AgentStore store) =>
+        endpoints.MapGet("/agents/{id}/skills", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             return agent is null ? Results.NotFound() : Results.Ok(agent.DisabledSkillIds);
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/{id}/skills", (string id, AgentBoundSkillsRequest req, AgentStore store, SkillStore skillStore) =>
+        endpoints.MapPost("/agents/{id}/skills", async (string id, AgentBoundSkillsRequest req, IAgentRepository agentRepo, MicroAgentService agentService, SkillStore skillStore, CancellationToken ct) =>
         {
-            AgentDto? existing = store.GetById(id);
+            AgentDto? existing = agentRepo.GetById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
-            // 0-B-6: 批量校验 SkillId 是否存在于文件系�?
             IReadOnlyList<string> skillIds = req.SkillIds ?? [];
             List<string> invalidIds = skillIds.Where(sid => !skillStore.Exists(sid)).ToList();
             if (invalidIds.Count > 0)
@@ -206,32 +210,34 @@ public static class AgentEndpoints
                 });
 
             existing.UpdateDisabledSkillIds(skillIds);
-            ((IAgentRepository)store).Save(existing);
-            return Results.Ok(new { existing.Id });
+            AgentDto saved = agentRepo.Save(existing);
+            await agentService.RefreshAgentAsync(saved, ct);
+            return Results.Ok(new { saved.Id });
         })
         .WithTags("Agents");
+
 
         // ── Agent DNA 文件管理（SOUL.md / MEMORY.md）──────────────────────────
 
         // ── 子代�?ACL 查询 ──────────────────────────────────────────────────
 
-        endpoints.MapGet("/agents/{id}/sub-agents", (string id, AgentStore store) =>
+        endpoints.MapGet("/agents/{id}/sub-agents", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = store.GetById(id);
+            AgentDto? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             // 根据 ACL 过滤可调用子代理列表（排除自身），使用 Agent.CanCallSubAgent 行为方法
-            IEnumerable<AgentDto> candidates = store.All.Where(a => a.IsEnabled && a.Id != id && agent.CanCallSubAgent(a.Id));
+            IEnumerable<AgentDto> candidates = agentRepo.GetAll().Where(a => a.IsEnabled && a.Id != id && agent.CanCallSubAgent(a.Id));
 
             var result = candidates.Select(a => new { a.Id, a.Name, a.Description }).ToList();
             return Results.Ok(result);
         })
         .WithTags("Agents");
 
-        endpoints.MapGet("/agents/{id}/dna", (string id, AgentStore store, AgentDnaService agentDna) =>
+        endpoints.MapGet("/agents/{id}/dna", (string id, IAgentRepository agentRepo, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (agentRepo.GetById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             IReadOnlyList<AgentDnaFileInfo> files = agentDna.ListFiles(id);
@@ -239,9 +245,9 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapGet("/agents/{id}/dna/{fileName}", (string id, string fileName, AgentStore store, AgentDnaService agentDna) =>
+        endpoints.MapGet("/agents/{id}/dna/{fileName}", (string id, string fileName, IAgentRepository agentRepo, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (agentRepo.GetById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             AgentDnaFileInfo? file = agentDna.Read(id, fileName);
@@ -252,9 +258,9 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        endpoints.MapPost("/agents/{id}/dna", (string id, AgentDnaUpdateRequest req, AgentStore store, AgentDnaService agentDna) =>
+        endpoints.MapPost("/agents/{id}/dna", (string id, AgentDnaUpdateRequest req, IAgentRepository agentRepo, AgentDnaService agentDna) =>
         {
-            if (store.GetById(id) is null)
+            if (agentRepo.GetById(id) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             if (string.IsNullOrWhiteSpace(req.FileName))

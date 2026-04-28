@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using MicroClaw.Agent;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Channels;
@@ -28,7 +29,7 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public sealed class SessionService : MicroService, ISessionService
 {
-    private AgentStore? agentStore;
+    private IMicroAgentService? agentService;
     private IHubContext<GatewayHub>? hubContext;
     private IPetFactory? _petFactory;
     private readonly IServiceProvider serviceProvider;
@@ -53,7 +54,7 @@ public sealed class SessionService : MicroService, ISessionService
     /// </summary>
     protected override async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
-        agentStore ??= serviceProvider.GetRequiredService<AgentStore>();
+        agentService ??= serviceProvider.GetRequiredService<IMicroAgentService>();
         hubContext ??= serviceProvider.GetRequiredService<IHubContext<GatewayHub>>();
         _petFactory ??= serviceProvider.GetRequiredService<IPetFactory>();
         MicroClawUtils.CheckDirectory(MicroClawConfig.Env.SessionsDir);
@@ -115,7 +116,7 @@ public sealed class SessionService : MicroService, ISessionService
             ChannelType = ChannelUtils.SerializeChannelType(channelType),
             ChannelId = channelId,
             CreatedAtMs = TimeUtils.NowMs(),
-            AgentId = agentStore!.GetDefault()?.Id,
+            AgentId = agentService!.GetDefault()?.Id,
         };
         MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
         AddToCacheAndPersist(microSession);

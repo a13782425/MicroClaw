@@ -10,8 +10,10 @@ public interface IMicroAgent
 {
     string Id { get; }
     string Name { get; }
+    string Description { get; }
     bool IsEnabled { get; }
     bool IsDefault { get; }
+    IReadOnlyList<string>? AllowedSubAgentIds { get; }
     
     /// <summary>
     /// 驱动 ReAct 循环。调用方负责在 <paramref name="context"/> 中填充

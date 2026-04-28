@@ -16,6 +16,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Skills;
 using MicroClaw.Endpoints;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Plugins;
 using MicroClaw.Abstractions.Sessions;
@@ -223,7 +224,7 @@ public class ServeCommand : Command
 		builder.Services.MapAs<ISessionService, SessionService>();
 		
 		// Agent 服务
-		builder.Services.AddService<AgentStore>();
+		builder.Services.AddSingleton<AgentStore>();
 		builder.Services.MapAs<IPluginAgentRegistrar, AgentStore>();
 		builder.Services.MapAs<IAgentRepository, AgentStore>();
 		builder.Services.AddSingleton<AgentDnaService>();
@@ -258,8 +259,11 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<IAgentStatusNotifier, HubAgentStatusNotifier>();
 		// SessionMessage → AIContent 还原服务（Restorer 由 Service 内部构建）
 		builder.Services.AddSingleton<MicroClaw.Agent.Restorers.ChatContentRestorerService>();
-		builder.Services.AddService<AgentRunner>();
-		// P-F-5: Pet 编排层服务注册（Pet 为消息入口，AgentRunner 保留但不再作为消息入口）
+		// MicroAgentService：Agent 运行时生命周期管理服务（MicroService, Order=10），
+		// 取代旧的 AgentRunner；IMicroAgentService 供 Pet / SubAgentRunner / WorkflowEngine 使用。
+		builder.Services.AddMicroService<MicroAgentService>();
+		builder.Services.MapAs<IMicroAgentService, MicroAgentService>();
+		// P-F-5: Pet 编排层服务注册（Pet 为消息入口）
 		builder.Services.AddSingleton<MicroClaw.Pet.Storage.PetStateStore>();
 		builder.Services.AddSingleton<MicroClaw.Pet.RateLimit.PetRateLimiter>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Decision.PetModelSelector>();
@@ -278,7 +282,8 @@ public class ServeCommand : Command
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();
-		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowEngine>();
+		// TODO P4-02: WorkflowEngine 暂时屏蔽（依赖 AgentRunner 已移除），待 P5-01 重新接入 IMicroAgentService
+		// builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowEngine>();
 
 		// 开发调试指标服务（始终注册；调试端点仅在 Development 环境映射）
 		builder.Services.AddSingleton<IDevMetricsService, DevMetricsService>();
