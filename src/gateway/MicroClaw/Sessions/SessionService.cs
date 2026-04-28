@@ -99,11 +99,11 @@ public sealed class SessionService : MicroService, ISessionService
     }
     
     /// <inheritdoc/>
-    public async Task<SessionInfo> FindOrCreateSession(ChannelType channelType, string channelId, string senderId, string channelDisplayName, string providerId)
+    public async Task<IMicroSession> FindOrCreateSession(ChannelType channelType, string channelId, string senderId, string channelDisplayName, string providerId)
     {
         string sessionId = GenerateSessionId(channelType, channelId, senderId);
         if (_sessions.TryGetValue(sessionId, out MicroSession? existing))
-            return existing.ToInfo();
+            return existing;
         
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
@@ -112,7 +112,7 @@ public sealed class SessionService : MicroService, ISessionService
             Id = sessionId,
             Title = title,
             ProviderId = providerId,
-            ChannelType = ChannelService.SerializeChannelType(channelType),
+            ChannelType = ChannelUtils.SerializeChannelType(channelType),
             ChannelId = channelId,
             CreatedAtMs = TimeUtils.NowMs(),
             AgentId = agentStore!.GetDefault()?.Id,
@@ -120,11 +120,9 @@ public sealed class SessionService : MicroService, ISessionService
         MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
         AddToCacheAndPersist(microSession);
         
-        SessionInfo created = microSession.ToInfo();
+        _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = microSession.Id, title = microSession.Title, channelType = ChannelUtils.SerializeChannelType(channelType) });
         
-        _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = created.Id, title = created.Title, channelType = ChannelService.SerializeChannelType(channelType) });
-        
-        return created;
+        return microSession;
     }
     
     /// <inheritdoc/>
@@ -136,11 +134,11 @@ public sealed class SessionService : MicroService, ISessionService
         
         NotifyThrottle[sessionId] = now;
         
-        await hubContext!.Clients.All.SendAsync("sessionPendingApproval", new { sessionId, sessionTitle, channelType = ChannelService.SerializeChannelType(channelType), timestamp = now });
+        await hubContext!.Clients.All.SendAsync("sessionPendingApproval", new { sessionId, sessionTitle, channelType = ChannelUtils.SerializeChannelType(channelType), timestamp = now });
     }
     
     /// <inheritdoc/>
-    public async Task<bool> CheckApprovalAsync(SessionInfo session, ChannelType channelType)
+    public async Task<bool> CheckApprovalAsync(IMicroSession session, ChannelType channelType)
     {
         if (session.IsApproved) return true;
         await NotifyPendingApprovalAsync(session.Id, session.Title, channelType);
@@ -155,8 +153,8 @@ public sealed class SessionService : MicroService, ISessionService
             Id = id ?? MicroClawUtils.GetUniqueId(),
             Title = title,
             ProviderId = providerId,
-            ChannelType = ChannelService.SerializeChannelType(channelType),
-            ChannelId = channelId ?? ChannelService.WebChannelId,
+            ChannelType = ChannelUtils.SerializeChannelType(channelType),
+            ChannelId = channelId ?? ChannelUtils.WebChannelId,
             CreatedAtMs = TimeUtils.NowMs(),
             AgentId = agentId,
         };

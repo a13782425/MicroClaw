@@ -275,8 +275,6 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>();
 		builder.Services.AddService<MicroClaw.Pet.PetService>();
 		builder.Services.MapAs<MicroClaw.Pet.IPetService, MicroClaw.Pet.PetService>();
-		// P-F-3: IAgentMessageHandler 指向 PetService，渠道消息经 Pet 编排后再委派 AgentRunner
-		builder.Services.MapAs<IAgentMessageHandler, MicroClaw.Pet.PetService>();
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();

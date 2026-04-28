@@ -13,6 +13,7 @@ using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Providers;
+using MicroClaw.Skills;
 using MicroClaw.Tools;
 using MicroClaw.Utils;
 using Microsoft.Extensions.AI;
@@ -62,6 +63,11 @@ internal enum PetContextState
 /// </summary>
 public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 {
+    private const string DispatchLifecycleStartedItemKey = "pet:dispatch-lifecycle-started";
+    private const string DispatchSuccessCompletionStartedItemKey = "pet:dispatch-success-completion-started";
+    private const string DispatchSkillModelOverrideItemKey = "pet:skill-model-override";
+    private const string DispatchSkillEffortOverrideItemKey = "pet:skill-effort-override";
+
     private PetState _petState;
     private volatile bool _isDirty;
 
@@ -76,8 +82,10 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
     private readonly AgentStore _agentStore;
     private readonly ProviderService _providerStore;
+    private readonly IProviderRouter? _providerRouter;
     private readonly ISessionService _sessionService;
     private readonly AgentRunner _agentRunner;
+    private readonly ChatMessageAssembler _messageAssembler;
     private readonly ToolCollector _toolCollector;
     private readonly ILogger _logger;
 
@@ -106,8 +114,10 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
         _agentStore = sp.GetRequiredService<AgentStore>();
         _providerStore = sp.GetRequiredService<ProviderService>();
+        _providerRouter = sp.GetService<IProviderRouter>();
         _sessionService = sp.GetRequiredService<ISessionService>();
         _agentRunner = sp.GetRequiredService<AgentRunner>();
+        _messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
     }
@@ -230,70 +240,68 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             if (agent is null || !agent.IsEnabled)
                 throw new InvalidOperationException("No enabled agent found for this session.");
 
-            string providerId = MicroSession.ProviderId;
+            string providerId = ResolveProviderId(agent, MicroSession.ProviderId);
 
-            var disabledBranchCtx = new MicroChatContext
+            MicroChatContext disabledBranchCtx = CreateDispatchContext(
+                history,
+                source: "chat",
+                output: null,
+                ct);
+            disabledBranchCtx.TargetAgentId = agent.Id;
+            disabledBranchCtx.TargetAgentName = agent.Name;
+            disabledBranchCtx.TargetProviderId = providerId;
+            InitializeDispatchExecutionMetadata(disabledBranchCtx, agent, providerId);
+            var disabledOutputChannel = Channel.CreateUnbounded<StreamItem>();
+            Task disabledExecution = ExecuteDirectAgentDispatchAsync(
+                agent,
+                providerId,
+                history,
+                sessionId,
+                disabledBranchCtx,
+                disabledOutputChannel,
+                ct,
+                source: "chat");
+            try
             {
-                Session = MicroSession,
-                History = history,
-                Source = "chat",
-                Output = null,
-                Pet = this,
-                Channel = MicroSession.Channel!,
-                Ct = ct,
-            };
-        await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, disabledBranchCtx);
+                await foreach (var item in disabledOutputChannel.Reader.ReadAllAsync(ct))
+                {
+                    yield return item;
+                }
+            }
+            finally
+            {
+                try { await disabledExecution; }
+                catch (OperationCanceledException) { }
+                catch { }
+            }
 
-        var toolContext = BuildToolContext(agent);
-        ToolCollectionResult? prebuiltTools = null;
+            yield break;
+        }
+
+    // ── 4. Pet 启用：Channel 解耦迭代器 ──
+    var outputChannel = Channel.CreateUnbounded<StreamItem>();
+    MicroChatContext enabledBranchCtx = CreateDispatchContext(
+        history,
+        source: "chat",
+        output: outputChannel.Writer,
+        ct);
+
+        Task execution = ExecuteChatWithPetAsync(history, enabledBranchCtx, ct, outputChannel, source: "chat");
+
         try
         {
-            prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
-            await foreach (var item in _agentRunner.StreamReActAsync(
-                agent, providerId, history, sessionId, ct, source: "chat", prebuiltTools: prebuiltTools))
+            await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
             {
                 yield return item;
             }
         }
         finally
         {
-            if (prebuiltTools is not null)
-                await prebuiltTools.DisposeAsync();
+            try { await execution; }
+            catch (OperationCanceledException) { }
+            catch { }
         }
-
-        // TODO(next-round): 由具体 PetComponent（或 MicroPet 内部消息累加器）把最终 assistant 回复
-        // 聚合进 ctx.FinalAssistantMessage。本轮先置 null。
-        disabledBranchCtx.FinalAssistantMessage = null;
-        await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, disabledBranchCtx);
-        yield break;
     }
-
-    // ── 4. Pet 启用：Channel 解耦迭代器 ──
-    var outputChannel = Channel.CreateUnbounded<StreamItem>();
-    var enabledBranchCtx = new MicroChatContext
-    {
-        Session = MicroSession,
-        History = history,
-        Source = "chat",
-        Output = outputChannel.Writer,
-        Pet = this,
-        Channel = MicroSession.Channel!,
-        Ct = ct,
-    };
-    await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, enabledBranchCtx);
-
-    Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: "chat");
-
-    await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
-        yield return item;
-
-    try { await execution; }
-    catch (OperationCanceledException) { /* cancelled silently */ }
-
-    // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。本轮置 null。
-    enabledBranchCtx.FinalAssistantMessage = null;
-    await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, enabledBranchCtx);
-}
 
     // ── IPet.HandleMessageAsync — 渠道消息处理（调用方已保存消息 & 加载历史）──
 
@@ -315,83 +323,85 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             if (agent is null || !agent.IsEnabled)
                 throw new InvalidOperationException("No enabled agent found for this session.");
 
-            string providerId = MicroSession.ProviderId;
+            string providerId = ResolveProviderId(agent, MicroSession.ProviderId);
 
-            var disabledBranchCtx = new MicroChatContext
+            MicroChatContext disabledBranchCtx = CreateDispatchContext(
+                history,
+                source,
+                output: null,
+                ct);
+            disabledBranchCtx.TargetAgentId = agent.Id;
+            disabledBranchCtx.TargetAgentName = agent.Name;
+            disabledBranchCtx.TargetProviderId = providerId;
+            InitializeDispatchExecutionMetadata(disabledBranchCtx, agent, providerId);
+            var disabledOutputChannel = Channel.CreateUnbounded<StreamItem>();
+            Task disabledExecution = ExecuteDirectAgentDispatchAsync(
+                agent,
+                providerId,
+                history,
+                sessionId,
+                disabledBranchCtx,
+                disabledOutputChannel,
+                ct,
+                source: source);
+            try
             {
-                Session = MicroSession,
-                History = history,
-                Source = source,
-                Output = null,
-                Ct = ct,
-                Pet = this,
-                Channel = MicroSession.Channel!
-            };
-        await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, disabledBranchCtx);
+                await foreach (var item in disabledOutputChannel.Reader.ReadAllAsync(ct))
+                {
+                    yield return item;
+                }
+            }
+            finally
+            {
+                try { await disabledExecution; }
+                catch (OperationCanceledException) { }
+                catch { }
+            }
 
-        var toolContext = BuildToolContext(agent);
-        ToolCollectionResult? prebuiltTools = null;
+            yield break;
+        }
+
+    // ── Pet 启用：Channel 解耦迭代器 ──
+    var outputChannel = Channel.CreateUnbounded<StreamItem>();
+    MicroChatContext enabledBranchCtx = CreateDispatchContext(
+        history,
+        source,
+        output: outputChannel.Writer,
+        ct);
+
+        Task execution = ExecuteChatWithPetAsync(history, enabledBranchCtx, ct, outputChannel, source: source);
+
         try
         {
-            prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
-            await foreach (var item in _agentRunner.StreamReActAsync(
-                agent, providerId, history, sessionId, ct, source: source, prebuiltTools: prebuiltTools))
+            await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
             {
                 yield return item;
             }
         }
         finally
         {
-            if (prebuiltTools is not null)
-                await prebuiltTools.DisposeAsync();
+            try { await execution; }
+            catch (OperationCanceledException) { }
+            catch { }
         }
-
-        // TODO(next-round): 由具体 PetComponent 聚合 assistant 最终消息。
-        disabledBranchCtx.FinalAssistantMessage = null;
-        await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, disabledBranchCtx);
-        yield break;
     }
-
-    // ── Pet 启用：Channel 解耦迭代器 ──
-    var outputChannel = Channel.CreateUnbounded<StreamItem>();
-    var enabledBranchCtx = new MicroChatContext
-    {
-        Session = MicroSession,
-        History = history,
-        Source = source,
-        Output = outputChannel.Writer,
-        Ct = ct,
-        Pet = this,
-        Channel = MicroSession.Channel!
-    };
-    await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, enabledBranchCtx);
-
-    Task execution = ExecuteChatWithPetAsync(history, ct, outputChannel, source: source);
-
-    await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
-        yield return item;
-
-    try { await execution; }
-    catch (OperationCanceledException) { /* cancelled silently */ }
-
-    // TODO(next-round): 累加 token 构造 ctx.FinalAssistantMessage。
-    enabledBranchCtx.FinalAssistantMessage = null;
-    await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, enabledBranchCtx);
-}
 
     /// <summary>
     /// Pet 编排核心逻辑（非迭代器，可自由使用 try-catch）。
     /// </summary>
     private async Task ExecuteChatWithPetAsync(
         IReadOnlyList<SessionMessage> history,
+        MicroChatContext chatCtx,
         CancellationToken ct,
         Channel<StreamItem> output,
         string source = "chat")
     {
+        ArgumentNullException.ThrowIfNull(chatCtx);
         string sessionId = MicroSession.Id;
         PetDispatchResult dispatch = new() { Reason = "初始化" };
         bool messageSucceeded = false;
         PetBehaviorState previousBehaviorState = PetState.BehaviorState;
+        var lifecycleTracker = new DispatchLifecycleTracker();
 
         try
         {
@@ -409,7 +419,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             // ── 根据 dispatch 结果执行 ──
             if (dispatch.ShouldPetRespond && !string.IsNullOrWhiteSpace(dispatch.PetResponse))
             {
-                output.Writer.TryWrite(new TokenItem(dispatch.PetResponse));
+                await output.Writer.WriteAsync(new TokenItem(dispatch.PetResponse), ct);
                 messageSucceeded = true;
             }
             else
@@ -421,39 +431,54 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
                 if (agent is null || !agent.IsEnabled)
                     throw new InvalidOperationException("No enabled agent found for this session.");
 
-                string providerId = !string.IsNullOrWhiteSpace(dispatch.ProviderId)
-                    ? dispatch.ProviderId
-                    : MicroSession.ProviderId;
+                string providerId = ResolveProviderId(agent, dispatch.ProviderId ?? MicroSession.ProviderId);
+
+                var behaviorProfile = GetBehaviorProfile();
+                AgentEntity effectiveAgent = CreateRuntimeToolOverrideAgent(agent, dispatch.ToolOverrides);
+
+                chatCtx.TargetAgentId = agent.Id;
+                chatCtx.TargetAgentName = agent.Name;
+                chatCtx.TargetProviderId = providerId;
+                chatCtx.TemperatureOverride = behaviorProfile.Temperature;
+                chatCtx.TopPOverride = behaviorProfile.TopP;
+                chatCtx.PromptBehaviorSuffix = behaviorProfile.SystemPromptSuffix;
+                chatCtx.PetKnowledge = dispatch.PetKnowledge;
+                InitializeDispatchExecutionMetadata(chatCtx, agent, providerId);
+
+                if (dispatch.ToolOverrides is { Count: > 0 })
+                    chatCtx.Items[MicroChatContext.RuntimeToolGroupOverridesItemKey] = dispatch.ToolOverrides;
+                else
+                    chatCtx.Items.Remove(MicroChatContext.RuntimeToolGroupOverridesItemKey);
+
+                await PrepareDispatchContextAsync(chatCtx);
 
                 // Collect tools: common + channel
-                var toolContext = BuildToolContext(agent);
                 ToolCollectionResult? prebuiltTools = null;
                 try
                 {
-                    prebuiltTools = await _toolCollector.CollectToolsAsync(agent, toolContext, ct);
+                    prebuiltTools = await _toolCollector.CollectToolsAsync(effectiveAgent, BuildToolContext(agent, chatCtx), ct);
+                    await MergeChannelToolsAsync(prebuiltTools, ct);
+                    PopulateDispatchExecutionPayload(chatCtx, agent, providerId, prebuiltTools.AllTools);
+                    await StartDispatchLifecycleAsync(chatCtx);
 
-                    // Merge channel tools
-                    IReadOnlyList<AIFunction> channelTools = await CollectChannelToolsAsync(ct);
-                    if (channelTools.Count > 0)
-                        prebuiltTools.AddTools(channelTools);
-
-                    // Build PetOverrides from emotion-behavior mapping
-                    var behaviorProfile = GetBehaviorProfile();
-                    var petOverrides = new PetOverrides
+                    var dispatchCanceled = new StrongBox<bool>(false);
+                    using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
                     {
-                        Temperature = behaviorProfile.Temperature,
-                        TopP = behaviorProfile.TopP,
-                        BehaviorSuffix = behaviorProfile.SystemPromptSuffix,
-                        ToolOverrides = dispatch.ToolOverrides is { Count: > 0 } ? dispatch.ToolOverrides : null,
-                        PetKnowledge = dispatch.PetKnowledge,
-                    };
+                        await foreach (var item in _agentRunner.StreamReActAsync(
+                            agent,
+                            chatCtx))
+                        {
+                            if (HasDispatchLifecycleStarted(chatCtx))
+                                await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);
 
-                    await foreach (var item in _agentRunner.StreamReActAsync(
-                        agent, providerId, history, sessionId, ct, source: source, petOverrides,
-                        prebuiltTools: prebuiltTools))
-                    {
-                        output.Writer.TryWrite(item);
+                            await output.Writer.WriteAsync(item, ct);
+                        }
                     }
+
+                    if (dispatchCanceled.Value)
+                        throw new OperationCanceledException(ct);
+
+                    await CompleteDispatchSuccessAsync(chatCtx, lifecycleTracker);
                     messageSucceeded = true;
                 }
                 finally
@@ -469,6 +494,12 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         {
             if (ex is not OperationCanceledException)
                 _logger.LogError(ex, "Pet [{SessionId}] 执行失败", sessionId);
+
+            await CompleteDispatchFailureAsync(
+                chatCtx,
+                ex is OperationCanceledException
+                    ? MicroChatLifecyclePhase.OnCanceled
+                    : MicroChatLifecyclePhase.OnError);
             output.Writer.TryComplete(ex);
         }
         finally
@@ -591,7 +622,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
     /// <summary>
     /// Get the <see cref="BehaviorProfile"/> mapped from current emotion state.
-    /// Used by MicroPet to build <see cref="PetOverrides"/>.
+    /// Used by MicroPet to populate runtime overrides on <see cref="MicroChatContext"/>.
     /// </summary>
     internal BehaviorProfile GetBehaviorProfile() => _emotionBehaviorMapper.GetProfile(Emotion);
 
@@ -655,13 +686,356 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             ? _agentStore.GetDefaultAgent()
             : _agentStore.GetAgentById(agentId) ?? _agentStore.GetDefaultAgent();
 
-    private ToolCreationContext BuildToolContext(AgentEntity agent) => new(
+    private static AgentEntity CreateRuntimeToolOverrideAgent(
+        AgentEntity agent,
+        IReadOnlyList<ToolGroupConfig>? toolOverrides)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+
+        if (toolOverrides is not { Count: > 0 })
+            return agent;
+
+        return AgentEntity.Reconstitute(
+            id: agent.Id,
+            name: agent.Name,
+            description: agent.Description,
+            isEnabled: agent.IsEnabled,
+            disabledSkillIds: agent.DisabledSkillIds,
+            disabledMcpServerIds: agent.DisabledMcpServerIds,
+            toolGroupConfigs: toolOverrides,
+            createdAtUtc: agent.CreatedAtUtc,
+            isDefault: agent.IsDefault,
+            contextWindowMessages: agent.ContextWindowMessages,
+            exposeAsA2A: agent.ExposeAsA2A,
+            allowedSubAgentIds: agent.AllowedSubAgentIds,
+            routingStrategy: agent.RoutingStrategy,
+            monthlyBudgetUsd: agent.MonthlyBudgetUsd);
+    }
+
+    private string ResolveProviderId(AgentEntity agent, string? preferredProviderId)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+
+        if (!string.IsNullOrWhiteSpace(preferredProviderId))
+        {
+            ProviderConfig? preferred = _providerStore.GetById(preferredProviderId);
+            if (preferred is { IsEnabled: true, ModelType: ModelType.Chat })
+                return preferred.Id;
+        }
+
+        if (_providerRouter is not null)
+        {
+            ProviderConfig? routed = _providerRouter.Route(_providerStore.All, agent.RoutingStrategy);
+            if (routed is not null)
+                return routed.Id;
+        }
+
+        return _providerStore.GetDefault()?.Id
+            ?? throw new InvalidOperationException("No enabled provider found for this dispatch.");
+    }
+
+    private MicroChatContext CreateDispatchContext(
+        IReadOnlyList<SessionMessage> history,
+        string source,
+        ChannelWriter<StreamItem>? output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
+        var ctx = new MicroChatContext
+        {
+            Session = MicroSession,
+            History = history,
+            Source = source,
+            Output = output,
+            Ct = ct,
+            Pet = this,
+            Channel = MicroSession.Channel!,
+        };
+
+        return ctx;
+    }
+
+    private async ValueTask PrepareDispatchContextAsync(MicroChatContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        ctx.Items.Remove(DispatchSuccessCompletionStartedItemKey);
+        ctx.Items[DispatchLifecycleStartedItemKey] = true;
+        await RunPhaseAsync(MicroChatLifecyclePhase.Decorate, ctx);
+        if (ctx.AssembledMessages is null)
+            await AssembleDispatchMessagesAsync(ctx);
+    }
+
+    private async ValueTask StartDispatchLifecycleAsync(MicroChatContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        await RunPhaseAsync(MicroChatLifecyclePhase.BeforeDispatch, ctx);
+    }
+
+    private async ValueTask CompleteDispatchSuccessAsync(
+        MicroChatContext ctx,
+        DispatchLifecycleTracker lifecycleTracker)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentNullException.ThrowIfNull(lifecycleTracker);
+
+        if (!HasDispatchLifecycleStarted(ctx))
+            return;
+
+        ctx.Items[DispatchSuccessCompletionStartedItemKey] = true;
+        ctx.FinalAssistantMessage = lifecycleTracker.BuildFinalAssistantMessage();
+        DispatchLifecycleTracker.ResetToolState(ctx);
+        await RunPhaseAsync(MicroChatLifecyclePhase.AfterDispatch, ctx);
+    }
+
+    private async ValueTask CompleteDispatchFailureAsync(
+        MicroChatContext ctx,
+        MicroChatLifecyclePhase phase)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        if (!HasDispatchLifecycleStarted(ctx))
+            return;
+
+        if (ctx.Items.TryGetValue(DispatchSuccessCompletionStartedItemKey, out object? successCompletionStarted)
+            && successCompletionStarted is true)
+        {
+            return;
+        }
+
+        ctx.FinalAssistantMessage = null;
+        await RunPhaseAsync(phase, ctx);
+    }
+
+    private async Task ExecuteDirectAgentDispatchAsync(
+        AgentEntity agent,
+        string providerId,
+        IReadOnlyList<SessionMessage> history,
+        string sessionId,
+        MicroChatContext chatCtx,
+        Channel<StreamItem> output,
+        CancellationToken ct,
+        string source)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(chatCtx);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var lifecycleTracker = new DispatchLifecycleTracker();
+        ToolCollectionResult? prebuiltTools = null;
+
+        try
+        {
+            await PrepareDispatchContextAsync(chatCtx);
+            prebuiltTools = await _toolCollector.CollectToolsAsync(agent, BuildToolContext(agent, chatCtx), ct);
+            await MergeChannelToolsAsync(prebuiltTools, ct);
+            PopulateDispatchExecutionPayload(chatCtx, agent, providerId, prebuiltTools.AllTools);
+            await StartDispatchLifecycleAsync(chatCtx);
+
+            var dispatchCanceled = new StrongBox<bool>(false);
+            using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
+            {
+                await foreach (var item in _agentRunner.StreamReActAsync(
+                    agent,
+                    chatCtx))
+                {
+                    if (HasDispatchLifecycleStarted(chatCtx))
+                        await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);
+
+                    await output.Writer.WriteAsync(item, ct);
+                }
+            }
+
+            if (dispatchCanceled.Value)
+                throw new OperationCanceledException(ct);
+
+            await CompleteDispatchSuccessAsync(chatCtx, lifecycleTracker);
+            output.Writer.TryComplete();
+        }
+        catch (OperationCanceledException ex)
+        {
+            await CompleteDispatchFailureAsync(chatCtx, MicroChatLifecyclePhase.OnCanceled);
+            output.Writer.TryComplete(ex);
+        }
+        catch (Exception ex)
+        {
+            await CompleteDispatchFailureAsync(chatCtx, MicroChatLifecyclePhase.OnError);
+            output.Writer.TryComplete(ex);
+        }
+        finally
+        {
+            if (prebuiltTools is not null)
+                await prebuiltTools.DisposeAsync();
+        }
+    }
+
+    private async ValueTask AssembleDispatchMessagesAsync(MicroChatContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        AgentEntity? agent = ResolveAgent(ctx.TargetAgentId ?? MicroSession.AgentId);
+        if (agent is null || !agent.IsEnabled)
+            throw new InvalidOperationException("No enabled agent found for this dispatch.");
+
+        string providerId = ResolveProviderId(agent, ctx.TargetProviderId ?? MicroSession.ProviderId);
+        ProviderConfig provider = _providerStore.GetById(providerId)
+            ?? throw new InvalidOperationException($"Provider '{providerId}' not found.");
+        if (!provider.IsEnabled || provider.ModelType != ModelType.Chat)
+            throw new InvalidOperationException($"Provider '{providerId}' is not an enabled chat provider.");
+
+        ctx.TargetAgentId ??= agent.Id;
+        ctx.TargetAgentName ??= agent.Name;
+        ctx.TargetProviderId ??= provider.Id;
+
+        ChatMessageAssemblyResult assembly = await _messageAssembler.AssembleAsync(
+            agent,
+            provider,
+            ctx.History ?? [],
+            ctx.Session.Id,
+            behaviorSuffix: ctx.PromptBehaviorSuffix,
+            petKnowledge: ctx.PetKnowledge,
+            ct: ctx.Ct);
+        ctx.AssembledMessages = assembly.Messages;
+
+        if (string.IsNullOrWhiteSpace(assembly.SkillContext.ModelOverride))
+            ctx.Items.Remove(DispatchSkillModelOverrideItemKey);
+        else
+            ctx.Items[DispatchSkillModelOverrideItemKey] = assembly.SkillContext.ModelOverride;
+
+        if (string.IsNullOrWhiteSpace(assembly.SkillContext.EffortOverride))
+            ctx.Items.Remove(DispatchSkillEffortOverrideItemKey);
+        else
+            ctx.Items[DispatchSkillEffortOverrideItemKey] = assembly.SkillContext.EffortOverride;
+    }
+
+    private static bool HasDispatchLifecycleStarted(MicroChatContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        return ctx.Items.TryGetValue(DispatchLifecycleStartedItemKey, out object? value)
+            && value is true;
+    }
+
+    private void InitializeDispatchExecutionMetadata(MicroChatContext ctx, AgentEntity agent, string providerId)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
+
+        ctx.TargetAgentId ??= agent.Id;
+        ctx.TargetAgentName ??= agent.Name;
+        ctx.TargetProviderId ??= providerId;
+        ctx.ProviderFallbackIds ??= ResolveProviderFallbackIds(agent, providerId);
+        ctx.MaxAgentIterations ??= 10;
+        ctx.HasRuntimeSubAgentAcl = true;
+        ctx.RuntimeAllowedSubAgentIds = agent.AllowedSubAgentIds is null
+            ? null
+            : [.. agent.AllowedSubAgentIds];
+        ctx.AncestorAgentIds ??= SubAgentRunScope.Current?.AgentChain is { Count: > 0 } ancestorAgentIds
+            ? [.. ancestorAgentIds]
+            : null;
+    }
+
+    private ToolCreationContext BuildToolContext(AgentEntity agent, MicroChatContext? chatContext = null) => new(
         SessionId: MicroSession.Id,
         ChannelType: MicroSession.ChannelType,
         ChannelId: MicroSession.ChannelId,
         DisabledSkillIds: agent.DisabledSkillIds,
         CallingAgentId: agent.Id,
-        AllowedSubAgentIds: agent.AllowedSubAgentIds);
+        AllowedSubAgentIds: chatContext?.HasRuntimeSubAgentAcl == true
+            ? chatContext.RuntimeAllowedSubAgentIds
+            : agent.AllowedSubAgentIds,
+        AncestorAgentIds: chatContext?.AncestorAgentIds);
+
+    private async ValueTask MergeChannelToolsAsync(ToolCollectionResult toolResult, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(toolResult);
+
+        IReadOnlyList<AIFunction> channelTools = await CollectChannelToolsAsync(ct);
+        if (channelTools.Count > 0)
+            toolResult.AddTools(channelTools);
+    }
+
+    private void PopulateDispatchExecutionPayload(
+        MicroChatContext ctx,
+        AgentEntity agent,
+        string providerId,
+        IReadOnlyList<AITool> tools)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
+        ArgumentNullException.ThrowIfNull(tools);
+
+        ProviderConfig provider = _providerStore.GetById(providerId)
+            ?? throw new InvalidOperationException($"Provider '{providerId}' not found.");
+        if (!provider.IsEnabled || provider.ModelType != ModelType.Chat)
+            throw new InvalidOperationException($"Provider '{providerId}' is not an enabled chat provider.");
+
+        ctx.TargetAgentId ??= agent.Id;
+        ctx.TargetAgentName ??= agent.Name;
+        ctx.TargetProviderId = provider.Id;
+        ctx.ProviderFallbackIds ??= ResolveProviderFallbackIds(agent, provider.Id);
+
+        List<AITool> assembledTools = [.. tools];
+        ctx.AssembledTools = assembledTools.AsReadOnly();
+
+        HashSet<string> availableToolNames = assembledTools
+            .Select(static tool => tool.Name)
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ctx.InternalToolNames = SkillToolProvider.InternalToolNames
+            .Where(availableToolNames.Contains)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        ctx.ExecutionOptions = ChatExecutionOptionsFactory.Build(
+            ctx.AssembledTools,
+            provider,
+            modelOverride: TryGetStringItem(ctx, DispatchSkillModelOverrideItemKey),
+            effortOverride: TryGetStringItem(ctx, DispatchSkillEffortOverrideItemKey),
+            temperatureOverride: ctx.TemperatureOverride,
+            topPOverride: ctx.TopPOverride);
+    }
+
+    private IReadOnlyList<string> ResolveProviderFallbackIds(AgentEntity agent, string primaryProviderId)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(primaryProviderId);
+
+        IReadOnlyList<ProviderConfig> allProviders = _providerStore.All;
+        IReadOnlyList<ProviderConfig> orderedChain = _providerRouter is not null
+            ? _providerRouter.GetFallbackChain(allProviders, agent.RoutingStrategy)
+            : allProviders
+                .Where(static provider => provider.IsEnabled && provider.ModelType == ModelType.Chat)
+                .OrderByDescending(static provider => provider.IsDefault ? 1 : 0)
+                .ToList()
+                .AsReadOnly();
+
+        List<string> fallbackIds = [];
+        foreach (ProviderConfig provider in orderedChain)
+        {
+            if (string.Equals(provider.Id, primaryProviderId, StringComparison.Ordinal))
+                continue;
+
+            fallbackIds.Add(provider.Id);
+        }
+
+        return fallbackIds.AsReadOnly();
+    }
+
+    private static string? TryGetStringItem(MicroChatContext ctx, string key)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        return ctx.Items.TryGetValue(key, out object? value) && value is string text && !string.IsNullOrWhiteSpace(text)
+            ? text
+            : null;
+    }
 
     // ── 对话生命周期编排 ───────────────────────────────────────────────────────
 
@@ -685,6 +1059,11 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
         foreach (PetComponent component in components)
         {
+            if (phase is not MicroChatLifecyclePhase.OnError
+                and not MicroChatLifecyclePhase.OnCanceled
+                and not MicroChatLifecyclePhase.AfterDispatch)
+                ctx.Ct.ThrowIfCancellationRequested();
+
             ValueTask invocation = phase switch
             {
                 MicroChatLifecyclePhase.Decorate => component.OnDecorateAsync(ctx),

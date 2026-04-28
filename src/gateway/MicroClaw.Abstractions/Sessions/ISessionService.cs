@@ -30,11 +30,12 @@ public interface ISessionService
 
     // ── Channel session management ───────────────────────────────────────
     
-    Task<SessionInfo> FindOrCreateSession(ChannelType channelType, string channelId, string senderId, string channelDisplayName, string providerId);
+    Task<IMicroSession> FindOrCreateSession(ChannelType channelType, string channelId, string senderId, string channelDisplayName, string providerId);
+    
     
     Task NotifyPendingApprovalAsync(string sessionId, string sessionTitle, ChannelType channelType);
     
-    Task<bool> CheckApprovalAsync(SessionInfo session, ChannelType channelType);
+    Task<bool> CheckApprovalAsync(IMicroSession session, ChannelType channelType);
     
     Task<IMicroSession> CreateSession(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? channelId = null);
 }

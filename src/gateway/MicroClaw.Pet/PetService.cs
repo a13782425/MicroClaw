@@ -17,7 +17,7 @@ namespace MicroClaw.Pet;
 /// 核心消息处理逻辑委托给 <see cref="MicroPet.HandleChatAsync"/>。
 /// </para>
 /// </summary>
-public sealed class PetService : IPetService, IAgentMessageHandler, IService
+public sealed class PetService : IPetService, IService
 {
     private readonly ISessionService _sessionRepo;
     private readonly PetContextFactory _petContextFactory;

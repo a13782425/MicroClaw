@@ -52,7 +52,6 @@ internal sealed class FeishuChannelProvider : IChannelProvider
                 return _processor ??= new FeishuMessageProcessor(
                     _serviceProvider.GetRequiredService<ISessionService>(),
                     _loggerFactory.CreateLogger<FeishuMessageProcessor>(),
-                    _serviceProvider.GetService<IAgentMessageHandler>(),
                     _serviceProvider.GetService<IChannelRetryQueue>(),
                     RateLimiter, HealthStore, StatsService);
             }

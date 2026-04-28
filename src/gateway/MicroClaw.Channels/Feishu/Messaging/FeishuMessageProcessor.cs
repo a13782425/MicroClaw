@@ -9,34 +9,23 @@ using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Channels.Feishu;
-
 /// <summary>
 /// 飞书消息共享处理器：接收已提取的用户文本，管理会话，通过 Agent 处理消息，通过飞书 API 回复。
 /// Webhook 和 WebSocket 两种入口共用此处理器。由 <see cref="FeishuChannelProvider"/> 创建并持有。
 /// </summary>
-internal sealed class FeishuMessageProcessor(
-    ISessionService sessionService,
-    ILogger<FeishuMessageProcessor> logger,
-    IAgentMessageHandler? agentHandler = null,
-    IChannelRetryQueue? retryQueue = null,
-    FeishuRateLimiter? rateLimiter = null,
-    FeishuChannelHealthStore? healthStore = null,
-    FeishuChannelStatsService? statsService = null)
+internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILogger<FeishuMessageProcessor> logger, IChannelRetryQueue? retryQueue = null, FeishuRateLimiter? rateLimiter = null, FeishuChannelHealthStore? healthStore = null, FeishuChannelStatsService? statsService = null)
 {
     // F-A-2: 消息去重 — 缓存最近 5 分钟内已处理的 MessageId，防止飞书重复推送触发重复 AI 调用
     private static readonly TimeSpan DeduplicationWindow = TimeSpan.FromMinutes(5);
     private readonly ConcurrentDictionary<string, DateTimeOffset> _processedMessageIds = new();
-
+    
     /// <summary>处理一条飞书文本消息：管理会话 → 查找 Provider → 调用 AI → 回复飞书。</summary>
-    public async Task ProcessMessageAsync(
-        string userText, string? senderId, string chatId, string messageId,
-        ChannelEntity channel, FeishuChannelSettings settings,
-        string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null,
-        IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)
+    public async Task ProcessMessageAsync(string userText, string? senderId, string chatId, string messageId, ChannelEntity channel, FeishuChannelSettings settings, string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null, IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)
     {
         // F-B-1: 群聊过滤 — 群聊消息只有 @机器人 时才响应
         if (chatType == "group")
@@ -50,27 +39,27 @@ internal sealed class FeishuMessageProcessor(
                 return;
             }
         }
-
+        
         // F-A-2: 消息去重 — 惰性清理 5 分钟前的旧记录，然后进行幂等检查
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = TimeUtils.NowOffset();
         foreach (string staleKey in _processedMessageIds.Keys)
         {
             if (_processedMessageIds.TryGetValue(staleKey, out DateTimeOffset ts) && now - ts > DeduplicationWindow)
                 _processedMessageIds.TryRemove(staleKey, out _);
         }
-
+        
         if (!_processedMessageIds.TryAdd(messageId, now))
         {
             logger.LogWarning("消息去重：messageId={MessageId} 已处理，跳过重复推送", messageId);
             return;
         }
-
+        
         // F-F-1: 全链路追踪 — 以 MessageId 前 8 位为 traceId，注入结构化日志上下文
         string traceId = messageId.Length >= 8 ? messageId[..8] : messageId;
         using IDisposable? _traceScope = logger.BeginScope(new Dictionary<string, object> { ["TraceId"] = traceId });
-
+        
         logger.LogInformation("[{TraceId}] 飞书消息接收 from={SenderId} chat={ChatId}: {Text}", traceId, senderId, chatId, userText);
-
+        
         // F-B-2: 群聊会话隔离策略 — 群聊 shared 模式用 chatId 作为会话键（群内共享上下文）；其余用 senderId
         string sessionKey;
         if (chatType == "group" && !settings.GroupChatSessionMode.Equals("isolated", StringComparison.OrdinalIgnoreCase))
@@ -82,15 +71,15 @@ internal sealed class FeishuMessageProcessor(
         {
             sessionKey = senderId ?? chatId; // isolated 或单聊：每人独立上下文
         }
-
+        
         // 查找或创建对应会话（模型与会话绑定）
-        SessionInfo session = await sessionService.FindOrCreateSession(ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, string.Empty);
-
+        IMicroSession session = await sessionService.FindOrCreateSession(ChannelType.Feishu, channel.Id, sessionKey, channel.DisplayName, string.Empty);
+        
         // F-B-3: 话题支持 — root_id 非空表示该消息属于某个话题（Thread），回复时需带 reply_in_thread
         bool replyInThread = !string.IsNullOrEmpty(rootId);
         if (replyInThread)
             logger.LogDebug("[{TraceId}] 消息属于话题 rootId={RootId}，将在话题内回复", traceId, rootId);
-
+        
         // 会话审批检查：未通过时自动通知管理员（含限流），并向用户回复拒绝提示
         if (!await sessionService.CheckApprovalAsync(session, ChannelType.Feishu))
         {
@@ -99,14 +88,14 @@ internal sealed class FeishuMessageProcessor(
                 await ReplyMessageAsync(settings, messageId, "此会话尚未获得批准，请联系管理员登录后台进行审批。", tenantApi, traceId, ct, replyInThread: replyInThread);
             return;
         }
-
+        
         // 保存用户消息
         SessionMessage userMessage = new(Guid.NewGuid().ToString("N"), "user", userText, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, userMessage);
-
+        
         // 获取历史消息上下文
         IReadOnlyList<SessionMessage> history = sessionService.GetMessages(session.Id);
-
+        
         // F-B-4: 发送方身份透传 — 在 AI 调用前获取用户昵称和职位（可选）
         if (settings.InjectSenderInfo && !string.IsNullOrEmpty(senderId) && tenantApi is not null)
         {
@@ -114,31 +103,18 @@ internal sealed class FeishuMessageProcessor(
             if (senderInfo is not null)
                 logger.LogDebug("[{TraceId}] 发送方身份已获取 name={Name} title={Title}", traceId, senderInfo.Value.Name, senderInfo.Value.JobTitle);
         }
-
+        
         // F-A-8: 添加"思考中"表情回应，让用户知道 AI 正在处理
         string? reactionId = tenantApi is not null ? await AddReactionAsync(messageId, tenantApi, traceId, ct) : null;
-
+        
         bool aiSuccess = true;
         string? aiError = null;
         string aiReply;
         try
         {
-            if (agentHandler?.HasAgentForChannel(channel.Id) != true)
-            {
-                logger.LogWarning("[{TraceId}] 渠道 {ChannelId} 无可用 Agent，拒绝处理消息", traceId, channel.Id);
-                if (reactionId is not null && tenantApi is not null)
-                {
-                    await RemoveReactionAsync(messageId, reactionId, tenantApi, traceId, ct);
-                    reactionId = null;
-                }
-                if (tenantApi is not null)
-                    await ReplyMessageAsync(settings, messageId, "当前渠道尚未绑定 Agent，无法处理消息。请联系管理员配置。", tenantApi, traceId, ct, replyInThread: replyInThread);
-                healthStore?.Report(channel.Id, false, "no agent");
-                return;
-            }
-
+            
             logger.LogInformation("[{TraceId}] 路由到 Agent channel={ChannelId}", traceId, channel.Id);
-            AgentResponse agentResponse = await agentHandler.HandleMessageAsync(channel.Id, session.Id, history, ct).MaterializeAsync(ct);
+            AgentResponse agentResponse = await session.HandleMessageAsync(userText, null, ChannelUtils.SerializeChannelType(ChannelType.Feishu), ct).MaterializeAsync(ct);
             aiReply = agentResponse.Text;
         }
         catch (Exception ex)
@@ -146,10 +122,10 @@ internal sealed class FeishuMessageProcessor(
             aiSuccess = false;
             aiError = ex.Message;
             logger.LogError(ex, "[{TraceId}] AI 调用失败", traceId);
-
+            
             // F-F-3: AI 调用失败计数
             statsService?.IncrementAiCallFailure(channel.Id);
-
+            
             // F-D-1: AI 失败入队重试（如果有重试队列）
             if (retryQueue is not null)
             {
@@ -167,7 +143,7 @@ internal sealed class FeishuMessageProcessor(
                     logger.LogWarning(enqueueEx, "[{TraceId}] 入队重试失败，回退到即时错误回复", traceId);
                 }
             }
-
+            
             aiReply = "抱歉，AI 处理出错，请稍后再试。";
         }
         finally
@@ -176,18 +152,18 @@ internal sealed class FeishuMessageProcessor(
             if (reactionId is not null && tenantApi is not null)
                 await RemoveReactionAsync(messageId, reactionId, tenantApi, traceId, ct);
         }
-
+        
         // 保存助手消息
         SessionMessage assistantMessage = new(Guid.NewGuid().ToString("N"), "assistant", aiReply, null, DateTimeOffset.UtcNow, null);
         sessionService.AddMessage(session.Id, assistantMessage);
-
+        
         if (tenantApi is not null)
             await ReplyMessageAsync(settings, messageId, aiReply, tenantApi, traceId, ct, channel.Id, replyInThread);
-
+        
         // F-F-2: 上报消息处理结果到健康监控
         healthStore?.Report(channel.Id, aiSuccess, aiError);
     }
-
+    
     /// <summary>从飞书消息事件中提取用户输入文本（支持 text / image 类型，去除 @mention）。</summary>
     public static string? ExtractText(FeishuMessageEvent? evt)
     {
@@ -195,14 +171,14 @@ internal sealed class FeishuMessageProcessor(
         var mentionMap = BuildMentionMap(evt.Message.Mentions);
         return ExtractFromContent(evt.Message.MessageType, evt.Message.Content, mentionMap);
     }
-
+    
     /// <summary>从 SDK 消息事件 DTO 中提取用户输入文本（WebSocket 模式使用）。</summary>
     public static string? ExtractText(ImMessageReceiveV1EventBodyDto? body)
     {
         if (body?.Message is null) return null;
         return ExtractFromContent(body.Message.MessageType, body.Message.Content);
     }
-
+    
     /// <summary>
     /// F-A-7: 从飞书 SDK 消息 DTO 中提取文本，同时将 @mention 占位符替换为用户显示名称。
     /// </summary>
@@ -211,40 +187,58 @@ internal sealed class FeishuMessageProcessor(
         if (body?.Message is null) return null;
         return ExtractFromContent(body.Message.MessageType, body.Message.Content, mentionMap);
     }
-
+    
     /// <summary>根据消息类型和 content JSON 提取可供 AI 处理的文本描述。</summary>
     private static string? ExtractFromContent(string? messageType, string? contentJson, IReadOnlyDictionary<string, string>? mentionMap = null)
     {
         if (string.IsNullOrWhiteSpace(contentJson)) return null;
-
+        
         switch (messageType)
         {
             case "text":
             {
                 FeishuTextContent? content;
-                try { content = JsonSerializer.Deserialize<FeishuTextContent>(contentJson); }
-                catch { return null; }
-
+                try
+                {
+                    content = JsonSerializer.Deserialize<FeishuTextContent>(contentJson);
+                }
+                catch
+                {
+                    return null;
+                }
+                
                 string? text = content?.Text;
                 if (string.IsNullOrWhiteSpace(text)) return null;
                 return ResolveMentions(text, mentionMap);
             }
-
+            
             case "image":
             {
                 FeishuImageContent? content;
-                try { content = JsonSerializer.Deserialize<FeishuImageContent>(contentJson); }
-                catch { return null; }
-
+                try
+                {
+                    content = JsonSerializer.Deserialize<FeishuImageContent>(contentJson);
+                }
+                catch
+                {
+                    return null;
+                }
+                
                 return string.IsNullOrWhiteSpace(content?.ImageKey) ? "[图片]" : $"[图片: {content.ImageKey}]";
             }
-
+            
             case "file":
             {
                 FeishuFileContent? content;
-                try { content = JsonSerializer.Deserialize<FeishuFileContent>(contentJson); }
-                catch { return null; }
-
+                try
+                {
+                    content = JsonSerializer.Deserialize<FeishuFileContent>(contentJson);
+                }
+                catch
+                {
+                    return null;
+                }
+                
                 string fileName = content?.FileName ?? "未知文件";
                 if (content?.FileSize is > 0)
                 {
@@ -254,20 +248,26 @@ internal sealed class FeishuMessageProcessor(
                 }
                 return $"[文件: {fileName}]";
             }
-
+            
             case "post":
             {
                 FeishuPostContent? postContent;
-                try { postContent = JsonSerializer.Deserialize<FeishuPostContent>(contentJson); }
-                catch { return null; }
-
+                try
+                {
+                    postContent = JsonSerializer.Deserialize<FeishuPostContent>(contentJson);
+                }
+                catch
+                {
+                    return null;
+                }
+                
                 FeishuPostBody? body = postContent?.ZhCn ?? postContent?.EnUs;
                 if (body is null) return null;
-
+                
                 var sb = new StringBuilder();
                 if (!string.IsNullOrWhiteSpace(body.Title))
                     sb.AppendLine(body.Title);
-
+                
                 if (body.Content is not null)
                 {
                     foreach (FeishuPostElement[] paragraph in body.Content)
@@ -284,28 +284,24 @@ internal sealed class FeishuMessageProcessor(
                         sb.AppendLine();
                     }
                 }
-
+                
                 string result = ResolveMentions(sb.ToString().Trim(), mentionMap);
                 return string.IsNullOrWhiteSpace(result) ? null : result;
             }
-
+            
             default:
                 return null;
         }
     }
-
+    
     private const string ThinkingEmojiType = "Status_PrivateMessage";
-
+    
     private async Task<string?> AddReactionAsync(string messageId, IFeishuTenantApi tenantApi, string traceId, CancellationToken ct)
     {
         try
         {
-            var response = await tenantApi.PostImV1MessagesByMessageIdReactionsAsync(messageId,
-                new PostImV1MessagesByMessageIdReactionsBodyDto
-                {
-                    ReactionType = new PostImV1MessagesByMessageIdReactionsBodyDto.Emoji { EmojiType = ThinkingEmojiType }
-                }, ct);
-
+            var response = await tenantApi.PostImV1MessagesByMessageIdReactionsAsync(messageId, new PostImV1MessagesByMessageIdReactionsBodyDto { ReactionType = new PostImV1MessagesByMessageIdReactionsBodyDto.Emoji { EmojiType = ThinkingEmojiType } }, ct);
+            
             string? reactionId = response.Data?.ReactionId;
             if (!string.IsNullOrEmpty(reactionId))
                 logger.LogDebug("[{TraceId}] 已添加思考中表情 reactionId={ReactionId}", traceId, reactionId);
@@ -317,7 +313,7 @@ internal sealed class FeishuMessageProcessor(
             return null;
         }
     }
-
+    
     private async Task RemoveReactionAsync(string messageId, string reactionId, IFeishuTenantApi tenantApi, string traceId, CancellationToken ct)
     {
         try
@@ -330,16 +326,14 @@ internal sealed class FeishuMessageProcessor(
             logger.LogDebug(ex, "[{TraceId}] 移除表情回应失败（不影响主流程）", traceId);
         }
     }
-
-    private async Task ReplyMessageAsync(FeishuChannelSettings settings, string messageId, string text,
-        IFeishuTenantApi tenantApi, string traceId, CancellationToken ct,
-        string? channelId = null, bool replyInThread = false)
+    
+    private async Task ReplyMessageAsync(FeishuChannelSettings settings, string messageId, string text, IFeishuTenantApi tenantApi, string traceId, CancellationToken ct, string? channelId = null, bool replyInThread = false)
     {
         try
         {
             if (rateLimiter is not null && !string.IsNullOrEmpty(settings.AppId))
                 await rateLimiter.WaitAsync(settings.AppId, ct);
-
+            
             string msgType;
             string contentJson;
             if (ContainsMarkdown(text))
@@ -353,14 +347,8 @@ internal sealed class FeishuMessageProcessor(
                 msgType = "text";
                 contentJson = JsonSerializer.Serialize(new { text });
             }
-
-            await tenantApi.PostImV1MessagesByMessageIdReplyAsync(messageId,
-                new PostImV1MessagesByMessageIdReplyBodyDto
-                {
-                    Content = contentJson,
-                    MsgType = msgType,
-                    ReplyInThread = replyInThread ? true : null
-                }, ct);
+            
+            await tenantApi.PostImV1MessagesByMessageIdReplyAsync(messageId, new PostImV1MessagesByMessageIdReplyBodyDto { Content = contentJson, MsgType = msgType, ReplyInThread = replyInThread ? true : null }, ct);
             logger.LogInformation("[{TraceId}] 飞书回复成功 messageId={MessageId} msgType={MsgType} replyInThread={ReplyInThread}", traceId, messageId, msgType, replyInThread);
         }
         catch (Exception ex)
@@ -370,7 +358,7 @@ internal sealed class FeishuMessageProcessor(
                 statsService?.IncrementReplyFailure(channelId);
         }
     }
-
+    
     internal static bool ContainsMarkdown(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
@@ -381,28 +369,26 @@ internal sealed class FeishuMessageProcessor(
         if (Regex.IsMatch(text, @"(?m)^\d+\.\s")) return true;
         return false;
     }
-
+    
     internal static string BuildCardJson(string text)
     {
         var card = new { schema = "2.0", body = new { elements = new[] { new { tag = "markdown", content = text } } } };
         return JsonSerializer.Serialize(card);
     }
-
+    
     internal static string ResolveMentions(string text, IReadOnlyDictionary<string, string>? mentionMap = null)
     {
         if (string.IsNullOrEmpty(text)) return text;
         if (mentionMap is { Count: > 0 })
         {
-            text = Regex.Replace(text, @"@_user_\d+", match =>
-                mentionMap.TryGetValue(match.Value, out string? name) && !string.IsNullOrEmpty(name)
-                    ? $"@{name}" : string.Empty);
+            text = Regex.Replace(text, @"@_user_\d+", match => mentionMap.TryGetValue(match.Value, out string? name) && !string.IsNullOrEmpty(name) ? $"@{name}" : string.Empty);
             return text.Trim();
         }
         return Regex.Replace(text, @"@_user_\d+\s*", string.Empty).Trim();
     }
-
+    
     internal static string StripMentions(string text) => ResolveMentions(text, null);
-
+    
     private static IReadOnlyDictionary<string, string>? BuildMentionMap(FeishuMention[]? mentions)
     {
         if (mentions is not { Length: > 0 }) return null;
@@ -410,14 +396,13 @@ internal sealed class FeishuMessageProcessor(
         foreach (FeishuMention m in mentions)
         {
             if (string.IsNullOrEmpty(m.Key)) continue;
-            string displayName = !string.IsNullOrWhiteSpace(m.Name) ? m.Name
-                : m.Id?.OpenId ?? m.Id?.UserId ?? m.Id?.UnionId ?? string.Empty;
+            string displayName = !string.IsNullOrWhiteSpace(m.Name) ? m.Name : m.Id?.OpenId ?? m.Id?.UserId ?? m.Id?.UnionId ?? string.Empty;
             if (!string.IsNullOrEmpty(displayName))
                 map[m.Key] = displayName;
         }
         return map.Count > 0 ? map : null;
     }
-
+    
     /// <summary>
     /// F-D-1: 供 ChannelRetryJob 调用，直接回复指定飞书消息（不经过去重和重试入队逻辑）。
     /// 通过临时构建 SDK ServiceProvider 获取 TenantApi（Phase 5 将评估是否保留此机制）。
@@ -428,9 +413,8 @@ internal sealed class FeishuMessageProcessor(
         IFeishuTenantApi tenantApi = sp.GetRequiredService<IFeishuTenantApi>();
         await ReplyMessageAsync(settings, messageId, text, tenantApi, "retry", ct);
     }
-
-    private async Task<(string Name, string? JobTitle)?> GetSenderInfoAsync(
-        string openId, IFeishuTenantApi tenantApi, string traceId, CancellationToken ct)
+    
+    private async Task<(string Name, string? JobTitle)?> GetSenderInfoAsync(string openId, IFeishuTenantApi tenantApi, string traceId, CancellationToken ct)
     {
         try
         {
@@ -446,24 +430,22 @@ internal sealed class FeishuMessageProcessor(
             return null;
         }
     }
-
+    
     /// <summary>
     /// F-A-1: 主动发送消息到指定飞书用户或群聊（不依赖 messageId，构造新消息）。
     /// </summary>
-    public async Task SendMessageAsync(string receiveId, string text, FeishuChannelSettings settings,
-        IFeishuTenantApi tenantApi, CancellationToken ct = default)
+    public async Task SendMessageAsync(string receiveId, string text, FeishuChannelSettings settings, IFeishuTenantApi tenantApi, CancellationToken ct = default)
     {
         string receiveIdType = receiveId.StartsWith("oc_", StringComparison.Ordinal) ? "chat_id" : "open_id";
         try
         {
             if (rateLimiter is not null && !string.IsNullOrEmpty(settings.AppId))
                 await rateLimiter.WaitAsync(settings.AppId, ct);
-
+            
             string msgType = ContainsMarkdown(text) ? "interactive" : "text";
             string contentJson = msgType == "interactive" ? BuildCardJson(text) : JsonSerializer.Serialize(new { text });
-
-            await tenantApi.PostImV1MessagesAsync(receiveIdType,
-                new PostImV1MessagesBodyDto { ReceiveId = receiveId, MsgType = msgType, Content = contentJson }, ct);
+            
+            await tenantApi.PostImV1MessagesAsync(receiveIdType, new PostImV1MessagesBodyDto { ReceiveId = receiveId, MsgType = msgType, Content = contentJson }, ct);
             logger.LogInformation("飞书主动发送消息成功 to={ReceiveId} type={IdType} msgType={MsgType}", receiveId, receiveIdType, msgType);
         }
         catch (Exception ex)
@@ -471,7 +453,7 @@ internal sealed class FeishuMessageProcessor(
             logger.LogError(ex, "飞书主动发送消息失败 to={ReceiveId}", receiveId);
         }
     }
-
+    
     /// <summary>
     /// Build a temporary SDK ServiceProvider for cases where no live channel instance is available (e.g. retry path).
     /// Phase 5 (5-A-3) will evaluate whether this fallback is still needed.
@@ -480,16 +462,12 @@ internal sealed class FeishuMessageProcessor(
     {
         ServiceCollection services = new();
         Action<HttpClient>? configureHttpClient = null;
-        if (!string.IsNullOrWhiteSpace(settings.ApiBaseUrl) &&
-            !settings.ApiBaseUrl.Equals("https://open.feishu.cn", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(settings.ApiBaseUrl) && !settings.ApiBaseUrl.Equals("https://open.feishu.cn", StringComparison.OrdinalIgnoreCase))
         {
             string baseUrl = settings.ApiBaseUrl.TrimEnd('/');
             configureHttpClient = client => client.BaseAddress = new Uri(baseUrl);
         }
-        services.AddFeishuNetSdk(
-            appId: settings.AppId, appSecret: settings.AppSecret,
-            encryptKey: settings.EncryptKey, verificationToken: settings.VerificationToken,
-            httpClientOptions: configureHttpClient);
+        services.AddFeishuNetSdk(appId: settings.AppId, appSecret: settings.AppSecret, encryptKey: settings.EncryptKey, verificationToken: settings.VerificationToken, httpClientOptions: configureHttpClient);
         return services.BuildServiceProvider();
     }
 }

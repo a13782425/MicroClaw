@@ -155,9 +155,14 @@ public abstract class ChatMicroProvider : MicroProvider
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentNullException.ThrowIfNull(tools);
 
-        // TODO: 待 MicroChatContext 扩展 Agent 元数据后，AgentName / MaxIterations 等应由上下文提供。
-        const string agentName = "agent";
-        const int maxIterations = 10;
+        string agentName = !string.IsNullOrWhiteSpace(ctx.TargetAgentName)
+            ? ctx.TargetAgentName
+            : !string.IsNullOrWhiteSpace(ctx.TargetAgentId)
+                ? ctx.TargetAgentId
+                : "agent";
+        int maxIterations = ctx.MaxAgentIterations is > 0
+            ? ctx.MaxAgentIterations.Value
+            : 10;
 
         ChatOptions resolvedOptions = options ?? BuildDefaultChatOptions();
         if (resolvedOptions.Tools is null && tools.Count > 0 && Config.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))

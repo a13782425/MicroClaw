@@ -74,7 +74,7 @@ public sealed class ChannelServiceTests : IDisposable
             [
                 new ChannelEntity
                 {
-                    Id = ChannelService.WebChannelId,
+                    Id = ChannelUtils.WebChannelId,
                     DisplayName = "Web Console",
                     ChannelType = ChannelType.Web,
                     IsEnabled = true,
@@ -252,7 +252,7 @@ public sealed class ChannelServiceTests : IDisposable
             ChannelEntity channel = effectiveChannels[i];
             data[$"channel:channels:{i}:id"] = channel.Id;
             data[$"channel:channels:{i}:display_name"] = channel.DisplayName;
-            data[$"channel:channels:{i}:channel_type"] = ChannelService.SerializeChannelType(channel.ChannelType);
+            data[$"channel:channels:{i}:channel_type"] = ChannelUtils.SerializeChannelType(channel.ChannelType);
             data[$"channel:channels:{i}:is_enabled"] = channel.IsEnabled.ToString();
             data[$"channel:channels:{i}:setting_json"] = channel.SettingJson;
         }

@@ -18,7 +18,7 @@ public static class ChannelEndpoints
             {
                 c.Id,
                 c.DisplayName,
-                ChannelType = ChannelService.SerializeChannelType(c.ChannelType),
+                ChannelType = ChannelUtils.SerializeChannelType(c.ChannelType),
                 c.IsEnabled,
                 Settings = ChannelService.MaskSettingsSecrets(c.SettingJson, c.ChannelType)
             });
@@ -71,7 +71,7 @@ public static class ChannelEndpoints
             ChannelEntity channel = new()
             {
                 DisplayName = req.DisplayName.Trim(),
-                ChannelType = ChannelService.ParseChannelType(req.ChannelType),
+                ChannelType = ChannelUtils.ParseChannelType(req.ChannelType),
                 IsEnabled = req.IsEnabled,
                 SettingJson = req.Settings ?? "{}"
             };
@@ -89,7 +89,7 @@ public static class ChannelEndpoints
             ChannelEntity incoming = new()
             {
                 DisplayName = req.DisplayName?.Trim() ?? string.Empty,
-                ChannelType = ChannelService.ParseChannelType(req.ChannelType),
+                ChannelType = ChannelUtils.ParseChannelType(req.ChannelType),
                 IsEnabled = req.IsEnabled,
                 SettingJson = req.Settings ?? "{}"
             };

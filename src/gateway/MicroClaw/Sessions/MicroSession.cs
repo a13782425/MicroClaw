@@ -1,9 +1,12 @@
+using System.Runtime.CompilerServices;
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
+using MicroClaw.Streaming;
 using MicroClaw.Utils;
 
 namespace MicroClaw.Sessions;
@@ -34,8 +37,8 @@ public class MicroSession : MicroObject, IMicroSession
     public string Title => Entity.Title;
     public string ProviderId => Entity.ProviderId;
     public bool IsApproved => Entity.IsApproved;
-    public ChannelType ChannelType => ChannelService.ParseChannelType(Entity.ChannelType);
-    public string ChannelId => string.IsNullOrEmpty(Entity.ChannelId) ? ChannelService.WebChannelId : Entity.ChannelId;
+    public ChannelType ChannelType => ChannelUtils.ParseChannelType(Entity.ChannelType);
+    public string ChannelId => string.IsNullOrEmpty(Entity.ChannelId) ? ChannelUtils.WebChannelId : Entity.ChannelId;
     public DateTimeOffset CreatedAt => TimeUtils.FromMs(Entity.CreatedAtMs);
     public string? AgentId => Entity.AgentId;
     public string? ApprovalReason => Entity.ApprovalReason;
@@ -79,4 +82,37 @@ public class MicroSession : MicroObject, IMicroSession
     }
     
     public SessionInfo ToInfo() => new(Id, Title, ProviderId, IsApproved, ChannelType, ChannelId, CreatedAt, AgentId, ApprovalReason);
+    
+    #region 接口实现
+    public async IAsyncEnumerable<StreamItem> HandleMessageAsync(string content, IReadOnlyList<MessageAttachment>? attachments, string source, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        // 1. 持久化用户消息
+        SessionMessage userMessage = new(Id: MicroClawUtils.GetUniqueId(), Role: "user", Content: content, ThinkContent: null, Timestamp: TimeUtils.NowOffset(), Attachments: attachments, Source: source);
+        Messages.AddMessage(userMessage);
+        
+        // 2. Pet 未绑定 = 无 AI 能力，静默结束
+        IPet? pet = Pet;
+        if (pet is null) yield break;
+        
+        // 3. 加载完整历史（含刚才写入的用户消息）
+        IReadOnlyList<SessionMessage> history = Messages.GetMessages();
+        
+        // 4. 流式执行 + 同步持久化 assistant 消息
+        var pipeline = new StreamItemPersistencePipeline();
+        await foreach (StreamItem item in pet.HandleMessageAsync(history, ct, source))
+        {
+            // 工具调用 / 子代理等立即产生消息的类型，直接入库
+            foreach (SessionMessage msg in pipeline.ProcessItem(item))
+                Messages.AddMessage(msg);
+            
+            yield return item;
+        }
+        
+        // 5. 聚合最终 assistant 消息（文本 + think + 附件）
+        SessionMessage? assistantMsg = pipeline.Finalize();
+        if (assistantMsg is not null)
+            Messages.AddMessage(assistantMsg);
+    }
+    #endregion
+    
 }

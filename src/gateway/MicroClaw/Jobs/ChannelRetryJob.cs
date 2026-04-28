@@ -23,7 +23,6 @@ public sealed class ChannelRetryJob : IScheduledJob
     private readonly ChannelService _channelConfigStore;
     private readonly ProviderService _providerService;
     private readonly ISessionService _sessionService;
-    private readonly IAgentMessageHandler? _agentHandler;
     private readonly ILogger<ChannelRetryJob> _logger;
 
     public ChannelRetryJob(IServiceProvider sp)
@@ -32,7 +31,6 @@ public sealed class ChannelRetryJob : IScheduledJob
         _channelConfigStore = sp.GetRequiredService<ChannelService>();
         _providerService = sp.GetRequiredService<ProviderService>();
         _sessionService = sp.GetRequiredService<ISessionService>();
-        _agentHandler = sp.GetService<IAgentMessageHandler>();
         _logger = sp.GetRequiredService<ILogger<ChannelRetryJob>>();
     }
     private const int MaxRetries = 3;
@@ -93,37 +91,38 @@ public sealed class ChannelRetryJob : IScheduledJob
             IReadOnlyList<SessionMessage> history = _sessionService.GetMessages(entry.SessionId);
 
             // 执行 AI 调用
-            string aiReply;
-            if (_agentHandler?.HasAgentForChannel(channel.Id) == true)
-            {
-                AgentResponse agentResponse = await _agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct).MaterializeAsync(ct);
-                aiReply = agentResponse.Text;
-            }
-            else
-            {
-                IMicroSession? session = _sessionService.Get(entry.SessionId);
-                string? resolvedProviderId = session?.ProviderId;
-                ChatMicroProvider? chatProvider = !string.IsNullOrWhiteSpace(resolvedProviderId)
-                    ? _providerService.TryGetProvider(resolvedProviderId)
-                    : _providerService.GetDefaultProvider();
-                if (chatProvider is null)
-                {
-                    throw new InvalidOperationException(
-                        $"找不到可用的 Provider（sessionId={entry.SessionId}）");
-                }
-
-                List<ChatMessage> chatMessages = history
-                    .Select(m => new ChatMessage(
-                        m.Role == "user" ? ChatRole.User : ChatRole.Assistant,
-                        m.Content))
-                    .ToList();
-
-                MicroChatContext chatCtx = session is not null
-                    ? MicroChatContext.ForSystem(session, "channel-retry", ct)
-                    : MicroChatContext.ForSystem(entry.SessionId, "channel-retry", ct);
-                ChatResponse response = await chatProvider.ChatAsync(chatCtx, chatMessages);
-                aiReply = response.Text ?? "（无回复）";
-            }
+            string aiReply = "";
+            // 暂时先不执行重试
+            // if (_agentHandler?.HasAgentForChannel(channel.Id) == true)
+            // {
+            //     AgentResponse agentResponse = await _agentHandler.HandleMessageAsync(channel.Id, entry.SessionId, history, ct).MaterializeAsync(ct);
+            //     aiReply = agentResponse.Text;
+            // }
+            // else
+            // {
+            //     IMicroSession? session = _sessionService.Get(entry.SessionId);
+            //     string? resolvedProviderId = session?.ProviderId;
+            //     ChatMicroProvider? chatProvider = !string.IsNullOrWhiteSpace(resolvedProviderId)
+            //         ? _providerService.TryGetProvider(resolvedProviderId)
+            //         : _providerService.GetDefaultProvider();
+            //     if (chatProvider is null)
+            //     {
+            //         throw new InvalidOperationException(
+            //             $"找不到可用的 Provider（sessionId={entry.SessionId}）");
+            //     }
+            //
+            //     List<ChatMessage> chatMessages = history
+            //         .Select(m => new ChatMessage(
+            //             m.Role == "user" ? ChatRole.User : ChatRole.Assistant,
+            //             m.Content))
+            //         .ToList();
+            //
+            //     MicroChatContext chatCtx = session is not null
+            //         ? MicroChatContext.ForSystem(session, "channel-retry", ct)
+            //         : MicroChatContext.ForSystem(entry.SessionId, "channel-retry", ct);
+            //     ChatResponse response = await chatProvider.ChatAsync(chatCtx, chatMessages);
+            //     aiReply = response.Text ?? "（无回复）";
+            // }
 
             // 保存助手消息并回复用户
             _sessionService.AddMessage(entry.SessionId,

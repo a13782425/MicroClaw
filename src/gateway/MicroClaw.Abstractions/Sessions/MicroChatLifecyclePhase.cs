@@ -21,7 +21,7 @@ namespace MicroClaw.Abstractions;
 ///                   AfterDispatch
 ///                 │
 ///       异常路径：OnError / OnCanceled
-///       （与正常结束的 AfterDispatch/AfterDecorate 互斥）
+///       （目标 contract 中与正常结束的 AfterDispatch 互斥）
 /// </code>
 /// </para>
 /// <para>
@@ -34,15 +34,13 @@ public enum MicroChatLifecyclePhase
     
     /// <summary>
     /// 装配：为单个派发目标 Agent 构造请求上下文——注入 System Prompt 片段、工具、技能、RAG 文档等。
-    /// <para>
-    /// 每次只装配一次
-    /// </para>
+    /// <para>目标 contract 为每个 dispatch 1 次；当前实际 Agent 调用路径已由 <c>MicroPet</c> 在 <see cref="BeforeDispatch"/> 前触发。</para>
     /// </summary>
     Decorate,
     
     /// <summary>
     /// 派发前：单个 Agent 请求已装配完成，即将调用 AgentRunner / LLM。
-    /// 每个 dispatch 精确 1 次（多 Agent 编排时 N 次）。
+    /// <para>目标 contract 为每个 dispatch 精确 1 次（多 Agent 编排时 N 次）。</para>
     /// </summary>
     BeforeDispatch,
 
@@ -69,8 +67,10 @@ public enum MicroChatLifecyclePhase
 
     /// <summary>
     /// 派发后：当前 dispatch 的 LLM 往返和工具调用都已完成，assistant 最终消息已就绪。
-    /// 每个 dispatch 精确 1 次（多 Agent 编排时 N 次），典型用途是持久化本次回复、回推到 Channel、
-    /// 情绪更新、埋点等"出口"类副作用。
+    /// <para>
+    /// 目标 contract 为每个 dispatch 精确 1 次（多 Agent 编排时 N 次），典型用途是持久化本次回复、回推到 Channel、
+    /// 情绪更新、埋点等"出口"类副作用。当前实现里 <see cref="MicroChatContext.FinalAssistantMessage"/> 仍可能为 null。
+    /// </para>
     /// </summary>
     AfterDispatch,
 

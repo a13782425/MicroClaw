@@ -41,7 +41,7 @@ public static class SessionEndpoints
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
             
             // 解析 ChannelId：默认使用内置 web channel
-            string channelId = string.IsNullOrWhiteSpace(req.ChannelId) ? ChannelService.WebChannelId : req.ChannelId;
+            string channelId = string.IsNullOrWhiteSpace(req.ChannelId) ? ChannelUtils.WebChannelId : req.ChannelId;
             ChannelEntity? channel = channelStore.GetById(channelId);
             if (channel is null)
                 return Results.NotFound(new { success = false, message = $"Channel '{channelId}' not found.", errorCode = "NOT_FOUND" });
