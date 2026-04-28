@@ -14,7 +14,7 @@ public sealed class SessionDnaContextProvider(SessionDnaService sessionDnaServic
     public int Order => 20;
 
     /// <inheritdoc />
-    public ValueTask<string?> BuildContextAsync(Agent agent, string? sessionId, CancellationToken ct = default)
+    public ValueTask<string?> BuildContextAsync(AgentDto agent, string? sessionId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
             return ValueTask.FromResult<string?>(null);

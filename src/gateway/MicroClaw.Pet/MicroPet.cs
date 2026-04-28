@@ -5,7 +5,7 @@ using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.Agent;
+using AgentEntity = MicroClaw.Agent.AgentDto;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Observer;
@@ -426,7 +426,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             {
                 // Resolve Agent / Provider from dispatch or session defaults
                 AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId)
-                    ? _agentStore.GetAgentById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId)
+                    ? _agentStore.GetById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId)
                     : ResolveAgent(MicroSession.AgentId);
                 if (agent is null || !agent.IsEnabled)
                     throw new InvalidOperationException("No enabled agent found for this session.");
@@ -683,8 +683,8 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
 
     private AgentEntity? ResolveAgent(string? agentId) =>
         string.IsNullOrWhiteSpace(agentId)
-            ? _agentStore.GetDefaultAgent()
-            : _agentStore.GetAgentById(agentId) ?? _agentStore.GetDefaultAgent();
+            ? _agentStore.GetDefault()
+            : _agentStore.GetById(agentId) ?? _agentStore.GetDefault();
 
     private static AgentEntity CreateRuntimeToolOverrideAgent(
         AgentEntity agent,

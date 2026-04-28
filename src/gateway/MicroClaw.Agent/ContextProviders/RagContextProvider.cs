@@ -22,14 +22,14 @@ public sealed class RagContextProvider : IUserAwareContextProvider
     public int Order => 15;
 
     public ValueTask<string?> BuildContextAsync(
-        Agent agent,
+        AgentDto agent,
         string? sessionId,
         CancellationToken ct = default)
         => new(default(string));
 
     /// <summary>TODO: Reimplement using session.Rag.QueryWithMetadataAsync</summary>
     public ValueTask<string?> BuildContextAsync(
-        Agent agent,
+        AgentDto agent,
         string? sessionId,
         string? userMessage,
         CancellationToken ct = default)

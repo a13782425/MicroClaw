@@ -12,7 +12,7 @@ public sealed class ServerTimeContextProvider : IAgentContextProvider
     public int Order => 5;
 
     /// <inheritdoc />
-    public ValueTask<string?> BuildContextAsync(Agent agent, string? sessionId, CancellationToken ct = default)
+    public ValueTask<string?> BuildContextAsync(AgentDto agent, string? sessionId, CancellationToken ct = default)
     {
         string localTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz");
         string utcTime = DateTimeOffset.UtcNow.ToString("O");

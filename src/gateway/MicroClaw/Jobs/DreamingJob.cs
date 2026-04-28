@@ -81,10 +81,10 @@ public sealed class DreamingJob : IScheduledJob
     /// 执行一轮认知整理，供测试直接调用。
     internal async Task RunDreamingAsync(CancellationToken ct)
     {
-        IReadOnlyList<AgentConfig> agents = _agentStore.All;
+        IReadOnlyList<AgentDto> agents = _agentStore.All;
         IReadOnlyList<IMicroSession> allSessions = _repo.GetAll();
 
-        foreach (AgentConfig agent in agents)
+        foreach (AgentDto agent in agents)
         {
             if (ct.IsCancellationRequested) break;
             if (!agent.IsEnabled) continue;
@@ -94,7 +94,7 @@ public sealed class DreamingJob : IScheduledJob
     }
 
     private async Task DreamForAgentAsync(
-        AgentConfig agent,
+        AgentDto agent,
         IReadOnlyList<IMicroSession> allSessions,
         CancellationToken ct)
     {

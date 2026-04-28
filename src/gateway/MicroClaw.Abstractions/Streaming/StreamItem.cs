@@ -24,10 +24,10 @@ public sealed record TokenItem(string Content) : StreamItem
 /// 流式执行中的终止性错误事件。
 /// 调用方收到此事件后流即结束，不应期望后续还有其他 item。
 /// </summary>
-public sealed record ErrorItem(string Content) : StreamItem
+public sealed record ErrorItem(string Content, string? Code = null) : StreamItem
 {
     public override string TypeName => "error";
-    public override object ToSerializablePayload() => new { content = Content, messageId = MessageId };
+    public override object ToSerializablePayload() => new { content = Content, code = Code, messageId = MessageId };
 }
 /// <summary>AI 发起的工具调用请求。</summary>
 public sealed record ToolCallItem(string CallId, string ToolName, IDictionary<string, object?>? Arguments) : StreamItem

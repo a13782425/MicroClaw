@@ -1,4 +1,4 @@
-using System.Text.Json;
+ï»¿using System.Text.Json;
 using System.Text.Json.Serialization;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -11,15 +11,15 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Agent.A2A;
 
 /// <summary>
-/// A2A£¨Agent-to-Agent£©Ð­Òé¶Ëµã¡£
-/// ÊµÏÖ A2A v0.2 ¹æ·¶£¨https://google.github.io/A2A£©µÄ JSON-RPC ½Ó¿Ú¡£
+/// A2Aï¿½ï¿½Agent-to-Agentï¿½ï¿½Ð­ï¿½ï¿½Ëµã¡£
+/// Êµï¿½ï¿½ A2A v0.2 ï¿½æ·¶ï¿½ï¿½https://google.github.io/A2Aï¿½ï¿½ï¿½ï¿½ JSON-RPC ï¿½Ó¿Ú¡ï¿½
 /// 
-/// GET  /a2a/agent/{agentId}  ¡ú Agent Card£¨·¢ÏÖ¶Ëµã£¬¹«¿ª·ÃÎÊ£©
-/// POST /a2a/agent/{agentId}  ¡ú JSON-RPC ÈÎÎñ½Ó¿Ú£¨¹«¿ª·ÃÎÊ£©
-///   - tasks/send ¡ú ·¢ËÍÏûÏ¢£¬SSE Á÷Ê½·µ»Ø
-///   - tasks/get  ¡ú ²éÑ¯×î½üÈÎÎñ£¨²»º¬ÀúÊ·£¬·µ»Ø not-found£©
+/// GET  /a2a/agent/{agentId}  ï¿½ï¿½ Agent Cardï¿½ï¿½ï¿½ï¿½ï¿½Ö¶Ëµã£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê£ï¿½
+/// POST /a2a/agent/{agentId}  ï¿½ï¿½ JSON-RPC ï¿½ï¿½ï¿½ï¿½Ó¿Ú£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê£ï¿½
+///   - tasks/send ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½SSE ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½
+///   - tasks/get  ï¿½ï¿½ ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ñ£¨²ï¿½ï¿½ï¿½ï¿½ï¿½Ê·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ not-foundï¿½ï¿½
 ///
-/// ½ö ExposeAsA2A=true µÄ Agent ¿ÉÍ¨¹ý´Ë½Ó¿Ú·ÃÎÊ¡£
+/// ï¿½ï¿½ ExposeAsA2A=true ï¿½ï¿½ Agent ï¿½ï¿½Í¨ï¿½ï¿½ï¿½Ë½Ó¿Ú·ï¿½ï¿½Ê¡ï¿½
 /// </summary>
 public static class A2AEndpoints
 {
@@ -32,10 +32,10 @@ public static class A2AEndpoints
 
     public static IEndpointRouteBuilder MapA2AEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        // ©¤©¤ Agent Card£¨·¢ÏÖ¶Ëµã£©©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+        // ï¿½ï¿½ï¿½ï¿½ Agent Cardï¿½ï¿½ï¿½ï¿½ï¿½Ö¶Ëµã£©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         endpoints.MapGet("/a2a/agent/{agentId}", (string agentId, HttpContext ctx, AgentStore store) =>
         {
-            Agent? agent = store.GetAgentById(agentId);
+            AgentDto? agent = store.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
                 return Results.NotFound(new JsonRpcError(-32001, "Agent not found or A2A not enabled."));
 
@@ -55,7 +55,7 @@ public static class A2AEndpoints
         })
         .WithTags("A2A");
 
-        // ©¤©¤ JSON-RPC ÈÎÎñ½Ó¿Ú ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+        // ï¿½ï¿½ï¿½ï¿½ JSON-RPC ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         endpoints.MapPost("/a2a/agent/{agentId}", async (
             string agentId,
             HttpContext ctx,
@@ -66,7 +66,7 @@ public static class A2AEndpoints
         {
             var logger = loggerFactory.CreateLogger("A2A");
 
-            Agent? agent = store.GetAgentById(agentId);
+            AgentDto? agent = store.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
             {
                 ctx.Response.StatusCode = 404;
@@ -77,7 +77,7 @@ public static class A2AEndpoints
                 return;
             }
 
-            // ½âÎö JSON-RPC ÇëÇó
+            // ï¿½ï¿½ï¿½ï¿½ JSON-RPC ï¿½ï¿½ï¿½ï¿½
             JsonRpcRequest? rpc;
             try
             {
@@ -110,7 +110,7 @@ public static class A2AEndpoints
                     break;
 
                 case "tasks/get":
-                    // tasks/get ²»Î¬»¤ÈÎÎñ×´Ì¬£¬Í³Ò»·µ»ØÈÎÎñÎ´ÕÒµ½
+                    // tasks/get ï¿½ï¿½Î¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½Í³Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î´ï¿½Òµï¿½
                     ctx.Response.ContentType = "application/json; charset=utf-8";
                     await ctx.Response.WriteAsJsonAsync(
                         BuildRpcError(rpc.Id, -32001, "Task not found. This gateway does not persist task state.", JsonOpts),
@@ -132,17 +132,17 @@ public static class A2AEndpoints
         return endpoints;
     }
 
-    // ©¤©¤ tasks/send ´¦Àí£ºSSE Á÷Ê½Êä³ö ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ tasks/send ï¿½ï¿½ï¿½ï¿½ï¿½SSE ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     private static async Task HandleTaskSendAsync(
         HttpContext ctx,
-        Agent agent,
+        AgentDto agent,
         JsonRpcRequest rpc,
         AgentRunner runner,
         ProviderService providerStore,
         ILogger logger)
     {
-        // ½âÎö tasks/send ²ÎÊý
+        // ï¿½ï¿½ï¿½ï¿½ tasks/send ï¿½ï¿½ï¿½ï¿½
         TaskSendParams? taskParams;
         try
         {
@@ -190,13 +190,13 @@ public static class A2AEndpoints
 
         CancellationToken ct = ctx.RequestAborted;
 
-        // SSE ÏìÓ¦Í·
+        // SSE ï¿½ï¿½Ó¦Í·
         ctx.Response.ContentType = "text/event-stream; charset=utf-8";
         ctx.Response.Headers.CacheControl = "no-cache";
         ctx.Response.Headers.Connection = "keep-alive";
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-        // ·¢ËÍ working ×´Ì¬
+        // ï¿½ï¿½ï¿½ï¿½ working ×´Ì¬
         await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskStatusUpdateEvent(
             Type: "TaskStatusUpdateEvent",
             TaskId: taskId,
@@ -223,7 +223,7 @@ public static class A2AEndpoints
                 }
             }
 
-            // ½áÊø£ºcompleted ×´Ì¬
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½completed ×´Ì¬
             await WriteSseRpcAsync(ctx.Response, rpc.Id, new TaskStatusUpdateEvent(
                 Type: "TaskStatusUpdateEvent",
                 TaskId: taskId,
@@ -234,7 +234,7 @@ public static class A2AEndpoints
         }
         catch (OperationCanceledException)
         {
-            // ¿Í»§¶Ë¶Ï¿ª£¬¾²Ä¬½áÊø
+            // ï¿½Í»ï¿½ï¿½Ë¶Ï¿ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½ï¿½ï¿½
         }
         catch (Exception ex)
         {
@@ -252,12 +252,12 @@ public static class A2AEndpoints
             }
             catch
             {
-                // ÏìÓ¦ÒÑ¹Ø±Õ£¬ºöÂÔ
+                // ï¿½ï¿½Ó¦ï¿½Ñ¹Ø±Õ£ï¿½ï¿½ï¿½ï¿½ï¿½
             }
         }
     }
 
-    // ©¤©¤ ¹¤¾ß·½·¨ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ß·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     private static string? ExtractTextContent(A2AMessage? message)
     {
@@ -292,7 +292,7 @@ public static class A2AEndpoints
         new { jsonrpc = "2.0", id, error = new { code, message } };
 }
 
-// ©¤©¤ A2A Êý¾ÝÄ£ÐÍ£¨Agent Card£©©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+// ï¿½ï¿½ï¿½ï¿½ A2A ï¿½ï¿½ï¿½ï¿½Ä£ï¿½Í£ï¿½Agent Cardï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 public sealed record AgentCard(
     string Name,
@@ -306,7 +306,7 @@ public sealed record AgentCapabilities(bool Streaming);
 
 public sealed record AgentSkill(string Id, string Name, string Description);
 
-// ©¤©¤ A2A JSON-RPC ÇëÇóÄ£ÐÍ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+// ï¿½ï¿½ï¿½ï¿½ A2A JSON-RPC ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 public sealed record JsonRpcRequest(
     string Jsonrpc,
@@ -323,7 +323,7 @@ public sealed record A2AMessage(
     string Role,
     IReadOnlyList<JsonElement> Parts);
 
-// ©¤©¤ A2A SSE ÊÂ¼þ ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+// ï¿½ï¿½ï¿½ï¿½ A2A SSE ï¿½Â¼ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 public sealed record TaskStatusUpdateEvent(
     string Type,
@@ -347,7 +347,7 @@ public sealed record TaskArtifact(
 
 public sealed record TextPart(string Type, string Text);
 
-// ©¤©¤ ´íÎóÄ£ÐÍ£¨½öÓÃÓÚ Agent Card ¶ËµãµÄ 404 ÏìÓ¦£©©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ä£ï¿½Í£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Agent Card ï¿½Ëµï¿½ï¿½ 404 ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 public sealed record JsonRpcError(int Code, string Message);
 

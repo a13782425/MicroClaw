@@ -54,7 +54,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 ([Description("要查询的 Agent ID")] string agentId) =>
                 {
-                    AgentConfig? agent = agentStore.GetById(agentId);
+                    AgentDto? agent = agentStore.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
 
@@ -87,20 +87,14 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentConfig config = new(
-                            Id: string.Empty,
-                            Name: name.Trim(),
-                            Description: description?.Trim() ?? string.Empty,
-                            IsEnabled: true,
-                            DisabledSkillIds: [],
-                            DisabledMcpServerIds: [],
-                            ToolGroupConfigs: [],
-                            CreatedAtUtc: DateTimeOffset.UtcNow,
-                            IsDefault: false,
-                            ContextWindowMessages: 20,
-                            ExposeAsA2A: false);
+                        AgentDto config = AgentDto.Create(
+                            name: name.Trim(),
+                            description: description?.Trim() ?? string.Empty,
+                            isEnabled: true,
+                            contextWindowMessages: 20,
+                            exposeAsA2A: false);
 
-                        AgentConfig created = agentStore.Add(config);
+                        AgentDto created = agentStore.Add(config);
                         agentDnaService.InitializeAgent(created.Id);
 
                         if (!string.IsNullOrWhiteSpace(systemPrompt))
@@ -120,7 +114,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 ([Description("要删除的 Agent ID")] string agentId) =>
                 {
-                    AgentConfig? agent = agentStore.GetById(agentId);
+                    AgentDto? agent = agentStore.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
@@ -142,21 +136,19 @@ public static class SubAgentTools
                  [Description("新名称（null 或空字符串表示不修改）")] string? name,
                  [Description("新的功能描述（null 表示不修改）")] string? description) =>
                 {
-                    AgentConfig? agent = agentStore.GetById(agentId);
+                    AgentDto? agent = agentStore.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理的信息不可修改，请通过管理界面操作。" };
 
-                    AgentConfig updated = agent with
-                    {
-                        Name = string.IsNullOrWhiteSpace(name) ? agent.Name : name.Trim(),
-                        Description = description is null ? agent.Description : description.Trim(),
-                    };
+                    agent.UpdateInfo(
+                        string.IsNullOrWhiteSpace(name) ? agent.Name : name.Trim(),
+                        description is null ? agent.Description : description.Trim());
 
                     try
                     {
-                        AgentConfig? result = agentStore.Update(agentId, updated);
+                        AgentDto? result = agentStore.Update(agentId, agent);
                         return result is null
                             ? (object)new { success = false, error = $"更新 Agent '{agentId}' 失败。" }
                             : new { success = true, agentId, name = result.Name, description = result.Description };
@@ -174,14 +166,14 @@ public static class SubAgentTools
                 ([Description("要修改的 Agent ID")] string agentId,
                  [Description("true = 启用，false = 禁用")] bool isEnabled) =>
                 {
-                    AgentConfig? agent = agentStore.GetById(agentId);
+                    AgentDto? agent = agentStore.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理不可禁用，请通过管理界面操作。" };
 
-                    AgentConfig updated = agent with { IsEnabled = isEnabled };
-                    AgentConfig? result = agentStore.Update(agentId, updated);
+                    if (isEnabled) agent.Enable(); else agent.Disable();
+                    AgentDto? result = agentStore.Update(agentId, agent);
                     return result is null
                         ? (object)new { success = false, error = $"更新 Agent '{agentId}' 失败。" }
                         : new { success = true, agentId, isEnabled = result.IsEnabled };
@@ -194,14 +186,14 @@ public static class SubAgentTools
                 ([Description("要修改的 Agent ID")] string agentId,
                  [Description("子代理白名单：null = 允许调用所有代理；空数组 = 禁止调用任何子代理；字符串数组 = 仅允许指定 ID 的子代理")] IReadOnlyList<string>? allowedSubAgentIds) =>
                 {
-                    AgentConfig? agent = agentStore.GetById(agentId);
+                    AgentDto? agent = agentStore.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理的子代理白名单不可修改，请通过管理界面操作。" };
 
-                    AgentConfig updated = agent with { AllowedSubAgentIds = allowedSubAgentIds };
-                    AgentConfig? result = agentStore.Update(agentId, updated);
+                    agent.UpdateAllowedSubAgentIds(allowedSubAgentIds);
+                    AgentDto? result = agentStore.Update(agentId, agent);
                     return result is null
                         ? (object)new { success = false, error = $"更新 Agent '{agentId}' 失败。" }
                         : new { success = true, agentId, allowedSubAgentIds = result.AllowedSubAgentIds };

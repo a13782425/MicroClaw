@@ -1,4 +1,4 @@
-using System.Diagnostics;
+ï»¿using System.Diagnostics;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace MicroClaw.Agent.Workflows;
 
 /// <summary>
-/// ¹¤×÷Á÷Ö´ÐÐÒýÇæ£º°´ÍØÆËË³Ðò±éÀúÓÐÏòÍ¼½Úµã£¬ÒÀ´ÎÖ´ÐÐ¸÷½Úµã£¬
-/// ²¢Í¨¹ý IAsyncEnumerable{StreamItem} ÊµÊ±Êä³öÊÂ¼þÁ÷¡£
-/// Ê¹ÓÃÔËÐÐÊ±ÉÏÏÂÎÄ£¨currentAgentId / currentProviderId£©ÊµÏÖ´úÀíºÍÄ£ÐÍµÄ´«²¥¡£
+/// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½ï¿½ï¿½ï¿½æ£ºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½Úµã£¬ï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ð¸ï¿½ï¿½Úµã£¬
+/// ï¿½ï¿½Í¨ï¿½ï¿½ IAsyncEnumerable{StreamItem} ÊµÊ±ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½
+/// Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½currentAgentId / currentProviderIdï¿½ï¿½Êµï¿½Ö´ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ÍµÄ´ï¿½ï¿½ï¿½ï¿½ï¿½
 /// </summary>
 public sealed class WorkflowEngine
 {
@@ -38,11 +38,11 @@ public sealed class WorkflowEngine
         List<WorkflowNodeConfig> orderedNodes = TopologicalSort(workflow);
         if (orderedNodes.Count == 0)
         {
-            yield return new WorkflowErrorItem(executionId, string.Empty, "¹¤×÷Á÷Ã»ÓÐ¿ÉÖ´ÐÐ½Úµã¡£");
+            yield return new WorkflowErrorItem(executionId, string.Empty, "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½Ð¿ï¿½Ö´ï¿½Ð½Úµã¡£");
             yield break;
         }
 
-        // ÔËÐÐÊ±ÉÏÏÂÎÄ£º´úÀíÓëÄ£ÐÍÔÚ½Úµã¼ä´«²¥
+        // ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½Ú½Úµï¿½ä´«ï¿½ï¿½
         string? currentAgentId = _agentStore.GetDefault()?.Id;
         string? currentProviderId = workflow.DefaultProviderId ?? _providerStore.GetDefault()?.Id;
 
@@ -78,7 +78,7 @@ public sealed class WorkflowEngine
                     string? effectiveAgentId = node.AgentId ?? currentAgentId;
                     if (string.IsNullOrWhiteSpace(effectiveAgentId))
                     {
-                        yield return new WorkflowErrorItem(executionId, node.NodeId, "Î´ÅäÖÃ Agent ÇÒÎÞÄ¬ÈÏ´úÀí¿ÉÓÃ¡£");
+                        yield return new WorkflowErrorItem(executionId, node.NodeId, "Î´ï¿½ï¿½ï¿½ï¿½ Agent ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½Ï´ï¿½ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½");
                         yield break;
                     }
 
@@ -145,7 +145,7 @@ public sealed class WorkflowEngine
             }
             else
             {
-                yield return new WorkflowErrorItem(executionId, node.NodeId, $"½Úµã '{node.Label}' Ö´ÐÐÊ§°Ü¡£");
+                yield return new WorkflowErrorItem(executionId, node.NodeId, $"ï¿½Úµï¿½ '{node.Label}' Ö´ï¿½ï¿½Ê§ï¿½Ü¡ï¿½");
                 yield break;
             }
         }
@@ -154,7 +154,7 @@ public sealed class WorkflowEngine
         yield return new WorkflowCompleteItem(executionId, finalResult, sw.ElapsedMilliseconds);
     }
 
-    // ©¤©¤ Ë½ÓÐ¸¨Öú ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Ë½ï¿½Ð¸ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     private async IAsyncEnumerable<StreamItem> ExecuteAgentNodeAsync(
         WorkflowNodeConfig node,
@@ -163,10 +163,10 @@ public sealed class WorkflowEngine
         string providerId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        Agent? agent = _agentStore.GetAgentById(effectiveAgentId);
+        AgentDto? agent = _agentStore.GetById(effectiveAgentId);
         if (agent is null || !agent.IsEnabled)
         {
-            _logger.LogWarning("¹¤×÷Á÷½Úµã {NodeId} ÒýÓÃµÄ Agent '{AgentId}' ²»´æÔÚ»òÒÑ½ûÓÃ£¬Ìø¹ý¡£",
+            _logger.LogWarning("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ {NodeId} ï¿½ï¿½ï¿½Ãµï¿½ Agent '{AgentId}' ï¿½ï¿½ï¿½ï¿½ï¿½Ú»ï¿½ï¿½Ñ½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
                 node.NodeId, effectiveAgentId);
             yield break;
         }
@@ -204,7 +204,7 @@ public sealed class WorkflowEngine
 
         if (string.IsNullOrWhiteSpace(toolAgentId))
         {
-            _logger.LogWarning("¹¤×÷Á÷ Tool ½Úµã {NodeId} Î´ÅäÖÃ toolAgentId¡£", node.NodeId);
+            _logger.LogWarning("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Tool ï¿½Úµï¿½ {NodeId} Î´ï¿½ï¿½ï¿½ï¿½ toolAgentIdï¿½ï¿½", node.NodeId);
             yield return new TokenItem(input);
             yield break;
         }
@@ -212,14 +212,14 @@ public sealed class WorkflowEngine
         if (!string.IsNullOrWhiteSpace(currentAgentId) && toolAgentId != currentAgentId)
         {
             yield return new WorkflowWarningItem(executionId, node.NodeId,
-                $"Tool ½ÚµãÊ¹ÓÃµÄ Agent '{toolAgentId}' Óëµ±Ç°ÉÏÏÂÎÄ Agent '{currentAgentId}' ²»Ò»ÖÂ¡£");
+                $"Tool ï¿½Úµï¿½Ê¹ï¿½Ãµï¿½ Agent '{toolAgentId}' ï¿½ëµ±Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Agent '{currentAgentId}' ï¿½ï¿½Ò»ï¿½Â¡ï¿½");
         }
 
         string result = await _agentRunner.InvokeToolAsync(toolAgentId, toolName, node.Config, input, ct);
         yield return new TokenItem(result);
     }
 
-    /// <summary>ÍØÆËÅÅÐò£ºKahn Ëã·¨£¨BFS ²ãÐò£©¡£</summary>
+    /// <summary>ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Kahn ï¿½ã·¨ï¿½ï¿½BFS ï¿½ï¿½ï¿½ò£©¡ï¿½</summary>
     private static List<WorkflowNodeConfig> TopologicalSort(WorkflowConfig workflow)
     {
         Dictionary<string, WorkflowNodeConfig> nodeMap = workflow.Nodes.ToDictionary(n => n.NodeId);
@@ -255,7 +255,7 @@ public sealed class WorkflowEngine
         return result;
     }
 
-    /// <summary>²éÕÒµ±Ç°½ÚµãµÄµÚÒ»ÌõÈë±ßÀ´Ô´½Úµã ID¡£</summary>
+    /// <summary>ï¿½ï¿½ï¿½Òµï¿½Ç°ï¿½Úµï¿½Äµï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½Úµï¿½ IDï¿½ï¿½</summary>
     private static string? GetSourceNodeId(WorkflowConfig workflow, string targetNodeId) =>
         workflow.Edges.FirstOrDefault(e => e.TargetNodeId == targetNodeId)?.SourceNodeId;
 }

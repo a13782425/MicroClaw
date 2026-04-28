@@ -172,7 +172,7 @@ public static class SessionEndpoints
         // POST /api/sessions/{id}/chat — SSE 流式对话
         endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, PetContextFactory petContextFactory, HttpContext ctx, CancellationToken ct) =>
         {
-            // ── 1. 找到 Session ──
+            // ──  找到 Session ──
             IMicroSession? session = repo.Get(id);
             if (session is null)
             {
@@ -181,68 +181,30 @@ public static class SessionEndpoints
                 return;
             }
             
-            if (!session.IsApproved)
-            {
-                ctx.Response.StatusCode = 403;
-                await ctx.Response.WriteAsJsonAsync(new { message = "会话尚未获得批准，请联系管理员。" }, ct);
-                return;
-            }
-            
-            // ── 2. 找到 Session 的 Pet（惰性加载） ──
-            IPet? pet = session.Pet;
-            if (pet is null)
-            {
-                ctx.Response.StatusCode = 503;
-                await ctx.Response.WriteAsJsonAsync(new { message = "宠物在这个会话没有启用." }, ct);
-                return;
-            }
-            
-            // ── 3. 设置 SSE 响应头 ──
+            // ──  设置 SSE 响应头 ──
             ctx.Response.ContentType = "text/event-stream; charset=utf-8";
             ctx.Response.Headers.CacheControl = "no-cache";
             ctx.Response.Headers.Connection = "keep-alive";
             ctx.Response.Headers["X-Accel-Buffering"] = "no";
             
-            // ── 4. Pet 处理消息（内部完成：保存用户消息、加载历史、Provider/Agent 解析、决策、执行）──
-            var persistencePipeline = new StreamItemPersistencePipeline();
-            
             try
             {
-                await foreach (StreamItem item in pet.HandleChatAsync(req, ct))
+                await foreach (StreamItem item in session.HandleMessageAsync(req.Content, req.Attachments, "web", ct))
                 {
-                    // 持久化逻辑：通过管道分发
-                    IReadOnlyList<SessionMessage> msgs = persistencePipeline.ProcessItem(item);
-                    foreach (SessionMessage msg in msgs)
-                        repo.AddMessage(id, msg);
+                    if (MessageVisibility.IsVisibleToFrontend(item.Visibility))
+                        await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
                     
-                    // 不可见于前端的事件跳过 SSE 推送（仅持久化供 LLM 使用）
-                    if (!MessageVisibility.IsVisibleToFrontend(item.Visibility))
-                        continue;
-                    
-                    // 统一 SSE 序列化（所有类型）
-                    await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
+                    if (item is ErrorItem) break;  // 错误终止，不再发 done
                 }
                 
-                // 从管道获取最终聚合的 assistant 消息（含文本 + think + 附件）
-                SessionMessage? finalMessage = persistencePipeline.Finalize();
-                if (finalMessage is not null)
-                    repo.AddMessage(id, finalMessage);
-                
-                // 发送完成信号
-                string doneData = JsonSerializer.Serialize(new { type = "done", thinkContent = finalMessage?.ThinkContent, messageId = finalMessage?.Id }, JsonOpts);
-                await WriteSseAsync(ctx.Response, doneData, ct);
+                await WriteSseAsync(ctx.Response, JsonSerializer.Serialize(new { type = "done" }, JsonOpts), ct);
                 await ctx.Response.WriteAsync("data: [DONE]\n\n", ct);
-            }
-            catch (OperationCanceledException)
-            {
-                // 客户端断开，静默处理
             }
             catch (Exception ex)
             {
                 try
                 {
-                    string errData = JsonSerializer.Serialize(new { type = "error", message = ex.Message }, JsonOpts);
-                    await WriteSseAsync(ctx.Response, errData, CancellationToken.None);
+                    await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(new ErrorItem(ex.Message)), CancellationToken.None);
                     await ctx.Response.WriteAsync("data: [DONE]\n\n", CancellationToken.None);
                     await ctx.Response.Body.FlushAsync(CancellationToken.None);
                 }

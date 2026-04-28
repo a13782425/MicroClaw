@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.Agent;
+using AgentEntity = MicroClaw.Agent.AgentDto;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
@@ -32,7 +32,7 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
         string sessionId,
         CancellationToken ct = default)
     {
-        AgentEntity? agent = AgentStore.GetAgentById(agentId);
+        AgentEntity? agent = AgentStore.GetById(agentId);
         if (agent is null)
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
         if (!agent.IsEnabled)

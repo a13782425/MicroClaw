@@ -21,5 +21,5 @@ public interface IAgentContextProvider
     /// <param name="sessionId">当前会话 ID；子代理场景下可为 <c>null</c>。</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>上下文文本；为 <c>null</c> 或空时忽略。</returns>
-    ValueTask<string?> BuildContextAsync(Agent agent, string? sessionId, CancellationToken ct = default);
+    ValueTask<string?> BuildContextAsync(AgentDto agent, string? sessionId, CancellationToken ct = default);
 }

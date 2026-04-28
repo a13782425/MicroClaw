@@ -38,7 +38,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
     /// <summary>确保默认 Agent（main）存在，并初始化其 DNA 目录。</summary>
     public Task InitializeAsync(CancellationToken ct = default)
     {
-        AgentConfig main = EnsureMainAgent();
+        AgentDto main = EnsureMainAgent();
         var agentDna = _sp.GetRequiredService<AgentDnaService>();
         agentDna.InitializeAgent(main.Id);
         return Task.CompletedTask;
@@ -49,39 +49,39 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
 
     // ── Queries ─────────────────────────────────────────────────────────
 
-    public IReadOnlyList<AgentConfig> All
+    public IReadOnlyList<AgentDto> All
     {
         get
         {
             _lock.EnterReadLock();
-            try { return GetItems().Select(ToConfig).ToList().AsReadOnly(); }
+            try { return GetItems().Select(ToDto).ToList().AsReadOnly(); }
             finally { _lock.ExitReadLock(); }
         }
     }
 
-    public AgentConfig? GetById(string id)
+    public AgentDto? GetById(string id)
     {
         _lock.EnterReadLock();
-        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToConfig(e) : null; }
+        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToDto(e) : null; }
         finally { _lock.ExitReadLock(); }
     }
 
     /// <summary>返回 IsDefault=true 的代理，不存在时返回 null。</summary>
-    public AgentConfig? GetDefault()
+    public AgentDto? GetDefault()
     {
         _lock.EnterReadLock();
-        try { return GetItems().FirstOrDefault(e => e.IsDefault) is { } e ? ToConfig(e) : null; }
+        try { return GetItems().FirstOrDefault(e => e.IsDefault) is { } e ? ToDto(e) : null; }
         finally { _lock.ExitReadLock(); }
     }
 
     /// <summary>按名称查找已启用的 Agent。</summary>
-    public AgentConfig? GetByName(string name)
+    public AgentDto? GetByName(string name)
     {
         _lock.EnterReadLock();
         try
         {
             return GetItems().FirstOrDefault(e => e.Name == name && e.IsEnabled) is { } e
-                ? ToConfig(e)
+                ? ToDto(e)
                 : null;
         }
         finally { _lock.ExitReadLock(); }
@@ -90,28 +90,23 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
     /// <summary>
     /// 确保存在默认代理（main）。幂等，多次调用不会创建重复记录。
     /// </summary>
-    public AgentConfig EnsureMainAgent()
+    public AgentDto EnsureMainAgent()
     {
-        AgentConfig? existing = GetDefault();
+        AgentDto? existing = GetDefault();
         if (existing is not null) return existing;
 
-        return Add(new AgentConfig(
-            Id: string.Empty,
-            Name: "main",
-            Description: string.Empty,
-            IsEnabled: true,
-            DisabledSkillIds: [],
-            DisabledMcpServerIds: [],
-            ToolGroupConfigs: [],
-            CreatedAtUtc: DateTimeOffset.UtcNow,
-            IsDefault: true));
+        return Add(AgentDto.Create(
+            name: "main",
+            description: string.Empty,
+            isEnabled: true,
+            isDefault: true));
     }
 
     // ── Commands ─────────────────────────────────────────────────────────
 
-    public AgentConfig Add(AgentConfig config)
+    public AgentDto Add(AgentDto config)
     {
-        var entity = ToEntity(config with { Id = Guid.NewGuid().ToString("N") });
+        var entity = ToEntity(config, Guid.NewGuid().ToString("N"));
 
         _lock.EnterWriteLock();
         try
@@ -128,10 +123,10 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
         }
         finally { _lock.ExitWriteLock(); }
 
-        return ToConfig(entity);
+        return ToDto(entity);
     }
 
-    public AgentConfig? Update(string id, AgentConfig incoming)
+    public AgentDto? Update(string id, AgentDto incoming)
     {
         _lock.EnterWriteLock();
         try
@@ -170,13 +165,13 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
 
             var newItems = new List<AgentConfigEntity>(opts.Items) { [idx] = updated };
             MicroClawConfig.Save(new AgentsOptions { SubAgentMaxDepth = opts.SubAgentMaxDepth, Items = newItems });
-            return ToConfig(updated);
+            return ToDto(updated);
         }
         finally { _lock.ExitWriteLock(); }
     }
 
     /// <summary>更新 Agent 禁用的 MCP Server ID 排除列表。</summary>
-    public AgentConfig? UpdateDisabledMcpServerIds(string id, IReadOnlyList<string> mcpServerIds)
+    public AgentDto? UpdateDisabledMcpServerIds(string id, IReadOnlyList<string> mcpServerIds)
         => MutateItem(id, e => e with
         {
             DisabledMcpServerIdsJson = mcpServerIds.Count > 0
@@ -184,7 +179,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
         });
 
     /// <summary>更新 Agent 的工具分组启用配置。</summary>
-    public AgentConfig? UpdateToolGroupConfigs(string id, IReadOnlyList<ToolGroupConfig> configs)
+    public AgentDto? UpdateToolGroupConfigs(string id, IReadOnlyList<ToolGroupConfig> configs)
         => MutateItem(id, e => e with
         {
             ToolGroupConfigsJson = configs.Count > 0
@@ -267,7 +262,7 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
     private static List<AgentConfigEntity> GetItems()
         => MicroClawConfig.Get<AgentsOptions>().Items;
 
-    private AgentConfig? MutateItem(string id, Func<AgentConfigEntity, AgentConfigEntity> mutate)
+    private AgentDto? MutateItem(string id, Func<AgentConfigEntity, AgentConfigEntity> mutate)
     {
         _lock.EnterWriteLock();
         try
@@ -279,30 +274,31 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
             var mutated = mutate(opts.Items[idx]);
             var newItems = new List<AgentConfigEntity>(opts.Items) { [idx] = mutated };
             MicroClawConfig.Save(new AgentsOptions { SubAgentMaxDepth = opts.SubAgentMaxDepth, Items = newItems });
-            return ToConfig(mutated);
+            return ToDto(mutated);
         }
         finally { _lock.ExitWriteLock(); }
     }
 
-    private static AgentConfig ToConfig(AgentConfigEntity e) => new(
-        e.Id,
-        e.Name,
-        e.Description,
-        e.IsEnabled,
-        DeserializeList<string>(e.DisabledSkillIdsJson),
-        DeserializeList<string>(e.DisabledMcpServerIdsJson),
-        DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
-        TimeUtils.FromMs(e.CreatedAtMs),
-        e.IsDefault,
-        e.ContextWindowMessages,
-        e.ExposeAsA2A,
-        DeserializeNullableList<string>(e.AllowedSubAgentIdsJson),
-        ParseRoutingStrategy(e.RoutingStrategy),
-        e.MonthlyBudgetUsd);
+    private static AgentDto ToDto(AgentConfigEntity e) =>
+        AgentDto.Reconstitute(
+            id: e.Id,
+            name: e.Name,
+            description: e.Description,
+            isEnabled: e.IsEnabled,
+            disabledSkillIds: DeserializeList<string>(e.DisabledSkillIdsJson),
+            disabledMcpServerIds: DeserializeList<string>(e.DisabledMcpServerIdsJson),
+            toolGroupConfigs: DeserializeList<ToolGroupConfig>(e.ToolGroupConfigsJson),
+            createdAtUtc: TimeUtils.FromMs(e.CreatedAtMs),
+            isDefault: e.IsDefault,
+            contextWindowMessages: e.ContextWindowMessages,
+            exposeAsA2A: e.ExposeAsA2A,
+            allowedSubAgentIds: DeserializeNullableList<string>(e.AllowedSubAgentIdsJson),
+            routingStrategy: ParseRoutingStrategy(e.RoutingStrategy),
+            monthlyBudgetUsd: e.MonthlyBudgetUsd);
 
-    private static AgentConfigEntity ToEntity(AgentConfig c) => new()
+    private static AgentConfigEntity ToEntity(AgentDto c, string? overrideId = null) => new()
     {
-        Id = c.Id,
+        Id = overrideId ?? c.Id,
         Name = c.Name,
         Description = c.Description,
         IsEnabled = c.IsEnabled,
@@ -365,8 +361,8 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
         return (name, description);
     }
 
-    private static Agent ToAgent(AgentConfigEntity e) =>
-        Agent.Reconstitute(
+    private static AgentDto ToAgent(AgentConfigEntity e) =>
+        AgentDto.Reconstitute(
             id: e.Id,
             name: e.Name,
             description: e.Description,
@@ -382,75 +378,34 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository, IServi
             routingStrategy: ParseRoutingStrategy(e.RoutingStrategy),
             monthlyBudgetUsd: e.MonthlyBudgetUsd);
 
-    // ── Agent 实体查询（返回领域对象）──────────────────────────────────────
-
-    /// <summary>按 ID 查找并返回 Agent 领域对象，不存在时返回 null。</summary>
-    public Agent? GetAgentById(string id)
-    {
-        _lock.EnterReadLock();
-        try { return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? ToAgent(e) : null; }
-        finally { _lock.ExitReadLock(); }
-    }
-
-    /// <summary>返回 IsDefault=true 的 Agent 领域对象，不存在时返回 null。</summary>
-    public Agent? GetDefaultAgent()
-    {
-        _lock.EnterReadLock();
-        try { return GetItems().FirstOrDefault(e => e.IsDefault) is { } e ? ToAgent(e) : null; }
-        finally { _lock.ExitReadLock(); }
-    }
-
     // ── IAgentRepository 显式接口实现 ─────────────────────────────────────
 
-    IReadOnlyList<Agent> IAgentRepository.GetAll()
+    IReadOnlyList<AgentDto> IAgentRepository.GetAll()
     {
         _lock.EnterReadLock();
-        try { return GetItems().Select(ToAgent).ToList().AsReadOnly(); }
+        try { return GetItems().Select(ToDto).ToList().AsReadOnly(); }
         finally { _lock.ExitReadLock(); }
     }
 
-    Agent? IAgentRepository.GetById(string id) => GetAgentById(id);
+    AgentDto? IAgentRepository.GetById(string id) => GetById(id);
 
-    Agent? IAgentRepository.GetDefault() => GetDefaultAgent();
+    AgentDto? IAgentRepository.GetDefault() => GetDefault();
 
-    Agent? IAgentRepository.GetByName(string name)
-    {
-        _lock.EnterReadLock();
-        try
-        {
-            return GetItems().FirstOrDefault(e => e.Name == name && e.IsEnabled) is { } e
-                ? ToAgent(e)
-                : null;
-        }
-        finally { _lock.ExitReadLock(); }
-    }
+    AgentDto? IAgentRepository.GetByName(string name) => GetByName(name);
 
-    Agent IAgentRepository.Save(Agent agent)
+    AgentDto IAgentRepository.Save(AgentDto agent)
     {
         if (string.IsNullOrEmpty(agent.Id))
         {
-            // 新建：通过 AgentConfig.Create 流程分配 ID
-            AgentConfig created = Add(agent.ToConfig());
-            _lock.EnterReadLock();
-            try
-            {
-                AgentConfigEntity entity = GetItems().First(e => e.Id == created.Id);
-                return ToAgent(entity);
-            }
-            finally { _lock.ExitReadLock(); }
+            // 新建：Add 负责分配 ID
+            return Add(agent);
         }
         else
         {
             // 更新
-            AgentConfig? updated = Update(agent.Id, agent.ToConfig());
+            AgentDto? updated = Update(agent.Id, agent);
             if (updated is null) throw new KeyNotFoundException($"Agent '{agent.Id}' not found.");
-            _lock.EnterReadLock();
-            try
-            {
-                AgentConfigEntity entity = GetItems().First(e => e.Id == agent.Id);
-                return ToAgent(entity);
-            }
-            finally { _lock.ExitReadLock(); }
+            return updated;
         }
     }
 

@@ -19,10 +19,10 @@ using Microsoft.Extensions.Logging;
 
 namespace MicroClaw.Agent;
 /// <summary>
-/// Agent 执行引擎：实现 ReAct 循环（推理 → 工具调用 → 观察 → 循环）。
-/// System Prompt 由各 <see cref="IAgentContextProvider"/> 按 Order 顺序聚合构成。
-/// MCP 工具从全局 McpServerConfigStore 加载，按 Agent.DisabledMcpServerIds 排除。
-/// 实现 IAgentMessageHandler，供渠道消息处理器路由调用。
+/// Agent ִ�����棺ʵ�� ReAct ѭ�������� �� ���ߵ��� �� �۲� �� ѭ������
+/// System Prompt �ɸ� <see cref="IAgentContextProvider"/> �� Order ˳��ۺϹ��ɡ�
+/// MCP ���ߴ�ȫ�� McpServerConfigStore ���أ��� Agent.DisabledMcpServerIds �ų���
+/// ʵ�� IAgentMessageHandler����������Ϣ������·�ɵ��á�
 /// </summary>
 public sealed class AgentRunner : IService
 {
@@ -59,16 +59,16 @@ public sealed class AgentRunner : IService
         _ragRetrievalContext = sp.GetService<RagRetrievalContext>();
     }
     
-    // ── IService ─────────────────────────────────────────────────────────
+    // ���� IService ������������������������������������������������������������������������������������������������������������������
     public int InitOrder => 20;
     public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     
-    // ── Provider 路由策略辅助 ───────────────────────────────────────────────
+    // ���� Provider ·�ɲ��Ը��� ����������������������������������������������������������������������������������������������
     
     /// <summary>
-    /// 当 Session 未显式绑定 Provider 时，按 Agent 路由策略从已启用 Provider 中自动选择。
-    /// 降级链：<see cref="IProviderRouter"/> → <see cref="ProviderService.GetDefault"/> → 空字符串。
+    /// �� Session δ��ʽ�� Provider ʱ���� Agent ·�ɲ��Դ������� Provider ���Զ�ѡ��
+    /// ��������<see cref="IProviderRouter"/> �� <see cref="ProviderService.GetDefault"/> �� ���ַ�����
     /// </summary>
     private string ResolveProviderByStrategy(ProviderRoutingStrategy strategy)
     {
@@ -91,13 +91,13 @@ public sealed class AgentRunner : IService
         throw new InvalidOperationException("Context-first AgentRunner path requires MicroChatContext.TargetProviderId to be populated.");
     }
     
-    // ── 流式 ReAct 循环（AF ChatClientAgent + FunctionInvokingChatClient + Channel 事件桥接）──
+    // ���� ��ʽ ReAct ѭ����AF ChatClientAgent + FunctionInvokingChatClient + Channel �¼��Žӣ�����
     
     /// <summary>
-    /// 主执行入口：调用方已通过 <see cref="MicroChatContext"/> 完成本次 dispatch 的装配，
-    /// AgentRunner 仅消费 context 中的执行事实来驱动模型循环。
+    /// ��ִ����ڣ����÷���ͨ�� <see cref="MicroChatContext"/> ��ɱ��� dispatch ��װ�䣬
+    /// AgentRunner ������ context �е�ִ����ʵ������ģ��ѭ����
     /// </summary>
-    public IAsyncEnumerable<StreamItem> StreamReActAsync(Agent agent, MicroChatContext chatContext, IReadOnlyList<string>? ancestorAgentIdsOverride = null)
+    public IAsyncEnumerable<StreamItem> StreamReActAsync(AgentDto agent, MicroChatContext chatContext, IReadOnlyList<string>? ancestorAgentIdsOverride = null)
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(chatContext);
@@ -130,7 +130,7 @@ public sealed class AgentRunner : IService
         }
     }
     
-    private async Task ExecutePreparedStreamingCoreAsync(Agent agent, MicroChatContext chatContext, System.Threading.Channels.Channel<StreamItem> output, IReadOnlyList<string>? ancestorAgentIdsOverride = null)
+    private async Task ExecutePreparedStreamingCoreAsync(AgentDto agent, MicroChatContext chatContext, System.Threading.Channels.Channel<StreamItem> output, IReadOnlyList<string>? ancestorAgentIdsOverride = null)
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(chatContext);
@@ -220,7 +220,7 @@ public sealed class AgentRunner : IService
                                 }
                                 catch (Exception ex)
                                 {
-                                    _logger.LogWarning(ex, "RAG 审计后台任务失败");
+                                    _logger.LogWarning(ex, "RAG ��ƺ�̨����ʧ��");
                                 }
                             }, CancellationToken.None);
                         }
@@ -272,7 +272,7 @@ public sealed class AgentRunner : IService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ExecutePreparedStreamingCoreAsync 发生未处理异常，关闭 output Channel");
+            _logger.LogError(ex, "ExecutePreparedStreamingCoreAsync ����δ�����쳣���ر� output Channel");
             output.Writer.TryComplete(ex);
             
             if (_hookExecutor is not null)
@@ -321,11 +321,11 @@ public sealed class AgentRunner : IService
         return chatContext.ExecutionOptions ?? throw new InvalidOperationException("Context-first AgentRunner path requires MicroChatContext.ExecutionOptions to be populated.");
     }
     
-    public async IAsyncEnumerable<StreamItem> StreamReActAsync(Agent agent, string providerId, IReadOnlyList<SessionMessage> history, string? sessionId = null, [EnumeratorCancellation] CancellationToken ct = default, string source = "chat", IReadOnlyList<string>? ancestorAgentIdsOverride = null, ToolCollectionResult? prebuiltTools = null, MicroChatContext? chatContext = null)
+    public async IAsyncEnumerable<StreamItem> StreamReActAsync(AgentDto agent, string providerId, IReadOnlyList<SessionMessage> history, string? sessionId = null, [EnumeratorCancellation] CancellationToken ct = default, string source = "chat", IReadOnlyList<string>? ancestorAgentIdsOverride = null, ToolCollectionResult? prebuiltTools = null, MicroChatContext? chatContext = null)
     {
-        // ── 薄迭代器：delegating to non-iterator ExecuteStreamingCoreAsync ──────────
-        // C# 规则：yield return 不能置于 try-catch 块中，因此将含回退逻辑的非迭代器方法
-        // 通过 Channel 与迭代器解耦，迭代器只负责从 Channel 读取并 yield。
+        // ���� ����������delegating to non-iterator ExecuteStreamingCoreAsync ��������������������
+        // C# ����yield return �������� try-catch ���У���˽��������߼��ķǵ���������
+        // ͨ�� Channel ����������������ֻ����� Channel ��ȡ�� yield��
         var outputChannel = System.Threading.Channels.Channel.CreateUnbounded<StreamItem>();
         Task execution = ExecuteStreamingCoreAsync(agent, providerId, history, sessionId, ct, source, outputChannel, ancestorAgentIdsOverride, prebuiltTools, chatContext);
         
@@ -336,29 +336,29 @@ public sealed class AgentRunner : IService
         }
         finally
         {
-            // 确保后台任务的任何异常被观察到（Channel 已 drain，不会重复 yield）
+            // ȷ����̨������κ��쳣���۲쵽��Channel �� drain�������ظ� yield��
             try
             {
                 await execution;
             }
             catch (OperationCanceledException)
             {
-                /* 取消时静默 */
+                /* ȡ��ʱ��Ĭ */
             }
             catch
             {
-                /* 异常已通过 Channel 传播给调用方，此处忽略重复抛出 */
+                /* �쳣��ͨ�� Channel ���������÷����˴������ظ��׳� */
             }
         }
     }
     
-    // ── 核心执行逻辑（非迭代器，可自由使用 try-catch）──────────────────────────
+    // ���� ����ִ���߼����ǵ�������������ʹ�� try-catch������������������������������������������������������
     
     /// <summary>
-    /// 使用 Provider 回退链执行流式推理。失败且尚未产生任何输出时自动切换到下一个 Provider。
-    /// 始终通过 <paramref name="output"/> Channel 完成（正常或带异常），供迭代器包装层读取。
+    /// ʹ�� Provider ������ִ����ʽ�����ʧ������δ�����κ����ʱ�Զ��л�����һ�� Provider��
+    /// ʼ��ͨ�� <paramref name="output"/> Channel ��ɣ���������쳣��������������װ���ȡ��
     /// </summary>
-    private async Task ExecuteStreamingCoreAsync(Agent agent, string primaryProviderId, IReadOnlyList<SessionMessage> history, string? sessionId, CancellationToken ct, string source, System.Threading.Channels.Channel<StreamItem> output, IReadOnlyList<string>? ancestorAgentIdsOverride = null, ToolCollectionResult? prebuiltTools = null, MicroChatContext? chatContext = null)
+    private async Task ExecuteStreamingCoreAsync(AgentDto agent, string primaryProviderId, IReadOnlyList<SessionMessage> history, string? sessionId, CancellationToken ct, string source, System.Threading.Channels.Channel<StreamItem> output, IReadOnlyList<string>? ancestorAgentIdsOverride = null, ToolCollectionResult? prebuiltTools = null, MicroChatContext? chatContext = null)
     {
         IReadOnlyList<ProviderConfig> chain = BuildFallbackChain(primaryProviderId, agent.RoutingStrategy, chatContext);
         
@@ -389,13 +389,13 @@ public sealed class AgentRunner : IService
                     _logger.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
                 }
                 
-                // 执行状态标志
+                // ִ��״̬��־
                 bool succeeded = false;
                 Exception? streamingException = null;
                 
                 try
                 {
-                    // ── 阶段 1：Setup ────────────────────────────────────────────
+                    // ���� �׶� 1��Setup ����������������������������������������������������������������������������������������
                     IReadOnlyList<ChatMessage>? assembledMessages = chatContext?.AssembledMessages;
                     bool usePreassembledMessages = assembledMessages is not null && attempt == 0 && (string.IsNullOrWhiteSpace(chatContext?.TargetProviderId) || string.Equals(chatContext?.TargetProviderId, provider.Id, StringComparison.Ordinal));
                     
@@ -424,7 +424,7 @@ public sealed class AgentRunner : IService
                         throw new InvalidOperationException("Dispatch message assembly produced an explicit empty message list; AgentRunner will not invoke the provider.");
                     }
                     
-                    // 工具收集（prebuiltTools != null 时由调用方管理释放，跳过内部收集）
+                    // �����ռ���prebuiltTools != null ʱ�ɵ��÷������ͷţ������ڲ��ռ���
                     ToolCollectionResult toolResult;
                     bool ownsToolResult;
                     if (chatContext?.AssembledTools is { Count: >= 0 })
@@ -450,7 +450,7 @@ public sealed class AgentRunner : IService
                     {
                         IReadOnlyList<ToolGroupConfig>? toolOverrides = chatContext?.Items.TryGetValue(MicroChatContext.RuntimeToolGroupOverridesItemKey, out object? rawToolOverrides) == true && rawToolOverrides is IReadOnlyList<ToolGroupConfig> typedToolOverrides && typedToolOverrides.Count > 0 ? typedToolOverrides : null;
                         
-                        Agent effectiveAgent = toolOverrides is { Count: > 0 } ? agent.WithToolOverrides(toolOverrides) : agent;
+                        AgentDto effectiveAgent = toolOverrides is { Count: > 0 } ? agent.WithToolOverrides(toolOverrides) : agent;
                         IMicroSession? sessionForTools = !string.IsNullOrWhiteSpace(sessionId) ? _sessionReader.Get(sessionId) : null;
                         
                         var ancestorAgentIds = new List<string>();
@@ -479,7 +479,7 @@ public sealed class AgentRunner : IService
                     
                     ChatOptions chatOptions = usePreassembledExecutionOptions ? chatContext!.ExecutionOptions! : ChatExecutionOptionsFactory.Build(effectiveTools, provider, skillCtx.ModelOverride, skillCtx.EffortOverride, temperatureOverride: chatContext?.TemperatureOverride, topPOverride: chatContext?.TopPOverride);
                     
-                    // MicroChatContext：Provider 内部依此归属 usage。
+                    // MicroChatContext��Provider �ڲ����˹��� usage��
                     IMicroSession? sessionForCtx = !string.IsNullOrWhiteSpace(sessionId) ? _sessionReader.Get(sessionId) : null;
                     MicroChatContext effectiveChatContext = chatContext ?? (sessionForCtx is not null ? MicroChatContext.ForSystem(sessionForCtx, source, ct) : MicroChatContext.ForSystem(!string.IsNullOrWhiteSpace(sessionId) ? sessionId : $"agent:{agent.Id}", source, ct));
                     
@@ -490,7 +490,7 @@ public sealed class AgentRunner : IService
                     if (!string.IsNullOrWhiteSpace(sessionId))
                         await _agentStatusNotifier.NotifyAsync(sessionId, agent.Id, "running", ct);
                     
-                    // 插件 Hook：SessionStart
+                    // ��� Hook��SessionStart
                     if (_hookExecutor is not null)
                     {
                         _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionStart, SessionId = sessionId, AgentId = agent.Id }, CancellationToken.None);
@@ -498,11 +498,11 @@ public sealed class AgentRunner : IService
                     
                     var runSw = System.Diagnostics.Stopwatch.StartNew();
                     
-                    // ── 阶段 2：Streaming（内层 try-finally 负责清理）────────────
+                    // ���� �׶� 2��Streaming���ڲ� try-finally ���������������������������������
                     try
                     {
-                        // Provider 内部驱动 FunctionInvokingChatClient + ChatClientAgent，
-                        // 直接生成 StreamItem（含 token / thinking / tool_call / tool_result / usage）。
+                        // Provider �ڲ����� FunctionInvokingChatClient + ChatClientAgent��
+                        // ֱ������ StreamItem���� token / thinking / tool_call / tool_result / usage����
                         var responseAccumulator = new System.Text.StringBuilder();
                         await foreach (StreamItem item in chatProvider.AgentStreamAsync(effectiveChatContext, messages, effectiveTools, options: chatOptions, internalToolNames: internalToolNames, ct: ct))
                         {
@@ -514,7 +514,7 @@ public sealed class AgentRunner : IService
                         
                         succeeded = true;
                         
-                        // RAG 审计：fire-and-forget，不阻塞流式输出完成
+                        // RAG ��ƣ�fire-and-forget����������ʽ������
                         if (_ragUsageAuditor is not null && _ragRetrievalContext?.RetrievedChunks is { Count: > 0 } chunks && responseAccumulator.Length > 0 && !string.IsNullOrWhiteSpace(sessionId))
                         {
                             string response = responseAccumulator.ToString();
@@ -527,33 +527,33 @@ public sealed class AgentRunner : IService
                                 }
                                 catch (Exception ex)
                                 {
-                                    _logger.LogWarning(ex, "RAG 审计后台任务失败");
+                                    _logger.LogWarning(ex, "RAG ��ƺ�̨����ʧ��");
                                 }
                             }, CancellationToken.None);
                         }
                     }
                     catch (OperationCanceledException)
                     {
-                        throw; // 取消直接向上传播，由外层的 OperationCanceledException catch 处理
+                        throw; // ȡ��ֱ�����ϴ����������� OperationCanceledException catch ����
                     }
                     catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
                     {
-                        // 流式执行失败，且尚未向输出写入任何内容 → 可安全回退
+                        // ��ʽִ��ʧ�ܣ�����δ�����д���κ����� �� �ɰ�ȫ����
                         streamingException = ex;
                     }
                     finally
                     {
                         runSw.Stop();
                         _devMetrics.RecordAgentRun(agent.Id, succeeded, runSw.ElapsedMilliseconds);
-                        // TODO: Agent 月度预算（MonthlyBudgetUsd）检查已随 UsageTrackingMiddleware 一起撤除；
-                        //       待 MicroChatContext + MicroProvider 接入预算策略后恢复。
+                        // TODO: Agent �¶�Ԥ�㣨MonthlyBudgetUsd��������� UsageTrackingMiddleware һ�𳷳���
+                        //       �� MicroChatContext + MicroProvider ����Ԥ����Ժ�ָ���
                         if (!string.IsNullOrWhiteSpace(sessionId))
                             await _agentStatusNotifier.NotifyAsync(sessionId, agent.Id, succeeded ? "completed" : "failed", CancellationToken.None);
                         if (ownsToolResult)
                             await toolResult.DisposeAsync();
                     }
                     
-                    // streamingException 被内层 catch 捕获 → 尝试下一个 Provider
+                    // streamingException ���ڲ� catch ���� �� ������һ�� Provider
                     if (streamingException is not null)
                     {
                         lastException = streamingException;
@@ -561,10 +561,10 @@ public sealed class AgentRunner : IService
                         continue;
                     }
                     
-                    // 成功！完成输出 Channel
+                    // �ɹ��������� Channel
                     output.Writer.TryComplete();
                     
-                    // 插件 Hook：SessionEnd
+                    // ��� Hook��SessionEnd
                     if (_hookExecutor is not null)
                     {
                         _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionEnd, SessionId = sessionId, AgentId = agent.Id }, CancellationToken.None);
@@ -578,25 +578,25 @@ public sealed class AgentRunner : IService
                 }
                 catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
                 {
-                    // Setup 阶段失败（Provider 尚未产生输出）→ 尝试下一个
+                    // Setup �׶�ʧ�ܣ�Provider ��δ����������� ������һ��
                     lastException = ex;
                     _logger.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
-                    // 继续循环
+                    // ����ѭ��
                 }
             }
             
-            // 所有 Provider 均已耗尽
+            // ���� Provider ���Ѻľ�
             output.Writer.TryComplete(lastException ?? new InvalidOperationException("All providers in fallback chain failed."));
             
         } // end try
         catch (Exception ex)
         {
-            // 安全网：确保 output Channel 在任何未预料的异常路径下都被正确关闭，
-            // 避免消费端 ReadAllAsync() 无限挂起。
-            _logger.LogError(ex, "ExecuteStreamingCoreAsync 发生未处理异常，关闭 output Channel");
+            // ��ȫ����ȷ�� output Channel ���κ�δԤ�ϵ��쳣·���¶�����ȷ�رգ�
+            // �������Ѷ� ReadAllAsync() ���޹���
+            _logger.LogError(ex, "ExecuteStreamingCoreAsync ����δ�����쳣���ر� output Channel");
             output.Writer.TryComplete(ex);
             
-            // 插件 Hook：OnError
+            // ��� Hook��OnError
             if (_hookExecutor is not null)
             {
                 _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.OnError, SessionId = sessionId, ErrorMessage = ex.Message }, CancellationToken.None);
@@ -604,12 +604,12 @@ public sealed class AgentRunner : IService
         }
     }
     
-    // ── Provider 回退链构建 ────────────────────────────────────────────────
+    // ���� Provider ���������� ������������������������������������������������������������������������������������������������
     
     /// <summary>
-    /// 构建 Provider 回退链：将指定 <paramref name="primaryProviderId"/> 排在链首，
-    /// 其余按路由策略排序的已启用 Provider 依次跟随。
-    /// 若未注册 <see cref="IProviderRouter"/>，则仅返回主 Provider（无回退）。
+    /// ���� Provider ����������ָ�� <paramref name="primaryProviderId"/> �������ף�
+    /// ���ఴ·�ɲ�������������� Provider ���θ��档
+    /// ��δע�� <see cref="IProviderRouter"/>����������� Provider���޻��ˣ���
     /// </summary>
     private IReadOnlyList<ProviderConfig> BuildFallbackChain(string primaryProviderId, ProviderRoutingStrategy strategy, MicroChatContext? chatContext)
     {
@@ -646,23 +646,23 @@ public sealed class AgentRunner : IService
             }
         }
         
-        // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
+        // ֻ���� Chat ���͵� Provider �����������Embedding ģ�Ͳ������ڶԻ�
         IReadOnlyList<ProviderConfig> allProviders = _providerService.All.Where(p => p.ModelType != ModelType.Embedding).ToList().AsReadOnly();
         
         if (_providerRouter is null)
         {
-            // 无路由器：仅使用主 Provider，不提供回退
+            // ��·��������ʹ���� Provider�����ṩ����
             ProviderConfig? primary = allProviders.FirstOrDefault(p => p.Id == primaryProviderId && p.IsEnabled);
             return primary is not null ? [primary] : [];
         }
         
         IReadOnlyList<ProviderConfig> orderedChain = _providerRouter.GetFallbackChain(allProviders, strategy);
         
-        // 将 primaryProviderId 移至链首（优先使用 Session/Agent 指定的 Provider）
+        // �� primaryProviderId �������ף�����ʹ�� Session/Agent ָ���� Provider��
         ProviderConfig? primaryInChain = orderedChain.FirstOrDefault(p => p.Id == primaryProviderId);
         if (primaryInChain is null || string.IsNullOrWhiteSpace(primaryProviderId))
         {
-            // 主 Provider 未找到或未指定，直接使用策略顺序
+            // �� Provider δ�ҵ���δָ����ֱ��ʹ�ò���˳��
             return orderedChain;
         }
         
@@ -708,19 +708,19 @@ public sealed class AgentRunner : IService
     }
     
     /// <summary>
-    /// 调用指定 Agent 的工具（MCP 或内置），返回工具输出字符串。
-    /// 通过 ToolCollector 统一收集后按名称查找。供工作流 Tool 节点使用。
+    /// ����ָ�� Agent �Ĺ��ߣ�MCP �����ã������ع�������ַ�����
+    /// ͨ�� ToolCollector ͳһ�ռ������Ʋ��ҡ��������� Tool �ڵ�ʹ�á�
     /// </summary>
     public async Task<string> InvokeToolAsync(string agentId, string toolName, IReadOnlyDictionary<string, string>? nodeConfig, string fallbackInput, CancellationToken ct)
     {
-        Agent? agent = _agentStore.GetAgentById(agentId);
+        AgentDto? agent = _agentStore.GetById(agentId);
         if (agent is null || !agent.IsEnabled)
         {
             _logger.LogWarning("InvokeToolAsync: Agent '{AgentId}' not found or disabled.", agentId);
             return fallbackInput;
         }
         
-        // 构建工具参数
+        // �������߲���
         var arguments = new Dictionary<string, object?>();
         if (nodeConfig is not null)
         {
@@ -733,7 +733,7 @@ public sealed class AgentRunner : IService
         if (arguments.Count == 0)
             arguments["input"] = fallbackInput;
         
-        // 通过 ToolCollector 统一收集并查找工具
+        // ͨ�� ToolCollector ͳһ�ռ������ҹ���
         var context = new ToolCreationContext();
         await using ToolCollectionResult toolResult = await _toolCollector.CollectToolsAsync(agent, context, ct);
         

@@ -7,14 +7,14 @@ namespace MicroClaw.Agent;
 /// Agent 实体（领域对象）：聚合工具权限、子代理策略、路由配置等行为。
 /// 使用 <see cref="Create"/> 创建新 Agent，<see cref="Reconstitute"/> 从持久化状态恢复。
 /// </summary>
-public sealed class Agent
+public sealed class AgentDto
 {
     private List<string> _disabledSkillIds = [];
     private List<string> _disabledMcpServerIds = [];
     private List<ToolGroupConfig> _toolGroupConfigs = [];
     private List<string>? _allowedSubAgentIds;
 
-    private Agent() { }  // 强制通过工厂方法创建
+    private AgentDto() { }  // 强制通过工厂方法创建
 
     // ── 属性 ─────────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ public sealed class Agent
     // ── 工厂方法 ──────────────────────────────────────────────────────────
 
     /// <summary>创建新 Agent（Id 为空，由 IAgentRepository.Save 分配）。</summary>
-    public static Agent Create(
+    public static AgentDto Create(
         string name,
         string description,
         bool isEnabled,
@@ -69,7 +69,7 @@ public sealed class Agent
         };
 
     /// <summary>从持久化状态恢复 Agent 实例。</summary>
-    public static Agent Reconstitute(
+    public static AgentDto Reconstitute(
         string id,
         string name,
         string description,
@@ -179,28 +179,11 @@ public sealed class Agent
 
     // ── DTO 转换（O-2-9）─────────────────────────────────────────────────
 
-    /// <summary>转换为 AgentConfig DTO（用于 API 响应，保持向后兼容）。</summary>
-    public AgentConfig ToConfig() => new(
-        Id: Id,
-        Name: Name,
-        Description: Description,
-        IsEnabled: IsEnabled,
-        DisabledSkillIds: _disabledSkillIds.AsReadOnly(),
-        DisabledMcpServerIds: _disabledMcpServerIds.AsReadOnly(),
-        ToolGroupConfigs: _toolGroupConfigs.AsReadOnly(),
-        CreatedAtUtc: CreatedAtUtc,
-        IsDefault: IsDefault,
-        ContextWindowMessages: ContextWindowMessages,
-        ExposeAsA2A: ExposeAsA2A,
-        AllowedSubAgentIds: _allowedSubAgentIds?.AsReadOnly(),
-        RoutingStrategy: RoutingStrategy,
-        MonthlyBudgetUsd: MonthlyBudgetUsd);
-
     /// <summary>
     /// 应用 Pet 工具覆盖，返回含覆盖配置的新 Agent 实例（不修改原对象）。
     /// 仅用于单次请求内的 ToolCollector 调用，不持久化。
     /// </summary>
-    internal Agent WithToolOverrides(IReadOnlyList<ToolGroupConfig> overrides) =>
+    internal AgentDto WithToolOverrides(IReadOnlyList<ToolGroupConfig> overrides) =>
         Reconstitute(
             id: Id,
             name: Name,

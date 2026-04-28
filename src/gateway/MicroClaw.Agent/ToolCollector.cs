@@ -26,7 +26,7 @@ public sealed class ToolCollector(
     /// 调用方使用 <c>await using</c> 确保 MCP 连接释放。
     /// </summary>
     public async Task<ToolCollectionResult> CollectToolsAsync(
-        Agent agent, ToolCreationContext context, CancellationToken ct = default)
+        AgentDto agent, ToolCreationContext context, CancellationToken ct = default)
     {
         var result = new ToolCollectionResult();
 
@@ -91,7 +91,7 @@ public sealed class ToolCollector(
     /// <paramref name="agent"/> 为 null 时返回全局视图（不做 Agent 级过滤）。
     /// </summary>
     public async Task<IReadOnlyList<ToolGroupInfo>> GetToolGroupsAsync(
-        Agent? agent, CancellationToken ct = default)
+        AgentDto? agent, CancellationToken ct = default)
     {
         var groups = new List<ToolGroupInfo>();
 
@@ -182,7 +182,7 @@ public sealed class ToolCollector(
     }
 
     /// <summary>返回未被整体禁用的 MCP Server 配置列表（排除 Agent 级别禁用项）。</summary>
-    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(Agent agent)
+    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentDto agent)
     {
         // 优先从进程内注册表查询（不走 DB），回退到 Store（旧行为）
         IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null

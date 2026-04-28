@@ -4,7 +4,7 @@ using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.Agent;
+using AgentEntity = MicroClaw.Agent.AgentDto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -82,7 +82,7 @@ public sealed class PetService : IPetService, IService
     /// <summary>检查是否有启用的默认 Agent（渠道消息路由前置检查）。</summary>
     public bool HasAgentForChannel(string channelId)
     {
-        AgentEntity? main = _agentStore.GetDefaultAgent();
+        AgentEntity? main = _agentStore.GetDefault();
         return main is { IsEnabled: true };
     }
 

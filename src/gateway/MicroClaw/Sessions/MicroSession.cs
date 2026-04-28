@@ -86,20 +86,29 @@ public class MicroSession : MicroObject, IMicroSession
     #region 接口实现
     public async IAsyncEnumerable<StreamItem> HandleMessageAsync(string content, IReadOnlyList<MessageAttachment>? attachments, string source, [EnumeratorCancellation] CancellationToken ct = default)
     {
+        if (!IsApproved)
+        {
+            yield return new ErrorItem("会话尚未获得批准，请联系管理员。");
+            yield break;
+        }
+        
+        if (Pet is null)
+        {
+            yield return new ErrorItem("宠物在这个会话没有启用。");
+            yield break;
+        }
+        
         // 1. 持久化用户消息
         SessionMessage userMessage = new(Id: MicroClawUtils.GetUniqueId(), Role: "user", Content: content, ThinkContent: null, Timestamp: TimeUtils.NowOffset(), Attachments: attachments, Source: source);
         Messages.AddMessage(userMessage);
         
-        // 2. Pet 未绑定 = 无 AI 能力，静默结束
-        IPet? pet = Pet;
-        if (pet is null) yield break;
         
         // 3. 加载完整历史（含刚才写入的用户消息）
         IReadOnlyList<SessionMessage> history = Messages.GetMessages();
         
         // 4. 流式执行 + 同步持久化 assistant 消息
         var pipeline = new StreamItemPersistencePipeline();
-        await foreach (StreamItem item in pet.HandleMessageAsync(history, ct, source))
+        await foreach (StreamItem item in Pet.HandleMessageAsync(history, ct, source))
         {
             // 工具调用 / 子代理等立即产生消息的类型，直接入库
             foreach (SessionMessage msg in pipeline.ProcessItem(item))

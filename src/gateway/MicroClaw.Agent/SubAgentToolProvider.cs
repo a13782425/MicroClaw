@@ -42,7 +42,7 @@ public sealed class SubAgentToolProvider(
             ? new HashSet<string>(context.AllowedSubAgentIds, StringComparer.Ordinal)
             : null;
 
-        foreach (AgentConfig subAgent in agentStore.All.Where(a => a.IsEnabled))
+        foreach (AgentDto subAgent in agentStore.All.Where(a => a.IsEnabled))
         {
             // 排除自身和祖先链
             if (excludedIds.Contains(subAgent.Id)) continue;

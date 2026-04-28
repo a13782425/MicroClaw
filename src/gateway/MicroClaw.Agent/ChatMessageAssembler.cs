@@ -26,7 +26,7 @@ public sealed class ChatMessageAssembler(
     /// 基于 Agent、Provider 和历史消息装配本次调用的最终消息列表及技能上下文。
     /// </summary>
     public async Task<ChatMessageAssemblyResult> AssembleAsync(
-        Agent agent,
+        AgentDto agent,
         ProviderConfig provider,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
@@ -161,7 +161,7 @@ public sealed class ChatMessageAssembler(
     }
 
     private async ValueTask<string> BuildSystemPromptAsync(
-        Agent agent,
+        AgentDto agent,
         string? sessionId,
         string? skillContext,
         string? userMessage,
