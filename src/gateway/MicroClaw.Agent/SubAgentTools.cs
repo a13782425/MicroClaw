@@ -87,7 +87,7 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentEntity config = AgentEntity.Create(
+                        AgentEntity config = AgentEntity.New(
                             name: name.Trim(),
                             description: description?.Trim() ?? string.Empty,
                             isEnabled: true,

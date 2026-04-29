@@ -39,14 +39,11 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
 
-            AgentEntity newAgent = AgentEntity.Create(
+            AgentEntity newAgent = AgentEntity.New(
                 name: req.Name.Trim(),
                 description: req.Description ?? string.Empty,
                 isEnabled: req.IsEnabled,
-                disabledSkillIds: req.DisabledSkillIds ?? [],
-                disabledMcpServerIds: req.DisabledMcpServerIds ?? [],
-                contextWindowMessages: req.ContextWindowMessages,
-                allowedSubAgentIds: req.AllowedSubAgentIds);
+                contextWindowMessages: req.ContextWindowMessages);
             try
             {
                 AgentEntity created = agentRepo.Save(newAgent);
@@ -182,7 +179,7 @@ public static class AgentEndpoints
         })
         .WithTags("Agents");
 
-        // ── 技能绑定管�?─────────────────────────────────────────────────────
+        // ── 技能绑定管理─────────────────────────────────────────────────────
 
         endpoints.MapGet("/agents/{id}/skills", (string id, IAgentRepository agentRepo) =>
         {
@@ -217,7 +214,7 @@ public static class AgentEndpoints
 
         // ── Agent DNA 文件管理（SOUL.md / MEMORY.md）──────────────────────────
 
-        // ── 子代�?ACL 查询 ──────────────────────────────────────────────────
+        // ── 子代里查询 ──────────────────────────────────────────────────
 
         endpoints.MapGet("/agents/{id}/sub-agents", (string id, IAgentRepository agentRepo) =>
         {
@@ -319,24 +316,14 @@ public sealed record AgentUpdateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
-    /// <summary>是否明确传入 ContextWindowMessages（用于区�?null=未传 vs null=清除限制）�?/summary>
     bool HasContextWindowMessages = false,
 
     IReadOnlyList<string>? AllowedSubAgentIds = null,
-    /// <summary>
-    /// 显式标记是否传入�?AllowedSubAgentIds�?
-    /// 用于区分“未传”（保留原值）和“传�?null”（清除限制）�?
-    /// 前端�?true + AllowedSubAgentIds = null 表示“允许所有”；�?true + [] 表示“禁止所有”�?
-    /// </summary>
+
     bool HasAllowedSubAgentIds = false,
-    /// <summary>
-    /// Provider 路由策略（Default/QualityFirst/CostFirst/LatencyFirst）�?
-    /// null 表示不修改，保留原有策略�?
-    /// </summary>
+
     string? RoutingStrategy = null,
-    /// <summary>月度预算上限（USD）。null 表示不修改，保留原有属性�?/summary>
     decimal? MonthlyBudgetUsd = null,
-    /// <summary>是否明确传入 MonthlyBudgetUsd（用于区�?null=未传 vs null=清除预算）�?/summary>
     bool HasMonthlyBudgetUsd = false);
 
 public sealed record AgentMcpServersRequest(IReadOnlyList<string>? McpServerIds);

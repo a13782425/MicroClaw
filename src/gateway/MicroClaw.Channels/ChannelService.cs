@@ -189,7 +189,7 @@ public sealed class ChannelService : IChannelService
         if (!TryGet(channelId, out IChannel? channel))
             throw new InvalidOperationException($"No channel is registered for id '{channelId}'.");
         
-        return channel;
+        return channel!;
     }
     
     public bool TryGet(string channelId, out IChannel? channel)
