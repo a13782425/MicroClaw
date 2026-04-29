@@ -269,25 +269,6 @@ export function AgentDetail({ agent, allAgents, onUpdated, onDeleted }: AgentDet
                 <Button size="sm" colorPalette="blue" loading={savingContextWindow} onClick={handleContextWindowSave}>保存</Button>
               </HStack>
             </Box>
-
-            {agent.exposeAsA2A && (
-              <Box mt="4">
-                <Text fontSize="xs" color="var(--mc-text-muted)" mb="1">A2A 端点</Text>
-                <Box
-                  bg="var(--mc-surface-muted)"
-                 
-                  p="2"
-                  rounded="md"
-                  fontFamily="mono"
-                  fontSize="xs"
-                  wordBreak="break-all"
-                  cursor="text"
-                  userSelect="all"
-                >
-                  {`${window.location.origin}/a2a/agent/${agent.id}`}
-                </Box>
-              </Box>
-            )}
           </Box>
         </Tabs.Content>
 

@@ -26,7 +26,6 @@ public sealed class AgentEntity
     public bool IsDefault { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public int? ContextWindowMessages { get; private set; }
-    public bool ExposeAsA2A { get; private set; }
     public ProviderRoutingStrategy RoutingStrategy { get; private set; }
     public decimal? MonthlyBudgetUsd { get; private set; }
 
@@ -47,7 +46,6 @@ public sealed class AgentEntity
         IReadOnlyList<ToolGroupConfig>? toolGroupConfigs = null,
         bool isDefault = false,
         int? contextWindowMessages = null,
-        bool exposeAsA2A = false,
         IReadOnlyList<string>? allowedSubAgentIds = null,
         ProviderRoutingStrategy routingStrategy = ProviderRoutingStrategy.Default,
         decimal? monthlyBudgetUsd = null) =>
@@ -60,7 +58,6 @@ public sealed class AgentEntity
             IsDefault = isDefault,
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ContextWindowMessages = contextWindowMessages,
-            ExposeAsA2A = exposeAsA2A,
             RoutingStrategy = routingStrategy,
             MonthlyBudgetUsd = monthlyBudgetUsd,
             _disabledSkillIds = [.. (disabledSkillIds ?? [])],
@@ -81,7 +78,6 @@ public sealed class AgentEntity
         DateTimeOffset createdAtUtc,
         bool isDefault = false,
         int? contextWindowMessages = null,
-        bool exposeAsA2A = false,
         IReadOnlyList<string>? allowedSubAgentIds = null,
         ProviderRoutingStrategy routingStrategy = ProviderRoutingStrategy.Default,
         decimal? monthlyBudgetUsd = null) =>
@@ -94,7 +90,6 @@ public sealed class AgentEntity
             IsDefault = isDefault,
             CreatedAtUtc = createdAtUtc,
             ContextWindowMessages = contextWindowMessages,
-            ExposeAsA2A = exposeAsA2A,
             RoutingStrategy = routingStrategy,
             MonthlyBudgetUsd = monthlyBudgetUsd,
             _disabledSkillIds = [.. disabledSkillIds],
@@ -116,8 +111,6 @@ public sealed class AgentEntity
 
     public void UpdateContextWindow(int? contextWindowMessages)
         => ContextWindowMessages = contextWindowMessages;
-
-    public void UpdateExposeAsA2A(bool expose) => ExposeAsA2A = expose;
 
     public void UpdateRoutingStrategy(ProviderRoutingStrategy strategy) => RoutingStrategy = strategy;
 
@@ -196,7 +189,6 @@ public sealed class AgentEntity
             createdAtUtc: CreatedAtUtc,
             isDefault: IsDefault,
             contextWindowMessages: ContextWindowMessages,
-            exposeAsA2A: ExposeAsA2A,
             allowedSubAgentIds: _allowedSubAgentIds,
             routingStrategy: RoutingStrategy,
             monthlyBudgetUsd: MonthlyBudgetUsd);

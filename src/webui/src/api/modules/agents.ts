@@ -9,7 +9,6 @@ export type AgentConfig = {
   disabledSkillIds: string[]
   disabledMcpServerIds: string[]
   createdAtUtc: string
-  exposeAsA2A: boolean
   allowedSubAgentIds: string[] | null
   routingStrategy: string
   monthlyBudgetUsd: number | null
@@ -32,7 +31,6 @@ export type AgentUpdateRequest = {
   isEnabled?: boolean
   disabledSkillIds?: string[]
   disabledMcpServerIds?: string[]
-  exposeAsA2A?: boolean
   allowedSubAgentIds?: string[] | null
   hasAllowedSubAgentIds?: boolean
   routingStrategy?: string

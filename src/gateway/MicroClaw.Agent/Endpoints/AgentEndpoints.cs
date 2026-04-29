@@ -46,7 +46,6 @@ public static class AgentEndpoints
                 disabledSkillIds: req.DisabledSkillIds ?? [],
                 disabledMcpServerIds: req.DisabledMcpServerIds ?? [],
                 contextWindowMessages: req.ContextWindowMessages,
-                exposeAsA2A: req.ExposeAsA2A,
                 allowedSubAgentIds: req.AllowedSubAgentIds);
             try
             {
@@ -79,7 +78,6 @@ public static class AgentEndpoints
             if (req.DisabledSkillIds is not null) existing.UpdateDisabledSkillIds(req.DisabledSkillIds);
             if (req.DisabledMcpServerIds is not null) existing.UpdateDisabledMcpServerIds(req.DisabledMcpServerIds);
             if (req.HasContextWindowMessages) existing.UpdateContextWindow(req.ContextWindowMessages);
-            if (req.ExposeAsA2A is not null) existing.UpdateExposeAsA2A(req.ExposeAsA2A.Value);
             if (req.HasAllowedSubAgentIds) existing.UpdateAllowedSubAgentIds(req.AllowedSubAgentIds);
             if (req.RoutingStrategy is not null &&
                 Enum.TryParse<ProviderRoutingStrategy>(req.RoutingStrategy, ignoreCase: true, out var parsedStrategy))
@@ -295,7 +293,6 @@ public static class AgentEndpoints
         a.CreatedAtUtc,
         a.IsDefault,
         a.ContextWindowMessages,
-        a.ExposeAsA2A,
         a.AllowedSubAgentIds,
         RoutingStrategy = a.RoutingStrategy.ToString(),
         a.MonthlyBudgetUsd,
@@ -311,7 +308,6 @@ public sealed record AgentCreateRequest(
     IReadOnlyList<string>? DisabledSkillIds = null,
     IReadOnlyList<string>? DisabledMcpServerIds = null,
     int? ContextWindowMessages = null,
-    bool ExposeAsA2A = false,
     IReadOnlyList<string>? AllowedSubAgentIds = null,
     decimal? MonthlyBudgetUsd = null);
 
@@ -325,7 +321,7 @@ public sealed record AgentUpdateRequest(
     int? ContextWindowMessages = null,
     /// <summary>是否明确传入 ContextWindowMessages（用于区�?null=未传 vs null=清除限制）�?/summary>
     bool HasContextWindowMessages = false,
-    bool? ExposeAsA2A = null,
+
     IReadOnlyList<string>? AllowedSubAgentIds = null,
     /// <summary>
     /// 显式标记是否传入�?AllowedSubAgentIds�?

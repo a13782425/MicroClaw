@@ -92,7 +92,6 @@ export default function AgentsPage() {
                           <Badge size="xs" colorPalette={agent.isEnabled ? 'green' : 'gray'}>
                             {agent.isEnabled ? '启用' : '停用'}
                           </Badge>
-                          {agent.exposeAsA2A && <Badge size="xs" colorPalette="blue" variant="outline">A2A</Badge>}
                         </HStack>
                       </Box>
                     </HStack>

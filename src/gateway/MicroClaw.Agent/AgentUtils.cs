@@ -26,7 +26,6 @@ public static class AgentUtils
             createdAtUtc: TimeUtils.FromMs(entityConfig.CreatedAtMs), 
             isDefault: entityConfig.IsDefault, 
             contextWindowMessages: entityConfig.ContextWindowMessages, 
-            exposeAsA2A: entityConfig.ExposeAsA2A, 
             allowedSubAgentIds: DeserializeNullableList<string>(entityConfig.AllowedSubAgentIdsJson),
             routingStrategy: ParseRoutingStrategy(entityConfig.RoutingStrategy), 
             monthlyBudgetUsd: entityConfig.MonthlyBudgetUsd);
@@ -53,7 +52,6 @@ public static class AgentUtils
             CreatedAtMs = TimeUtils.ToMs(entity.CreatedAtUtc),
             IsDefault = entity.IsDefault,
             ContextWindowMessages = entity.ContextWindowMessages,
-            ExposeAsA2A = entity.ExposeAsA2A,
             AllowedSubAgentIdsJson = entity.AllowedSubAgentIds is not null ? JsonSerializer.Serialize(entity.AllowedSubAgentIds, JsonOpts) : null,
             RoutingStrategy = entity.RoutingStrategy == ProviderRoutingStrategy.Default ? null : entity.RoutingStrategy.ToString(),
             MonthlyBudgetUsd = entity.MonthlyBudgetUsd,

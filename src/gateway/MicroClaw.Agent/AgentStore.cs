@@ -135,7 +135,6 @@ public sealed class AgentStore : IPluginAgentRegistrar, IAgentRepository
                 DisabledMcpServerIdsJson = incoming.DisabledMcpServerIds.Count > 0 ? JsonSerializer.Serialize(incoming.DisabledMcpServerIds, JsonOpts) : null,
                 ToolGroupConfigsJson = incoming.ToolGroupConfigs.Count > 0 ? JsonSerializer.Serialize(incoming.ToolGroupConfigs, JsonOpts) : null,
                 ContextWindowMessages = incoming.ContextWindowMessages,
-                ExposeAsA2A = incoming.ExposeAsA2A,
                 AllowedSubAgentIdsJson = incoming.AllowedSubAgentIds is not null ? JsonSerializer.Serialize(incoming.AllowedSubAgentIds, JsonOpts) : null,
                 RoutingStrategy = incoming.RoutingStrategy == ProviderRoutingStrategy.Default ? null : incoming.RoutingStrategy.ToString(),
                 MonthlyBudgetUsd = incoming.MonthlyBudgetUsd,

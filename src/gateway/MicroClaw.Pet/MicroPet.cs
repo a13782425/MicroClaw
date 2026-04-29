@@ -627,7 +627,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         if (toolOverrides is not { Count: > 0 })
             return agent;
         
-        return AgentEntity.Reconstitute(id: agent.Id, name: agent.Name, description: agent.Description, isEnabled: agent.IsEnabled, disabledSkillIds: agent.DisabledSkillIds, disabledMcpServerIds: agent.DisabledMcpServerIds, toolGroupConfigs: toolOverrides, createdAtUtc: agent.CreatedAtUtc, isDefault: agent.IsDefault, contextWindowMessages: agent.ContextWindowMessages, exposeAsA2A: agent.ExposeAsA2A, allowedSubAgentIds: agent.AllowedSubAgentIds, routingStrategy: agent.RoutingStrategy, monthlyBudgetUsd: agent.MonthlyBudgetUsd);
+        return AgentEntity.Reconstitute(id: agent.Id, name: agent.Name, description: agent.Description, isEnabled: agent.IsEnabled, disabledSkillIds: agent.DisabledSkillIds, disabledMcpServerIds: agent.DisabledMcpServerIds, toolGroupConfigs: toolOverrides, createdAtUtc: agent.CreatedAtUtc, isDefault: agent.IsDefault, contextWindowMessages: agent.ContextWindowMessages, allowedSubAgentIds: agent.AllowedSubAgentIds, routingStrategy: agent.RoutingStrategy, monthlyBudgetUsd: agent.MonthlyBudgetUsd);
     }
     
     private string ResolveProviderId(AgentEntity agent, string? preferredProviderId)

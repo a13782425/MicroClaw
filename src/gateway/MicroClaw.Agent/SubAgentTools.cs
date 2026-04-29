@@ -91,8 +91,7 @@ public static class SubAgentTools
                             name: name.Trim(),
                             description: description?.Trim() ?? string.Empty,
                             isEnabled: true,
-                            contextWindowMessages: 20,
-                            exposeAsA2A: false);
+                            contextWindowMessages: 20);
 
                         AgentEntity created = agentRepo.Save(config);
                         agentDnaService.InitializeAgent(created.Id);
@@ -108,7 +107,7 @@ public static class SubAgentTools
                     }
                 },
                 name: "create_agent",
-                description: "创建一个新的 Agent 代理。需指定唯一名称；可选填功能描述和系统提示词（Soul）；默认开启 A2A 协议暴露、上下文窗口 20 条，创建后立即可用。"),
+                description: "创建一个新的 Agent 代理。需指定唯一名称；可选填功能描述和系统提示词（Soul）；默认上下文窗口 20 条，创建后立即可用。"),
 
             // 4. delete_agent
             AIFunctionFactory.Create(

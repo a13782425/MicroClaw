@@ -68,12 +68,6 @@ public sealed record AgentEntityConfig
     public int? ContextWindowMessages { get; set; }
 
     /// <summary>
-    /// 指示该 Agent 是否暴露为 A2A 可发现节点。
-    /// </summary>
-    [YamlMember(Alias = "expose_as_a2a", Description = "指示该 Agent 是否暴露为 A2A 可发现节点。")]
-    public bool ExposeAsA2A { get; set; }
-
-    /// <summary>
     /// 允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。
     /// </summary>
     [YamlMember(Alias = "allowed_sub_agent_ids_json", Description = "允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。")]
