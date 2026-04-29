@@ -77,7 +77,7 @@ public sealed class ChannelRetryJob : IScheduledJob
         try
         {
             // 加载渠道配置
-            ChannelEntity? channel = _channelConfigStore.GetById(entry.ChannelId);
+            ChannelEntityConfig? channel = _channelConfigStore.GetById(entry.ChannelId);
             if (channel is null || !channel.IsEnabled)
             {
                 _logger.LogWarning("F-D-1 渠道 {ChannelId} 不存在或已禁用，放弃重试 messageId={MessageId}",

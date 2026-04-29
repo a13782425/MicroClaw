@@ -188,7 +188,7 @@ public static class A2AEndpoints
         }
 
         string taskId = taskParams.Id ?? Guid.NewGuid().ToString("N");
-        ProviderConfig? providerCfg = providerStore.GetDefault();
+        ProviderEntity? providerCfg = providerStore.GetDefault();
         string providerId = providerCfg?.Id ?? string.Empty;
         if (providerCfg is null)
         {

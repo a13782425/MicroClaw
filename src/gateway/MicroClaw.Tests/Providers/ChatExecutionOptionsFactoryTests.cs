@@ -9,7 +9,7 @@ public sealed class ChatExecutionOptionsFactoryTests
     [Fact]
     public void Build_WithFunctionCallingProvider_AttachesToolsAndOverrides()
     {
-        ProviderConfig provider = CreateProvider(ProviderFeature.FunctionCalling);
+        ProviderEntity provider = CreateProvider(ProviderFeature.FunctionCalling);
         IReadOnlyList<AITool> tools =
         [
             AIFunctionFactory.Create(() => "ok", name: "tool-1", description: "test tool")
@@ -38,7 +38,7 @@ public sealed class ChatExecutionOptionsFactoryTests
     [Fact]
     public void Build_WithoutFunctionCallingSupport_DoesNotAttachTools()
     {
-        ProviderConfig provider = CreateProvider(ProviderFeature.None);
+        ProviderEntity provider = CreateProvider(ProviderFeature.None);
         IReadOnlyList<AITool> tools =
         [
             AIFunctionFactory.Create(() => "ok", name: "tool-1", description: "test tool")
@@ -52,7 +52,7 @@ public sealed class ChatExecutionOptionsFactoryTests
         options.AllowMultipleToolCalls.Should().BeTrue();
     }
 
-    private static ProviderConfig CreateProvider(ProviderFeature features) => new()
+    private static ProviderEntity CreateProvider(ProviderFeature features) => new()
     {
         Id = "provider-1",
         DisplayName = "Provider 1",

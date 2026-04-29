@@ -15,16 +15,16 @@ namespace MicroClaw.Providers.OpenAI;
 ///   <item><b>Chat Completions API</b>（默认）：适用于大多数兼容 OpenAI 协议的第三方网关。</item>
 ///   <item>
 ///     <b>Responses API</b>：当 <see cref="ProviderCapabilities.Features"/> 含 <see cref="ProviderFeature.ResponsesApi"/>
-///     且未自定义 <see cref="ProviderConfig.BaseUrl"/> 时启用，支持内置工具、会话状态等 Responses API 特有能力。
+///     且未自定义 <see cref="ProviderEntity.BaseUrl"/> 时启用，支持内置工具、会话状态等 Responses API 特有能力。
 ///   </item>
 /// </list>
 /// 两条路径都会产出 <see cref="IChatClient"/>，基类处理后续的消息/工具/usage 逻辑无差异。
 /// </summary>
 public sealed class OpenAIChatMicroProvider : ChatMicroProvider
 {
-    /// <summary>通过 <see cref="ProviderConfig"/> 构造 OpenAI Chat Provider。</summary>
-    public OpenAIChatMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
-        : base(configEntity, usageTracker)
+    /// <summary>通过 <see cref="ProviderEntity"/> 构造 OpenAI Chat Provider。</summary>
+    public OpenAIChatMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker)
+        : base(entityConfig, usageTracker)
     {
     }
 
@@ -32,21 +32,21 @@ public sealed class OpenAIChatMicroProvider : ChatMicroProvider
     protected override IChatClient BuildClient()
     {
         var options = new OpenAIClientOptions();
-        if (!string.IsNullOrWhiteSpace(Config.BaseUrl))
-            options.Endpoint = new Uri(Config.BaseUrl);
+        if (!string.IsNullOrWhiteSpace(Entity.BaseUrl))
+            options.Endpoint = new Uri(Entity.BaseUrl);
 
-        var credential = new ApiKeyCredential(Config.ApiKey);
+        var credential = new ApiKeyCredential(Entity.ApiKey);
 
         // 自定义 BaseUrl 时必须降级为 Chat Completions（Responses API 仅对接官方端点）。
-        bool useResponsesApi = Config.Capabilities.Features.HasFlag(ProviderFeature.ResponsesApi)
-            && string.IsNullOrWhiteSpace(Config.BaseUrl);
+        bool useResponsesApi = Entity.Capabilities.Features.HasFlag(ProviderFeature.ResponsesApi)
+            && string.IsNullOrWhiteSpace(Entity.BaseUrl);
 
         if (useResponsesApi)
         {
             var client = new OpenAIClient(credential, options);
-            return client.GetResponsesClient().AsIChatClient(Config.ModelName);
+            return client.GetResponsesClient().AsIChatClient(Entity.ModelName);
         }
 
-        return new ChatClient(Config.ModelName, credential, options).AsIChatClient();
+        return new ChatClient(Entity.ModelName, credential, options).AsIChatClient();
     }
 }

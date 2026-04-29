@@ -88,7 +88,7 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
             List<ResponseAttachment> attachmentsList = [];
 
             // 获取 ProviderConfig 用于消息装配
-            ProviderConfig? providerCfg = ProviderSvc.GetById(primaryProviderId)
+            ProviderEntity? providerCfg = ProviderSvc.GetById(primaryProviderId)
                 ?? ProviderSvc.GetDefault();
             if (providerCfg is null)
                 throw new InvalidOperationException("找不到可用的模型提供方。");

@@ -35,7 +35,7 @@ public static class SystemEndpoints
             if (string.IsNullOrWhiteSpace(req.ApiKey))
                 return ApiErrors.BadRequest("ApiKey is required.");
 
-            ProviderConfig config = new()
+            ProviderEntity entity = new()
             {
                 DisplayName = req.DisplayName.Trim(),
                 Protocol = ParseProtocol(req.Protocol),
@@ -48,7 +48,7 @@ public static class SystemEndpoints
                 Capabilities = req.Capabilities ?? new()
             };
 
-            ProviderConfig created = store.Add(config);
+            ProviderEntity created = store.Add(entity);
             return Results.Ok(new { created.Id });
         })
         .WithTags("Providers");
@@ -58,11 +58,11 @@ public static class SystemEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
 
-            ProviderConfig? existing = store.GetById(req.Id);
+            ProviderEntity? existing = store.GetById(req.Id);
             if (existing is null)
                 return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 
-            ProviderConfig incoming = existing with
+            ProviderEntity incoming = existing with
             {
                 DisplayName = req.DisplayName?.Trim() ?? existing.DisplayName,
                 Protocol = req.Protocol != null ? ParseProtocol(req.Protocol) : existing.Protocol,
@@ -75,7 +75,7 @@ public static class SystemEndpoints
                 Capabilities = req.Capabilities ?? existing.Capabilities
             };
 
-            ProviderConfig? updated = store.Update(req.Id, incoming);
+            ProviderEntity? updated = store.Update(req.Id, incoming);
             if (updated is null)
                 return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 

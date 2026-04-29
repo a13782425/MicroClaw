@@ -48,7 +48,7 @@ internal sealed class FeishuMessageEventHandler(
             return Task.CompletedTask;
 
         string? senderId = body.Sender?.SenderId?.OpenId;
-        ChannelEntity channel = channelContext.Channel;
+        ChannelEntityConfig channel = channelContext.Channel;
         FeishuChannelSettings settings = channelContext.Settings;
         // Capture the IFeishuTenantApi from the channel context (same child SP, SDK-managed token)
         IFeishuTenantApi tenantApi = channelContext.Api;

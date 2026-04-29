@@ -70,7 +70,7 @@ public sealed class ChatMessageAssemblerTests : IDisposable
             disabledMcpServerIds: [],
             toolGroupConfigs: [],
             createdAtUtc: DateTimeOffset.UtcNow);
-        var provider = new ProviderConfig
+        var provider = new ProviderEntity
         {
             Id = "provider-1",
             DisplayName = "Provider 1",

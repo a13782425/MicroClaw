@@ -36,13 +36,13 @@ public abstract class ChatMicroProvider : MicroProvider
     private readonly object _clientLock = new();
     private IChatClient? _client;
     
-    protected ProviderConfig Config { get; init; }
+    protected ProviderEntity Entity { get; init; }
     
     /// <summary>创建 Chat 类 Provider。</summary>
-    protected ChatMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
-        : base(configEntity, usageTracker)
+    protected ChatMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker)
+        : base(entityConfig, usageTracker)
     {
-        Config = configEntity.ToConfig();
+        Entity = entityConfig.ToEntity();
     }
 
     /// <summary>懒加载的底层 <see cref="IChatClient"/>。同一实例内复用。</summary>
@@ -68,20 +68,20 @@ public abstract class ChatMicroProvider : MicroProvider
         if (inputTokens <= 0 && outputTokens <= 0) return;
         
         long nonCachedInput = Math.Max(0L, inputTokens - cachedInputTokens);
-        decimal inputCost = nonCachedInput > 0 && Config.Capabilities.InputPricePerMToken.HasValue ? nonCachedInput * Config.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
-        decimal outputCost = outputTokens > 0 && Config.Capabilities.OutputPricePerMToken.HasValue ? outputTokens * Config.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
-        decimal cacheInputCost = cachedInputTokens > 0 ? cachedInputTokens * (Config.Capabilities.CacheInputPricePerMToken ?? Config.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
+        decimal inputCost = nonCachedInput > 0 && Entity.Capabilities.InputPricePerMToken.HasValue ? nonCachedInput * Entity.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal outputCost = outputTokens > 0 && Entity.Capabilities.OutputPricePerMToken.HasValue ? outputTokens * Entity.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal cacheInputCost = cachedInputTokens > 0 ? cachedInputTokens * (Entity.Capabilities.CacheInputPricePerMToken ?? Entity.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
         
         try
         {
-            await UsageTracker.TrackAsync(ctx.Session.Id, Config.Id, Config.DisplayName, ctx.Source, inputTokens, outputTokens, cachedInputTokens, inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
+            await UsageTracker.TrackAsync(ctx.Session.Id, Entity.Id, Entity.DisplayName, ctx.Source, inputTokens, outputTokens, cachedInputTokens, inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
                 // TODO: 在 MicroChatContext 增加 AgentId / MonthlyBudgetUsd 字段后透传，
                 //       当前 Agent 预算告警暂时走不到，等 AgentRunner 迁移完整补回。
                 agentId: null, monthlyBudgetUsd: null, ct: CancellationToken.None);
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Usage tracking failed for provider {ProviderId} session {SessionId}", Config.Id, ctx.Session.Id);
+            Logger.LogWarning(ex, "Usage tracking failed for provider {ProviderId} session {SessionId}", Entity.Id, ctx.Session.Id);
         }
     }
     
@@ -165,7 +165,7 @@ public abstract class ChatMicroProvider : MicroProvider
             : 10;
 
         ChatOptions resolvedOptions = options ?? BuildDefaultChatOptions();
-        if (resolvedOptions.Tools is null && tools.Count > 0 && Config.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
+        if (resolvedOptions.Tools is null && tools.Count > 0 && Entity.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
             resolvedOptions.Tools = [.. tools];
 
         Channel<StreamItem> output = Channel.CreateUnbounded<StreamItem>(
@@ -363,8 +363,8 @@ public abstract class ChatMicroProvider : MicroProvider
     /// <summary>根据 <see cref="MicroProvider.Config"/> 构造默认 <see cref="ChatOptions"/>。</summary>
     protected virtual ChatOptions BuildDefaultChatOptions() => new()
     {
-        ModelId = Config.ModelName,
-        MaxOutputTokens = Config.MaxOutputTokens,
+        ModelId = Entity.ModelName,
+        MaxOutputTokens = Entity.MaxOutputTokens,
         ToolMode = ChatToolMode.Auto,
         AllowMultipleToolCalls = true,
     };

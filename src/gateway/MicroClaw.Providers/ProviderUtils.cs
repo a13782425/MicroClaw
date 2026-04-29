@@ -4,57 +4,57 @@ using MicroClaw.Configuration.Options;
 namespace MicroClaw.Providers;
 public static class ProviderUtils
 {
-    private static Dictionary<string, ProviderConfig> _cache = new();
-    private static Dictionary<string, ProviderConfigEntity> _entityCache = new();
+    private static Dictionary<string, ProviderEntity> _cache = new();
+    private static Dictionary<string, ProviderEntityConfig> _entityCache = new();
     
-    public static ProviderConfig ToConfig(this ProviderConfigEntity entity)
+    public static ProviderEntity ToEntity(this ProviderEntityConfig entityConfig)
     {
-        if (_cache.TryGetValue(entity.Id, out var config))
+        if (_cache.TryGetValue(entityConfig.Id, out var config))
             return config;
         
-        config = new ProviderConfig
+        config = new ProviderEntity
         {
-            Id = entity.Id,
-            DisplayName = entity.DisplayName,
-            Protocol = ParseProtocol(entity.Protocol),
-            ModelType = ParseModelType(entity.ModelType),
-            BaseUrl = string.IsNullOrWhiteSpace(entity.BaseUrl) ? null : entity.BaseUrl,
-            ApiKey =  ResolveEnvVars(entity.ApiKey) ?? string.Empty,
-            ModelName =  ResolveEnvVars(entity.ModelName) ?? string.Empty,
-            MaxOutputTokens = entity.MaxOutputTokens,
-            IsEnabled = entity.IsEnabled,
-            IsDefault = entity.IsDefault,
-            Capabilities = DeserializeCapabilities(entity.CapabilitiesJson)
+            Id = entityConfig.Id,
+            DisplayName = entityConfig.DisplayName,
+            Protocol = ParseProtocol(entityConfig.Protocol),
+            ModelType = ParseModelType(entityConfig.ModelType),
+            BaseUrl = string.IsNullOrWhiteSpace(entityConfig.BaseUrl) ? null : entityConfig.BaseUrl,
+            ApiKey =  ResolveEnvVars(entityConfig.ApiKey) ?? string.Empty,
+            ModelName =  ResolveEnvVars(entityConfig.ModelName) ?? string.Empty,
+            MaxOutputTokens = entityConfig.MaxOutputTokens,
+            IsEnabled = entityConfig.IsEnabled,
+            IsDefault = entityConfig.IsDefault,
+            Capabilities = DeserializeCapabilities(entityConfig.CapabilitiesJson)
         };
         
-        _cache[entity.Id] = config;
-        _entityCache[entity.Id] = entity;
+        _cache[entityConfig.Id] = config;
+        _entityCache[entityConfig.Id] = entityConfig;
         return config;
     }
     
-    public static ProviderConfigEntity ToEntity(this ProviderConfig config)
+    public static ProviderEntityConfig ToConfig(this ProviderEntity entity)
     {
-        if (_entityCache.TryGetValue(config.Id, out var entity))
-            return entity;
+        if (_entityCache.TryGetValue(entity.Id, out var entityConfig))
+            return entityConfig;
         
-        entity = new ProviderConfigEntity
+        entityConfig = new ProviderEntityConfig
         {
-            Id = config.Id,
-            DisplayName = config.DisplayName,
-            Protocol = SerializeProtocol(config.Protocol),
-            ModelType = SerializeModelType(config.ModelType),
-            BaseUrl = config.BaseUrl,
-            ApiKey = config.ApiKey,
-            ModelName = config.ModelName,
-            MaxOutputTokens = config.MaxOutputTokens,
-            IsEnabled = config.IsEnabled,
-            IsDefault = config.IsDefault,
-            CapabilitiesJson = JsonSerializer.Serialize(config.Capabilities)
+            Id = entity.Id,
+            DisplayName = entity.DisplayName,
+            Protocol = SerializeProtocol(entity.Protocol),
+            ModelType = SerializeModelType(entity.ModelType),
+            BaseUrl = entity.BaseUrl,
+            ApiKey = entity.ApiKey,
+            ModelName = entity.ModelName,
+            MaxOutputTokens = entity.MaxOutputTokens,
+            IsEnabled = entity.IsEnabled,
+            IsDefault = entity.IsDefault,
+            CapabilitiesJson = JsonSerializer.Serialize(entity.Capabilities)
         };
         
-        _entityCache[config.Id] = entity;
-        _cache[config.Id] = config;
-        return entity;
+        _entityCache[entity.Id] = entityConfig;
+        _cache[entity.Id] = entity;
+        return entityConfig;
     }
     
     public static ProviderProtocol ParseProtocol(string? value) =>

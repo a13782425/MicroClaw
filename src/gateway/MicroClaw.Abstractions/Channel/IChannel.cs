@@ -13,7 +13,7 @@ public interface IChannel
 
     ChannelType Type { get; }
 
-    ChannelEntity Config { get; }
+    ChannelEntityConfig Config { get; }
 
     /// <summary>渠道实例的本地化显示名称（优先使用配置名）。</summary>
     string DisplayName => Name;

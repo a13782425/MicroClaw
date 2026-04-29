@@ -14,27 +14,27 @@ namespace MicroClaw.Providers.OpenAI;
 /// </summary>
 public sealed class OpenAIEmbeddingMicroProvider : EmbeddingMicroProvider
 {
-    /// <summary>通过 <see cref="ProviderConfig"/> 构造 OpenAI Embedding Provider。</summary>
-    public OpenAIEmbeddingMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
-        : base(configEntity, usageTracker)
+    /// <summary>通过 <see cref="ProviderEntity"/> 构造 OpenAI Embedding Provider。</summary>
+    public OpenAIEmbeddingMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker)
+        : base(entityConfig, usageTracker)
     {
     }
 
     /// <inheritdoc />
     protected override IEmbeddingGenerator<string, Embedding<float>> BuildGenerator()
     {
-        string endpoint = string.IsNullOrWhiteSpace(Config.BaseUrl) ? "(OpenAI 默认)" : Config.BaseUrl;
+        string endpoint = string.IsNullOrWhiteSpace(Entity.BaseUrl) ? "(OpenAI 默认)" : Entity.BaseUrl;
         Logger.LogDebug(
             "创建 OpenAI Embedding 客户端 — Endpoint: {Endpoint}, Model: {Model}",
-            endpoint, Config.ModelName);
+            endpoint, Entity.ModelName);
 
         var options = new OpenAIClientOptions();
-        if (!string.IsNullOrWhiteSpace(Config.BaseUrl))
-            options.Endpoint = new Uri(Config.BaseUrl);
+        if (!string.IsNullOrWhiteSpace(Entity.BaseUrl))
+            options.Endpoint = new Uri(Entity.BaseUrl);
 
-        var credential = new ApiKeyCredential(Config.ApiKey);
+        var credential = new ApiKeyCredential(Entity.ApiKey);
         var client = new OpenAIClient(credential, options);
 
-        return client.GetEmbeddingClient(Config.ModelName).AsIEmbeddingGenerator();
+        return client.GetEmbeddingClient(Entity.ModelName).AsIEmbeddingGenerator();
     }
 }

@@ -27,7 +27,7 @@ public sealed class ChatMessageAssembler(
     /// </summary>
     public async Task<ChatMessageAssemblyResult> AssembleAsync(
         AgentDto agent,
-        ProviderConfig provider,
+        ProviderEntity provider,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
         string? behaviorSuffix = null,
@@ -244,7 +244,7 @@ public sealed class ChatMessageAssembler(
 
     private IReadOnlyList<SessionMessage> ValidateModalities(
         IReadOnlyList<SessionMessage> history,
-        ProviderConfig provider)
+        ProviderEntity provider)
     {
         var caps = provider.Capabilities;
         if (!history.Any(m => m.Attachments is { Count: > 0 }))

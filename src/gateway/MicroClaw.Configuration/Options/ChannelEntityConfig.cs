@@ -20,7 +20,7 @@ public enum ChannelType
 /// <summary>
 /// 渠道配置实体类，用于持久化存储和传输。
 /// </summary>
-public sealed class ChannelEntity
+public sealed class ChannelEntityConfig
 {
     /// <summary>
     /// 渠道实例的唯一标识。

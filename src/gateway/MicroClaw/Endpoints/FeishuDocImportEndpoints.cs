@@ -67,7 +67,7 @@ public static class FeishuDocImportEndpoints
             return Results.BadRequest(new { success = false, message = "DocUrlOrToken is required.", errorCode = "BAD_REQUEST" });
 
         // 获取第一个已启用的飞书渠道配置
-        ChannelEntity? feishuConfig = channelStore
+        ChannelEntityConfig? feishuConfig = channelStore
             .GetConfigsByType(ChannelType.Feishu)
             .FirstOrDefault(c => c.IsEnabled);
 

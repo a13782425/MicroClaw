@@ -35,7 +35,7 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.ProviderId))
                 return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
             
-            ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
+            ProviderEntity? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
             if (provider.ModelType == ModelType.Embedding)
@@ -133,7 +133,7 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.ProviderId))
                 return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
             
-            ProviderConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
+            ProviderEntity? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null || !provider.IsEnabled)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found or disabled.", errorCode = "NOT_FOUND" });
             if (provider.ModelType == ModelType.Embedding)

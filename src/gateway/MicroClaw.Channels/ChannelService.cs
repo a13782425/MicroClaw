@@ -43,7 +43,7 @@ public sealed class ChannelService : IChannelService
     
     // ── Config CRUD ───────────────────────────────────────────────────────
     
-    public IReadOnlyList<ChannelEntity> All
+    public IReadOnlyList<ChannelEntityConfig> All
     {
         get
         {
@@ -59,7 +59,7 @@ public sealed class ChannelService : IChannelService
         }
     }
     
-    public ChannelEntity? GetById(string id)
+    public ChannelEntityConfig? GetById(string id)
     {
         _lock.EnterReadLock();
         try
@@ -73,7 +73,7 @@ public sealed class ChannelService : IChannelService
         }
     }
     
-    public IReadOnlyList<ChannelEntity> GetConfigsByType(ChannelType type)
+    public IReadOnlyList<ChannelEntityConfig> GetConfigsByType(ChannelType type)
     {
         _lock.EnterReadLock();
         try
@@ -86,13 +86,13 @@ public sealed class ChannelService : IChannelService
         }
     }
     
-    public ChannelEntity Add(ChannelEntity channel)
+    public ChannelEntityConfig Add(ChannelEntityConfig channel)
     {
         _lock.EnterWriteLock();
         try
         {
             var opts = MicroClawConfig.Get<ChannelOptions>();
-            var withId = new ChannelEntity
+            var withId = new ChannelEntityConfig
             {
                 Id = MicroClawUtils.GetUniqueId(),
                 DisplayName = channel.DisplayName,
@@ -109,7 +109,7 @@ public sealed class ChannelService : IChannelService
         }
     }
     
-    public ChannelEntity? Update(string id, ChannelEntity incoming)
+    public ChannelEntityConfig? Update(string id, ChannelEntityConfig incoming)
     {
         _lock.EnterWriteLock();
         try
@@ -118,7 +118,7 @@ public sealed class ChannelService : IChannelService
             var existing = opts.Channels.FirstOrDefault(c => c.Id == id);
             if (existing is null) return null;
             
-            var merged = new ChannelEntity
+            var merged = new ChannelEntityConfig
             {
                 Id = id,
                 DisplayName = incoming.DisplayName,
@@ -165,7 +165,7 @@ public sealed class ChannelService : IChannelService
             {
                 Channels =
                 [
-                    .. opts.Channels, new ChannelEntity
+                    .. opts.Channels, new ChannelEntityConfig
                     {
                         Id = ChannelUtils.WebChannelId,
                         DisplayName = "Web Console",
@@ -198,7 +198,7 @@ public sealed class ChannelService : IChannelService
         if (string.IsNullOrWhiteSpace(channelId))
             return false;
         
-        ChannelEntity? config = GetById(channelId);
+        ChannelEntityConfig? config = GetById(channelId);
         if (config is null)
         {
             _cache.TryRemove(channelId, out _);
@@ -272,7 +272,7 @@ public sealed class ChannelService : IChannelService
     
     private static bool IsMasked(string value) => string.IsNullOrWhiteSpace(value) || value.Contains("***");
     
-    private static ChannelEntity WithResolvedEnvVars(ChannelEntity e) =>
+    private static ChannelEntityConfig WithResolvedEnvVars(ChannelEntityConfig e) =>
         new()
         {
             Id = e.Id,
@@ -288,7 +288,7 @@ public sealed class ChannelService : IChannelService
         return Regex.Replace(value, @"\$\{([^}]+)\}", m => Environment.GetEnvironmentVariable(m.Groups[1].Value) ?? m.Value);
     }
     
-    private static string BuildFingerprint(ChannelEntity config) => string.Join("|", config.Id, config.DisplayName, config.ChannelType, config.IsEnabled, config.SettingJson);
+    private static string BuildFingerprint(ChannelEntityConfig config) => string.Join("|", config.Id, config.DisplayName, config.ChannelType, config.IsEnabled, config.SettingJson);
     
     private sealed record CacheEntry(string Fingerprint, IChannel Channel);
 }

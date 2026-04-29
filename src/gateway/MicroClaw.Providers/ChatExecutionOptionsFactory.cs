@@ -9,7 +9,7 @@ public static class ChatExecutionOptionsFactory
 {
     public static ChatOptions Build(
         IReadOnlyList<AITool> tools,
-        ProviderConfig provider,
+        ProviderEntity provider,
         string? modelOverride = null,
         string? effortOverride = null,
         float? temperatureOverride = null,

@@ -27,7 +27,7 @@ public sealed class PetModelSelector(
     /// <param name="scenario">当前使用场景。</param>
     /// <param name="preferredProviderId">首选 Provider ID（来自 PetConfig）。null 表示无偏好。</param>
     /// <returns>选中的 Provider 配置；无可用 Provider 时返回 <c>null</c>。</returns>
-    public ProviderConfig? Select(PetModelScenario scenario, string? preferredProviderId = null)
+    public ProviderEntity? Select(PetModelScenario scenario, string? preferredProviderId = null)
     {
         var allProviders = _providerService.All;
 
@@ -54,7 +54,7 @@ public sealed class PetModelSelector(
     /// <param name="scenario">当前使用场景。</param>
     /// <param name="preferredProviderId">首选 Provider ID。</param>
     /// <returns>排序后的 Provider 列表，第一个为最优选择。</returns>
-    public IReadOnlyList<ProviderConfig> GetFallbackChain(PetModelScenario scenario, string? preferredProviderId = null)
+    public IReadOnlyList<ProviderEntity> GetFallbackChain(PetModelScenario scenario, string? preferredProviderId = null)
     {
         var allProviders = _providerService.All;
         var strategy = MapScenarioToStrategy(scenario);

@@ -75,7 +75,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
     public ChannelType Type => ChannelType.Feishu;
     public string DisplayName => "飞书";
 
-    public IChannel Create(ChannelEntity config)
+    public IChannel Create(ChannelEntityConfig config)
     {
         FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
         bool isWebSocket = string.Equals(settings.ConnectionMode, "websocket", StringComparison.OrdinalIgnoreCase);
@@ -92,7 +92,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
         return channel;
     }
 
-    public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
+    public Task PublishAsync(ChannelEntityConfig config, ChannelMessage message, CancellationToken cancellationToken = default)
     {
         if (_instances.TryGetValue(config.Id, out FeishuChannel? ch))
             return ch.PublishAsync(message, cancellationToken);
@@ -100,7 +100,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
         return Create(config).PublishAsync(message, cancellationToken);
     }
 
-    public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+    public Task<WebhookResult> HandleWebhookAsync(ChannelEntityConfig config, string body,
         IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
     {
         if (_instances.TryGetValue(config.Id, out FeishuChannel? ch))
@@ -109,10 +109,10 @@ internal sealed class FeishuChannelProvider : IChannelProvider
         return Create(config).HandleWebhookAsync(body, headers, cancellationToken);
     }
 
-    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntityConfig config, CancellationToken cancellationToken = default)
         => Create(config).TestConnectionAsync(cancellationToken);
 
-    public Task<ChannelDiagnostics> GetDiagnosticsAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+    public Task<ChannelDiagnostics> GetDiagnosticsAsync(ChannelEntityConfig config, CancellationToken cancellationToken = default)
     {
         FeishuChannelSettings? settings = FeishuChannelSettings.TryParse(config.SettingJson);
         string connectionMode = settings?.ConnectionMode ?? "webhook";
@@ -150,10 +150,10 @@ internal sealed class FeishuChannelProvider : IChannelProvider
     {
         _logger.LogInformation("飞书 Provider 启动，开始扫描渠道配置…");
 
-        IReadOnlyList<ChannelEntity> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
+        IReadOnlyList<ChannelEntityConfig> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
         int started = 0;
 
-        foreach (ChannelEntity config in configs)
+        foreach (ChannelEntityConfig config in configs)
         {
             if (!config.IsEnabled)
             {
@@ -196,13 +196,13 @@ internal sealed class FeishuChannelProvider : IChannelProvider
 
     public async Task TickAsync(CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<ChannelEntity> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
+        IReadOnlyList<ChannelEntityConfig> configs = _channelStore.GetConfigsByType(ChannelType.Feishu);
 
         // Build desired state: enabled WebSocket channels
         HashSet<string> desiredIds = new(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, (ChannelEntity Config, FeishuChannelSettings Settings)> desiredMap = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, (ChannelEntityConfig Config, FeishuChannelSettings Settings)> desiredMap = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (ChannelEntity config in configs)
+        foreach (ChannelEntityConfig config in configs)
         {
             FeishuChannelSettings settings = FeishuChannelSettings.TryParse(config.SettingJson) ?? new();
             if (!config.IsEnabled ||
@@ -223,7 +223,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
         }
 
         // Add or recreate instances
-        foreach ((string id, (ChannelEntity config, FeishuChannelSettings settings)) in desiredMap)
+        foreach ((string id, (ChannelEntityConfig config, FeishuChannelSettings settings)) in desiredMap)
         {
             string newFingerprint = BuildFingerprint(config);
 
@@ -251,7 +251,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
     // ── Internal Helpers ────────────────────────────────────────────────
 
     /// <summary>Create and register a WebSocket channel instance.</summary>
-    private async Task StartInstanceAsync(ChannelEntity config, FeishuChannelSettings settings, CancellationToken ct)
+    private async Task StartInstanceAsync(ChannelEntityConfig config, FeishuChannelSettings settings, CancellationToken ct)
     {
         FeishuChannel channel = await FeishuChannel.CreateAsync(config, settings, this, _loggerFactory, ct);
         _instances[config.Id] = channel;
@@ -306,7 +306,7 @@ internal sealed class FeishuChannelProvider : IChannelProvider
     /// </summary>
     public Task<IReadOnlyList<AIFunction>> CreateToolsAsync(string channelId, CancellationToken cancellationToken = default)
     {
-        ChannelEntity? config = _channelStore.GetById(channelId);
+        ChannelEntityConfig? config = _channelStore.GetById(channelId);
         if (config is null)
             return Task.FromResult<IReadOnlyList<AIFunction>>([]);
 
@@ -344,6 +344,6 @@ internal sealed class FeishuChannelProvider : IChannelProvider
         return Task.FromResult(tools);
     }
 
-    private static string BuildFingerprint(ChannelEntity config)
+    private static string BuildFingerprint(ChannelEntityConfig config)
         => string.Join("|", config.Id, config.IsEnabled, config.SettingJson);
 }

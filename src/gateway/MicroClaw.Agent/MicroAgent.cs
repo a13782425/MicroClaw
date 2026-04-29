@@ -148,7 +148,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         ArgumentNullException.ThrowIfNull(output);
 
         string primaryProviderId = ResolveExecutionProviderId(chatContext);
-        IReadOnlyList<ProviderConfig> chain = BuildPreparedFallbackChain(chatContext);
+        IReadOnlyList<ProviderEntity> chain = BuildPreparedFallbackChain(chatContext);
         if (chain.Count == 0)
         {
             output.Writer.TryComplete(new InvalidOperationException($"Provider '{primaryProviderId}' not found or disabled."));
@@ -167,7 +167,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         {
             for (int attempt = 0; attempt < chain.Count; attempt++)
             {
-                ProviderConfig provider = chain[attempt];
+                ProviderEntity provider = chain[attempt];
                 bool isLastAttempt = attempt == chain.Count - 1;
                 bool anyItemWritten = false;
 
@@ -288,7 +288,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.TargetProviderId to be populated.");
     }
 
-    private IReadOnlyList<ProviderConfig> BuildPreparedFallbackChain(MicroChatContext chatContext)
+    private IReadOnlyList<ProviderEntity> BuildPreparedFallbackChain(MicroChatContext chatContext)
     {
         ArgumentNullException.ThrowIfNull(chatContext);
 
@@ -302,17 +302,17 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         if (preferredIds.Count == 0)
             return [];
 
-        Dictionary<string, ProviderConfig> providersById = _providerService!.All
+        Dictionary<string, ProviderEntity> providersById = _providerService!.All
             .Where(static p => p.IsEnabled && p.ModelType == ModelType.Chat)
             .GroupBy(static p => p.Id, StringComparer.Ordinal)
             .ToDictionary(static g => g.Key, static g => g.First(), StringComparer.Ordinal);
 
-        List<ProviderConfig> plannedChain = [];
+        List<ProviderEntity> plannedChain = [];
         HashSet<string> seenIds = new(StringComparer.Ordinal);
         foreach (string providerId in preferredIds)
         {
             if (!seenIds.Add(providerId)) continue;
-            if (providersById.TryGetValue(providerId, out ProviderConfig? p))
+            if (providersById.TryGetValue(providerId, out ProviderEntity? p))
                 plannedChain.Add(p);
         }
 

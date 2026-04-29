@@ -33,7 +33,7 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
     public IFeishuTenantApi Api { get; }
 
     private FeishuChannel(
-        ChannelEntity config,
+        ChannelEntityConfig config,
         ServiceProvider sp,
         IFeishuTenantApi api,
         IHostedService? wssService,
@@ -57,7 +57,7 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
     /// WebSocket 模式下同时注册并启动 <c>WssService</c>；Webhook 模式下仅注册 API 客户端。
     /// </summary>
     internal static async Task<FeishuChannel> CreateAsync(
-        ChannelEntity config,
+        ChannelEntityConfig config,
         FeishuChannelSettings settings,
         FeishuChannelProvider provider,
         ILoggerFactory loggerFactory,
@@ -122,7 +122,7 @@ internal sealed class FeishuChannel : IChannel, IAsyncDisposable
     public string Id => Config.Id;
     public string Name => "Feishu";
     public ChannelType Type => ChannelType.Feishu;
-    public ChannelEntity Config { get; }
+    public ChannelEntityConfig Config { get; }
     public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "飞书" : Config.DisplayName;
 
     public Task<ChannelDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)

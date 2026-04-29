@@ -12,9 +12,9 @@ namespace MicroClaw.Providers.Claude;
 /// </summary>
 public sealed class AnthropicChatMicroProvider : ChatMicroProvider
 {
-    /// <summary>通过 <see cref="ProviderConfig"/> 构造 Anthropic Chat Provider。</summary>
-    public AnthropicChatMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
-        : base(configEntity, usageTracker)
+    /// <summary>通过 <see cref="ProviderEntity"/> 构造 Anthropic Chat Provider。</summary>
+    public AnthropicChatMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker)
+        : base(entityConfig, usageTracker)
     {
     }
 
@@ -23,12 +23,12 @@ public sealed class AnthropicChatMicroProvider : ChatMicroProvider
     {
         var client = new AnthropicClient
         {
-            ApiKey = Config.ApiKey,
-            BaseUrl = string.IsNullOrWhiteSpace(Config.BaseUrl)
+            ApiKey = Entity.ApiKey,
+            BaseUrl = string.IsNullOrWhiteSpace(Entity.BaseUrl)
                 ? "https://api.anthropic.com"
-                : Config.BaseUrl.TrimEnd('/'),
+                : Entity.BaseUrl.TrimEnd('/'),
         };
 
-        return client.AsIChatClient(Config.ModelName);
+        return client.AsIChatClient(Entity.ModelName);
     }
 }

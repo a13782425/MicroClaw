@@ -25,7 +25,7 @@ internal sealed class FeishuMessageProcessor(ISessionService sessionService, ILo
     private readonly ConcurrentDictionary<string, DateTimeOffset> _processedMessageIds = new();
     
     /// <summary>处理一条飞书文本消息：管理会话 → 查找 Provider → 调用 AI → 回复飞书。</summary>
-    public async Task ProcessMessageAsync(string userText, string? senderId, string chatId, string messageId, ChannelEntity channel, FeishuChannelSettings settings, string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null, IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)
+    public async Task ProcessMessageAsync(string userText, string? senderId, string chatId, string messageId, ChannelEntityConfig channel, FeishuChannelSettings settings, string chatType = "p2p", IReadOnlyList<string>? mentionedOpenIds = null, IFeishuTenantApi? tenantApi = null, string? rootId = null, CancellationToken ct = default)
     {
         // F-B-1: 群聊过滤 — 群聊消息只有 @机器人 时才响应
         if (chatType == "group")

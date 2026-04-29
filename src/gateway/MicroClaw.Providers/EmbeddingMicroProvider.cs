@@ -15,12 +15,12 @@ public abstract class EmbeddingMicroProvider : MicroProvider
     private readonly object _generatorLock = new();
     private IEmbeddingGenerator<string, Embedding<float>>? _generator;
     
-    protected ProviderConfig Config { get; init; }
+    protected ProviderEntity Entity { get; init; }
     
     /// <summary>创建 Embedding 类 Provider。</summary>
-    protected EmbeddingMicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker) : base(configEntity, usageTracker)
+    protected EmbeddingMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker) : base(entityConfig, usageTracker)
     {
-        Config = configEntity.ToConfig();
+        Entity = entityConfig.ToEntity();
     }
     
     /// <summary>懒加载的底层 <see cref="IEmbeddingGenerator{String,Embedding}"/>；同一实例内复用。</summary>
@@ -67,14 +67,14 @@ public abstract class EmbeddingMicroProvider : MicroProvider
         ArgumentNullException.ThrowIfNull(ctx);
         if (inputTokens <= 0) return;
         
-        decimal inputCost = Config.Capabilities.InputPricePerMToken.HasValue ? inputTokens * Config.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal inputCost = Entity.Capabilities.InputPricePerMToken.HasValue ? inputTokens * Entity.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
         
         try
         {
             await UsageTracker.TrackAsync(
                 ctx.Session.Id, 
-                Config.Id,
-                Config.DisplayName,
+                Entity.Id,
+                Entity.DisplayName,
                 ctx.Source,
                 inputTokens,
                 outputTokens: 0L,
@@ -89,7 +89,7 @@ public abstract class EmbeddingMicroProvider : MicroProvider
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Embedding usage tracking failed for provider {ProviderId} session {SessionId}", Config.Id, ctx.Session.Id);
+            Logger.LogWarning(ex, "Embedding usage tracking failed for provider {ProviderId} session {SessionId}", Entity.Id, ctx.Session.Id);
         }
     }
     

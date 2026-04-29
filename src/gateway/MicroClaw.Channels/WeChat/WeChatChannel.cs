@@ -15,23 +15,23 @@ public sealed class WeChatChannelProvider : IChannelProvider
 
     public string DisplayName => "微信";
 
-    public IChannel Create(ChannelEntity config) => new WeChatChannel(config);
+    public IChannel Create(ChannelEntityConfig config) => new WeChatChannel(config);
 
-    public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
+    public Task PublishAsync(ChannelEntityConfig config, ChannelMessage message, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+    public Task<WebhookResult> HandleWebhookAsync(ChannelEntityConfig config, string body,
         IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
     {
         // 消息正文由端点层完成签名验证后传入；此处预留完整 XML 解析实现
         return Task.FromResult(WebhookResult.Empty);
     }
 
-    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+    public Task<ChannelTestResult> TestConnectionAsync(ChannelEntityConfig config, CancellationToken cancellationToken = default)
         => Task.FromResult(new ChannelTestResult(false, "微信渠道连通性测试尚未实现", 0));
 }
 
-public sealed class WeChatChannel(ChannelEntity config) : IChannel
+public sealed class WeChatChannel(ChannelEntityConfig config) : IChannel
 {
     public string Id => Config.Id;
 
@@ -39,7 +39,7 @@ public sealed class WeChatChannel(ChannelEntity config) : IChannel
 
     public ChannelType Type => ChannelType.WeChat;
 
-    public ChannelEntity Config { get; } = config;
+    public ChannelEntityConfig Config { get; } = config;
 
     public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? "微信" : Config.DisplayName;
 

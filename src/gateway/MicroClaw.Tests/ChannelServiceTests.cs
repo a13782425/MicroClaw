@@ -27,7 +27,7 @@ public sealed class ChannelServiceTests : IDisposable
         InitializeConfig(
             channels:
             [
-                new ChannelEntity
+                new ChannelEntityConfig
                 {
                     Id = "feishu-a",
                     DisplayName = "Feishu A",
@@ -46,7 +46,7 @@ public sealed class ChannelServiceTests : IDisposable
         InitializeConfig(
             channels:
             [
-                new ChannelEntity
+                new ChannelEntityConfig
                 {
                     Id = "feishu-a",
                     DisplayName = "Feishu A",
@@ -54,7 +54,7 @@ public sealed class ChannelServiceTests : IDisposable
                     IsEnabled = true,
                     SettingJson = """{"appId":"a"}"""
                 },
-                new ChannelEntity
+                new ChannelEntityConfig
                 {
                     Id = "feishu-b",
                     DisplayName = "Feishu B",
@@ -73,7 +73,7 @@ public sealed class ChannelServiceTests : IDisposable
         InitializeConfig(
             channels:
             [
-                new ChannelEntity
+                new ChannelEntityConfig
                 {
                     Id = ChannelUtils.WebChannelId,
                     DisplayName = "Web Console",
@@ -230,7 +230,7 @@ public sealed class ChannelServiceTests : IDisposable
         public object? GetService(Type serviceType) => null;
     }
 
-    private void InitializeConfig(ChannelEntity[]? channels = null, SessionEntity[]? sessions = null)
+    private void InitializeConfig(ChannelEntityConfig[]? channels = null, SessionEntity[]? sessions = null)
     {
         ResetMicroClawConfig();
 
@@ -245,12 +245,12 @@ public sealed class ChannelServiceTests : IDisposable
             ["sessions:items"] = null
         };
 
-        ChannelEntity[] effectiveChannels = channels ?? [];
+        ChannelEntityConfig[] effectiveChannels = channels ?? [];
         SessionEntity[] effectiveSessions = sessions ?? [];
 
         for (int i = 0; i < effectiveChannels.Length; i++)
         {
-            ChannelEntity channel = effectiveChannels[i];
+            ChannelEntityConfig channel = effectiveChannels[i];
             data[$"channel:channels:{i}:id"] = channel.Id;
             data[$"channel:channels:{i}:display_name"] = channel.DisplayName;
             data[$"channel:channels:{i}:channel_type"] = ChannelUtils.SerializeChannelType(channel.ChannelType);
@@ -293,20 +293,20 @@ public sealed class ChannelServiceTests : IDisposable
 
         public string DisplayName => displayName;
 
-        public IChannel Create(ChannelEntity config) => new FakeChannel(config, Name);
+        public IChannel Create(ChannelEntityConfig config) => new FakeChannel(config, Name);
 
-        public Task PublishAsync(ChannelEntity config, ChannelMessage message, CancellationToken cancellationToken = default)
+        public Task PublishAsync(ChannelEntityConfig config, ChannelMessage message, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task<WebhookResult> HandleWebhookAsync(ChannelEntity config, string body,
+        public Task<WebhookResult> HandleWebhookAsync(ChannelEntityConfig config, string body,
             IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
             => Task.FromResult(WebhookResult.Ok(null));
 
-        public Task<ChannelTestResult> TestConnectionAsync(ChannelEntity config, CancellationToken cancellationToken = default)
+        public Task<ChannelTestResult> TestConnectionAsync(ChannelEntityConfig config, CancellationToken cancellationToken = default)
             => Task.FromResult(new ChannelTestResult(true, "ok", 0));
     }
 
-    private sealed class FakeChannel(ChannelEntity config, string name) : IChannel
+    private sealed class FakeChannel(ChannelEntityConfig config, string name) : IChannel
     {
         public string Id => Config.Id;
 
@@ -314,7 +314,7 @@ public sealed class ChannelServiceTests : IDisposable
 
         public ChannelType Type => Config.ChannelType;
 
-        public ChannelEntity Config { get; } = config;
+        public ChannelEntityConfig Config { get; } = config;
 
         public string DisplayName => Config.DisplayName;
 

@@ -4,7 +4,7 @@ namespace MicroClaw.Configuration.Options;
 /// <summary>
 /// 单个模型提供方的持久化配置实体。
 /// </summary>
-public sealed record ProviderConfigEntity
+public sealed record ProviderEntityConfig
 {
     /// <summary>
     /// Provider 的唯一标识。

@@ -7,16 +7,16 @@ namespace MicroClaw.Providers;
 public sealed class ProviderRouter : IProviderRouter
 {
     /// <inheritdoc/>
-    public ProviderConfig? Route(IReadOnlyList<ProviderConfig> candidates, ProviderRoutingStrategy strategy)
+    public ProviderEntity? Route(IReadOnlyList<ProviderEntity> candidates, ProviderRoutingStrategy strategy)
         => GetFallbackChain(candidates, strategy).FirstOrDefault();
 
     /// <inheritdoc/>
-    public IReadOnlyList<ProviderConfig> GetFallbackChain(
-        IReadOnlyList<ProviderConfig> candidates,
+    public IReadOnlyList<ProviderEntity> GetFallbackChain(
+        IReadOnlyList<ProviderEntity> candidates,
         ProviderRoutingStrategy strategy)
     {
         // 只允许 Chat 类型的 Provider 进入回退链，Embedding 模型不能用于对话
-        List<ProviderConfig> enabled = candidates
+        List<ProviderEntity> enabled = candidates
             .Where(p => p.IsEnabled && p.ModelType != ModelType.Embedding)
             .ToList();
         if (enabled.Count == 0)

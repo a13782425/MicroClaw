@@ -8,13 +8,13 @@ namespace MicroClaw.Abstractions.Providers;
 /// 所有模型 Provider 的抽象基类。对外只暴露统一的消息发送/流式接口，
 /// 底层 <c>IChatClient</c>/<c>IEmbeddingGenerator</c> 以及 token usage 追踪
 /// 均由具体子类内部管理，调用方只需通过 <see cref="ProviderService"/>
-/// 按 <see cref="ProviderConfigEntity.Id"/> 拿到实例并传入 <see cref="MicroChatContext"/>。
+/// 按 <see cref="ProviderEntityConfig.Id"/> 拿到实例并传入 <see cref="MicroChatContext"/>。
 /// <para>
 /// 生命周期：
 /// </para>
 /// <list type="bullet">
 ///   <item>由 <see cref="ProviderService"/> 缓存并负责 <see cref="DisposeAsync"/>；</item>
-///   <item>当对应 <see cref="ProviderConfigEntity"/> 被修改（哈希变化）时，旧实例会被 dispose 并重新创建；</item>
+///   <item>当对应 <see cref="ProviderEntityConfig"/> 被修改（哈希变化）时，旧实例会被 dispose 并重新创建；</item>
 ///   <item>子类应把所有自持有的底层 SDK 客户端在 <see cref="OnDisposeAsync"/> 中释放。</item>
 /// </list>
 /// </summary>
@@ -24,19 +24,19 @@ public abstract class MicroProvider : IAsyncDisposable
     private int _disposed;
     
     /// <summary>创建 Provider 实例，保存配置快照。</summary>
-    /// <param name="configEntity">Provider 配置快照（实例生命周期内不可变）。</param>
+    /// <param name="entityConfig">Provider 配置快照（实例生命周期内不可变）。</param>
     /// <param name="usageTracker">Token usage 追踪器；具体子类通过 <see cref="TrackUsageAsync"/> 等 helper 上报。</param>
-    protected MicroProvider(ProviderConfigEntity configEntity, IUsageTracker usageTracker)
+    protected MicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker)
     {
-        ArgumentNullException.ThrowIfNull(configEntity);
+        ArgumentNullException.ThrowIfNull(entityConfig);
         ArgumentNullException.ThrowIfNull(usageTracker);
-        ConfigEntity = configEntity;
+        EntityConfig = entityConfig;
         UsageTracker = usageTracker;
         _logger = MicroLogger.Factory.CreateLogger(GetType());
     }
     
     /// <summary>Provider 配置快照，对实例生命周期内不可变。</summary>
-    public ProviderConfigEntity ConfigEntity { get; }
+    public ProviderEntityConfig EntityConfig { get; }
     
     /// <summary>Token usage 追踪器。子类在调用底层 SDK 后调用对应 helper 上报。</summary>
     protected IUsageTracker UsageTracker { get; }
@@ -188,7 +188,7 @@ public abstract class MicroProvider : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "MicroProvider {ProviderId} OnDisposeAsync threw; continuing teardown.", ConfigEntity.Id);
+            _logger.LogWarning(ex, "MicroProvider {ProviderId} OnDisposeAsync threw; continuing teardown.", EntityConfig.Id);
         }
         GC.SuppressFinalize(this);
     }

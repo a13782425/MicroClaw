@@ -14,7 +14,7 @@ public sealed class ProvidersOptions : IMicroClawConfigTemplate
     /// 当前系统中可用的 Provider 配置列表。
     /// </summary>
     [YamlMember(Alias = "items", Description = "当前系统中可用的 Provider 配置列表。")]
-    public List<ProviderConfigEntity> Items { get; set; } = [];
+    public List<ProviderEntityConfig> Items { get; set; } = [];
 
     public IMicroClawConfigOptions CreateDefaultTemplate() => new ProvidersOptions();
 }

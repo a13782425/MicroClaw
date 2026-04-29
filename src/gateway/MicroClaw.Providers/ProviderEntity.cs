@@ -10,7 +10,7 @@ public enum ModelType
     Chat,
     Embedding
 }
-public sealed record ProviderConfig
+public sealed record ProviderEntity
 {
     public string Id { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;

@@ -68,7 +68,7 @@ public static class ChannelEndpoints
             if (string.IsNullOrWhiteSpace(req.DisplayName))
                 return ApiErrors.BadRequest("DisplayName is required.");
 
-            ChannelEntity channel = new()
+            ChannelEntityConfig channel = new()
             {
                 DisplayName = req.DisplayName.Trim(),
                 ChannelType = ChannelUtils.ParseChannelType(req.ChannelType),
@@ -76,7 +76,7 @@ public static class ChannelEndpoints
                 SettingJson = req.Settings ?? "{}"
             };
 
-            ChannelEntity created = store.Add(channel);
+            ChannelEntityConfig created = store.Add(channel);
             return Results.Ok(new { created.Id });
         })
         .WithTags("Channels");
@@ -86,7 +86,7 @@ public static class ChannelEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
 
-            ChannelEntity incoming = new()
+            ChannelEntityConfig incoming = new()
             {
                 DisplayName = req.DisplayName?.Trim() ?? string.Empty,
                 ChannelType = ChannelUtils.ParseChannelType(req.ChannelType),
@@ -94,7 +94,7 @@ public static class ChannelEndpoints
                 SettingJson = req.Settings ?? "{}"
             };
 
-            ChannelEntity? updated = store.Update(req.Id, incoming);
+            ChannelEntityConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
                 return ApiErrors.NotFound($"Channel '{req.Id}' not found.");
 
