@@ -10,7 +10,7 @@ public sealed class ChannelOptions : IMicroClawConfigTemplate
     /// 当前启用或已注册的渠道配置列表。
     /// </summary>
     [YamlMember(Alias = "channels", Description = "当前启用或已注册的渠道配置列表。")]
-    public List<ChannelEntity> Channels { get; set; } = [];
+    public List<ChannelEntityConfig> Channels { get; set; } = [];
 
     public IMicroClawConfigOptions CreateDefaultTemplate() => new ChannelOptions();
 }

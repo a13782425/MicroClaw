@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.AgentDto;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;

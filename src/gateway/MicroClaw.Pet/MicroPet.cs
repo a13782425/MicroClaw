@@ -6,7 +6,6 @@ using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.AgentDto;
 using MicroClaw.Pet.Decision;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Observer;

@@ -41,7 +41,7 @@ public static class A2AEndpoints
         // ���� Agent Card�����ֶ˵㣩����������������������������������������������������������������������������������������
         endpoints.MapGet("/a2a/agent/{agentId}", (string agentId, HttpContext ctx, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = agentRepo.GetById(agentId);
+            AgentEntity? agent = agentRepo.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
                 return Results.NotFound(new JsonRpcError(-32001, "Agent not found or A2A not enabled."));
 
@@ -73,7 +73,7 @@ public static class A2AEndpoints
         {
             var logger = loggerFactory.CreateLogger("A2A");
 
-            AgentDto? agent = agentRepo.GetById(agentId);
+            AgentEntity? agent = agentRepo.GetById(agentId);
             if (agent is null || !agent.IsEnabled || !agent.ExposeAsA2A)
             {
                 ctx.Response.StatusCode = 404;
@@ -143,7 +143,7 @@ public static class A2AEndpoints
 
     private static async Task HandleTaskSendAsync(
         HttpContext ctx,
-        AgentDto agent,
+        AgentEntity agent,
         JsonRpcRequest rpc,
         IMicroAgentService agentService,
         ProviderService providerStore,

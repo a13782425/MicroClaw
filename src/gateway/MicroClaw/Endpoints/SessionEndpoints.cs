@@ -43,7 +43,7 @@ public static class SessionEndpoints
             
             // 解析 ChannelId：默认使用内置 web channel
             string channelId = string.IsNullOrWhiteSpace(req.ChannelId) ? ChannelUtils.WebChannelId : req.ChannelId;
-            ChannelEntity? channel = channelStore.GetById(channelId);
+            ChannelEntityConfig? channel = channelStore.GetById(channelId);
             if (channel is null)
                 return Results.NotFound(new { success = false, message = $"Channel '{channelId}' not found.", errorCode = "NOT_FOUND" });
             

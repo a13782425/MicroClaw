@@ -165,7 +165,7 @@ public sealed class WorkflowEngine
     {
         // TODO P5-01: Re-integrate ExecuteAgentNodeAsync with IMicroAgentService + MicroChatContext
         // WorkflowEngine is temporarily disabled (P4-02) pending P5-01 re-integration.
-        AgentDto? agentDto = _agentRepo.GetById(effectiveAgentId);
+        AgentEntity? agentDto = _agentRepo.GetById(effectiveAgentId);
         if (agentDto is null || !agentDto.IsEnabled)
         {
             _logger.LogWarning("Agent node {NodeId} references Agent '{AgentId}' which is missing or disabled.",

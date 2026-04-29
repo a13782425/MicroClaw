@@ -40,7 +40,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService
     {
         var agentDna = _sp.GetRequiredService<AgentDnaService>();
 
-        foreach (AgentDto entity in _agentRepo.GetAll())
+        foreach (AgentEntity entity in _agentRepo.GetAll())
         {
             MicroAgent agent = MicroAgent.Create(entity, _sp);
             await agent.InitializeAsync(cancellationToken);
@@ -48,7 +48,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService
         }
 
         // Initialize DNA directory for the default agent (idempotent).
-        AgentDto? main = _agentRepo.GetDefault();
+        AgentEntity? main = _agentRepo.GetDefault();
         if (main is not null)
             agentDna.InitializeAgent(main.Id);
     }
@@ -101,7 +101,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService
     /// Creates a new <see cref="MicroAgent"/> instance (and initializes it) if none exists;
     /// replaces the existing entry otherwise, disposing the old instance.
     /// </summary>
-    internal async ValueTask<MicroAgent> RefreshAgentAsync(AgentDto entity, CancellationToken ct = default)
+    internal async ValueTask<MicroAgent> RefreshAgentAsync(AgentEntity entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
 

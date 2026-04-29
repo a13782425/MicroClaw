@@ -13,7 +13,7 @@ public sealed class SessionMemoryContextProvider(MemoryService memoryService) : 
     public int Order => 30;
 
     /// <inheritdoc />
-    public ValueTask<string?> BuildContextAsync(AgentDto agent, string? sessionId, CancellationToken ct = default)
+    public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
             return ValueTask.FromResult<string?>(null);

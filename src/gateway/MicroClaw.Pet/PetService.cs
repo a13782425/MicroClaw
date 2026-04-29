@@ -4,7 +4,6 @@ using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent;
-using AgentEntity = MicroClaw.Agent.AgentDto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

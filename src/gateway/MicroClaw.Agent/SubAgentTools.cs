@@ -54,7 +54,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 ([Description("要查询的 Agent ID")] string agentId) =>
                 {
-                    AgentDto? agent = agentRepo.GetById(agentId);
+                    AgentEntity? agent = agentRepo.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
 
@@ -87,14 +87,14 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentDto config = AgentDto.Create(
+                        AgentEntity config = AgentEntity.Create(
                             name: name.Trim(),
                             description: description?.Trim() ?? string.Empty,
                             isEnabled: true,
                             contextWindowMessages: 20,
                             exposeAsA2A: false);
 
-                        AgentDto created = agentRepo.Save(config);
+                        AgentEntity created = agentRepo.Save(config);
                         agentDnaService.InitializeAgent(created.Id);
 
                         if (!string.IsNullOrWhiteSpace(systemPrompt))
@@ -114,7 +114,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 ([Description("要删除的 Agent ID")] string agentId) =>
                 {
-                    AgentDto? agent = agentRepo.GetById(agentId);
+                    AgentEntity? agent = agentRepo.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
@@ -136,7 +136,7 @@ public static class SubAgentTools
                  [Description("新名称（null 或空字符串表示不修改）")] string? name,
                  [Description("新的功能描述（null 表示不修改）")] string? description) =>
                 {
-                    AgentDto? agent = agentRepo.GetById(agentId);
+                    AgentEntity? agent = agentRepo.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
@@ -148,7 +148,7 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentDto result = agentRepo.Save(agent);
+                        AgentEntity result = agentRepo.Save(agent);
                         return (object)new { success = true, agentId, name = result.Name, description = result.Description };
                     }
                     catch (InvalidOperationException ex)
@@ -164,14 +164,14 @@ public static class SubAgentTools
                 ([Description("要修改的 Agent ID")] string agentId,
                  [Description("true = 启用，false = 禁用")] bool isEnabled) =>
                 {
-                    AgentDto? agent = agentRepo.GetById(agentId);
+                    AgentEntity? agent = agentRepo.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理不可禁用，请通过管理界面操作。" };
 
                     if (isEnabled) agent.Enable(); else agent.Disable();
-                    AgentDto result = agentRepo.Save(agent);
+                    AgentEntity result = agentRepo.Save(agent);
                     return (object)new { success = true, agentId, isEnabled = result.IsEnabled };
                 },
                 name: "enable_disable_agent",
@@ -182,14 +182,14 @@ public static class SubAgentTools
                 ([Description("要修改的 Agent ID")] string agentId,
                  [Description("子代理白名单：null = 允许调用所有代理；空数组 = 禁止调用任何子代理；字符串数组 = 仅允许指定 ID 的子代理")] IReadOnlyList<string>? allowedSubAgentIds) =>
                 {
-                    AgentDto? agent = agentRepo.GetById(agentId);
+                    AgentEntity? agent = agentRepo.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理的子代理白名单不可修改，请通过管理界面操作。" };
 
                     agent.UpdateAllowedSubAgentIds(allowedSubAgentIds);
-                    AgentDto result = agentRepo.Save(agent);
+                    AgentEntity result = agentRepo.Save(agent);
                     return (object)new { success = true, agentId, allowedSubAgentIds = result.AllowedSubAgentIds };
                 },
                 name: "update_agent_sub_agents",

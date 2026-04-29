@@ -13,7 +13,7 @@ public sealed class AgentDnaContextProvider(AgentDnaService agentDnaService) : I
     public int Order => 10;
 
     /// <inheritdoc />
-    public ValueTask<string?> BuildContextAsync(AgentDto agent, string? sessionId, CancellationToken ct = default)
+    public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
     {
         string context = agentDnaService.BuildAgentContext(agent.Id);
         return ValueTask.FromResult<string?>(string.IsNullOrWhiteSpace(context) ? null : context);

@@ -1,5 +1,6 @@
 using MicroClaw.Providers;
 using MicroClaw.Tools;
+using MicroClaw.Utils;
 
 namespace MicroClaw.Agent;
 
@@ -7,14 +8,14 @@ namespace MicroClaw.Agent;
 /// Agent 实体（领域对象）：聚合工具权限、子代理策略、路由配置等行为。
 /// 使用 <see cref="Create"/> 创建新 Agent，<see cref="Reconstitute"/> 从持久化状态恢复。
 /// </summary>
-public sealed class AgentDto
+public sealed class AgentEntity
 {
     private List<string> _disabledSkillIds = [];
     private List<string> _disabledMcpServerIds = [];
     private List<ToolGroupConfig> _toolGroupConfigs = [];
     private List<string>? _allowedSubAgentIds;
 
-    private AgentDto() { }  // 强制通过工厂方法创建
+    private AgentEntity() { }  // 强制通过工厂方法创建
 
     // ── 属性 ─────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ public sealed class AgentDto
     // ── 工厂方法 ──────────────────────────────────────────────────────────
 
     /// <summary>创建新 Agent（Id 为空，由 IAgentRepository.Save 分配）。</summary>
-    public static AgentDto Create(
+    public static AgentEntity Create(
         string name,
         string description,
         bool isEnabled,
@@ -52,7 +53,7 @@ public sealed class AgentDto
         decimal? monthlyBudgetUsd = null) =>
         new()
         {
-            Id = string.Empty,
+            Id = MicroClawUtils.GetUniqueId(),
             Name = name,
             Description = description,
             IsEnabled = isEnabled,
@@ -69,7 +70,7 @@ public sealed class AgentDto
         };
 
     /// <summary>从持久化状态恢复 Agent 实例。</summary>
-    public static AgentDto Reconstitute(
+    public static AgentEntity Reconstitute(
         string id,
         string name,
         string description,
@@ -183,7 +184,7 @@ public sealed class AgentDto
     /// 应用 Pet 工具覆盖，返回含覆盖配置的新 Agent 实例（不修改原对象）。
     /// 仅用于单次请求内的 ToolCollector 调用，不持久化。
     /// </summary>
-    internal AgentDto WithToolOverrides(IReadOnlyList<ToolGroupConfig> overrides) =>
+    internal AgentEntity WithToolOverrides(IReadOnlyList<ToolGroupConfig> overrides) =>
         Reconstitute(
             id: Id,
             name: Name,

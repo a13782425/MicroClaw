@@ -19,7 +19,7 @@ public sealed class AgentsOptions : IMicroClawConfigTemplate
     /// 当前系统中持久化的 Agent 配置列表。
     /// </summary>
     [YamlMember(Alias = "items", Description = "当前系统中持久化的 Agent 配置列表。")]
-    public List<AgentConfigEntity> Items { get; set; } = [];
+    public List<AgentEntityConfig> Items { get; set; } = [];
 
     public IMicroClawConfigOptions CreateDefaultTemplate() => new AgentsOptions();
 }

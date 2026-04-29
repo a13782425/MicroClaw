@@ -38,13 +38,13 @@ public sealed class ChatMessageAssemblerTests : IDisposable
 
         IAgentContextProvider baseProvider = Substitute.For<IAgentContextProvider>();
         baseProvider.Order.Returns(10);
-        baseProvider.BuildContextAsync(Arg.Any<MicroClaw.Agent.AgentDto>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        baseProvider.BuildContextAsync(Arg.Any<MicroClaw.Agent.AgentEntity>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(new ValueTask<string?>("base context"));
 
         IUserAwareContextProvider userAwareProvider = Substitute.For<IUserAwareContextProvider>();
         userAwareProvider.Order.Returns(20);
         userAwareProvider.BuildContextAsync(
-                Arg.Any<MicroClaw.Agent.AgentDto>(),
+                Arg.Any<MicroClaw.Agent.AgentEntity>(),
                 Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
@@ -61,7 +61,7 @@ public sealed class ChatMessageAssemblerTests : IDisposable
             summarizer,
             NullLogger<ChatMessageAssembler>.Instance);
 
-        MicroClaw.Agent.AgentDto agent = MicroClaw.Agent.AgentDto.Reconstitute(
+        MicroClaw.Agent.AgentEntity agent = MicroClaw.Agent.AgentEntity.Reconstitute(
             id: "agent-1",
             name: "Agent 1",
             description: "test",

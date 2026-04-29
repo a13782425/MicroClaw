@@ -29,7 +29,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             return agent is null ? Results.NotFound() : Results.Ok(ToDto(agent));
         })
         .WithTags("Agents");
@@ -39,7 +39,7 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, message = "Name is required.", errorCode = "BAD_REQUEST" });
 
-            AgentDto newAgent = AgentDto.Create(
+            AgentEntity newAgent = AgentEntity.Create(
                 name: req.Name.Trim(),
                 description: req.Description ?? string.Empty,
                 isEnabled: req.IsEnabled,
@@ -50,7 +50,7 @@ public static class AgentEndpoints
                 allowedSubAgentIds: req.AllowedSubAgentIds);
             try
             {
-                AgentDto created = agentRepo.Save(newAgent);
+                AgentEntity created = agentRepo.Save(newAgent);
                 agentDna.InitializeAgent(created.Id);
                 await agentService.RefreshAgentAsync(created, ct);
                 return Results.Ok(new { created.Id });
@@ -67,7 +67,7 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentDto? existing = agentRepo.GetById(req.Id);
+            AgentEntity? existing = agentRepo.GetById(req.Id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -88,7 +88,7 @@ public static class AgentEndpoints
 
             try
             {
-                AgentDto saved = agentRepo.Save(existing);
+                AgentEntity saved = agentRepo.Save(existing);
                 await agentService.RefreshAgentAsync(saved, ct);
                 return Results.Ok(new { saved.Id });
             }
@@ -104,7 +104,7 @@ public static class AgentEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            AgentDto? agent = agentRepo.GetById(req.Id);
+            AgentEntity? agent = agentRepo.GetById(req.Id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             if (agent.IsDefault)
@@ -121,7 +121,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/mcp-servers", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             return agent is null
                 ? Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" })
                 : Results.Ok(agent.DisabledMcpServerIds);
@@ -130,7 +130,7 @@ public static class AgentEndpoints
 
         endpoints.MapPost("/agents/{id}/mcp-servers", async (string id, AgentMcpServersRequest req, IAgentRepository agentRepo, MicroAgentService agentService, McpServerConfigStore mcpStore, CancellationToken ct) =>
         {
-            AgentDto? existing = agentRepo.GetById(id);
+            AgentEntity? existing = agentRepo.GetById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -145,7 +145,7 @@ public static class AgentEndpoints
                 });
 
             existing.UpdateDisabledMcpServerIds(mcpIds);
-            AgentDto saved = agentRepo.Save(existing);
+            AgentEntity saved = agentRepo.Save(existing);
             await agentService.RefreshAgentAsync(saved, ct);
             return Results.Ok(new { saved.Id });
         })
@@ -155,7 +155,7 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/tools", async (string id, IAgentRepository agentRepo, ToolCollector toolCollector, CancellationToken ct) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -168,7 +168,7 @@ public static class AgentEndpoints
 
         endpoints.MapPost("/agents/{id}/tools/settings", async (string id, IReadOnlyList<ToolGroupConfigRequest> req, IAgentRepository agentRepo, MicroAgentService agentService, CancellationToken ct) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -178,7 +178,7 @@ public static class AgentEndpoints
                 .AsReadOnly();
 
             agent.UpdateToolGroupConfigs(configs);
-            AgentDto saved = agentRepo.Save(agent);
+            AgentEntity saved = agentRepo.Save(agent);
             await agentService.RefreshAgentAsync(saved, ct);
             return Results.Ok(new { saved.Id });
         })
@@ -188,14 +188,14 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/skills", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             return agent is null ? Results.NotFound() : Results.Ok(agent.DisabledSkillIds);
         })
         .WithTags("Agents");
 
         endpoints.MapPost("/agents/{id}/skills", async (string id, AgentBoundSkillsRequest req, IAgentRepository agentRepo, MicroAgentService agentService, SkillStore skillStore, CancellationToken ct) =>
         {
-            AgentDto? existing = agentRepo.GetById(id);
+            AgentEntity? existing = agentRepo.GetById(id);
             if (existing is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -210,7 +210,7 @@ public static class AgentEndpoints
                 });
 
             existing.UpdateDisabledSkillIds(skillIds);
-            AgentDto saved = agentRepo.Save(existing);
+            AgentEntity saved = agentRepo.Save(existing);
             await agentService.RefreshAgentAsync(saved, ct);
             return Results.Ok(new { saved.Id });
         })
@@ -223,12 +223,12 @@ public static class AgentEndpoints
 
         endpoints.MapGet("/agents/{id}/sub-agents", (string id, IAgentRepository agentRepo) =>
         {
-            AgentDto? agent = agentRepo.GetById(id);
+            AgentEntity? agent = agentRepo.GetById(id);
             if (agent is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{id}' not found.", errorCode = "NOT_FOUND" });
 
             // 根据 ACL 过滤可调用子代理列表（排除自身），使用 Agent.CanCallSubAgent 行为方法
-            IEnumerable<AgentDto> candidates = agentRepo.GetAll().Where(a => a.IsEnabled && a.Id != id && agent.CanCallSubAgent(a.Id));
+            IEnumerable<AgentEntity> candidates = agentRepo.GetAll().Where(a => a.IsEnabled && a.Id != id && agent.CanCallSubAgent(a.Id));
 
             var result = candidates.Select(a => new { a.Id, a.Name, a.Description }).ToList();
             return Results.Ok(result);
@@ -283,7 +283,7 @@ public static class AgentEndpoints
         await response.Body.FlushAsync(ct);
     }
 
-    private static object ToDto(AgentDto a) => new
+    private static object ToDto(AgentEntity a) => new
     {
         a.Id,
         a.Name,

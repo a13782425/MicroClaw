@@ -45,7 +45,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     private IRagUsageAuditor? _ragUsageAuditor;
     private RagRetrievalContext? _ragRetrievalContext;
 
-    private MicroAgent(AgentDto entity, IServiceProvider sp)
+    private MicroAgent(AgentEntity entity, IServiceProvider sp)
     {
         Entity = entity ?? throw new ArgumentNullException(nameof(entity));
         _sp = sp ?? throw new ArgumentNullException(nameof(sp));
@@ -54,7 +54,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     // ── 内部实体 ─────────────────────────────────────────────────────────
 
     /// <summary>持久化实体数据（只读委托源）。</summary>
-    internal AgentDto Entity { get; private set; }
+    internal AgentEntity Entity { get; private set; }
 
     // ── IMicroAgent 属性委托 ─────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     /// 根据持久化 <paramref name="entity"/> 创建运行时 MicroAgent 实例。
     /// 此阶段仅分配数据字段，依赖解析推迟至 <see cref="InitializeAsync"/>。
     /// </summary>
-    public static MicroAgent Create(AgentDto entity, IServiceProvider sp) => new(entity, sp);
+    public static MicroAgent Create(AgentEntity entity, IServiceProvider sp) => new(entity, sp);
 
     // ── 初始化 ────────────────────────────────────────────────────────────
 

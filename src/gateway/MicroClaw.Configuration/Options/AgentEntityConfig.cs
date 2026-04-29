@@ -5,7 +5,7 @@ namespace MicroClaw.Configuration.Options;
 /// <summary>
 /// 单个 Agent 的持久化配置实体。
 /// </summary>
-public sealed record AgentConfigEntity
+public sealed record AgentEntityConfig
 {
     /// <summary>
     /// Agent 的唯一标识。

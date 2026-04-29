@@ -7,7 +7,7 @@ namespace MicroClaw.Agent.ContextProviders;
 /// </summary>
 /// <remarks>
 /// 当 <see cref="AgentRunner"/> 知道当前用户消息时，优先调用此接口的
-/// <see cref="BuildContextAsync(AgentDto, string?, string?, CancellationToken)"/> 重载，
+/// <see cref="BuildContextAsync(AgentEntity, string?, string?, CancellationToken)"/> 重载，
 /// 以便实现类（如 <c>RagContextProvider</c>）能够基于用户消息进行语义检索，
 /// 仅注入与当前对话相关的上下文段落，而非全量注入。
 /// </remarks>
@@ -22,7 +22,7 @@ public interface IUserAwareContextProvider : IAgentContextProvider
     /// <param name="ct">取消令牌。</param>
     /// <returns>上下文文本；为 <c>null</c> 或空时忽略。</returns>
     ValueTask<string?> BuildContextAsync(
-        AgentDto agent,
+        AgentEntity agent,
         string? sessionId,
         string? userMessage,
         CancellationToken ct = default);
