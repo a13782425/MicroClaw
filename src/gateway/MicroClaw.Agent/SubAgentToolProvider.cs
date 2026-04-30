@@ -14,7 +14,7 @@ namespace MicroClaw.Agent;
 /// </summary>
 public sealed class SubAgentToolProvider(
     IMicroAgentService agentService,
-    IAgentRepository agentRepo,
+    MicroAgentService microAgentService,
     ISubAgentRunner subAgentRunner,
     AgentDnaService agentDnaService) : IToolProvider
 {
@@ -30,6 +30,7 @@ public sealed class SubAgentToolProvider(
             return Task.FromResult(ToolProviderResult.Empty);
 
         var tools = new List<AIFunction>();
+        HashSet<string> usedToolNames = new(SubAgentTools.ManagementToolNames, StringComparer.OrdinalIgnoreCase);
 
         // 构建排除集合：调用者自身 + 祖先链中的所有代理
         var excludedIds = new HashSet<string>(StringComparer.Ordinal);
@@ -51,7 +52,7 @@ public sealed class SubAgentToolProvider(
 
             // ACL 白名单过滤
             if (allowedIds is not null && !allowedIds.Contains(subAgent.Id)) continue;
-            string toolName = SubAgentTools.SanitizeAgentName(subAgent.Name);
+            string toolName = SubAgentTools.BuildUniqueToolName(subAgent.Name, usedToolNames);
             string agentId = subAgent.Id;
             string agentName = subAgent.Name;
             string description = string.IsNullOrWhiteSpace(subAgent.Description)
@@ -78,7 +79,7 @@ public sealed class SubAgentToolProvider(
         }
 
         // 固定追加 Agent 管理工具集
-        tools.AddRange(SubAgentTools.CreateAgentManagementTools(agentRepo, agentDnaService));
+        tools.AddRange(SubAgentTools.CreateAgentManagementTools(agentService, microAgentService, agentDnaService));
 
         return Task.FromResult(new ToolProviderResult(tools));
     }

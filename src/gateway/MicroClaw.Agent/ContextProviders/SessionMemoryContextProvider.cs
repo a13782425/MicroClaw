@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Infrastructure.Data;
 
@@ -14,6 +15,16 @@ public sealed class SessionMemoryContextProvider(MemoryService memoryService) : 
 
     /// <inheritdoc />
     public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return ValueTask.FromResult<string?>(null);
+
+        string context = memoryService.BuildMemoryContext(sessionId);
+        return ValueTask.FromResult<string?>(string.IsNullOrWhiteSpace(context) ? null : context);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<string?> BuildContextAsync(IMicroAgent agent, string? sessionId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
             return ValueTask.FromResult<string?>(null);

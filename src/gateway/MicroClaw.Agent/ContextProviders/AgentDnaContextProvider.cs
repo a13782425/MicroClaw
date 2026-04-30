@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Infrastructure.Data;
 
@@ -14,6 +15,13 @@ public sealed class AgentDnaContextProvider(AgentDnaService agentDnaService) : I
 
     /// <inheritdoc />
     public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
+    {
+        string context = agentDnaService.BuildAgentContext(agent.Id);
+        return ValueTask.FromResult<string?>(string.IsNullOrWhiteSpace(context) ? null : context);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<string?> BuildContextAsync(IMicroAgent agent, string? sessionId, CancellationToken ct = default)
     {
         string context = agentDnaService.BuildAgentContext(agent.Id);
         return ValueTask.FromResult<string?>(string.IsNullOrWhiteSpace(context) ? null : context);

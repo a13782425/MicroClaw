@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
-using MicroClaw.Agent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,14 +20,14 @@ public sealed class PetService : IPetService, IService
 {
     private readonly ISessionService _sessionRepo;
     private readonly PetContextFactory _petContextFactory;
-    private readonly IAgentRepository _agentRepo;
+    private readonly IMicroAgentService _agentService;
     private readonly ILogger<PetService> _logger;
 
     public PetService(IServiceProvider sp)
     {
         _sessionRepo = sp.GetRequiredService<ISessionService>();
         _petContextFactory = sp.GetRequiredService<PetContextFactory>();
-        _agentRepo = sp.GetRequiredService<IAgentRepository>();
+        _agentService = sp.GetRequiredService<IMicroAgentService>();
         _logger = sp.GetRequiredService<ILogger<PetService>>();
     }
 
@@ -81,7 +81,7 @@ public sealed class PetService : IPetService, IService
     /// <summary>检查是否有启用的默认 Agent（渠道消息路由前置检查）。</summary>
     public bool HasAgentForChannel(string channelId)
     {
-        AgentEntity? main = _agentRepo.GetDefault();
+        IMicroAgent? main = _agentService.GetDefault();
         return main is { IsEnabled: true };
     }
 

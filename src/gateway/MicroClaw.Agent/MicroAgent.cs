@@ -5,6 +5,7 @@ using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent.Dev;
 using MicroClaw.Core;
+using MicroClaw.Core.Logging;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
@@ -24,8 +25,7 @@ namespace MicroClaw.Agent;
 /// </para>
 /// <para>
 /// 运行时依赖（ProviderService、ToolCollector 等）在 <c>OnInitializedAsync</c> 中惰性解析；
-/// MicroAgentService.StartAsync 通过 <see cref="InitializeAsync"/> 触发初始化，
-/// 无需将 MicroAgent 注册到 MicroEngine（参见 KD-3）。
+/// 由 <see cref="MicroEngine"/> 生命周期统一驱动初始化与激活。
 /// ReAct 执行逻辑在 P1-03 <c>StreamAsync</c> 中迁入；工具直调逻辑在 P1-04 迁入。
 /// </para>
 /// </summary>
@@ -35,7 +35,6 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
 
     // ── 运行时依赖（InitializeAsync 后填充，StreamAsync/InvokeToolAsync 前只读） ──
 
-    private ILogger<MicroAgent>? _agentLogger;
     private ProviderService? _providerService;
     private ToolCollector? _toolCollector;
     private IAgentStatusNotifier? _agentStatusNotifier;
@@ -45,7 +44,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     private IRagUsageAuditor? _ragUsageAuditor;
     private RagRetrievalContext? _ragRetrievalContext;
 
-    private MicroAgent(AgentEntity entity, IServiceProvider sp)
+    public MicroAgent(AgentEntity entity, IServiceProvider sp)
     {
         Entity = entity ?? throw new ArgumentNullException(nameof(entity));
         _sp = sp ?? throw new ArgumentNullException(nameof(sp));
@@ -55,6 +54,12 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
 
     /// <summary>持久化实体数据（只读委托源）。</summary>
     internal AgentEntity Entity { get; private set; }
+
+    internal void ReplaceEntity(AgentEntity entity)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        Entity = entity;
+    }
 
     // ── IMicroAgent 属性委托 ─────────────────────────────────────────────
 
@@ -76,13 +81,23 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     /// <inheritdoc/>
     public IReadOnlyList<string>? AllowedSubAgentIds => Entity.AllowedSubAgentIds;
 
-    // ── 工厂方法 ──────────────────────────────────────────────────────────
+    /// <inheritdoc/>
+    public int? ContextWindowMessages => Entity.ContextWindowMessages;
 
-    /// <summary>
-    /// 根据持久化 <paramref name="entity"/> 创建运行时 MicroAgent 实例。
-    /// 此阶段仅分配数据字段，依赖解析推迟至 <see cref="InitializeAsync"/>。
-    /// </summary>
-    public static MicroAgent Create(AgentEntity entity, IServiceProvider sp) => new(entity, sp);
+    /// <inheritdoc/>
+    public IReadOnlyList<string> DisabledSkillIds => Entity.DisabledSkillIds;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> DisabledMcpServerIds => Entity.DisabledMcpServerIds;
+
+    /// <inheritdoc/>
+    public bool IsToolGroupEnabled(string groupId) => Entity.IsToolGroupEnabled(groupId);
+
+    /// <inheritdoc/>
+    public bool IsToolDisabled(string groupId, string toolName) => Entity.IsToolDisabled(groupId, toolName);
+
+    /// <inheritdoc/>
+    public bool IsMcpServerDisabled(string serverIdOrName) => Entity.IsMcpServerDisabled(serverIdOrName);
 
     // ── 初始化 ────────────────────────────────────────────────────────────
 
@@ -92,7 +107,6 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     /// </summary>
     protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
     {
-        _agentLogger = _sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroAgent>();
         _providerService = _sp.GetRequiredService<ProviderService>();
         _toolCollector = _sp.GetRequiredService<ToolCollector>();
         _agentStatusNotifier = _sp.GetRequiredService<IAgentStatusNotifier>();
@@ -103,13 +117,6 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         _ragRetrievalContext = _sp.GetService<RagRetrievalContext>();
         return ValueTask.CompletedTask;
     }
-
-    /// <summary>
-    /// 由 <c>MicroAgentService.StartAsync</c> 调用，触发运行时依赖解析。
-    /// MicroAgent 不注册到引擎（KD-3），因此通过此 internal 方法代替引擎驱动的生命周期。
-    /// </summary>
-    internal ValueTask InitializeAsync(CancellationToken ct = default)
-        => OnInitializedAsync(ct);
 
     // ── IMicroAgent 执行方法 ───────────────────────────────────────────────
 
@@ -178,7 +185,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 }
 
                 if (attempt > 0)
-                    _agentLogger!.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
+                    Logger!.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
 
                 bool succeeded = false;
                 Exception? streamingException = null;
@@ -188,8 +195,8 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     chatContext.TargetAgentId ??= Entity.Id;
                     chatContext.TargetAgentName ??= Entity.Name;
                     chatContext.TargetProviderId = provider.Id;
-
-                    _agentLogger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Entity.Id, effectiveTools.Count, provider.Id);
+                    
+                    Logger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Entity.Id, effectiveTools.Count, provider.Id);
 
                     ChatMicroProvider chatProvider = _providerService!.TryGetProvider(provider.Id)
                         ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available in cache.");
@@ -221,7 +228,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                             _ = Task.Run(async () =>
                             {
                                 try { await _ragUsageAuditor.AuditAsync(auditSessionId, chunks, response, CancellationToken.None); }
-                                catch (Exception ex) { _agentLogger!.LogWarning(ex, "RAG 审计后台任务失败"); }
+                                catch (Exception ex) { Logger!.LogWarning(ex, "RAG 审计后台任务失败"); }
                             }, CancellationToken.None);
                         }
                     }
@@ -241,7 +248,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     if (streamingException is not null)
                     {
                         lastException = streamingException;
-                        _agentLogger!.LogWarning(streamingException, "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                        Logger!.LogWarning(streamingException, "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
                         continue;
                     }
 
@@ -260,7 +267,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
                 {
                     lastException = ex;
-                    _agentLogger!.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                    Logger!.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
                 }
             }
 
@@ -268,7 +275,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         }
         catch (Exception ex)
         {
-            _agentLogger!.LogError(ex, "StreamingCoreAsync 遭遇未预期异常，关闭 output Channel");
+            Logger!.LogError(ex, "StreamingCoreAsync 遭遇未预期异常，关闭 output Channel");
             output.Writer.TryComplete(ex);
 
             if (_hookExecutor is not null)
@@ -388,8 +395,8 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
             object? result = await fn.InvokeAsync(new AIFunctionArguments(arguments), ct);
             return result?.ToString() ?? string.Empty;
         }
-
-        _agentLogger!.LogWarning("InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.", toolName, Entity.Id);
+        
+        Logger!.LogWarning("InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.", toolName, Entity.Id);
         return fallbackInput;
     }
 }

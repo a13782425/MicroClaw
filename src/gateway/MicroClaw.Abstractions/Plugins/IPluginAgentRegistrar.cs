@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Allows the plugin system to import / remove Agent definitions from plugin files.
-/// Implemented by AgentStore; consumed by PluginLoader.
+/// Implemented by MicroAgentService; consumed by PluginLoader.
 /// </summary>
 public interface IPluginAgentRegistrar
 {

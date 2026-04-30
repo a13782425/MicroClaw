@@ -78,11 +78,10 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     private readonly PetSessionObserver _sessionObserver;
     private readonly PetRateLimiter _rateLimiter;
     private readonly PetSelfAwarenessReportBuilder _reportBuilder;
-    private readonly IAgentRepository _agentRepo;
     private readonly ProviderService _providerStore;
     private readonly IProviderRouter? _providerRouter;
     private readonly ISessionService _sessionService;
-    private readonly IMicroAgentService _agentService;
+    private readonly MicroAgentService _agentService;
     private readonly ChatMessageAssembler _messageAssembler;
     private readonly ToolCollector _toolCollector;
     private readonly ILogger _logger;
@@ -104,11 +103,10 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
         _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
         _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
-        _agentRepo = sp.GetRequiredService<IAgentRepository>();
         _providerStore = sp.GetRequiredService<ProviderService>();
         _providerRouter = sp.GetService<IProviderRouter>();
         _sessionService = sp.GetRequiredService<ISessionService>();
-        _agentService = sp.GetRequiredService<IMicroAgentService>();
+        _agentService = sp.GetRequiredService<MicroAgentService>();
         _messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
         _toolCollector = sp.GetRequiredService<ToolCollector>();
         _logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
@@ -388,7 +386,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             else
             {
                 // Resolve Agent / Provider from dispatch or session defaults
-                AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId) ? _agentRepo.GetById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId) : ResolveAgent(MicroSession.AgentId);
+                AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId) ? _agentService.GetAgentEntityById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId) : ResolveAgent(MicroSession.AgentId);
                 if (agent is null || !agent.IsEnabled)
                     throw new InvalidOperationException("No enabled agent found for this session.");
                 
@@ -597,7 +595,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     
     private IReadOnlyList<AgentSummary> BuildAgentSummaries(PetConfig config)
     {
-        var agents = _agentRepo.GetAll().Where(a => a.IsEnabled);
+        var agents = _agentService.All.Where(a => a.IsEnabled);
         if (config.AllowedAgentIds is { Count: > 0 })
         {
             var allowed = new HashSet<string>(config.AllowedAgentIds);
@@ -618,7 +616,17 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     
     // ── Agent/Tool 辅助方法 ──────────────────────────────────────────────────
     
-    private AgentEntity? ResolveAgent(string? agentId) => string.IsNullOrWhiteSpace(agentId) ? _agentRepo.GetDefault() : _agentRepo.GetById(agentId) ?? _agentRepo.GetDefault();
+    private AgentEntity? ResolveAgent(string? agentId)
+    {
+        AgentEntity? defaultAgent = _agentService.GetDefault() is { } runtimeDefault
+            ? _agentService.GetAgentEntityById(runtimeDefault.Id)
+            : null;
+
+        if (string.IsNullOrWhiteSpace(agentId))
+            return defaultAgent;
+
+        return _agentService.GetAgentEntityById(agentId) ?? defaultAgent;
+    }
     
     private static AgentEntity CreateRuntimeToolOverrideAgent(AgentEntity agent, IReadOnlyList<ToolGroupConfig>? toolOverrides)
     {

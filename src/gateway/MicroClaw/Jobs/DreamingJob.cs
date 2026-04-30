@@ -1,4 +1,5 @@
 ﻿using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Abstractions.Sessions;
@@ -20,7 +21,7 @@ namespace MicroClaw.Jobs;
 /// </summary>
 public sealed class DreamingJob : IScheduledJob
 {
-    private readonly AgentStore _agentStore;
+    private readonly IMicroAgentService _agentService;
     private readonly ISessionService _repo;
     private readonly ProviderService _providerService;
     private readonly AgentDnaService _agentDnaService;
@@ -29,7 +30,7 @@ public sealed class DreamingJob : IScheduledJob
 
     public DreamingJob(IServiceProvider sp)
     {
-        _agentStore = sp.GetRequiredService<AgentStore>();
+        _agentService = sp.GetRequiredService<IMicroAgentService>();
         _repo = sp.GetRequiredService<ISessionService>();
         _providerService = sp.GetRequiredService<ProviderService>();
         _agentDnaService = sp.GetRequiredService<AgentDnaService>();
@@ -81,10 +82,10 @@ public sealed class DreamingJob : IScheduledJob
     /// 执行一轮认知整理，供测试直接调用。
     internal async Task RunDreamingAsync(CancellationToken ct)
     {
-        IReadOnlyList<AgentEntity> agents = _agentStore.All;
+        IReadOnlyList<IMicroAgent> agents = _agentService.All;
         IReadOnlyList<IMicroSession> allSessions = _repo.GetAll();
 
-        foreach (AgentEntity agent in agents)
+        foreach (IMicroAgent agent in agents)
         {
             if (ct.IsCancellationRequested) break;
             if (!agent.IsEnabled) continue;
@@ -94,7 +95,7 @@ public sealed class DreamingJob : IScheduledJob
     }
 
     private async Task DreamForAgentAsync(
-        AgentEntity agent,
+        IMicroAgent agent,
         IReadOnlyList<IMicroSession> allSessions,
         CancellationToken ct)
     {

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Tools;
 
 namespace MicroClaw.Agent;
@@ -27,6 +28,32 @@ public sealed class ToolCollector(
     /// </summary>
     public async Task<ToolCollectionResult> CollectToolsAsync(
         AgentEntity agent, ToolCreationContext context, CancellationToken ct = default)
+        => await CollectToolsCoreAsync(
+            agent.IsToolGroupEnabled,
+            agent.IsToolDisabled,
+            GetEnabledMcpServers(agent),
+            context,
+            ct);
+
+    /// <summary>
+    /// 按运行时 Agent 配置和运行时上下文收集所有可用工具（含 MCP 连接），返回可释放的结果。
+    /// 调用方使用 <c>await using</c> 确保 MCP 连接释放。
+    /// </summary>
+    public async Task<ToolCollectionResult> CollectToolsAsync(
+        IMicroAgent agent, ToolCreationContext context, CancellationToken ct = default)
+        => await CollectToolsCoreAsync(
+            agent.IsToolGroupEnabled,
+            agent.IsToolDisabled,
+            GetEnabledMcpServers(agent),
+            context,
+            ct);
+
+    private async Task<ToolCollectionResult> CollectToolsCoreAsync(
+        Func<string, bool> isToolGroupEnabled,
+        Func<string, string, bool> isToolDisabled,
+        IReadOnlyList<McpServerConfig> enabledServers,
+        ToolCreationContext context,
+        CancellationToken ct)
     {
         var result = new ToolCollectionResult();
 
@@ -34,7 +61,7 @@ public sealed class ToolCollector(
         foreach (IToolProvider provider in providers)
         {
             // 按 Agent 行为方法整体启用/禁用工具组
-            if (!agent.IsToolGroupEnabled(provider.GroupId)) continue;
+            if (!isToolGroupEnabled(provider.GroupId)) continue;
 
             try
             {
@@ -43,7 +70,7 @@ public sealed class ToolCollector(
 
                 // 按 Agent 行为方法过滤组内单个工具
                 IEnumerable<AITool> filtered = providerResult.Tools
-                    .Where(t => !agent.IsToolDisabled(provider.GroupId, t.Name));
+                    .Where(t => !isToolDisabled(provider.GroupId, t.Name));
 
                 result.AddTools(filtered);
 
@@ -57,7 +84,6 @@ public sealed class ToolCollector(
         }
 
         // ── 2. 动态 MCP 工具（按 Agent 引用和 ToolGroupConfig 过滤）────────────
-        IReadOnlyList<McpServerConfig> enabledServers = GetEnabledMcpServers(agent);
         if (enabledServers.Count > 0)
         {
             foreach (McpServerConfig srv in enabledServers)
@@ -69,7 +95,7 @@ public sealed class ToolCollector(
 
                     // 按 Agent 行为方法过滤单个 MCP 工具
                     IEnumerable<AITool> filtered = mcpResult.Tools
-                        .Where(t => !agent.IsToolDisabled(srv.Name, t.Name) && !agent.IsToolDisabled(srv.Id, t.Name));
+                        .Where(t => !isToolDisabled(srv.Name, t.Name) && !isToolDisabled(srv.Id, t.Name));
 
                     result.AddTools(filtered);
 
@@ -189,6 +215,17 @@ public sealed class ToolCollector(
             ? mcpServerRegistry.GetAllEnabled()
             : mcpServerConfigStore.AllEnabled;
         // 排除 Agent 级别禁用的 MCP Server（用行为方法）
+        return servers
+            .Where(s => !agent.IsMcpServerDisabled(s.Id) && agent.IsToolGroupEnabled(s.Name) && agent.IsToolGroupEnabled(s.Id))
+            .ToList()
+            .AsReadOnly();
+    }
+
+    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(IMicroAgent agent)
+    {
+        IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null
+            ? mcpServerRegistry.GetAllEnabled()
+            : mcpServerConfigStore.AllEnabled;
         return servers
             .Where(s => !agent.IsMcpServerDisabled(s.Id) && agent.IsToolGroupEnabled(s.Name) && agent.IsToolGroupEnabled(s.Id))
             .ToList()

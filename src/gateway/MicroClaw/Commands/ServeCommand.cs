@@ -224,9 +224,6 @@ public class ServeCommand : Command
 		builder.Services.MapAs<ISessionService, SessionService>();
 		
 		// Agent 服务
-		builder.Services.AddSingleton<AgentStore>();
-		builder.Services.MapAs<IPluginAgentRegistrar, AgentStore>();
-		builder.Services.MapAs<IAgentRepository, AgentStore>();
 		builder.Services.AddSingleton<AgentDnaService>();
 		builder.Services.AddSingleton<SessionDnaService>();
 		builder.Services.AddSingleton<MemoryService>();
@@ -263,6 +260,7 @@ public class ServeCommand : Command
 		// 取代旧的 AgentRunner；IMicroAgentService 供 Pet / SubAgentRunner / WorkflowEngine 使用。
 		builder.Services.AddMicroService<MicroAgentService>();
 		builder.Services.MapAs<IMicroAgentService, MicroAgentService>();
+		builder.Services.MapAs<IPluginAgentRegistrar, MicroAgentService>();
 		// P-F-5: Pet 编排层服务注册（Pet 为消息入口）
 		builder.Services.AddSingleton<MicroClaw.Pet.Storage.PetStateStore>();
 		builder.Services.AddSingleton<MicroClaw.Pet.RateLimit.PetRateLimiter>();
@@ -294,7 +292,7 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<SkillStore>();
 		builder.Services.AddSingleton<SkillToolFactory>();
 		builder.Services.AddSingleton<MicroClaw.Skills.SkillInvocationTool>();
-		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.AgentStoreAgentLookup>();
+		builder.Services.AddSingleton<MicroClaw.Skills.IAgentLookup, MicroClaw.Services.MicroAgentLookup>();
 		builder.Services.AddSingleton<McpServerConfigStore>();
 
 		// D-6: MCP 动态工具注册——运行时注册表，启动时从 DB 同步，API 变更后即时生效，无需重启

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 using MicroClaw.Tools;
@@ -9,6 +10,7 @@ namespace MicroClaw.Agent;
 /// </summary>
 public sealed class AgentEntity
 {
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private List<string> _disabledSkillIds = [];
     private List<string> _disabledMcpServerIds = [];
     private List<ToolGroupConfig> _toolGroupConfigs = [];
@@ -59,7 +61,11 @@ public sealed class AgentEntity
     public ProviderRoutingStrategy RoutingStrategy
     {
         get => _routingStrategy;
-        set => _config.RoutingStrategy = value == ProviderRoutingStrategy.Default ? null : value.ToString();
+        set
+        {
+            _routingStrategy = value;
+            _config.RoutingStrategy = value == ProviderRoutingStrategy.Default ? null : value.ToString();
+        }
     }
     public decimal? MonthlyBudgetUsd
     {
@@ -118,7 +124,11 @@ public sealed class AgentEntity
     }
     
     /// <summary>更新工具分组启用配置。</summary>
-    public void UpdateToolGroupConfigs(IReadOnlyList<ToolGroupConfig> configs) => _toolGroupConfigs = [.. configs];
+    public void UpdateToolGroupConfigs(IReadOnlyList<ToolGroupConfig> configs)
+    {
+        _toolGroupConfigs = [.. configs];
+        _config.ToolGroupConfigsJson = _toolGroupConfigs.Count > 0 ? JsonSerializer.Serialize(_toolGroupConfigs, JsonOpts) : null;
+    }
     
     // ── 行为方法：MCP/Skill 禁用管理（O-2-3）────────────────────────────
     
@@ -126,13 +136,21 @@ public sealed class AgentEntity
     public bool IsMcpServerDisabled(string serverIdOrName) => _disabledMcpServerIds.Contains(serverIdOrName);
     
     /// <summary>更新禁用的 MCP Server 列表。</summary>
-    public void UpdateDisabledMcpServerIds(IReadOnlyList<string> ids) => _disabledMcpServerIds = [.. ids];
+    public void UpdateDisabledMcpServerIds(IReadOnlyList<string> ids)
+    {
+        _disabledMcpServerIds = [.. ids];
+        _config.DisabledMcpServerIdsJson = _disabledMcpServerIds.Count > 0 ? JsonSerializer.Serialize(_disabledMcpServerIds, JsonOpts) : null;
+    }
     
     /// <summary>检查指定 Skill 是否被禁用。</summary>
     public bool IsSkillDisabled(string skillId) => _disabledSkillIds.Contains(skillId);
     
     /// <summary>更新禁用的 Skill 列表。</summary>
-    public void UpdateDisabledSkillIds(IReadOnlyList<string> ids) => _disabledSkillIds = [.. ids];
+    public void UpdateDisabledSkillIds(IReadOnlyList<string> ids)
+    {
+        _disabledSkillIds = [.. ids];
+        _config.DisabledSkillIdsJson = _disabledSkillIds.Count > 0 ? JsonSerializer.Serialize(_disabledSkillIds, JsonOpts) : null;
+    }
     
     // ── 行为方法：SubAgent 权限（O-2-4）──────────────────────────────────
     
@@ -148,6 +166,10 @@ public sealed class AgentEntity
     }
     
     /// <summary>更新允许调用的子代理白名单（null = 全允许，空列表 = 全禁止）。</summary>
-    public void UpdateAllowedSubAgentIds(IReadOnlyList<string>? ids) => _allowedSubAgentIds = ids is null ? null : [.. ids];
+    public void UpdateAllowedSubAgentIds(IReadOnlyList<string>? ids)
+    {
+        _allowedSubAgentIds = ids is null ? null : [.. ids];
+        _config.AllowedSubAgentIdsJson = _allowedSubAgentIds is null ? null : JsonSerializer.Serialize(_allowedSubAgentIds, JsonOpts);
+    }
     
 }

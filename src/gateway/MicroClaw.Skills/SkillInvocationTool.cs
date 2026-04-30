@@ -136,7 +136,7 @@ public sealed class SkillInvocationTool
         // 渲染技能任务内容（复用 BuildSkillInstructionsFromManifest 统一处理 !command 注入 + $-替换）
         string task = _factory.BuildSkillInstructionsFromManifest(skillId, manifest, sessionId, arguments);
 
-        // 解析 agent 类型：manifest.Agent → AgentStore.GetByName → fallback GetDefault
+        // 解析 agent 类型：manifest.Agent → runtime lookup by name → fallback GetDefault
         string? agentId = ResolveAgentId(manifest.Agent, skillId);
         if (agentId is null)
         {

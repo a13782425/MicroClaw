@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Infrastructure.Data;
 
 namespace MicroClaw.Agent.ContextProviders;
@@ -13,6 +14,15 @@ public sealed class ServerTimeContextProvider : IAgentContextProvider
 
     /// <inheritdoc />
     public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
+    {
+        string localTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz");
+        string utcTime = DateTimeOffset.UtcNow.ToString("O");
+        string context = $"当前服务器时间：{localTime}（UTC: {utcTime}）";
+        return ValueTask.FromResult<string?>(context);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<string?> BuildContextAsync(IMicroAgent agent, string? sessionId, CancellationToken ct = default)
     {
         string localTime = DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz");
         string utcTime = DateTimeOffset.UtcNow.ToString("O");

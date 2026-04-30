@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Tools;
 using Microsoft.Extensions.AI;
@@ -12,6 +13,17 @@ namespace MicroClaw.Agent;
 /// </summary>
 public static class SubAgentTools
 {
+    internal static IReadOnlySet<string> ManagementToolNames { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "list_agents",
+        "get_agent",
+        "create_agent",
+        "delete_agent",
+        "update_agent_info",
+        "enable_disable_agent",
+        "update_agent_sub_agents"
+    };
+
     /// <summary>
     /// 将 Agent 显示名称规范化为合法的 AIFunction 名称（仅保留字母、数字、下划线，长度限 64）。
     /// </summary>
@@ -23,11 +35,31 @@ public static class SubAgentTools
         return safe.Length > 64 ? safe[..64] : safe;
     }
 
+    internal static string BuildUniqueToolName(string name, ISet<string> usedNames)
+    {
+        ArgumentNullException.ThrowIfNull(usedNames);
+
+        string baseName = SanitizeAgentName(name);
+        string candidate = baseName;
+        int suffix = 2;
+
+        while (!usedNames.Add(candidate))
+        {
+            string suffixText = $"_{suffix++}";
+            int maxBaseLength = Math.Max(1, 64 - suffixText.Length);
+            string trimmedBaseName = baseName.Length > maxBaseLength ? baseName[..maxBaseLength] : baseName;
+            candidate = trimmedBaseName + suffixText;
+        }
+
+        return candidate;
+    }
+
     /// <summary>
     /// 创建 Agent 管理工具集（7 个），供 <see cref="SubAgentToolProvider"/> 注入。
     /// </summary>
     public static IReadOnlyList<AIFunction> CreateAgentManagementTools(
-        IAgentRepository agentRepo,
+        IMicroAgentService agentService,
+        MicroAgentService microAgentService,
         AgentDnaService agentDnaService)
     {
         return
@@ -36,7 +68,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 () =>
                 {
-                    var agents = agentRepo.GetAll().Select(a => new
+                    var agents = agentService.All.Select(a => new
                     {
                         a.Id,
                         a.Name,
@@ -54,7 +86,7 @@ public static class SubAgentTools
             AIFunctionFactory.Create(
                 ([Description("要查询的 Agent ID")] string agentId) =>
                 {
-                    AgentEntity? agent = agentRepo.GetById(agentId);
+                    IMicroAgent? agent = agentService.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
 
@@ -78,9 +110,10 @@ public static class SubAgentTools
 
             // 3. create_agent
             AIFunctionFactory.Create(
-                ([Description("新代理名称（唯一，不可与已有代理重名）")] string name,
-                 [Description("代理的功能描述，帮助其他代理了解其用途（可为空）")] string? description,
-                 [Description("代理的系统提示词（Soul），定义代理的人格、语气和专长范围（可为空，为空时使用默认模板）")] string? systemPrompt) =>
+                async ([Description("新代理名称（唯一，不可与已有代理重名）")] string name,
+                       [Description("代理的功能描述，帮助其他代理了解其用途（可为空）")] string? description,
+                       [Description("代理的系统提示词（Soul），定义代理的人格、语气和专长范围（可为空，为空时使用默认模板）")] string? systemPrompt,
+                       CancellationToken ct) =>
                 {
                     if (string.IsNullOrWhiteSpace(name))
                         return (object)new { success = false, error = "name 不能为空。" };
@@ -93,15 +126,38 @@ public static class SubAgentTools
                             isEnabled: true,
                             contextWindowMessages: 20);
 
-                        AgentEntity created = agentRepo.Save(config);
-                        agentDnaService.InitializeAgent(created.Id);
+                        AgentEntity created = await microAgentService.CreateAgentAsync(config, ct);
+                        try
+                        {
+                            agentDnaService.InitializeAgent(created.Id);
 
-                        if (!string.IsNullOrWhiteSpace(systemPrompt))
-                            agentDnaService.UpdateSoul(created.Id, systemPrompt.Trim());
+                            if (!string.IsNullOrWhiteSpace(systemPrompt))
+                                agentDnaService.UpdateSoul(created.Id, systemPrompt.Trim());
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                await microAgentService.DeleteAgentAsync(created.Id, CancellationToken.None);
+                            }
+                            catch
+                            {
+                            }
+
+                            try
+                            {
+                                agentDnaService.DeleteAgentFiles(created.Id);
+                            }
+                            catch
+                            {
+                            }
+
+                            throw;
+                        }
 
                         return (object)new { success = true, agentId = created.Id, name = created.Name };
                     }
-                    catch (InvalidOperationException ex)
+                    catch (Exception ex)
                     {
                         return (object)new { success = false, error = ex.Message };
                     }
@@ -111,46 +167,58 @@ public static class SubAgentTools
 
             // 4. delete_agent
             AIFunctionFactory.Create(
-                ([Description("要删除的 Agent ID")] string agentId) =>
+                async ([Description("要删除的 Agent ID")] string agentId, CancellationToken ct) =>
                 {
-                    AgentEntity? agent = agentRepo.GetById(agentId);
+                    IMicroAgent? agent = agentService.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理不可删除，请通过管理界面操作。" };
 
-                    bool deleted = agentRepo.Delete(agentId);
-                    if (!deleted)
-                        return (object)new { success = false, error = $"删除 Agent '{agentId}' 失败。" };
+                    try
+                    {
+                        await microAgentService.DeleteAgentAsync(agentId, ct);
 
-                    agentDnaService.DeleteAgentFiles(agentId);
-                    return (object)new { success = true, agentId };
+                        try
+                        {
+                            agentDnaService.DeleteAgentFiles(agentId);
+                        }
+                        catch
+                        {
+                        }
+
+                        return (object)new { success = true, agentId };
+                    }
+                    catch (Exception ex)
+                    {
+                        return (object)new { success = false, error = ex.Message };
+                    }
                 },
                 name: "delete_agent",
                 description: "【不可逆操作，执行前请向用户确认】永久删除一个 Agent 代理及其 DNA 文件。默认代理不可删除。"),
 
             // 5. update_agent_info
             AIFunctionFactory.Create(
-                ([Description("要修改的 Agent ID")] string agentId,
-                 [Description("新名称（null 或空字符串表示不修改）")] string? name,
-                 [Description("新的功能描述（null 表示不修改）")] string? description) =>
+                async ([Description("要修改的 Agent ID")] string agentId,
+                       [Description("新名称（null 或空字符串表示不修改）")] string? name,
+                       [Description("新的功能描述（null 表示不修改）")] string? description,
+                       CancellationToken ct) =>
                 {
-                    AgentEntity? agent = agentRepo.GetById(agentId);
+                    IMicroAgent? agent = agentService.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理的信息不可修改，请通过管理界面操作。" };
 
-                    agent.UpdateInfo(
-                        string.IsNullOrWhiteSpace(name) ? agent.Name : name.Trim(),
-                        description is null ? agent.Description : description.Trim());
-
                     try
                     {
-                        AgentEntity result = agentRepo.Save(agent);
+                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing =>
+                            existing.UpdateInfo(
+                                string.IsNullOrWhiteSpace(name) ? existing.Name : name.Trim(),
+                                description is null ? existing.Description : description.Trim()), ct);
                         return (object)new { success = true, agentId, name = result.Name, description = result.Description };
                     }
-                    catch (InvalidOperationException ex)
+                    catch (Exception ex)
                     {
                         return (object)new { success = false, error = ex.Message };
                     }
@@ -160,36 +228,53 @@ public static class SubAgentTools
 
             // 6. enable_disable_agent
             AIFunctionFactory.Create(
-                ([Description("要修改的 Agent ID")] string agentId,
-                 [Description("true = 启用，false = 禁用")] bool isEnabled) =>
+                async ([Description("要修改的 Agent ID")] string agentId,
+                       [Description("true = 启用，false = 禁用")] bool isEnabled,
+                       CancellationToken ct) =>
                 {
-                    AgentEntity? agent = agentRepo.GetById(agentId);
+                    IMicroAgent? agent = agentService.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理不可禁用，请通过管理界面操作。" };
 
-                    if (isEnabled) agent.Enable(); else agent.Disable();
-                    AgentEntity result = agentRepo.Save(agent);
-                    return (object)new { success = true, agentId, isEnabled = result.IsEnabled };
+                    try
+                    {
+                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing =>
+                        {
+                            if (isEnabled) existing.Enable(); else existing.Disable();
+                        }, ct);
+                        return (object)new { success = true, agentId, isEnabled = result.IsEnabled };
+                    }
+                    catch (Exception ex)
+                    {
+                        return (object)new { success = false, error = ex.Message };
+                    }
                 },
                 name: "enable_disable_agent",
                 description: "【不可逆操作，执行前请向用户确认】启用或禁用一个 Agent 代理。被禁用的代理将无法被调用为子代理。默认代理不可禁用。"),
 
             // 7. update_agent_sub_agents
             AIFunctionFactory.Create(
-                ([Description("要修改的 Agent ID")] string agentId,
-                 [Description("子代理白名单：null = 允许调用所有代理；空数组 = 禁止调用任何子代理；字符串数组 = 仅允许指定 ID 的子代理")] IReadOnlyList<string>? allowedSubAgentIds) =>
+                async ([Description("要修改的 Agent ID")] string agentId,
+                       [Description("子代理白名单：null = 允许调用所有代理；空数组 = 禁止调用任何子代理；字符串数组 = 仅允许指定 ID 的子代理")] IReadOnlyList<string>? allowedSubAgentIds,
+                       CancellationToken ct) =>
                 {
-                    AgentEntity? agent = agentRepo.GetById(agentId);
+                    IMicroAgent? agent = agentService.GetById(agentId);
                     if (agent is null)
                         return (object)new { success = false, error = $"Agent '{agentId}' 不存在。" };
                     if (agent.IsDefault)
                         return (object)new { success = false, error = "默认代理的子代理白名单不可修改，请通过管理界面操作。" };
 
-                    agent.UpdateAllowedSubAgentIds(allowedSubAgentIds);
-                    AgentEntity result = agentRepo.Save(agent);
-                    return (object)new { success = true, agentId, allowedSubAgentIds = result.AllowedSubAgentIds };
+                    try
+                    {
+                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing => existing.UpdateAllowedSubAgentIds(allowedSubAgentIds), ct);
+                        return (object)new { success = true, agentId, allowedSubAgentIds = result.AllowedSubAgentIds };
+                    }
+                    catch (Exception ex)
+                    {
+                        return (object)new { success = false, error = ex.Message };
+                    }
                 },
                 name: "update_agent_sub_agents",
                 description: "修改 Agent 代理可调用的子代理白名单。null = 全部可调用；空数组 = 禁止调用任何子代理；指定 ID 数组 = 仅允许白名单内的代理。默认代理不可修改。"),

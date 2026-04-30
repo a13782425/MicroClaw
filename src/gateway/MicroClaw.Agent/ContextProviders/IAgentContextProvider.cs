@@ -1,3 +1,4 @@
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Infrastructure.Data;
 
 namespace MicroClaw.Agent.ContextProviders;
@@ -22,4 +23,13 @@ public interface IAgentContextProvider
     /// <param name="ct">取消令牌。</param>
     /// <returns>上下文文本；为 <c>null</c> 或空时忽略。</returns>
     ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 构建并返回该 Provider 负责的上下文文本片段。
+    /// </summary>
+    /// <param name="agent">当前执行的 Agent 运行时对象。</param>
+    /// <param name="sessionId">当前会话 ID；子代理场景下可为 <c>null</c>。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>上下文文本；为 <c>null</c> 或空时忽略。</returns>
+    ValueTask<string?> BuildContextAsync(IMicroAgent agent, string? sessionId, CancellationToken ct = default);
 }

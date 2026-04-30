@@ -28,7 +28,6 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
     private int MaxSubAgentDepth => MicroClawConfig.Get<AgentsOptions>().SubAgentMaxDepth;
     private ISessionService Sessions => sp.GetRequiredService<ISessionService>();
     private IMicroAgentService AgentService => sp.GetRequiredService<IMicroAgentService>();
-    private IAgentRepository AgentRepo => sp.GetRequiredService<IAgentRepository>();
     private ProviderService ProviderSvc => sp.GetRequiredService<ProviderService>();
     private ChatMessageAssembler MessageAssembler => sp.GetRequiredService<ChatMessageAssembler>();
     private ToolCollector ToolCollector => sp.GetRequiredService<ToolCollector>();
@@ -44,10 +43,6 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
             throw new InvalidOperationException($"子代理 '{agentId}' 不存在。");
         if (!runtimeAgent.IsEnabled)
             throw new InvalidOperationException($"子代理 '{runtimeAgent.Name}' 未启用。");
-
-        AgentEntity? agentDto = AgentRepo.GetById(agentId);
-        if (agentDto is null)
-            throw new InvalidOperationException($"子代理 '{agentId}' 配置不存在。");
         
         SubAgentRunContext? currentRunContext = SubAgentRunScope.Current;
         IReadOnlyList<string> ancestorAgentIds = currentRunContext?.AgentChain ?? Array.Empty<string>();
@@ -94,20 +89,20 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
 
             // 装配消息
             ChatMessageAssemblyResult assembly = await MessageAssembler.AssembleAsync(
-                agentDto, providerCfg, [userMsg], rootSessionId, ct: ct);
+                runtimeAgent, providerCfg, [userMsg], rootSessionId, ct: ct);
 
             // 收集工具（含子代理工具，传入祖先链）
             var toolCtx = new ToolCreationContext(
                 SessionId: rootSessionId,
                 CallingAgentId: agentId,
-                DisabledSkillIds: agentDto.DisabledSkillIds,
+                DisabledSkillIds: runtimeAgent.DisabledSkillIds,
                 AllowedSubAgentIds: runtimeAgent.AllowedSubAgentIds,
                 AncestorAgentIds: ancestorAgentIds);
 
             ToolCollectionResult? toolResult = null;
             try
             {
-                toolResult = await ToolCollector.CollectToolsAsync(agentDto, toolCtx, ct);
+                toolResult = await ToolCollector.CollectToolsAsync(runtimeAgent, toolCtx, ct);
 
                 // 计算内部工具名称集
                 var availableToolNames = toolResult.AllTools

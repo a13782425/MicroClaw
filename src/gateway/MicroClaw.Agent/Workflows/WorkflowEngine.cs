@@ -14,14 +14,13 @@ namespace MicroClaw.Agent.Workflows;
 /// </summary>
 public sealed class WorkflowEngine
 {
-    private readonly IAgentRepository _agentRepo;
+    private readonly IMicroAgentService _agentService;
     private readonly ProviderService _providerStore;
-    // TODO P5-01: Replace with IMicroAgentService after re-integration
     private readonly ILogger<WorkflowEngine> _logger;
 
     public WorkflowEngine(IServiceProvider sp)
     {
-        _agentRepo = sp.GetRequiredService<IAgentRepository>();
+        _agentService = sp.GetRequiredService<IMicroAgentService>();
         _providerStore = sp.GetRequiredService<ProviderService>();
         _logger = sp.GetRequiredService<ILogger<WorkflowEngine>>();
     }
@@ -43,7 +42,7 @@ public sealed class WorkflowEngine
         }
 
         // ����ʱ�����ģ�������ģ���ڽڵ�䴫��
-        string? currentAgentId = _agentRepo.GetDefault()?.Id;
+        string? currentAgentId = _agentService.GetDefault()?.Id;
         string? currentProviderId = workflow.DefaultProviderId ?? _providerStore.GetDefault()?.Id;
 
         Dictionary<string, string> nodeOutputs = new();
@@ -165,7 +164,7 @@ public sealed class WorkflowEngine
     {
         // TODO P5-01: Re-integrate ExecuteAgentNodeAsync with IMicroAgentService + MicroChatContext
         // WorkflowEngine is temporarily disabled (P4-02) pending P5-01 re-integration.
-        AgentEntity? agentDto = _agentRepo.GetById(effectiveAgentId);
+        IMicroAgent? agentDto = _agentService.GetById(effectiveAgentId);
         if (agentDto is null || !agentDto.IsEnabled)
         {
             _logger.LogWarning("Agent node {NodeId} references Agent '{AgentId}' which is missing or disabled.",

@@ -1,6 +1,7 @@
 using MicroClaw.Agent.ContextProviders;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Agent.Restorers;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Providers;
 using MicroClaw.Skills;
@@ -33,24 +34,58 @@ public sealed class ChatMessageAssembler(
         string? behaviorSuffix = null,
         string? petKnowledge = null,
         CancellationToken ct = default)
+        => await AssembleAsyncCore(
+            agent.DisabledSkillIds,
+            agent.ContextWindowMessages,
+            (skillContext, userMessage, token) => BuildSystemPromptAsync(agent, sessionId, skillContext, userMessage, behaviorSuffix, token),
+            provider,
+            history,
+            sessionId,
+            petKnowledge,
+            ct);
+
+    /// <summary>
+    /// 基于运行时 Agent、Provider 和历史消息装配本次调用的最终消息列表及技能上下文。
+    /// </summary>
+    public async Task<ChatMessageAssemblyResult> AssembleAsync(
+        IMicroAgent agent,
+        ProviderEntity provider,
+        IReadOnlyList<SessionMessage> history,
+        string? sessionId = null,
+        string? behaviorSuffix = null,
+        string? petKnowledge = null,
+        CancellationToken ct = default)
+        => await AssembleAsyncCore(
+            agent.DisabledSkillIds,
+            agent.ContextWindowMessages,
+            (skillContext, userMessage, token) => BuildSystemPromptAsync(agent, sessionId, skillContext, userMessage, behaviorSuffix, token),
+            provider,
+            history,
+            sessionId,
+            petKnowledge,
+            ct);
+
+    private async Task<ChatMessageAssemblyResult> AssembleAsyncCore(
+        IReadOnlyList<string> disabledSkillIds,
+        int? contextWindowMessages,
+        Func<string?, string?, CancellationToken, ValueTask<string>> buildSystemPromptAsync,
+        ProviderEntity provider,
+        IReadOnlyList<SessionMessage> history,
+        string? sessionId,
+        string? petKnowledge,
+        CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(buildSystemPromptAsync);
 
         IReadOnlyList<SessionMessage> validatedHistory = ValidateModalities(history, provider);
         string? latestUserMessage = validatedHistory
             .LastOrDefault(m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))
             ?.Content;
 
-        SkillContext skillContext = skillToolFactory.BuildSkillContext(agent.DisabledSkillIds, sessionId);
-        string systemPrompt = await BuildSystemPromptAsync(
-            agent,
-            sessionId,
-            skillContext.CatalogFragment,
-            latestUserMessage,
-            behaviorSuffix,
-            ct);
+        SkillContext skillContext = skillToolFactory.BuildSkillContext(disabledSkillIds, sessionId);
+        string systemPrompt = await buildSystemPromptAsync(skillContext.CatalogFragment, latestUserMessage, ct);
 
         if (!string.IsNullOrEmpty(systemPrompt))
         {
@@ -69,9 +104,9 @@ public sealed class ChatMessageAssembler(
         }
 
         IEnumerable<SessionMessage> windowed;
-        if (agent.ContextWindowMessages.HasValue && validatedHistory.Count > agent.ContextWindowMessages.Value)
+        if (contextWindowMessages.HasValue && validatedHistory.Count > contextWindowMessages.Value)
         {
-            int initialSplitIndex = validatedHistory.Count - agent.ContextWindowMessages.Value;
+            int initialSplitIndex = validatedHistory.Count - contextWindowMessages.Value;
             int adjustedSplitIndex = AdjustSplitIndexForToolCalls(validatedHistory, initialSplitIndex);
 
             windowed = validatedHistory.Skip(adjustedSplitIndex);
@@ -162,6 +197,35 @@ public sealed class ChatMessageAssembler(
 
     private async ValueTask<string> BuildSystemPromptAsync(
         AgentEntity agent,
+        string? sessionId,
+        string? skillContext,
+        string? userMessage,
+        string? behaviorSuffix,
+        CancellationToken ct)
+    {
+        var parts = new List<string>(_contextProviders.Count + 2);
+
+        foreach (IAgentContextProvider provider in _contextProviders)
+        {
+            string? fragment = provider is IUserAwareContextProvider userAware
+                ? await userAware.BuildContextAsync(agent, sessionId, userMessage, ct)
+                : await provider.BuildContextAsync(agent, sessionId, ct);
+
+            if (!string.IsNullOrWhiteSpace(fragment))
+                parts.Add(fragment);
+        }
+
+        if (!string.IsNullOrWhiteSpace(skillContext))
+            parts.Add(skillContext);
+
+        if (!string.IsNullOrWhiteSpace(behaviorSuffix))
+            parts.Add(behaviorSuffix);
+
+        return string.Join("\n\n", parts);
+    }
+
+    private async ValueTask<string> BuildSystemPromptAsync(
+        IMicroAgent agent,
         string? sessionId,
         string? skillContext,
         string? userMessage,

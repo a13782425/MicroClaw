@@ -1,4 +1,4 @@
-using MicroClaw.Agent;
+using MicroClaw.Abstractions.Agent;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.Storage;
@@ -15,14 +15,14 @@ public sealed class PetSelfAwarenessReportBuilder(
     IEmotionBehaviorMapper behaviorMapper,
     PetRateLimiter rateLimiter,
     ProviderService providerStore,
-    AgentStore agentStore)
+    IMicroAgentService agentService)
 {
     private readonly PetStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     private readonly IEmotionStore _emotionStore = emotionStore ?? throw new ArgumentNullException(nameof(emotionStore));
     private readonly IEmotionBehaviorMapper _behaviorMapper = behaviorMapper ?? throw new ArgumentNullException(nameof(behaviorMapper));
     private readonly PetRateLimiter _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
     private readonly ProviderService _providerStore = providerStore ?? throw new ArgumentNullException(nameof(providerStore));
-    private readonly AgentStore _agentStore = agentStore ?? throw new ArgumentNullException(nameof(agentStore));
+    private readonly IMicroAgentService _agentService = agentService ?? throw new ArgumentNullException(nameof(agentService));
 
     /// <summary>
     /// 构建指定 Session 的自我感知报告。
@@ -66,7 +66,7 @@ public sealed class PetSelfAwarenessReportBuilder(
         )).ToList();
 
         // Agent 摘要
-        var allAgents = _agentStore.All;
+        var allAgents = _agentService.All;
         var enabledAgents = allAgents.Where(a => a.IsEnabled).ToList();
 
         // 如果 PetConfig 指定了 AllowedAgentIds，则过滤

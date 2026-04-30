@@ -14,6 +14,13 @@ public interface IMicroAgent
     bool IsEnabled { get; }
     bool IsDefault { get; }
     IReadOnlyList<string>? AllowedSubAgentIds { get; }
+    int? ContextWindowMessages { get; }
+    IReadOnlyList<string> DisabledSkillIds { get; }
+    IReadOnlyList<string> DisabledMcpServerIds { get; }
+
+    bool IsToolGroupEnabled(string groupId);
+    bool IsToolDisabled(string groupId, string toolName);
+    bool IsMcpServerDisabled(string serverIdOrName);
     
     /// <summary>
     /// 驱动 ReAct 循环。调用方负责在 <paramref name="context"/> 中填充
