@@ -216,7 +216,6 @@ public class ServeCommand : Command
 			opts.LogTo(_ => {}, LogLevel.None);  // 禁用所有 EF 日志
 		});
 
-		builder.Services.AddSingleton<ConfigService>();
 		// ProviderService：依赖 IUsageTracker，按 MicroService 生命周期启动（Order=15），
 		// 取代旧的 ProviderClientFactory + 直接暴露 IChatClient 的模式。
 		builder.Services.AddMicroService<ProviderService>();

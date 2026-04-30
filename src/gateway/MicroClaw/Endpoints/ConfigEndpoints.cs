@@ -1,3 +1,5 @@
+using MicroClaw.Configuration;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Services;
 
 namespace MicroClaw.Endpoints;
@@ -6,31 +8,54 @@ public static class ConfigEndpoints
 {
     public static IEndpointRouteBuilder MapConfigEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/config", (ConfigService svc) => Results.Ok(svc.GetSystemConfig()))
-            .WithTags("Config");
+        endpoints.MapGet("/config", () =>
+        {
+            var agent = MicroClawConfig.Get<AgentsOptions>();
+            var skills = MicroClawConfig.Get<SkillOptions>();
+            var emotion = MicroClawConfig.Get<EmotionOptions>();
 
-        endpoints.MapPost("/config/agent", (AgentConfigSection req, ConfigService svc) =>
+            return Results.Ok(new SystemConfigDto
+            {
+                Agent = new AgentConfigSection { SubAgentMaxDepth = agent.SubAgentMaxDepth },
+                Skills = new SkillsConfigSection { AdditionalFolders = skills.AdditionalFolders },
+                Emotion = EmotionConfigSection.FromOptions(emotion),
+            });
+        })
+        .WithTags("Config");
+
+        endpoints.MapPost("/config/agent", (AgentConfigSection req) =>
         {
             if (req.SubAgentMaxDepth < 1 || req.SubAgentMaxDepth > 10)
                 return Results.BadRequest("sub_agent_max_depth 必须在 1–10 之间。");
 
-            svc.UpdateAgentConfig(req);
+            var current = MicroClawConfig.Get<AgentsOptions>();
+            MicroClawConfig.Save(new AgentsOptions
+            {
+                SubAgentMaxDepth = req.SubAgentMaxDepth,
+                Items = current.Items,
+            });
             return Results.Ok(new { message = "已保存，需重启生效。" });
         })
         .WithTags("Config");
 
-        endpoints.MapPost("/config/skills", (SkillsConfigSection req, ConfigService svc) =>
+        endpoints.MapPost("/config/skills", (SkillsConfigSection req) =>
         {
-            // 校验每个路径非空
             if (req.AdditionalFolders.Any(f => string.IsNullOrWhiteSpace(f)))
                 return Results.BadRequest("文件夹路径不能为空。");
 
-            svc.UpdateSkillsConfig(req);
+            var current = MicroClawConfig.Get<SkillOptions>();
+            MicroClawConfig.Save(new SkillOptions
+            {
+                AllowCommandInjection = current.AllowCommandInjection,
+                CatalogCharBudget = current.CatalogCharBudget,
+                DefaultFolder = current.DefaultFolder,
+                AdditionalFolders = [.. req.AdditionalFolders],
+            });
             return Results.Ok(new { message = "已保存，需重启生效。" });
         })
         .WithTags("Config");
 
-        endpoints.MapPost("/config/emotion", (EmotionConfigSection req, ConfigService svc) =>
+        endpoints.MapPost("/config/emotion", (EmotionConfigSection req) =>
         {
             if (req.CautiousAlertnessThreshold is < 0 or > 100 ||
                 req.CautiousConfidenceThreshold is < 0 or > 100 ||
@@ -62,7 +87,7 @@ public static class ConfigEndpoints
                                    InvalidDelta(d.Curiosity) || InvalidDelta(d.Confidence)))
                 return Results.BadRequest("加减分值必须在 -100 到 100 之间。");
 
-            svc.UpdateEmotionConfig(req);
+            MicroClawConfig.Save(req.ToOptions());
             return Results.Ok(new { message = "已保存，需重启生效。" });
         })
         .WithTags("Config");

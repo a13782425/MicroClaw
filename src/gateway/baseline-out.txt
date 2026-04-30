@@ -1,0 +1,25 @@
+﻿  姝ｅ湪纭畾瑕佽繕鍘熺殑椤圭洰鈥?
+  鎵€鏈夐」鐩潎鏄渶鏂扮殑锛屾棤娉曡繕鍘熴€?
+  MicroClaw.Core -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Core\bin\Debug\net10.0\MicroClaw.Core.dll
+  MicroClaw.Configuration -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Configuration\bin\Debug\net10.0\MicroClaw.Configuration.dll
+  MicroClaw.Jobs -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Jobs\bin\Debug\net10.0\MicroClaw.Jobs.dll
+  MicroClaw.Abstractions -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Abstractions\bin\Debug\net10.0\MicroClaw.Abstractions.dll
+  MicroClaw.Infrastructure -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Infrastructure\bin\Debug\net10.0\MicroClaw.Infrastructure.dll
+  MicroClaw.Providers -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Providers\bin\Debug\net10.0\MicroClaw.Providers.dll
+  MicroClaw.Tools -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Tools\bin\Debug\net10.0\MicroClaw.Tools.dll
+  MicroClaw.RAG -> F:\development\git\MicroClaw\src\gateway\MicroClaw.RAG\bin\Debug\net10.0\MicroClaw.RAG.dll
+  MicroClaw.Skills -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Skills\bin\Debug\net10.0\MicroClaw.Skills.dll
+  MicroClaw.Channels -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Channels\bin\Debug\net10.0\MicroClaw.Channels.dll
+  MicroClaw.Plugins -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Plugins\bin\Debug\net10.0\MicroClaw.Plugins.dll
+  MicroClaw.Agent -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Agent\bin\Debug\net10.0\MicroClaw.Agent.dll
+  MicroClaw.Pet -> F:\development\git\MicroClaw\src\gateway\MicroClaw.Pet\bin\Debug\net10.0\MicroClaw.Pet.dll
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(172,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淪ystemConfigDto鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(178,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淎gentConfigSection鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(182,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淪killsConfigSection鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(186,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淏ehaviorProfileConfigSection鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(192,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淓motionDeltaConfigSection鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(211,21): error CS0101: 鍛藉悕绌洪棿鈥淢icroClaw.Services鈥濆凡缁忓寘鍚€淓motionConfigSection鈥濈殑瀹氫箟 [F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(199,45): error CS0111: 绫诲瀷鈥淓motionDeltaConfigSection鈥濆凡瀹氫箟浜嗕竴涓悕涓衡€淔romOptions鈥濈殑鍏锋湁鐩稿悓鍙傛暟绫诲瀷鐨勬垚鍛?[F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(205,32): error CS0111: 绫诲瀷鈥淓motionDeltaConfigSection鈥濆凡瀹氫箟浜嗕竴涓悕涓衡€淭oOptions鈥濈殑鍏锋湁鐩稿悓鍙傛暟绫诲瀷鐨勬垚鍛?[F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(236,40): error CS0111: 绫诲瀷鈥淓motionConfigSection鈥濆凡瀹氫箟浜嗕竴涓悕涓衡€淔romOptions鈥濈殑鍏锋湁鐩稿悓鍙傛暟绫诲瀷鐨勬垚鍛?[F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
+F:\development\git\MicroClaw\src\gateway\MicroClaw\Services\ConfigService.cs(261,27): error CS0111: 绫诲瀷鈥淓motionConfigSection鈥濆凡瀹氫箟浜嗕竴涓悕涓衡€淭oOptions鈥濈殑鍏锋湁鐩稿悓鍙傛暟绫诲瀷鐨勬垚鍛?[F:\development\git\MicroClaw\src\gateway\MicroClaw\MicroClaw.csproj]
