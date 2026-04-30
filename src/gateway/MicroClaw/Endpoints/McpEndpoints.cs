@@ -1,10 +1,6 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using MicroClaw.Tools;
 
-namespace MicroClaw.Tools.Endpoints;
+namespace MicroClaw.Endpoints;
 
 /// <summary>
 /// 全局 MCP Server 管理 REST API 端点：CRUD + 连接测试 + 工具预览。

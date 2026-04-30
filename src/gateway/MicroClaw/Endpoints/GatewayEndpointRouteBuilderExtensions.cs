@@ -1,6 +1,3 @@
-using MicroClaw.Agent.Endpoints;
-using MicroClaw.Skills.Endpoints;
-using MicroClaw.Tools.Endpoints;
 
 namespace MicroClaw.Endpoints;
 

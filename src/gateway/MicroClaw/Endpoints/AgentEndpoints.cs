@@ -1,13 +1,11 @@
 ﻿using System.Text.Json;
+using MicroClaw.Agent;
 using MicroClaw.Agent.Memory;
 using MicroClaw.Providers;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 
-namespace MicroClaw.Agent.Endpoints;
+namespace MicroClaw.Endpoints;
 
 /// <summary>
 /// Agent REST API 端点：Agent CRUD、MCP Server 引用管理、工具列表、流式对话�?

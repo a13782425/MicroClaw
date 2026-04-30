@@ -1,8 +1,6 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
+using MicroClaw.Skills;
 
-namespace MicroClaw.Skills.Endpoints;
+namespace MicroClaw.Endpoints;
 
 /// <summary>
 /// Skill 技能 REST API 端点：技能列表 + workspace 文件管理。

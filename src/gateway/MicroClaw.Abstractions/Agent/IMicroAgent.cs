@@ -17,7 +17,7 @@ public interface IMicroAgent
     int? ContextWindowMessages { get; }
     IReadOnlyList<string> DisabledSkillIds { get; }
     IReadOnlyList<string> DisabledMcpServerIds { get; }
-
+    
     bool IsToolGroupEnabled(string groupId);
     bool IsToolDisabled(string groupId, string toolName);
     bool IsMcpServerDisabled(string serverIdOrName);
@@ -34,9 +34,5 @@ public interface IMicroAgent
     /// 直接调用此 Agent 持有的某个工具并返回文本结果。
     /// 供工作流 Tool 节点使用（不走 LLM，仅执行工具函数）。
     /// </summary>
-    Task<string> InvokeToolAsync(
-        string toolName,
-        IReadOnlyDictionary<string, string>? args,
-        string fallbackInput,
-        CancellationToken ct);
+    Task<string> InvokeToolAsync(string toolName, IReadOnlyDictionary<string, string>? args, string fallbackInput, CancellationToken ct);
 }

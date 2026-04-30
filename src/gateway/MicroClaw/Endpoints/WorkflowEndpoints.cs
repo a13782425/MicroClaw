@@ -1,12 +1,7 @@
 ﻿using System.Text.Json;
 using MicroClaw.Agent.Workflows;
-using MicroClaw.Abstractions.Sessions;
-using MicroClaw.Abstractions.Streaming;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 
-namespace MicroClaw.Agent.Endpoints;
+namespace MicroClaw.Endpoints;
 
 /// <summary>
 /// 工作流 REST API 端点。

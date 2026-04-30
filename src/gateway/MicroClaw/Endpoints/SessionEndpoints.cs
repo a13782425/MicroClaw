@@ -1,11 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
-using MicroClaw.Agent;
-using MicroClaw.Agent.Endpoints;
 using MicroClaw.Agent.Memory;
-using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Agent;
-using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
@@ -14,7 +10,6 @@ using MicroClaw.Hubs;
 using MicroClaw.Pet;
 using MicroClaw.Providers;
 using MicroClaw.Sessions;
-using MicroClaw.Streaming;
 using Microsoft.AspNetCore.SignalR;
 
 namespace MicroClaw.Endpoints;

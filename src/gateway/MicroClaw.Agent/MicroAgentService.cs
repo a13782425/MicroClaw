@@ -197,7 +197,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Persists a new agent and registers its runtime <see cref="MicroAgent"/>.
     /// Rolls back the persisted entry if runtime registration fails.
     /// </summary>
-    internal async ValueTask<AgentEntity> CreateAgentAsync(AgentEntity entity, CancellationToken ct = default)
+    public async ValueTask<AgentEntity> CreateAgentAsync(AgentEntity entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         
@@ -226,7 +226,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Loads, mutates, persists, and applies the latest configuration to the runtime agent.
     /// Existing runtime agents are updated in place to avoid a stale-runtime replacement window.
     /// </summary>
-    internal async ValueTask<AgentEntity> UpdateAgentAsync(string id, Action<AgentEntity> applyChanges, CancellationToken ct = default)
+    public async ValueTask<AgentEntity> UpdateAgentAsync(string id, Action<AgentEntity> applyChanges, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(applyChanges);
@@ -261,7 +261,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Deletes the persisted agent and removes its runtime object.
     /// Restores the persisted entry if runtime removal fails.
     /// </summary>
-    internal async ValueTask DeleteAgentAsync(string id, CancellationToken ct = default)
+    public async ValueTask DeleteAgentAsync(string id, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         
