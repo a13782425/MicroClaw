@@ -35,19 +35,19 @@ public sealed record AgentEntityConfig
     /// 被禁用的技能 ID 列表，使用 JSON 字符串持久化。
     /// </summary>
     [YamlMember(Alias = "disabled_skill_ids_json", Description = "被禁用的技能 ID 列表，使用 JSON 字符串持久化。")]
-    public string? DisabledSkillIdsJson { get; set; }
+    public string DisabledSkillIdsJson { get; set; } = string.Empty;
 
     /// <summary>
     /// 被禁用的 MCP 服务器 ID 列表，使用 JSON 字符串持久化。
     /// </summary>
     [YamlMember(Alias = "disabled_mcp_server_ids_json", Description = "被禁用的 MCP 服务器 ID 列表，使用 JSON 字符串持久化。")]
-    public string? DisabledMcpServerIdsJson { get; set; }
+    public string DisabledMcpServerIdsJson { get; set; } = string.Empty;
 
     /// <summary>
     /// 工具分组配置，使用 JSON 字符串持久化。
     /// </summary>
     [YamlMember(Alias = "tool_group_configs_json", Description = "工具分组配置，使用 JSON 字符串持久化。")]
-    public string? ToolGroupConfigsJson { get; set; }
+    public string ToolGroupConfigsJson { get; set; } = string.Empty;
 
     /// <summary>
     /// 创建时间的 Unix 毫秒时间戳。
@@ -60,34 +60,34 @@ public sealed record AgentEntityConfig
     /// </summary>
     [YamlMember(Alias = "is_default", Description = "指示该 Agent 是否为系统默认 Agent。")]
     public bool IsDefault { get; set; }
-
+    
     /// <summary>
     /// 上下文窗口中保留的消息条数上限。
     /// </summary>
     [YamlMember(Alias = "context_window_messages", Description = "上下文窗口中保留的消息条数上限。")]
-    public int? ContextWindowMessages { get; set; }
+    public int ContextWindowMessages { get; set; } = 10;
 
     /// <summary>
     /// 允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。
     /// </summary>
     [YamlMember(Alias = "allowed_sub_agent_ids_json", Description = "允许调用的子 Agent ID 列表，使用 JSON 字符串持久化。")]
-    public string? AllowedSubAgentIdsJson { get; set; }
+    public string AllowedSubAgentIdsJson { get; set; } = string.Empty;
 
     /// <summary>
     /// Provider 路由策略名称。
     /// </summary>
     [YamlMember(Alias = "routing_strategy", Description = "Provider 路由策略名称。")]
-    public string? RoutingStrategy { get; set; }
-
+    public string RoutingStrategy { get; set; } = string.Empty;
+    
     /// <summary>
     /// 每月预算上限，单位为美元。
     /// </summary>
     [YamlMember(Alias = "monthly_budget_usd", Description = "每月预算上限，单位为美元。")]
-    public decimal? MonthlyBudgetUsd { get; set; }
+    public decimal MonthlyBudgetUsd { get; set; } = -1;
 
     /// <summary>
     /// 来源插件 ID，用于标识该 Agent 是否由插件注入。
     /// </summary>
     [YamlMember(Alias = "source_plugin", Description = "来源插件 ID，用于标识该 Agent 是否由插件注入。")]
-    public string? SourcePlugin { get; set; }
+    public string SourcePlugin { get; set; } = string.Empty;
 }

@@ -120,13 +120,14 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentEntity config = AgentEntity.New(
+                        MicroAgent config = MicroAgent.New(
+                            sp: microAgentService.ServiceProvider,
                             name: name.Trim(),
                             description: description?.Trim() ?? string.Empty,
                             isEnabled: true,
                             contextWindowMessages: 20);
 
-                        AgentEntity created = await microAgentService.CreateAgentAsync(config, ct);
+                        MicroAgent created = await microAgentService.CreateAgentAsync(config, ct);
                         try
                         {
                             agentDnaService.InitializeAgent(created.Id);
@@ -212,7 +213,7 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing =>
+                        MicroAgent result = await microAgentService.UpdateAgentAsync(agentId, existing =>
                             existing.UpdateInfo(
                                 string.IsNullOrWhiteSpace(name) ? existing.Name : name.Trim(),
                                 description is null ? existing.Description : description.Trim()), ct);
@@ -240,9 +241,9 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing =>
+                        MicroAgent result = await microAgentService.UpdateAgentAsync(agentId, existing =>
                         {
-                            if (isEnabled) existing.Enable(); else existing.Disable();
+                            existing.IsEnabled = isEnabled;
                         }, ct);
                         return (object)new { success = true, agentId, isEnabled = result.IsEnabled };
                     }
@@ -268,7 +269,7 @@ public static class SubAgentTools
 
                     try
                     {
-                        AgentEntity result = await microAgentService.UpdateAgentAsync(agentId, existing => existing.UpdateAllowedSubAgentIds(allowedSubAgentIds), ct);
+                        MicroAgent result = await microAgentService.UpdateAgentAsync(agentId, existing => existing.UpdateAllowedSubAgentIds(allowedSubAgentIds), ct);
                         return (object)new { success = true, agentId, allowedSubAgentIds = result.AllowedSubAgentIds };
                     }
                     catch (Exception ex)

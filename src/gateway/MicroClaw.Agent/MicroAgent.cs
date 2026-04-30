@@ -1,15 +1,18 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Agent.Dev;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
 using MicroClaw.Plugins.Hooks;
 using MicroClaw.Providers;
 using MicroClaw.RAG;
 using MicroClaw.Tools;
+using MicroClaw.Utils;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,7 +32,18 @@ namespace MicroClaw.Agent;
 /// </summary>
 public sealed class MicroAgent : MicroObject, IMicroAgent
 {
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    
     private readonly IServiceProvider _sp;
+    
+    // ── 持久化数据 ────────────────────────────────────────────────────────
+    
+    private AgentEntityConfig _config;
+    private List<string> _disabledSkillIds;
+    private List<string> _disabledMcpServerIds;
+    private List<ToolGroupConfig> _toolGroupConfigs;
+    private List<string>? _allowedSubAgentIds;
+    private ProviderRoutingStrategy _routingStrategy;
     
     // ── 运行时依赖（InitializeAsync 后填充，StreamAsync/InvokeToolAsync 前只读） ──
     
@@ -42,60 +56,177 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     private IRagUsageAuditor? _ragUsageAuditor;
     private RagRetrievalContext? _ragRetrievalContext;
     
-    public MicroAgent(AgentEntity entity, IServiceProvider sp)
+    public MicroAgent(AgentEntityConfig config, IServiceProvider sp)
     {
-        Entity = entity ?? throw new ArgumentNullException(nameof(entity));
-        _sp = sp ?? throw new ArgumentNullException(nameof(sp));
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(sp);
+        _config = config;
+        _sp = sp;
+        _disabledSkillIds = MicroClawUtils.DeserializeList<string>(config.DisabledSkillIdsJson);
+        _disabledMcpServerIds = MicroClawUtils.DeserializeList<string>(config.DisabledMcpServerIdsJson);
+        _toolGroupConfigs = MicroClawUtils.DeserializeList<ToolGroupConfig>(config.ToolGroupConfigsJson);
+        _allowedSubAgentIds = config.AllowedSubAgentIdsJson is null ? null : MicroClawUtils.DeserializeList<string>(config.AllowedSubAgentIdsJson);
+        _routingStrategy = AgentUtils.ParseRoutingStrategy(config.RoutingStrategy);
     }
     
-    // ── 内部实体 ─────────────────────────────────────────────────────────
+    // ── 工厂 ──────────────────────────────────────────────────────────────
     
-    /// <summary>持久化实体数据（只读委托源）。</summary>
-    internal AgentEntity Entity { get; private set; }
+    public static MicroAgent New(IServiceProvider sp, string name, string description, bool isEnabled = true, int contextWindowMessages = 10) =>
+        new(new AgentEntityConfig
+        {
+            Id = MicroClawUtils.GetUniqueId(),
+            Name = name,
+            Description = description,
+            IsEnabled = isEnabled,
+            CreatedAtMs = TimeUtils.ToMs(DateTimeOffset.UtcNow),
+            ContextWindowMessages = contextWindowMessages
+        }, sp);
     
-    internal void ReplaceEntity(AgentEntity entity)
+    // ── 持久化导出 / 克隆 / 替换 ─────────────────────────────────────────
+    
+    /// <summary>导出当前持久化数据快照（不复制运行时依赖）。</summary>
+    public AgentEntityConfig ToConfig() => _config with { };
+    
+    /// <summary>创建脱离 MicroEngine 生命周期的同 SP 克隆，作为只读快照使用。</summary>
+    internal MicroAgent Clone() => new(_config with { }, _sp);
+    
+    
+    // ── 持久化字段访问（属性 + 行为方法）─────────────────────────────────
+    
+    /// <inheritdoc/>
+    public string Id => _config.Id;
+    
+    /// <inheritdoc/>
+    public string Name
     {
-        ArgumentNullException.ThrowIfNull(entity);
-        Entity = entity;
+        get => _config.Name;
+        set => _config.Name = value;
     }
     
-    // ── IMicroAgent 属性委托 ─────────────────────────────────────────────
+    /// <inheritdoc/>
+    public string Description
+    {
+        get => _config.Description;
+        set => _config.Description = value;
+    }
     
     /// <inheritdoc/>
-    public string Id => Entity.Id;
+    public bool IsEnabled
+    {
+        get => _config.IsEnabled;
+        set => _config.IsEnabled = value;
+    }
     
     /// <inheritdoc/>
-    public string Name => Entity.Name;
+    public bool IsDefault
+    {
+        get => _config.IsDefault;
+        set => _config.IsDefault = value;
+    }
+    
+    public DateTimeOffset CreatedAtUtc => TimeUtils.FromMs(_config.CreatedAtMs);
     
     /// <inheritdoc/>
-    public string Description => Entity.Description;
+    public int? ContextWindowMessages
+    {
+        get => _config.ContextWindowMessages;
+        set => _config.ContextWindowMessages = value!.Value;
+    }
+    
+    public ProviderRoutingStrategy RoutingStrategy
+    {
+        get => _routingStrategy;
+        set
+        {
+            _routingStrategy = value;
+            _config.RoutingStrategy = value == ProviderRoutingStrategy.Default ? null : value.ToString();
+        }
+    }
+    
+    public decimal? MonthlyBudgetUsd
+    {
+        get => _config.MonthlyBudgetUsd;
+        set => _config.MonthlyBudgetUsd = value!.Value;
+    }
     
     /// <inheritdoc/>
-    public bool IsEnabled => Entity.IsEnabled;
+    public IReadOnlyList<string> DisabledSkillIds => _disabledSkillIds.AsReadOnly();
     
     /// <inheritdoc/>
-    public bool IsDefault => Entity.IsDefault;
+    public IReadOnlyList<string> DisabledMcpServerIds => _disabledMcpServerIds.AsReadOnly();
+    
+    public IReadOnlyList<ToolGroupConfig> ToolGroupConfigs => _toolGroupConfigs.AsReadOnly();
     
     /// <inheritdoc/>
-    public IReadOnlyList<string>? AllowedSubAgentIds => Entity.AllowedSubAgentIds;
+    public IReadOnlyList<string>? AllowedSubAgentIds => _allowedSubAgentIds?.AsReadOnly();
+    
+    // ── 行为方法：生命周期 ────────────────────────────────────────────────
+    
+    public void UpdateInfo(string name, string description)
+    {
+        Name = name;
+        Description = description;
+    }
+    
+    // ── 行为方法：Tool 权限检查 ──────────────────────────────────────────
     
     /// <inheritdoc/>
-    public int? ContextWindowMessages => Entity.ContextWindowMessages;
+    public bool IsToolGroupEnabled(string groupId)
+    {
+        ToolGroupConfig? cfg = _toolGroupConfigs.FirstOrDefault(g => g.GroupId == groupId);
+        return cfg is null || cfg.IsEnabled;
+    }
     
     /// <inheritdoc/>
-    public IReadOnlyList<string> DisabledSkillIds => Entity.DisabledSkillIds;
+    public bool IsToolDisabled(string groupId, string toolName)
+    {
+        ToolGroupConfig? cfg = _toolGroupConfigs.FirstOrDefault(g => g.GroupId == groupId);
+        return cfg is not null && cfg.DisabledToolNames.Contains(toolName);
+    }
+    
+    public void UpdateToolGroupConfigs(IReadOnlyList<ToolGroupConfig> configs)
+    {
+        _toolGroupConfigs = [.. configs];
+        _config.ToolGroupConfigsJson = _toolGroupConfigs.Count > 0 ? JsonSerializer.Serialize(_toolGroupConfigs, JsonOpts) : null;
+    }
+    
+    // ── 行为方法：MCP/Skill 禁用管理 ─────────────────────────────────────
     
     /// <inheritdoc/>
-    public IReadOnlyList<string> DisabledMcpServerIds => Entity.DisabledMcpServerIds;
+    public bool IsMcpServerDisabled(string serverIdOrName) => _disabledMcpServerIds.Contains(serverIdOrName);
     
-    /// <inheritdoc/>
-    public bool IsToolGroupEnabled(string groupId) => Entity.IsToolGroupEnabled(groupId);
+    public void UpdateDisabledMcpServerIds(IReadOnlyList<string> ids)
+    {
+        _disabledMcpServerIds = [.. ids];
+        _config.DisabledMcpServerIdsJson = _disabledMcpServerIds.Count > 0 ? JsonSerializer.Serialize(_disabledMcpServerIds, JsonOpts) : null;
+    }
     
-    /// <inheritdoc/>
-    public bool IsToolDisabled(string groupId, string toolName) => Entity.IsToolDisabled(groupId, toolName);
+    public bool IsSkillDisabled(string skillId) => _disabledSkillIds.Contains(skillId);
     
-    /// <inheritdoc/>
-    public bool IsMcpServerDisabled(string serverIdOrName) => Entity.IsMcpServerDisabled(serverIdOrName);
+    public void UpdateDisabledSkillIds(IReadOnlyList<string> ids)
+    {
+        _disabledSkillIds = [.. ids];
+        _config.DisabledSkillIdsJson = _disabledSkillIds.Count > 0 ? JsonSerializer.Serialize(_disabledSkillIds, JsonOpts) : null;
+    }
+    
+    // ── 行为方法：SubAgent 权限 ───────────────────────────────────────────
+    
+    /// <summary>
+    /// 检查是否允许调用指定子代理。
+    /// null 白名单 = 允许调用所有；空列表 = 禁止调用任何；具体 ID 列表 = 仅允许指定 ID。
+    /// </summary>
+    public bool CanCallSubAgent(string agentId)
+    {
+        if (_allowedSubAgentIds is null) return true;
+        if (_allowedSubAgentIds.Count == 0) return false;
+        return _allowedSubAgentIds.Contains(agentId);
+    }
+    
+    public void UpdateAllowedSubAgentIds(IReadOnlyList<string>? ids)
+    {
+        _allowedSubAgentIds = ids is null ? null : [.. ids];
+        _config.AllowedSubAgentIdsJson = _allowedSubAgentIds is null ? null : JsonSerializer.Serialize(_allowedSubAgentIds, JsonOpts);
+    }
     
     // ── 初始化 ────────────────────────────────────────────────────────────
     
@@ -194,19 +325,19 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 
                 try
                 {
-                    chatContext.TargetAgentId ??= Entity.Id;
-                    chatContext.TargetAgentName ??= Entity.Name;
+                    chatContext.TargetAgentId ??= Id;
+                    chatContext.TargetAgentName ??= Name;
                     chatContext.TargetProviderId = provider.Id;
                     
-                    Logger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Entity.Id, effectiveTools.Count, provider.Id);
+                    Logger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Id, effectiveTools.Count, provider.Id);
                     
                     ChatMicroProvider chatProvider = _providerService!.TryGetProvider(provider.Id) ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available in cache.");
                     
                     if (!string.IsNullOrWhiteSpace(sessionId))
-                        await _agentStatusNotifier!.NotifyAsync(sessionId, Entity.Id, "running", chatContext.Ct);
+                        await _agentStatusNotifier!.NotifyAsync(sessionId, Id, "running", chatContext.Ct);
                     
                     if (_hookExecutor is not null)
-                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionStart, SessionId = sessionId, AgentId = Entity.Id }, CancellationToken.None);
+                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionStart, SessionId = sessionId, AgentId = Id }, CancellationToken.None);
                     
                     var runSw = System.Diagnostics.Stopwatch.StartNew();
                     try
@@ -250,9 +381,9 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     finally
                     {
                         runSw.Stop();
-                        _devMetrics!.RecordAgentRun(Entity.Id, succeeded, runSw.ElapsedMilliseconds);
+                        _devMetrics!.RecordAgentRun(Id, succeeded, runSw.ElapsedMilliseconds);
                         if (!string.IsNullOrWhiteSpace(sessionId))
-                            await _agentStatusNotifier!.NotifyAsync(sessionId, Entity.Id, succeeded ? "completed" : "failed", CancellationToken.None);
+                            await _agentStatusNotifier!.NotifyAsync(sessionId, Id, succeeded ? "completed" : "failed", CancellationToken.None);
                     }
                     
                     if (streamingException is not null)
@@ -265,7 +396,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     output.Writer.TryComplete();
                     
                     if (_hookExecutor is not null)
-                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionEnd, SessionId = sessionId, AgentId = Entity.Id }, CancellationToken.None);
+                        _ = _hookExecutor.ExecuteAsync(new HookContext { Event = HookEvent.SessionEnd, SessionId = sessionId, AgentId = Id }, CancellationToken.None);
                     
                     return;
                 }
@@ -387,8 +518,8 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         if (arguments.Count == 0)
             arguments["input"] = fallbackInput;
         
-        var toolContext = new ToolCreationContext(CallingAgentId: Entity.Id);
-        await using ToolCollectionResult toolResult = await _toolCollector!.CollectToolsAsync(Entity, toolContext, ct);
+        var toolContext = new ToolCreationContext(CallingAgentId: Id);
+        await using ToolCollectionResult toolResult = await _toolCollector!.CollectToolsAsync(this, toolContext, ct);
         
         AITool? tool = toolResult.AllTools.FirstOrDefault(t => t.Name == toolName) ?? toolResult.AllTools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.OrdinalIgnoreCase));
         
@@ -398,7 +529,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
             return result?.ToString() ?? string.Empty;
         }
         
-        Logger!.LogWarning("InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.", toolName, Entity.Id);
+        Logger!.LogWarning("InvokeToolAsync: Tool '{ToolName}' not found for Agent '{AgentId}'.", toolName, Id);
         return fallbackInput;
     }
 }

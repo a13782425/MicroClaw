@@ -35,25 +35,25 @@ public sealed record WorkflowConfigEntity
     /// JSON 序列化的工作流节点列表。
     /// </summary>
     [YamlMember(Alias = "nodes_json", Description = "JSON 序列化的工作流节点列表。")]
-    public string? NodesJson { get; set; }
+    public string NodesJson { get; set; }= string.Empty;
 
     /// <summary>
     /// JSON 序列化的工作流边列表。
     /// </summary>
     [YamlMember(Alias = "edges_json", Description = "JSON 序列化的工作流边列表。")]
-    public string? EdgesJson { get; set; }
+    public string EdgesJson { get; set; }= string.Empty;
 
     /// <summary>
     /// 工作流的入口节点 ID。
     /// </summary>
     [YamlMember(Alias = "entry_node_id", Description = "工作流的入口节点 ID。")]
-    public string? EntryNodeId { get; set; }
+    public string EntryNodeId { get; set; }= string.Empty;
 
     /// <summary>
     /// 工作流默认使用的 Provider ID。
     /// </summary>
     [YamlMember(Alias = "default_provider_id", Description = "工作流默认使用的 Provider ID。")]
-    public string? DefaultProviderId { get; set; }
+    public string DefaultProviderId { get; set; }= string.Empty;
 
     /// <summary>
     /// 创建时间的 Unix 毫秒时间戳。

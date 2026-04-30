@@ -69,16 +69,6 @@ public static class MicroClawConfig
     {
         MicroClawConfigTypeRegistry.RegisterType(typeof(T));
     }
-
-    /// <summary>
-    /// Registers an additional configuration type for startup-time auto-discovery.
-    /// Call this before building configuration when the type lives outside the core configuration assembly.
-    /// </summary>
-    public static void RegisterConfigType(Type optionType)
-    {
-        ArgumentNullException.ThrowIfNull(optionType);
-        MicroClawConfigTypeRegistry.RegisterType(optionType);
-    }
     
     /// <summary>
     /// Hot-update a registered options instance in memory (does NOT persist to YAML).

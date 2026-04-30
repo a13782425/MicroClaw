@@ -16,8 +16,6 @@ public static class DotEnvLoader
             Environment.SetEnvironmentVariable(MICROCLAW_HOME, home);
         }
 
-        HomeInitializer.EnsureLegacyConfigContractIsAbsent(home);
-
         string envPath = Path.Combine(home, ".env");
         if (File.Exists(envPath))
         {

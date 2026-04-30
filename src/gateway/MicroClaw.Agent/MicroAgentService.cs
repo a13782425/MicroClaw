@@ -31,6 +31,9 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         _sp = sp;
     }
     
+    /// <summary>Exposes the DI <see cref="IServiceProvider"/> for callers that need to construct <see cref="MicroAgent"/> instances.</summary>
+    public IServiceProvider ServiceProvider => _sp;
+    
     // ── MicroService ─────────────────────────────────────────────────────────
     
     public override int Order => 10;
@@ -46,12 +49,12 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         MicroEngine engine = Engine ?? throw new InvalidOperationException("MicroAgentService is not attached to a MicroEngine.");
         HashSet<string> registeredAgentIds = engine.Objects.OfType<MicroAgent>().Select(static agent => agent.Id).ToHashSet(StringComparer.Ordinal);
         
-        foreach (AgentEntity entity in GetPersistedAgents())
+        foreach (MicroAgent entity in GetPersistedAgents())
         {
             if (!registeredAgentIds.Add(entity.Id))
                 continue;
             
-            MicroAgent agent = new(entity, _sp);
+            MicroAgent agent = new(entity.ToConfig(), _sp);
             await engine.RegisterObjectAsync(agent, cancellationToken);
             _agents[agent.Id] = agent;
         }
@@ -103,20 +106,20 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// <summary>
     /// Returns detached snapshots of all runtime agents in engine object order.
     /// </summary>
-    public IReadOnlyList<AgentEntity> GetAllAgentEntities()
+    public IReadOnlyList<MicroAgent> GetAllAgents()
     {
-        IEnumerable<MicroAgent> snapshot = Engine?.Objects.OfType<MicroAgent>() ?? _agents.Values.OrderBy(static agent => agent.Entity.CreatedAtUtc);
+        IEnumerable<MicroAgent> snapshot = Engine?.Objects.OfType<MicroAgent>() ?? _agents.Values.OrderBy(static agent => agent.CreatedAtUtc);
         
-        return snapshot.Select(static agent => CloneAgent(agent.Entity)).ToList().AsReadOnly();
+        return snapshot.Select(static agent => agent.Clone()).ToList().AsReadOnly();
     }
     
     /// <summary>
-    /// Returns a detached snapshot of the runtime agent entity by id.
+    /// Returns a detached snapshot of the runtime agent by id.
     /// </summary>
-    public AgentEntity? GetAgentEntityById(string id)
+    public MicroAgent? GetAgentById(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _agents.TryGetValue(id, out MicroAgent? agent) ? CloneAgent(agent.Entity) : null;
+        return _agents.TryGetValue(id, out MicroAgent? agent) ? agent.Clone() : null;
     }
     
     /// <inheritdoc/>
@@ -128,7 +131,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         string content = File.ReadAllText(filePath);
         var (name, description) = ParseAgentFrontMatter(content, Path.GetFileNameWithoutExtension(filePath));
         string sourceTag = $"plugin:{pluginName}";
-        AgentEntity? importedAgent;
+        MicroAgent? importedAgent;
         
         await _mutationGate.WaitAsync(ct);
         try
@@ -197,14 +200,14 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Persists a new agent and registers its runtime <see cref="MicroAgent"/>.
     /// Rolls back the persisted entry if runtime registration fails.
     /// </summary>
-    public async ValueTask<AgentEntity> CreateAgentAsync(AgentEntity entity, CancellationToken ct = default)
+    public async ValueTask<MicroAgent> CreateAgentAsync(MicroAgent entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         
         await _mutationGate.WaitAsync(ct);
         try
         {
-            AgentEntity created = SavePersistedAgent(entity);
+            MicroAgent created = SavePersistedAgent(entity);
             try
             {
                 await RefreshAgentCoreAsync(created, ct);
@@ -226,7 +229,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Loads, mutates, persists, and applies the latest configuration to the runtime agent.
     /// Existing runtime agents are updated in place to avoid a stale-runtime replacement window.
     /// </summary>
-    public async ValueTask<AgentEntity> UpdateAgentAsync(string id, Action<AgentEntity> applyChanges, CancellationToken ct = default)
+    public async ValueTask<MicroAgent> UpdateAgentAsync(string id, Action<MicroAgent> applyChanges, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(applyChanges);
@@ -234,22 +237,13 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         await _mutationGate.WaitAsync(ct);
         try
         {
-            AgentEntity original = CloneAgent(GetPersistedAgentById(id) ?? throw new KeyNotFoundException($"Agent '{id}' not found."));
-            AgentEntity working = CloneAgent(GetPersistedAgentById(id) ?? throw new KeyNotFoundException($"Agent '{id}' not found."));
+            if (!_agents.TryGetValue(id, out MicroAgent? existing))
+                throw new KeyNotFoundException($"Agent '{id}' not found.");
+            applyChanges(existing);
             
-            applyChanges(working);
+            SavePersistedAgent(existing);
+            return existing;
             
-            AgentEntity saved = SavePersistedAgent(working);
-            try
-            {
-                await ApplyUpdatedAgentCoreAsync(saved, ct);
-                return saved;
-            }
-            catch
-            {
-                SavePersistedAgent(original);
-                throw;
-            }
         }
         finally
         {
@@ -268,7 +262,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         await _mutationGate.WaitAsync(ct);
         try
         {
-            AgentEntity existing = CloneAgent(GetPersistedAgentById(id) ?? throw new KeyNotFoundException($"Agent '{id}' not found."));
+            MicroAgent existing = (GetPersistedAgentById(id) ?? throw new KeyNotFoundException($"Agent '{id}' not found.")).Clone();
             if (existing.IsDefault)
                 throw new InvalidOperationException("Cannot delete the default agent.");
             
@@ -296,7 +290,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Creates a new <see cref="MicroAgent"/> instance (and initializes it) if none exists;
     /// replaces the existing entry otherwise, disposing the old instance.
     /// </summary>
-    internal async ValueTask<MicroAgent> RefreshAgentAsync(AgentEntity entity, CancellationToken ct = default)
+    internal async ValueTask<MicroAgent> RefreshAgentAsync(MicroAgent entity, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entity);
         
@@ -311,12 +305,12 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
     }
     
-    private async ValueTask<MicroAgent> RefreshAgentCoreAsync(AgentEntity entity, CancellationToken ct)
+    private async ValueTask<MicroAgent> RefreshAgentCoreAsync(MicroAgent entity, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entity);
         
         MicroEngine engine = Engine ?? throw new InvalidOperationException("MicroAgentService is not attached to a MicroEngine.");
-        MicroAgent fresh = new(entity, _sp);
+        MicroAgent fresh = new(entity.ToConfig(), _sp);
         await RegisterObjectWhenWritableAsync(engine, fresh, ct);
         
         if (_agents.TryGetValue(entity.Id, out MicroAgent? old))
@@ -340,19 +334,6 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
         
         return fresh;
-    }
-    
-    private async ValueTask<MicroAgent> ApplyUpdatedAgentCoreAsync(AgentEntity entity, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        
-        if (_agents.TryGetValue(entity.Id, out MicroAgent? existing))
-        {
-            existing.ReplaceEntity(entity);
-            return existing;
-        }
-        
-        return await RefreshAgentCoreAsync(entity, ct);
     }
     
     /// <summary>
@@ -448,12 +429,12 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     
     private static bool IsNotAttached(InvalidOperationException ex) => string.Equals(ex.Message, "MicroAgentService is not attached to a MicroEngine.", StringComparison.Ordinal);
     
-    private IReadOnlyList<AgentEntity> GetPersistedAgents()
+    private IReadOnlyList<MicroAgent> GetPersistedAgents()
     {
         _configLock.EnterReadLock();
         try
         {
-            return MicroClawConfig.Get<AgentsOptions>().Items.Select(static entity => entity.ToEntity()).ToList().AsReadOnly();
+            return MicroClawConfig.Get<AgentsOptions>().Items.Select(entity => new MicroAgent(entity with { }, _sp)).ToList().AsReadOnly();
         }
         finally
         {
@@ -461,7 +442,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
     }
     
-    private AgentEntity? GetPersistedAgentById(string id)
+    private MicroAgent? GetPersistedAgentById(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         
@@ -469,7 +450,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         try
         {
             AgentEntityConfig? entity = MicroClawConfig.Get<AgentsOptions>().Items.FirstOrDefault(item => item.Id == id);
-            return entity?.ToEntity();
+            return entity is null ? null : new MicroAgent(entity with { }, _sp);
         }
         finally
         {
@@ -477,7 +458,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
     }
     
-    private AgentEntity SavePersistedAgent(AgentEntity agent)
+    private MicroAgent SavePersistedAgent(MicroAgent agent)
     {
         ArgumentNullException.ThrowIfNull(agent);
         
@@ -505,14 +486,14 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
                 
                 List<AgentEntityConfig> newItems = new(options.Items) { [existingIndex] = updated };
                 SaveAgentsOptions(options, newItems);
-                return updated.ToEntity();
+                return new MicroAgent(updated with { }, _sp);
             }
             
             if (options.Items.Any(item => string.Equals(item.Name, incoming.Name, StringComparison.Ordinal)))
                 throw new InvalidOperationException($"Agent with name '{incoming.Name}' already exists.");
             
             SaveAgentsOptions(options, [.. options.Items, incoming]);
-            return incoming.ToEntity();
+            return new MicroAgent(incoming with { }, _sp);
         }
         finally
         {
@@ -541,7 +522,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
     }
     
-    private AgentEntity? ImportPluginAgentCore(string name, string description, string sourceTag)
+    private MicroAgent? ImportPluginAgentCore(string name, string description, string sourceTag)
     {
         _configLock.EnterWriteLock();
         try
@@ -563,7 +544,7 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
             };
             
             SaveAgentsOptions(options, [.. options.Items, entity]);
-            return entity.ToEntity();
+            return new MicroAgent(entity with { }, _sp);
         }
         finally
         {
@@ -628,11 +609,5 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
         }
         
         return (name, description);
-    }
-    
-    private static AgentEntity CloneAgent(AgentEntity entity)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-        return new AgentEntity(entity.Config with { });
     }
 }

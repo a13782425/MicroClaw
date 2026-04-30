@@ -212,7 +212,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         {
             _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner", sessionId);
             
-            AgentEntity? agent = ResolveAgent(MicroSession.AgentId);
+            MicroAgent? agent = ResolveAgent(MicroSession.AgentId);
             if (agent is null || !agent.IsEnabled)
                 throw new InvalidOperationException("No enabled agent found for this session.");
             
@@ -290,7 +290,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         {
             _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner (source={Source})", sessionId, source);
             
-            AgentEntity? agent = ResolveAgent(MicroSession.AgentId);
+            MicroAgent? agent = ResolveAgent(MicroSession.AgentId);
             if (agent is null || !agent.IsEnabled)
                 throw new InvalidOperationException("No enabled agent found for this session.");
             
@@ -386,14 +386,14 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             else
             {
                 // Resolve Agent / Provider from dispatch or session defaults
-                AgentEntity? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId) ? _agentService.GetAgentEntityById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId) : ResolveAgent(MicroSession.AgentId);
+                MicroAgent? agent = !string.IsNullOrWhiteSpace(dispatch.AgentId) ? _agentService.GetAgentById(dispatch.AgentId) ?? ResolveAgent(MicroSession.AgentId) : ResolveAgent(MicroSession.AgentId);
                 if (agent is null || !agent.IsEnabled)
                     throw new InvalidOperationException("No enabled agent found for this session.");
                 
                 string providerId = ResolveProviderId(agent, dispatch.ProviderId ?? MicroSession.ProviderId);
                 
                 var behaviorProfile = GetBehaviorProfile();
-                AgentEntity effectiveAgent = CreateRuntimeToolOverrideAgent(agent, dispatch.ToolOverrides);
+                MicroAgent effectiveAgent = CreateRuntimeToolOverrideAgent(agent, dispatch.ToolOverrides);
                 
                 chatCtx.TargetAgentId = agent.Id;
                 chatCtx.TargetAgentName = agent.Name;
@@ -423,7 +423,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
                     var dispatchCanceled = new StrongBox<bool>(false);
                     using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
                     {
-                        IMicroAgent runtimeAgent = _agentService.GetById(agent.Id) ?? throw new InvalidOperationException($"Agent '{agent.Id}' not found in runtime cache.");
+                        IMicroAgent runtimeAgent = agent;
                         await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
                         {
                             if (HasDispatchLifecycleStarted(chatCtx))
@@ -616,19 +616,19 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     
     // ── Agent/Tool 辅助方法 ──────────────────────────────────────────────────
     
-    private AgentEntity? ResolveAgent(string? agentId)
+    private MicroAgent? ResolveAgent(string? agentId)
     {
-        AgentEntity? defaultAgent = _agentService.GetDefault() is { } runtimeDefault
-            ? _agentService.GetAgentEntityById(runtimeDefault.Id)
+        MicroAgent? defaultAgent = _agentService.GetDefault() is { } runtimeDefault
+            ? _agentService.GetAgentById(runtimeDefault.Id)
             : null;
 
         if (string.IsNullOrWhiteSpace(agentId))
             return defaultAgent;
 
-        return _agentService.GetAgentEntityById(agentId) ?? defaultAgent;
+        return _agentService.GetAgentById(agentId) ?? defaultAgent;
     }
     
-    private static AgentEntity CreateRuntimeToolOverrideAgent(AgentEntity agent, IReadOnlyList<ToolGroupConfig>? toolOverrides)
+    private static MicroAgent CreateRuntimeToolOverrideAgent(MicroAgent agent, IReadOnlyList<ToolGroupConfig>? toolOverrides)
     {
         ArgumentNullException.ThrowIfNull(agent);
         
@@ -638,7 +638,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         return agent;
     }
     
-    private string ResolveProviderId(AgentEntity agent, string? preferredProviderId)
+    private string ResolveProviderId(MicroAgent agent, string? preferredProviderId)
     {
         ArgumentNullException.ThrowIfNull(agent);
         
@@ -726,7 +726,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         await RunPhaseAsync(phase, ctx);
     }
     
-    private async Task ExecuteDirectAgentDispatchAsync(AgentEntity agent, string providerId, IReadOnlyList<SessionMessage> history, string sessionId, MicroChatContext chatCtx, Channel<StreamItem> output, CancellationToken ct, string source)
+    private async Task ExecuteDirectAgentDispatchAsync(MicroAgent agent, string providerId, IReadOnlyList<SessionMessage> history, string sessionId, MicroChatContext chatCtx, Channel<StreamItem> output, CancellationToken ct, string source)
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(history);
@@ -747,7 +747,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             var dispatchCanceled = new StrongBox<bool>(false);
             using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
             {
-                IMicroAgent runtimeAgent = _agentService.GetById(agent.Id) ?? throw new InvalidOperationException($"Agent '{agent.Id}' not found in runtime cache.");
+                IMicroAgent runtimeAgent = agent;
                 await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
                 {
                     if (HasDispatchLifecycleStarted(chatCtx))
@@ -784,7 +784,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     {
         ArgumentNullException.ThrowIfNull(ctx);
         
-        AgentEntity? agent = ResolveAgent(ctx.TargetAgentId ?? MicroSession.AgentId);
+        MicroAgent? agent = ResolveAgent(ctx.TargetAgentId ?? MicroSession.AgentId);
         if (agent is null || !agent.IsEnabled)
             throw new InvalidOperationException("No enabled agent found for this dispatch.");
         
@@ -818,7 +818,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         return ctx.Items.TryGetValue(DispatchLifecycleStartedItemKey, out object? value) && value is true;
     }
     
-    private void InitializeDispatchExecutionMetadata(MicroChatContext ctx, AgentEntity agent, string providerId)
+    private void InitializeDispatchExecutionMetadata(MicroChatContext ctx, MicroAgent agent, string providerId)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(agent);
@@ -834,7 +834,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         ctx.AncestorAgentIds ??= SubAgentRunScope.Current?.AgentChain is { Count: > 0 } ancestorAgentIds ? [.. ancestorAgentIds] : null;
     }
     
-    private ToolCreationContext BuildToolContext(AgentEntity agent, MicroChatContext? chatContext = null) => new(SessionId: MicroSession.Id, ChannelType: MicroSession.ChannelType, ChannelId: MicroSession.ChannelId, DisabledSkillIds: agent.DisabledSkillIds, CallingAgentId: agent.Id, AllowedSubAgentIds: chatContext?.HasRuntimeSubAgentAcl == true ? chatContext.RuntimeAllowedSubAgentIds : agent.AllowedSubAgentIds, AncestorAgentIds: chatContext?.AncestorAgentIds);
+    private ToolCreationContext BuildToolContext(MicroAgent agent, MicroChatContext? chatContext = null) => new(SessionId: MicroSession.Id, ChannelType: MicroSession.ChannelType, ChannelId: MicroSession.ChannelId, DisabledSkillIds: agent.DisabledSkillIds, CallingAgentId: agent.Id, AllowedSubAgentIds: chatContext?.HasRuntimeSubAgentAcl == true ? chatContext.RuntimeAllowedSubAgentIds : agent.AllowedSubAgentIds, AncestorAgentIds: chatContext?.AncestorAgentIds);
     
     private async ValueTask MergeChannelToolsAsync(ToolCollectionResult toolResult, CancellationToken ct)
     {
@@ -845,7 +845,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             toolResult.AddTools(channelTools);
     }
     
-    private void PopulateDispatchExecutionPayload(MicroChatContext ctx, AgentEntity agent, string providerId, IReadOnlyList<AITool> tools)
+    private void PopulateDispatchExecutionPayload(MicroChatContext ctx, MicroAgent agent, string providerId, IReadOnlyList<AITool> tools)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(agent);
@@ -870,7 +870,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         ctx.ExecutionOptions = ChatExecutionOptionsFactory.Build(ctx.AssembledTools, provider, modelOverride: TryGetStringItem(ctx, DispatchSkillModelOverrideItemKey), effortOverride: TryGetStringItem(ctx, DispatchSkillEffortOverrideItemKey), temperatureOverride: ctx.TemperatureOverride, topPOverride: ctx.TopPOverride);
     }
     
-    private IReadOnlyList<string> ResolveProviderFallbackIds(AgentEntity agent, string primaryProviderId)
+    private IReadOnlyList<string> ResolveProviderFallbackIds(MicroAgent agent, string primaryProviderId)
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentException.ThrowIfNullOrWhiteSpace(primaryProviderId);

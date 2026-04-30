@@ -23,28 +23,12 @@ public sealed class RagContextProvider : IUserAwareContextProvider
     public int Order => 15;
 
     public ValueTask<string?> BuildContextAsync(
-        AgentEntity agent,
-        string? sessionId,
-        CancellationToken ct = default)
-        => new(default(string));
-
-    public ValueTask<string?> BuildContextAsync(
         IMicroAgent agent,
         string? sessionId,
         CancellationToken ct = default)
         => new(default(string));
 
     /// <summary>TODO: Reimplement using session.Rag.QueryWithMetadataAsync</summary>
-    public ValueTask<string?> BuildContextAsync(
-        AgentEntity agent,
-        string? sessionId,
-        string? userMessage,
-        CancellationToken ct = default)
-    {
-        // Temporarily disabled during MicroRag migration
-        return new(default(string));
-    }
-
     public ValueTask<string?> BuildContextAsync(
         IMicroAgent agent,
         string? sessionId,

@@ -1,6 +1,4 @@
-
 namespace MicroClaw.Configuration.Options;
-
 /// <summary>
 /// 会话元数据持久化实体。
 /// </summary>
@@ -52,13 +50,13 @@ public sealed record SessionEntity
     /// 当前会话绑定的 Agent ID。
     /// </summary>
     [YamlMember(Alias = "agent_id", Description = "当前会话绑定的 Agent ID。")]
-    public string? AgentId { get; set; }
+    public string AgentId { get; set; } = string.Empty;
     
     /// <summary>
     /// 审批原因或备注。
     /// </summary>
     [YamlMember(Alias = "approval_reason", Description = "审批原因或备注。")]
-    public string? ApprovalReason { get; set; }
+    public string ApprovalReason { get; set; } = string.Empty;
     
     public SessionEntity DeepClone() =>
         new()

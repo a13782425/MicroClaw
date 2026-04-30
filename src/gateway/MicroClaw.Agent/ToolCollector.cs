@@ -23,19 +23,6 @@ public sealed class ToolCollector(
     private readonly ILogger _logger = loggerFactory.CreateLogger<ToolCollector>();
 
     /// <summary>
-    /// 按 Agent 配置和运行时上下文收集所有可用工具（含 MCP 连接），返回可释放的结果。
-    /// 调用方使用 <c>await using</c> 确保 MCP 连接释放。
-    /// </summary>
-    public async Task<ToolCollectionResult> CollectToolsAsync(
-        AgentEntity agent, ToolCreationContext context, CancellationToken ct = default)
-        => await CollectToolsCoreAsync(
-            agent.IsToolGroupEnabled,
-            agent.IsToolDisabled,
-            GetEnabledMcpServers(agent),
-            context,
-            ct);
-
-    /// <summary>
     /// 按运行时 Agent 配置和运行时上下文收集所有可用工具（含 MCP 连接），返回可释放的结果。
     /// 调用方使用 <c>await using</c> 确保 MCP 连接释放。
     /// </summary>
@@ -117,7 +104,7 @@ public sealed class ToolCollector(
     /// <paramref name="agent"/> 为 null 时返回全局视图（不做 Agent 级过滤）。
     /// </summary>
     public async Task<IReadOnlyList<ToolGroupInfo>> GetToolGroupsAsync(
-        AgentEntity? agent, CancellationToken ct = default)
+        MicroAgent? agent, CancellationToken ct = default)
     {
         var groups = new List<ToolGroupInfo>();
 
@@ -208,19 +195,6 @@ public sealed class ToolCollector(
     }
 
     /// <summary>返回未被整体禁用的 MCP Server 配置列表（排除 Agent 级别禁用项）。</summary>
-    private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(AgentEntity agent)
-    {
-        // 优先从进程内注册表查询（不走 DB），回退到 Store（旧行为）
-        IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null
-            ? mcpServerRegistry.GetAllEnabled()
-            : mcpServerConfigStore.AllEnabled;
-        // 排除 Agent 级别禁用的 MCP Server（用行为方法）
-        return servers
-            .Where(s => !agent.IsMcpServerDisabled(s.Id) && agent.IsToolGroupEnabled(s.Name) && agent.IsToolGroupEnabled(s.Id))
-            .ToList()
-            .AsReadOnly();
-    }
-
     private IReadOnlyList<McpServerConfig> GetEnabledMcpServers(IMicroAgent agent)
     {
         IReadOnlyList<McpServerConfig> servers = mcpServerRegistry is not null

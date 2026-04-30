@@ -25,7 +25,6 @@ public class InitCommand : Command
 		{
 			string? home = result.GetValue(homeOption)
 				?? Environment.GetEnvironmentVariable("MICROCLAW_HOME");
-			HomeInitializer.EnsureLegacyConfigContractIsAbsent(home);
 			bool force = result.GetValue(forceOption);
 
 			string resolvedHome = HomeInitializer.ResolveHome(home);

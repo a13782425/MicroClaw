@@ -15,16 +15,6 @@ public sealed class SessionDnaContextProvider(SessionDnaService sessionDnaServic
     public int Order => 20;
 
     /// <inheritdoc />
-    public ValueTask<string?> BuildContextAsync(AgentEntity agent, string? sessionId, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-            return ValueTask.FromResult<string?>(null);
-
-        string context = sessionDnaService.BuildDnaContext(sessionId);
-        return ValueTask.FromResult<string?>(string.IsNullOrWhiteSpace(context) ? null : context);
-    }
-
-    /// <inheritdoc />
     public ValueTask<string?> BuildContextAsync(IMicroAgent agent, string? sessionId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(sessionId))

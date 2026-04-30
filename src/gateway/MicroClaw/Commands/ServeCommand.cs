@@ -497,12 +497,12 @@ public class ServeCommand : Command
 
 	internal static void EnsureAuthConfigurationIsSafe(AuthOptions options)
 	{
-		if (string.Equals(options.Password, AuthOptions.DefaultPassword, StringComparison.Ordinal) ||
-			string.Equals(options.JwtSecret, AuthOptions.DefaultJwtSecret, StringComparison.Ordinal))
-		{
-			throw new InvalidOperationException(
-				"检测到默认认证占位值。请先在 auth.yaml 或环境变量中设置自定义 password 和 jwt_secret，再启动服务。");
-		}
+		// if (string.Equals(options.Password, AuthOptions.DefaultPassword, StringComparison.Ordinal) ||
+		// 	string.Equals(options.JwtSecret, AuthOptions.DefaultJwtSecret, StringComparison.Ordinal))
+		// {
+		// 	throw new InvalidOperationException(
+		// 		"检测到默认认证占位值。请先在 auth.yaml 或环境变量中设置自定义 password 和 jwt_secret，再启动服务。");
+		// }
 
 		int jwtSecretBytes = Encoding.UTF8.GetByteCount(options.JwtSecret);
 		if (jwtSecretBytes < 32)

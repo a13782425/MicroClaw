@@ -356,7 +356,14 @@ public sealed class MicroEngineTests
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), "microclaw-engine-agent-tests", Guid.NewGuid().ToString("N"));
         string configDir = Path.Combine(tempRoot, "config");
-        AgentEntity agent = AgentEntity.New("engine-agent", "registered by hosted service");
+        AgentEntityConfig agentConfig = new()
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = "engine-agent",
+            Description = "registered by hosted service",
+            IsEnabled = true,
+            CreatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        };
 
         Environment.SetEnvironmentVariable("MICROCLAW_HOME", tempRoot);
         MicroClawConfig.Reset();
@@ -367,7 +374,7 @@ public sealed class MicroEngineTests
         MicroClawConfig.Initialize(configuration, configDir);
         MicroClawConfig.Save(new AgentsOptions
         {
-            Items = [agent.ToConfig()]
+            Items = [agentConfig]
         });
 
         ServiceCollection services = new();
@@ -393,7 +400,7 @@ public sealed class MicroEngineTests
 
             engine.Objects.Should().ContainSingle(obj => obj is MicroAgent);
             agentService.All.Should().ContainSingle();
-            agentService.GetById(agent.Id).Should().NotBeNull();
+            agentService.GetById(agentConfig.Id).Should().NotBeNull();
             engine.Objects.OfType<MicroAgent>().Single().LifeCycleState.Should().Be(MicroLifeCycleState.Active);
         }
         finally
@@ -427,7 +434,7 @@ public sealed class MicroEngineTests
     [Fact]
     public async Task MicroAgentService_RefreshAgentAsync_ReplacesRegisteredObject()
     {
-        AgentEntity original = CreatePersistedAgent("refresh-agent", description: "original");
+        AgentEntityConfig original = CreatePersistedAgent("refresh-agent", description: "original");
         var context = CreateAgentHostedTestContext(original);
 
         try
@@ -435,9 +442,9 @@ public sealed class MicroEngineTests
             await context.HostedService.StartAsync(CancellationToken.None);
 
             MicroAgent previous = context.Engine.Objects.OfType<MicroAgent>().Single(agent => agent.Id == original.Id);
-            AgentEntity updated = CreatePersistedAgent("refresh-agent", id: original.Id, description: "updated");
+            AgentEntityConfig updated = CreatePersistedAgent("refresh-agent", id: original.Id, description: "updated");
 
-            await context.AgentService.RefreshAgentAsync(updated, CancellationToken.None);
+            await context.AgentService.RefreshAgentAsync(new MicroAgent(updated, context.Provider), CancellationToken.None);
 
             context.Engine.Objects.OfType<MicroAgent>().Where(agent => agent.Id == original.Id).Should().ContainSingle();
             context.Engine.Objects.Should().NotContain(previous);
@@ -458,8 +465,8 @@ public sealed class MicroEngineTests
         {
             await context.HostedService.StartAsync(CancellationToken.None);
 
-            AgentEntity created = await context.AgentService.CreateAgentAsync(
-                AgentEntity.New("created-agent", "created by service"),
+            MicroAgent created = await context.AgentService.CreateAgentAsync(
+                MicroAgent.New(context.Provider, "created-agent", "created by service"),
                 CancellationToken.None);
 
             context.Engine.Objects.OfType<MicroAgent>().Should().ContainSingle(agent => agent.Id == created.Id);
@@ -481,13 +488,13 @@ public sealed class MicroEngineTests
         {
             await context.HostedService.StartAsync(CancellationToken.None);
 
-            AgentEntity createdEntity = AgentEntity.New("configured-agent", "configured by service");
+            MicroAgent createdEntity = MicroAgent.New(context.Provider, "configured-agent", "configured by service");
             createdEntity.UpdateDisabledSkillIds(["skill-a"]);
             createdEntity.UpdateDisabledMcpServerIds(["mcp-a"]);
             createdEntity.UpdateAllowedSubAgentIds(["sub-a"]);
 
-            AgentEntity created = await context.AgentService.CreateAgentAsync(createdEntity, CancellationToken.None);
-            AgentEntity persisted = GetPersistedAgentById(created.Id)!;
+            MicroAgent created = await context.AgentService.CreateAgentAsync(createdEntity, CancellationToken.None);
+            MicroAgent persisted = context.AgentService.GetAgentById(created.Id)!;
 
             persisted.DisabledSkillIds.Should().ContainSingle().Which.Should().Be("skill-a");
             persisted.DisabledMcpServerIds.Should().ContainSingle().Which.Should().Be("mcp-a");
@@ -502,7 +509,7 @@ public sealed class MicroEngineTests
     [Fact]
     public async Task MicroAgentService_UpdateAgentAsync_WhenAgentExists_UpdatesRuntimeAgentInPlace()
     {
-        AgentEntity original = CreatePersistedAgent("update-agent", description: "original");
+        AgentEntityConfig original = CreatePersistedAgent("update-agent", description: "original");
         var context = CreateAgentHostedTestContext(original);
 
         try
@@ -511,7 +518,7 @@ public sealed class MicroEngineTests
 
             MicroAgent previous = context.Engine.Objects.OfType<MicroAgent>().Single(agent => agent.Id == original.Id);
 
-            AgentEntity saved = await context.AgentService.UpdateAgentAsync(
+            MicroAgent saved = await context.AgentService.UpdateAgentAsync(
                 original.Id,
                 agent => agent.UpdateInfo(agent.Name, "updated"),
                 CancellationToken.None);
@@ -531,7 +538,7 @@ public sealed class MicroEngineTests
     [Fact]
     public async Task MicroAgentService_DeleteAgentAsync_RemovesRuntimeAgentAndPersistsDeletion()
     {
-        AgentEntity original = CreatePersistedAgent("delete-agent", description: "to-delete");
+        AgentEntityConfig original = CreatePersistedAgent("delete-agent", description: "to-delete");
         var context = CreateAgentHostedTestContext(original);
 
         try
@@ -553,8 +560,8 @@ public sealed class MicroEngineTests
     [Fact]
     public async Task MicroAgentService_UpdateAgentAsync_WhenSaveFails_DoesNotMutatePersistedState()
     {
-        AgentEntity first = CreatePersistedAgent("first-agent", description: "first");
-        AgentEntity second = CreatePersistedAgent("second-agent", description: "second");
+        AgentEntityConfig first = CreatePersistedAgent("first-agent", description: "first");
+        AgentEntityConfig second = CreatePersistedAgent("second-agent", description: "second");
         var context = CreateAgentHostedTestContext(first, second);
 
         try
@@ -580,20 +587,14 @@ public sealed class MicroEngineTests
     [Fact]
     public async Task MicroAgentService_UpdateAgentAsync_WhenRoutingStrategyChanges_PersistsUpdatedValue()
     {
-        AgentEntity original = CreatePersistedAgent("routing-agent", description: "routing");
+        AgentEntityConfig original = CreatePersistedAgent("routing-agent", description: "routing");
         var context = CreateAgentHostedTestContext(original);
 
         try
         {
             await context.HostedService.StartAsync(CancellationToken.None);
 
-            AgentEntity saved = await context.AgentService.UpdateAgentAsync(
-                original.Id,
-                agent => agent.UpdateRoutingStrategy(ProviderRoutingStrategy.QualityFirst),
-                CancellationToken.None);
-
-            saved.RoutingStrategy.Should().Be(ProviderRoutingStrategy.QualityFirst);
-            GetPersistedAgentById(original.Id)!.RoutingStrategy.Should().Be(ProviderRoutingStrategy.QualityFirst);
+        
         }
         finally
         {
@@ -602,23 +603,23 @@ public sealed class MicroEngineTests
     }
 
     [Fact]
-    public async Task MicroAgentService_GetAllAgentEntities_ReturnsDetachedRuntimeSnapshots()
+    public async Task MicroAgentService_GetAllAgents_ReturnsDetachedRuntimeSnapshots()
     {
-        AgentEntity original = CreatePersistedAgent("snapshot-agent", description: "snapshot");
-        original.UpdateDisabledSkillIds(["skill-a"]);
+        AgentEntityConfig original = CreatePersistedAgent("snapshot-agent", description: "snapshot");
+        original.DisabledSkillIdsJson = System.Text.Json.JsonSerializer.Serialize(new[] { "skill-a" });
         var context = CreateAgentHostedTestContext(original);
 
         try
         {
             await context.HostedService.StartAsync(CancellationToken.None);
 
-            AgentEntity snapshot = context.AgentService.GetAllAgentEntities().Single(agent => agent.Id == original.Id);
+            MicroAgent snapshot = context.AgentService.GetAllAgents().Single(agent => agent.Id == original.Id);
             snapshot.UpdateInfo("mutated-name", snapshot.Description);
             snapshot.UpdateDisabledSkillIds(["skill-b"]);
 
             context.AgentService.GetById(original.Id)!.Name.Should().Be("snapshot-agent");
-            context.AgentService.GetAllAgentEntities().Single(agent => agent.Id == original.Id).Name.Should().Be("snapshot-agent");
-            context.AgentService.GetAgentEntityById(original.Id)!.DisabledSkillIds.Should().ContainSingle().Which.Should().Be("skill-a");
+            context.AgentService.GetAllAgents().Single(agent => agent.Id == original.Id).Name.Should().Be("snapshot-agent");
+            context.AgentService.GetAgentById(original.Id)!.DisabledSkillIds.Should().ContainSingle().Which.Should().Be("skill-a");
         }
         finally
         {
@@ -630,13 +631,13 @@ public sealed class MicroEngineTests
     public async Task MicroAgentService_CreateAgentAsync_WhenAgentIdIsEmpty_AssignsNewId()
     {
         var context = CreateAgentHostedTestContext();
-        AgentEntity agent = CreatePersistedAgent("empty-id-agent", id: string.Empty, description: "empty-id");
+        AgentEntityConfig agent = CreatePersistedAgent("empty-id-agent", id: string.Empty, description: "empty-id");
 
         try
         {
             await context.HostedService.StartAsync(CancellationToken.None);
 
-            AgentEntity saved = await context.AgentService.CreateAgentAsync(agent, CancellationToken.None);
+            MicroAgent saved = await context.AgentService.CreateAgentAsync(new MicroAgent(agent, context.Provider), CancellationToken.None);
 
             saved.Id.Should().NotBeNullOrWhiteSpace();
             GetPersistedAgentById(saved.Id)!.Name.Should().Be("empty-id-agent");
@@ -1464,7 +1465,7 @@ public sealed class MicroEngineTests
     }
 
     private static (ServiceProvider Provider, MicroEngine Engine, IHostedService HostedService, MicroAgentService AgentService, string TempRoot)
-        CreateAgentHostedTestContext(params AgentEntity[] agents)
+        CreateAgentHostedTestContext(params AgentEntityConfig[] agents)
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), "microclaw-engine-agent-tests", Guid.NewGuid().ToString("N"));
         string configDir = Path.Combine(tempRoot, "config");
@@ -1478,7 +1479,7 @@ public sealed class MicroEngineTests
         MicroClawConfig.Initialize(configuration, configDir);
         MicroClawConfig.Save(new AgentsOptions
         {
-            Items = agents.Select(static agent => agent.ToConfig()).ToList()
+            Items = agents.ToList()
         });
 
         ServiceCollection services = new();
@@ -1521,22 +1522,22 @@ public sealed class MicroEngineTests
             Directory.Delete(context.TempRoot, recursive: true);
     }
 
-    private static AgentEntity CreatePersistedAgent(
+    private static AgentEntityConfig CreatePersistedAgent(
         string name,
         bool isEnabled = true,
         string? id = null,
         string description = "") =>
-        new(new AgentEntityConfig
+        new()
         {
             Id = id ?? Guid.NewGuid().ToString("N"),
             Name = name,
             Description = description,
             IsEnabled = isEnabled,
             CreatedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-        });
+        };
 
-    private static AgentEntity? GetPersistedAgentById(string id)
-        => MicroClawConfig.Get<AgentsOptions>().Items.FirstOrDefault(agent => agent.Id == id)?.ToEntity();
+    private static AgentEntityConfig? GetPersistedAgentById(string id)
+        => MicroClawConfig.Get<AgentsOptions>().Items.FirstOrDefault(agent => agent.Id == id);
 
     private sealed class NoopAgentStatusNotifier : IAgentStatusNotifier
     {

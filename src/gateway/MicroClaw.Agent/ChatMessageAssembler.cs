@@ -24,27 +24,6 @@ public sealed class ChatMessageAssembler(
         contextProviders.OrderBy(p => p.Order).ToList().AsReadOnly();
 
     /// <summary>
-    /// 基于 Agent、Provider 和历史消息装配本次调用的最终消息列表及技能上下文。
-    /// </summary>
-    public async Task<ChatMessageAssemblyResult> AssembleAsync(
-        AgentEntity agent,
-        ProviderEntity provider,
-        IReadOnlyList<SessionMessage> history,
-        string? sessionId = null,
-        string? behaviorSuffix = null,
-        string? petKnowledge = null,
-        CancellationToken ct = default)
-        => await AssembleAsyncCore(
-            agent.DisabledSkillIds,
-            agent.ContextWindowMessages,
-            (skillContext, userMessage, token) => BuildSystemPromptAsync(agent, sessionId, skillContext, userMessage, behaviorSuffix, token),
-            provider,
-            history,
-            sessionId,
-            petKnowledge,
-            ct);
-
-    /// <summary>
     /// 基于运行时 Agent、Provider 和历史消息装配本次调用的最终消息列表及技能上下文。
     /// </summary>
     public async Task<ChatMessageAssemblyResult> AssembleAsync(
@@ -193,35 +172,6 @@ public sealed class ChatMessageAssembler(
         }
 
         return new ChatMessageAssemblyResult(messages.AsReadOnly(), skillContext);
-    }
-
-    private async ValueTask<string> BuildSystemPromptAsync(
-        AgentEntity agent,
-        string? sessionId,
-        string? skillContext,
-        string? userMessage,
-        string? behaviorSuffix,
-        CancellationToken ct)
-    {
-        var parts = new List<string>(_contextProviders.Count + 2);
-
-        foreach (IAgentContextProvider provider in _contextProviders)
-        {
-            string? fragment = provider is IUserAwareContextProvider userAware
-                ? await userAware.BuildContextAsync(agent, sessionId, userMessage, ct)
-                : await provider.BuildContextAsync(agent, sessionId, ct);
-
-            if (!string.IsNullOrWhiteSpace(fragment))
-                parts.Add(fragment);
-        }
-
-        if (!string.IsNullOrWhiteSpace(skillContext))
-            parts.Add(skillContext);
-
-        if (!string.IsNullOrWhiteSpace(behaviorSuffix))
-            parts.Add(behaviorSuffix);
-
-        return string.Join("\n\n", parts);
     }
 
     private async ValueTask<string> BuildSystemPromptAsync(

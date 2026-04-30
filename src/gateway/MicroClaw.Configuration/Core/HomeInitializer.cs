@@ -29,28 +29,7 @@ public static class HomeInitializer
 
         return Path.Combine(Directory.GetCurrentDirectory(), ".microclaw");
     }
-
-    /// <summary>
-    /// 无兼容模式下，旧主配置契约必须显式失败，避免静默回退到错误工作目录。
-    /// </summary>
-    public static void EnsureLegacyConfigContractIsAbsent(string? home)
-    {
-        string? legacyConfigFile = Environment.GetEnvironmentVariable("MICROCLAW_CONFIG_FILE");
-        if (!string.IsNullOrWhiteSpace(legacyConfigFile))
-        {
-            throw new InvalidOperationException(
-                "MICROCLAW_CONFIG_FILE 已废弃。请改用 MICROCLAW_HOME 指向工作目录，并将配置迁移到 HOME/config/*.yaml。");
-        }
-
-        string homeDir = ResolveHome(home);
-        string legacyMainConfigPath = Path.Combine(homeDir, "microclaw.yaml");
-        if (File.Exists(legacyMainConfigPath))
-        {
-            throw new InvalidOperationException(
-                "microclaw.yaml 主配置已废弃。请将配置迁移到 HOME/config/*.yaml 后再启动。");
-        }
-    }
-
+    
     /// <summary>
     /// 确保工作目录存在并包含所有必要的子目录和默认配置文件。
     /// </summary>
