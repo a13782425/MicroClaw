@@ -191,6 +191,7 @@ public class ServeCommand : Command
 	/// <summary>注册核心基础设施服务：SQLite DbContext、SessionStore、ProviderService、SignalR 和 Swagger。</summary>
 	private static void ConfigureServices(WebApplicationBuilder builder)
 	{
+		builder.Services.AddMicroEngine();
 		builder.Services.ConfigureHttpJsonOptions(options =>
 		{
 			options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -333,7 +334,7 @@ public class ServeCommand : Command
 		builder.Services.AddHostedService<ServiceLifetimeHost>();
 		builder.Services.AddHostedService<CronJobStartupService>();
 		builder.Services.AddHostedService<MicroClaw.Pet.PetRunner>();
-		builder.Services.AddMicroEngine();
+	
 
 		// Token 用量追踪
 		builder.Services.AddSingleton<IUsageTracker, UsageTracker>();

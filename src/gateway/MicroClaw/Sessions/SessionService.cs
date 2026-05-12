@@ -66,6 +66,7 @@ public sealed class SessionService : MicroService, ISessionService
             MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
             if (!warmedSessions.TryAdd(microSession.Id, microSession))
                 throw new InvalidOperationException($"Duplicate session id '{microSession.Id}' found while warming cache.");
+            await Engine!.RegisterObjectAsync(microSession);
         }
         
         _sessions = warmedSessions;
@@ -116,7 +117,7 @@ public sealed class SessionService : MicroService, ISessionService
             ChannelType = ChannelUtils.SerializeChannelType(channelType),
             ChannelId = channelId,
             CreatedAtMs = TimeUtils.NowMs(),
-            AgentId = agentService!.GetDefault()?.Id,
+            AgentId = agentService!.GetDefault()!.Id,
         };
         MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
         AddToCacheAndPersist(microSession);

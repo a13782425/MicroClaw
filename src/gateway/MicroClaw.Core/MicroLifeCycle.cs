@@ -21,7 +21,10 @@ public abstract class MicroLifeCycle<THost> : IAsyncDisposable where THost : cla
     private IMicroLogger? _logger;
     private bool _traceEnabled;
     private bool _traceEnabledEvaluated;
-
+    /// <summary>
+    /// 当前生命周期节点的唯一标识，格式为不带连字符的 32 位小写字母数字字符串。用于跟踪和关联日志、事件等信息，
+    /// </summary>
+    public string InstanceId { get; } = Guid.NewGuid().ToString("N");
     /// <summary>
     /// 当前生命周期节点的 logger，分类名取自运行时类型。惰性初始化以便宿主在启动阶段
     /// 替换 <see cref="MicroLogger.Factory"/> 后仍能被后续实例拾取到。

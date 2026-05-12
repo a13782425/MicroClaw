@@ -27,6 +27,11 @@ public sealed class MicroEngine : IAsyncDisposable
     private IMicroLogger? _logger;
     
     /// <summary>
+    /// 需要在<see cref="MicroLifeCycle.OnAttachedAsync"/> 之后访问
+    /// </summary>
+    public static MicroEngine Instance { get; private set; } = null!;
+    
+    /// <summary>
     /// 当前生命周期节点的 logger，分类名取自运行时类型。惰性初始化以便宿主在启动阶段
     /// 替换 <see cref="MicroLogger.Factory"/> 后仍能被后续实例拾取到。
     /// 使用 <see cref="LazyInitializer.EnsureInitialized{T}(ref T,Func{T})"/> 保证并发安全：
@@ -41,34 +46,18 @@ public sealed class MicroEngine : IAsyncDisposable
     /// 为避免在存在 <see cref="SynchronizationContext"/>（例如 WPF/WinForms）时
     /// 阻塞调用者线程导致死锁，内部将异步挂载工作 offload 到线程池后再同步等待。
     /// 如果调用方本身位于异步上下文中，建议优先使用
-    /// <see cref="CreateAsync(IServiceProvider, IEnumerable{MicroService}, CancellationToken)"/>。
     /// </summary>
-    public MicroEngine(IServiceProvider serviceProvider, IEnumerable<MicroService> services) : this(serviceProvider)
+    public MicroEngine(IServiceProvider serviceProvider, IEnumerable<MicroService> services)
     {
         ArgumentNullException.ThrowIfNull(services);
         Logger?.LogDebug("MicroEngine start");
-        RunSynchronously(() => InitializeServicesAsync(services, CancellationToken.None));
-    }
-    
-    private MicroEngine(IServiceProvider serviceProvider)
-    {
+        Instance = this;
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _tickScheduler = new MicroTickSchedulerRunner(this);
+        Task.Run(async () => await InitializeServicesAsync(services, CancellationToken.None)).GetAwaiter().GetResult();
     }
     
-    /// <summary>
-    /// 异步工厂：按指定初始服务列表创建并挂载引擎。推荐在异步代码路径中使用，可避免
-    /// 构造函数内部的 sync-over-async 行为。
-    /// </summary>
-    public static async ValueTask<MicroEngine> CreateAsync(IServiceProvider serviceProvider, IEnumerable<MicroService> services, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        
-        MicroEngine engine = new(serviceProvider);
-        await engine.InitializeServicesAsync(services, cancellationToken);
-        return engine;
-    }
-    
+
     private async ValueTask InitializeServicesAsync(IEnumerable<MicroService> services, CancellationToken cancellationToken)
     {
         List<MicroService> attachedServices = [];
@@ -112,15 +101,6 @@ public sealed class MicroEngine : IAsyncDisposable
             rollbackErrors.Insert(0, ex);
             throw new AggregateException(rollbackErrors);
         }
-    }
-    
-    /// <summary>
-    /// 在线程池上运行异步工作并同步等待，避免调用线程的 <see cref="SynchronizationContext"/>
-    /// 造成 sync-over-async 死锁。
-    /// </summary>
-    private static void RunSynchronously(Func<ValueTask> work)
-    {
-        Task.Run(async () => await work()).GetAwaiter().GetResult();
     }
     
     /// <summary>当前引擎状态。</summary>
