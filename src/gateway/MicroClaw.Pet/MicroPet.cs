@@ -227,7 +227,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             Task disabledExecution = ExecuteDirectAgentDispatchAsync(agent, providerId, history, sessionId, disabledBranchCtx, disabledOutputChannel, ct, source: "chat");
             try
             {
-                await foreach (var item in disabledOutputChannel.Reader.ReadAllAsync(ct))
+                await foreach (StreamItem item in disabledOutputChannel.Reader.ReadAllAsync(ct))
                 {
                     yield return item;
                 }
@@ -257,7 +257,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         
         try
         {
-            await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+            await foreach (StreamItem item in outputChannel.Reader.ReadAllAsync(ct))
             {
                 yield return item;
             }
@@ -289,41 +289,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         if (!IsEnabled)
         {
             _logger.LogDebug("Pet 未启用 (SessionId={SessionId})，透传 AgentRunner (source={Source})", sessionId, source);
-            
-            MicroAgent? agent = ResolveAgent(MicroSession.AgentId);
-            if (agent is null || !agent.IsEnabled)
-                throw new InvalidOperationException("No enabled agent found for this session.");
-            
-            string providerId = ResolveProviderId(agent, MicroSession.ProviderId);
-            
-            MicroChatContext disabledBranchCtx = CreateDispatchContext(history, source, output: null, ct);
-            disabledBranchCtx.TargetAgentId = agent.Id;
-            disabledBranchCtx.TargetAgentName = agent.Name;
-            disabledBranchCtx.TargetProviderId = providerId;
-            InitializeDispatchExecutionMetadata(disabledBranchCtx, agent, providerId);
-            var disabledOutputChannel = Channel.CreateUnbounded<StreamItem>();
-            Task disabledExecution = ExecuteDirectAgentDispatchAsync(agent, providerId, history, sessionId, disabledBranchCtx, disabledOutputChannel, ct, source: source);
-            try
-            {
-                await foreach (var item in disabledOutputChannel.Reader.ReadAllAsync(ct))
-                {
-                    yield return item;
-                }
-            }
-            finally
-            {
-                try
-                {
-                    await disabledExecution;
-                }
-                catch (OperationCanceledException)
-                {
-                }
-                catch
-                {
-                }
-            }
-            
+            yield return new ErrorItem($"Pet 未启用 (SessionId={sessionId})，请联系管理员。");
             yield break;
         }
         
@@ -335,7 +301,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         
         try
         {
-            await foreach (var item in outputChannel.Reader.ReadAllAsync(ct))
+            await foreach (StreamItem item in outputChannel.Reader.ReadAllAsync(ct))
             {
                 yield return item;
             }
@@ -392,7 +358,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
                 
                 string providerId = ResolveProviderId(agent, dispatch.ProviderId ?? MicroSession.ProviderId);
                 
-                var behaviorProfile = GetBehaviorProfile();
+                BehaviorProfile behaviorProfile = GetBehaviorProfile();
                 MicroAgent effectiveAgent = CreateRuntimeToolOverrideAgent(agent, dispatch.ToolOverrides);
                 
                 chatCtx.TargetAgentId = agent.Id;
@@ -424,7 +390,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
                     using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
                     {
                         IMicroAgent runtimeAgent = agent;
-                        await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
+                        await foreach (StreamItem item in runtimeAgent.StreamAsync(chatCtx))
                         {
                             if (HasDispatchLifecycleStarted(chatCtx))
                                 await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);
@@ -495,7 +461,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         }
         
         // ── 构建决策上下文 ──
-        var rateLimitStatus = await _rateLimiter.GetStatusAsync(sessionId, ct);
+        RateLimitStatus? rateLimitStatus = await _rateLimiter.GetStatusAsync(sessionId, ct);
         var recentSummaries = BuildRecentSummaries(history, maxCount: 10);
         var agentSummaries = BuildAgentSummaries(Config);
         var providerSummaries = BuildProviderSummaries();
@@ -536,8 +502,8 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         try
         {
             // 通过情绪规则引擎更新情绪（应用情绪增减量）
-            var emotionEvent = messageSucceeded ? EmotionEventType.MessageSuccess : EmotionEventType.MessageFailed;
-            var delta = _emotionRuleEngine.GetDelta(emotionEvent);
+            EmotionEventType emotionEvent = messageSucceeded ? EmotionEventType.MessageSuccess : EmotionEventType.MessageFailed;
+            EmotionDelta delta = _emotionRuleEngine.GetDelta(emotionEvent);
             UpdateEmotion(delta);
             await _emotionStore.SaveAsync(sessionId, Emotion, ct);
             
@@ -586,7 +552,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         var summaries = new List<string>(Math.Min(maxCount, history.Count));
         for (int i = start; i < history.Count; i++)
         {
-            var msg = history[i];
+            SessionMessage msg = history[i];
             string snippet = msg.Content.Length > 100 ? msg.Content[..100] + "..." : msg.Content;
             summaries.Add($"[{msg.Role}] {snippet}");
         }
@@ -748,7 +714,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             using (ct.Register(static state => ((StrongBox<bool>)state!).Value = true, dispatchCanceled))
             {
                 IMicroAgent runtimeAgent = agent;
-                await foreach (var item in runtimeAgent.StreamAsync(chatCtx))
+                await foreach (StreamItem item in runtimeAgent.StreamAsync(chatCtx))
                 {
                     if (HasDispatchLifecycleStarted(chatCtx))
                         await lifecycleTracker.TrackAsync(item, chatCtx, RunPhaseAsync);
