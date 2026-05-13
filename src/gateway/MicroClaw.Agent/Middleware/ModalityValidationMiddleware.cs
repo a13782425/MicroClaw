@@ -6,14 +6,14 @@ namespace MicroClaw.Agent.Middleware;
 
 /// <summary>
 /// 模态校验中间件（逻辑从 <c>AgentRunner.ValidateModalities()</c> 提取为独立静态类）。
-/// 根据 <see cref="ProviderEntity"/> 的能力声明，过滤掉当前 Provider 不支持的附件类型。
+/// 根据 <see cref="ChatMicroProvider"/> 的能力声明，过滤掉当前 Provider 不支持的附件类型。
 /// </summary>
 public static class ModalityValidationMiddleware
 {
     /// <summary>按 Provider 能力声明，从消息历史中移除不支持的附件类型。返回新列表，不修改原始集合。</summary>
     public static IReadOnlyList<ChatMessage> FilterUnsupportedModalities(
         IReadOnlyList<ChatMessage> messages,
-        ProviderEntity provider,
+        ChatMicroProvider provider,
         Microsoft.Extensions.Logging.ILogger logger)
     {
         // 快速路径：若无 DataContent 则无需检查
@@ -53,7 +53,7 @@ public static class ModalityValidationMiddleware
                 else
                     logger.LogWarning(
                         "DataContent ({MimeType}) skipped: provider '{Provider}' does not support this modality",
-                        dc.MediaType, provider.DisplayName);
+                        dc.MediaType, provider.ProviderDisplayName);
             }
 
             filtered.Add(new ChatMessage(msg.Role, kept) { AuthorName = msg.AuthorName });

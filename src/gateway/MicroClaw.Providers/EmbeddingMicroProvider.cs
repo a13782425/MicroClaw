@@ -15,12 +15,32 @@ public abstract class EmbeddingMicroProvider : MicroProvider
     private readonly object _generatorLock = new();
     private IEmbeddingGenerator<string, Embedding<float>>? _generator;
     
-    protected ProviderEntity Entity { get; init; }
+    public readonly string ProviderId;
+    public readonly string ProviderDisplayName;
+    public readonly ProviderProtocol Protocol;
+    public readonly ModelType ModelType;
+    public readonly string ResolvedApiKey;
+    public readonly string? ResolvedBaseUrl;
+    public readonly string ResolvedModelName;
+    public readonly int MaxOutputTokens;
+    public readonly ProviderCapabilities Capabilities;
+    public readonly bool IsEnabled;
+    public readonly bool IsDefault;
     
     /// <summary>创建 Embedding 类 Provider。</summary>
     protected EmbeddingMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker) : base(entityConfig, usageTracker)
     {
-        Entity = entityConfig.ToEntity();
+        ProviderId = entityConfig.Id;
+        ProviderDisplayName = entityConfig.DisplayName;
+        Protocol = ProviderUtils.ParseProtocol(entityConfig.Protocol);
+        ModelType = ProviderUtils.ParseModelType(entityConfig.ModelType);
+        ResolvedApiKey = ProviderUtils.ResolveEnvVars(entityConfig.ApiKey) ?? string.Empty;
+        ResolvedBaseUrl = string.IsNullOrWhiteSpace(entityConfig.BaseUrl) ? null : ProviderUtils.ResolveEnvVars(entityConfig.BaseUrl);
+        ResolvedModelName = ProviderUtils.ResolveEnvVars(entityConfig.ModelName) ?? string.Empty;
+        MaxOutputTokens = entityConfig.MaxOutputTokens;
+        Capabilities = ProviderUtils.DeserializeCapabilities(entityConfig.CapabilitiesJson);
+        IsEnabled = entityConfig.IsEnabled;
+        IsDefault = entityConfig.IsDefault;
     }
     
     /// <summary>懒加载的底层 <see cref="IEmbeddingGenerator{String,Embedding}"/>；同一实例内复用。</summary>
@@ -67,14 +87,14 @@ public abstract class EmbeddingMicroProvider : MicroProvider
         ArgumentNullException.ThrowIfNull(ctx);
         if (inputTokens <= 0) return;
         
-        decimal inputCost = Entity.Capabilities.InputPricePerMToken.HasValue ? inputTokens * Entity.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal inputCost = Capabilities.InputPricePerMToken.HasValue ? inputTokens * Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
         
         try
         {
             await UsageTracker.TrackAsync(
                 ctx.Session.Id, 
-                Entity.Id,
-                Entity.DisplayName,
+                ProviderId,
+                ProviderDisplayName,
                 ctx.Source,
                 inputTokens,
                 outputTokens: 0L,
@@ -89,12 +109,12 @@ public abstract class EmbeddingMicroProvider : MicroProvider
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Embedding usage tracking failed for provider {ProviderId} session {SessionId}", Entity.Id, ctx.Session.Id);
+            Logger.LogWarning(ex, "Embedding usage tracking failed for provider {ProviderId} session {SessionId}", ProviderId, ctx.Session.Id);
         }
     }
     
     /// <inheritdoc />
-    protected override async ValueTask OnDisposeAsync()
+    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
     {
         IEmbeddingGenerator<string, Embedding<float>>? g = Interlocked.Exchange(ref _generator, null);
         switch (g)

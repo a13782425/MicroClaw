@@ -81,9 +81,9 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
             StringBuilder thinkBuilder = new();
             List<ResponseAttachment> attachmentsList = [];
 
-            // 获取 ProviderConfig 用于消息装配
-            ProviderEntity? providerCfg = ProviderSvc.GetById(primaryProviderId)
-                ?? ProviderSvc.GetDefault();
+            // 获取 ChatMicroProvider 用于消息装配
+            ChatMicroProvider? providerCfg = ProviderSvc.TryGetProvider(primaryProviderId)
+                ?? ProviderSvc.GetDefaultProvider();
             if (providerCfg is null)
                 throw new InvalidOperationException("找不到可用的模型提供方。");
 
@@ -124,7 +124,7 @@ public sealed class SubAgentRunnerService(IServiceProvider sp) : ISubAgentRunner
                     Source = "subagent",
                     History = [userMsg],
                     Ct = ct,
-                    TargetProviderId = providerCfg.Id,
+                    TargetProviderId = providerCfg.ProviderId,
                     AncestorAgentIds = ancestorAgentIds,
                     AssembledMessages = assembly.Messages,
                     AssembledTools = toolResult.AllTools,

@@ -105,8 +105,7 @@ public sealed class PetStateMachine(
 
         try
         {
-            var chatProvider = _providerService.TryGetProvider(provider.Id)
-                ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+            var chatProvider = provider;
             var chatCtx = MicroChatContext.ForSystem(report.SessionId, "pet-heartbeat", ct);
             var response = await chatProvider.ChatAsync(
                 chatCtx,

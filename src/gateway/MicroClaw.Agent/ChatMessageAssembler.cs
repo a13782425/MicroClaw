@@ -28,7 +28,7 @@ public sealed class ChatMessageAssembler(
     /// </summary>
     public async Task<ChatMessageAssemblyResult> AssembleAsync(
         IMicroAgent agent,
-        ProviderEntity provider,
+        ChatMicroProvider provider,
         IReadOnlyList<SessionMessage> history,
         string? sessionId = null,
         string? behaviorSuffix = null,
@@ -48,7 +48,7 @@ public sealed class ChatMessageAssembler(
         IReadOnlyList<string> disabledSkillIds,
         int? contextWindowMessages,
         Func<string?, string?, CancellationToken, ValueTask<string>> buildSystemPromptAsync,
-        ProviderEntity provider,
+        ChatMicroProvider provider,
         IReadOnlyList<SessionMessage> history,
         string? sessionId,
         string? petKnowledge,
@@ -93,7 +93,7 @@ public sealed class ChatMessageAssembler(
             if (!string.IsNullOrWhiteSpace(sessionId))
             {
                 var overflowMessages = validatedHistory.Take(adjustedSplitIndex).ToList();
-                _ = contextOverflowSummarizer.SummarizeAsync(sessionId, provider.Id, overflowMessages, CancellationToken.None);
+                _ = contextOverflowSummarizer.SummarizeAsync(sessionId, provider.ProviderId, overflowMessages, CancellationToken.None);
             }
         }
         else
@@ -258,7 +258,7 @@ public sealed class ChatMessageAssembler(
 
     private IReadOnlyList<SessionMessage> ValidateModalities(
         IReadOnlyList<SessionMessage> history,
-        ProviderEntity provider)
+        ChatMicroProvider provider)
     {
         var caps = provider.Capabilities;
         if (!history.Any(m => m.Attachments is { Count: > 0 }))
@@ -292,7 +292,7 @@ public sealed class ChatMessageAssembler(
                 {
                     logger.LogWarning(
                         "Attachment '{FileName}' ({MimeType}) skipped: provider '{Provider}' does not support this modality",
-                        att.FileName, att.MimeType, provider.DisplayName);
+                        att.FileName, att.MimeType, provider.ProviderDisplayName);
                 }
             }
 

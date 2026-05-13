@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using MicroClaw.Abstractions;
@@ -32,12 +31,32 @@ public abstract class ChatMicroProvider : MicroProvider
     private readonly object _clientLock = new();
     private IChatClient? _client;
     
-    protected ProviderEntity Entity { get; init; }
+    public readonly string ProviderId;
+    public readonly string ProviderDisplayName;
+    public readonly ProviderProtocol Protocol;
+    public readonly ModelType ModelType;
+    public readonly string ResolvedApiKey;
+    public readonly string? ResolvedBaseUrl;
+    public readonly string ResolvedModelName;
+    public readonly int MaxOutputTokens;
+    public readonly ProviderCapabilities Capabilities;
+    public readonly bool IsEnabled;
+    public readonly bool IsDefault;
     
     /// <summary>创建 Chat 类 Provider。</summary>
     protected ChatMicroProvider(ProviderEntityConfig entityConfig, IUsageTracker usageTracker) : base(entityConfig, usageTracker)
     {
-        Entity = entityConfig.ToEntity();
+        ProviderId = entityConfig.Id;
+        ProviderDisplayName = entityConfig.DisplayName;
+        Protocol = ProviderUtils.ParseProtocol(entityConfig.Protocol);
+        ModelType = ProviderUtils.ParseModelType(entityConfig.ModelType);
+        ResolvedApiKey = ProviderUtils.ResolveEnvVars(entityConfig.ApiKey) ?? string.Empty;
+        ResolvedBaseUrl = string.IsNullOrWhiteSpace(entityConfig.BaseUrl) ? null : ProviderUtils.ResolveEnvVars(entityConfig.BaseUrl);
+        ResolvedModelName = ProviderUtils.ResolveEnvVars(entityConfig.ModelName) ?? string.Empty;
+        MaxOutputTokens = entityConfig.MaxOutputTokens;
+        Capabilities = ProviderUtils.DeserializeCapabilities(entityConfig.CapabilitiesJson);
+        IsEnabled = entityConfig.IsEnabled;
+        IsDefault = entityConfig.IsDefault;
     }
     
     /// <summary>懒加载的底层 <see cref="IChatClient"/>。同一实例内复用。</summary>
@@ -63,20 +82,20 @@ public abstract class ChatMicroProvider : MicroProvider
         if (inputTokens <= 0 && outputTokens <= 0) return;
         
         long nonCachedInput = Math.Max(0L, inputTokens - cachedInputTokens);
-        decimal inputCost = nonCachedInput > 0 && Entity.Capabilities.InputPricePerMToken.HasValue ? nonCachedInput * Entity.Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
-        decimal outputCost = outputTokens > 0 && Entity.Capabilities.OutputPricePerMToken.HasValue ? outputTokens * Entity.Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
-        decimal cacheInputCost = cachedInputTokens > 0 ? cachedInputTokens * (Entity.Capabilities.CacheInputPricePerMToken ?? Entity.Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
+        decimal inputCost = nonCachedInput > 0 && Capabilities.InputPricePerMToken.HasValue ? nonCachedInput * Capabilities.InputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal outputCost = outputTokens > 0 && Capabilities.OutputPricePerMToken.HasValue ? outputTokens * Capabilities.OutputPricePerMToken.Value / 1_000_000m : 0m;
+        decimal cacheInputCost = cachedInputTokens > 0 ? cachedInputTokens * (Capabilities.CacheInputPricePerMToken ?? Capabilities.InputPricePerMToken ?? 0m) / 1_000_000m : 0m;
         
         try
         {
-            await UsageTracker.TrackAsync(ctx.Session.Id, Entity.Id, Entity.DisplayName, ctx.Source, inputTokens, outputTokens, cachedInputTokens, inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
+            await UsageTracker.TrackAsync(ctx.Session.Id, ProviderId, ProviderDisplayName, ctx.Source, inputTokens, outputTokens, cachedInputTokens, inputCost, outputCost, cacheInputCost, cacheOutputCostUsd: 0m,
                 // TODO: 在 MicroChatContext 增加 AgentId / MonthlyBudgetUsd 字段后透传，
                 //       当前 Agent 预算告警暂时走不到，等 AgentRunner 迁移完整补回。
                 agentId: null, monthlyBudgetUsd: null, ct: CancellationToken.None);
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Usage tracking failed for provider {ProviderId} session {SessionId}", Entity.Id, ctx.Session.Id);
+            Logger.LogWarning(ex, "Usage tracking failed for provider {ProviderId} session {SessionId}", ProviderId, ctx.Session.Id);
         }
     }
     
@@ -118,34 +137,25 @@ public abstract class ChatMicroProvider : MicroProvider
     /// <see cref="DataContentItem"/>（图片/音频等）、<see cref="ToolCallItem"/>、<see cref="ToolResultItem"/>。
     /// </para>
     /// </summary>
-    /// <param name="ctx">统一调用上下文；<see cref="MicroChatContext.Ct"/> 与 <paramref name="ct"/> 之间以参数为准（通常两者相同）。</param>
-    /// <param name="messages">初始消息序列。</param>
-    /// <param name="tools">工具列表；为空表示禁止 function calling。</param>
-    /// <param name="options">
-    ///     可选的 <see cref="ChatOptions"/> 覆盖；传入 <c>null</c> 时由
-    ///     <see cref="BuildDefaultChatOptions"/> 构造并自动挂载 <paramref name="tools"/>。
-    /// </param>
-    /// <param name="internalToolNames">
-    ///     可选的"内部工具"名单。命中时对应的 <see cref="ToolCallItem"/> / <see cref="ToolResultItem"/>
-    ///     的 <see cref="StreamItem.Visibility"/> 会被设为
-    ///     <see cref="MessageVisibility.LlmOnly"/>，避免前端展示。
-    /// </param>
-    /// <param name="ct">取消令牌；与 <paramref name="ctx"/>.Ct 通常一致。</param>
-    public virtual async IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx, IEnumerable<ChatMessage> messages, IReadOnlyList<AITool> tools, ChatOptions? options = null, IReadOnlySet<string>? internalToolNames = null, [EnumeratorCancellation] CancellationToken ct = default)
+    /// <param name="ctx">统一调用上下文；<see cref="MicroChatContext.Ct"/> 与 <paramref name="ctx"/> 之间以参数为准（通常两者相同）。</param>
+    public override async IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx)
     {
-        _ = ValidateContext(ctx);
-        ArgumentNullException.ThrowIfNull(messages);
-        ArgumentNullException.ThrowIfNull(tools);
-        
+        CancellationToken ct = ValidateContext(ctx);
+
+        IReadOnlyList<ChatMessage> messages = ctx.AssembledMessages
+            ?? throw new InvalidOperationException("AssembledMessages not set on MicroChatContext.");
+        IReadOnlyList<AITool> tools = ctx.AssembledTools ?? [];
+        IReadOnlySet<string>? internalToolNames = ctx.InternalToolNames;
+
         string agentName = !string.IsNullOrWhiteSpace(ctx.TargetAgentName) ? ctx.TargetAgentName : !string.IsNullOrWhiteSpace(ctx.TargetAgentId) ? ctx.TargetAgentId : "agent";
-        
-        ChatOptions resolvedOptions = options ?? BuildDefaultChatOptions();
-        if (resolvedOptions.Tools is null && tools.Count > 0 && Entity.Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
+
+        ChatOptions resolvedOptions = ctx.ExecutionOptions ?? BuildDefaultChatOptions();
+        if (resolvedOptions.Tools is null && tools.Count > 0 && Capabilities.Features.HasFlag(ProviderFeature.FunctionCalling))
             resolvedOptions.Tools = [.. tools];
-        
+
         Channel<StreamItem> output = Channel.CreateUnbounded<StreamItem>(new UnboundedChannelOptions { SingleReader = true });
-        
-        Task exec = RunStreamingCoreAsync(ctx, messages, resolvedOptions, agentName, internalToolNames, output, ct);
+
+        Task exec = RunStreamingCoreAsync(ctx, resolvedOptions, agentName, internalToolNames, output, ct);
         
         try
         {
@@ -170,8 +180,9 @@ public abstract class ChatMicroProvider : MicroProvider
     }
     
     // ── 内部：非迭代器流式核心（允许使用 try-catch 和 finally）──────────────
-    private async Task RunStreamingCoreAsync(MicroChatContext ctx, IEnumerable<ChatMessage> messages, ChatOptions options, string agentName, IReadOnlySet<string>? internalToolNames, Channel<StreamItem> output, CancellationToken ct)
+    private async Task RunStreamingCoreAsync(MicroChatContext ctx, ChatOptions options, string agentName, IReadOnlySet<string>? internalToolNames, Channel<StreamItem> output, CancellationToken ct)
     {
+        IReadOnlyList<ChatMessage> messages = ctx.AssembledMessages!;
         var tracker = new StreamMessageIdTracker();
         var usage = new UsageCaptureBox();
         
@@ -303,7 +314,7 @@ public abstract class ChatMicroProvider : MicroProvider
     protected virtual ChatOptions BuildDefaultChatOptions() =>
         new()
         {
-            ModelId = Entity.ModelName, MaxOutputTokens = Entity.MaxOutputTokens, ToolMode = ChatToolMode.Auto, AllowMultipleToolCalls = true,
+            ModelId = ResolvedModelName, MaxOutputTokens = MaxOutputTokens, ToolMode = ChatToolMode.Auto, AllowMultipleToolCalls = true,
         };
     
     /// <summary>将 Agent 名称清洗成合法的函数/工具名（字母数字下划线，不超过 64 字符）。</summary>
@@ -319,7 +330,7 @@ public abstract class ChatMicroProvider : MicroProvider
     }
     
     /// <inheritdoc />
-    protected override async ValueTask OnDisposeAsync()
+    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
     {
         IChatClient? client = Interlocked.Exchange(ref _client, null);
         switch (client)

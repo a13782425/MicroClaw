@@ -49,15 +49,12 @@ public sealed class PetSelfAwarenessReportBuilder(
         var rateLimitStatus = await _rateLimiter.GetStatusAsync(sessionId, ct);
 
         // Provider 摘要
-        var allProviders = _providerStore.All;
-        var chatProviders = allProviders
-            .Where(p => p.IsEnabled && p.ModelType != ModelType.Embedding)
-            .ToList();
+        var chatProviders = _providerStore.GetEnabledChatProviders();
 
         var providerSummaries = chatProviders.Select(p => new ProviderSummary(
-            Id: p.Id,
-            DisplayName: p.DisplayName,
-            ModelName: p.ModelName,
+            Id: p.ProviderId,
+            DisplayName: p.ProviderDisplayName,
+            ModelName: p.ResolvedModelName,
             QualityScore: p.Capabilities.QualityScore,
             LatencyTier: p.Capabilities.LatencyTier.ToString(),
             InputPricePerMToken: p.Capabilities.InputPricePerMToken,

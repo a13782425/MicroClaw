@@ -100,8 +100,7 @@ public sealed class PetPromptEvolver
         // ── 调用 LLM ──
         try
         {
-            var chatProvider = _providerService.TryGetProvider(provider.Id)
-                ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+            var chatProvider = provider;
             var chatCtx = MicroChatContext.ForSystem(sessionId, "pet-prompt-evolve", ct);
             var response = await chatProvider.ChatAsync(
                 chatCtx,

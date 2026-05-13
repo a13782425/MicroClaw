@@ -237,8 +237,7 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.OrganizeMemory, false, "无可用 Provider");
 
-        var chatProvider = _providerService.TryGetProvider(provider.Id)
-            ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+        var chatProvider = provider;
         var organizeCtx = MicroChatContext.ForSystem(sessionId, "pet-action:organize-memory", ct);
         var response = await chatProvider.ChatAsync(
             organizeCtx,
@@ -288,8 +287,7 @@ public sealed class PetActionExecutor
         if (provider is null)
             return new ActionExecutionResult(PetActionType.ReflectOnSession, false, "无可用 Provider");
 
-        var chatProvider = _providerService.TryGetProvider(provider.Id)
-            ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available.");
+        var chatProvider = provider;
         var reflectCtx = MicroChatContext.ForSystem(sessionId, "pet-action:reflect-on-session", ct);
         var response = await chatProvider.ChatAsync(
             reflectCtx,

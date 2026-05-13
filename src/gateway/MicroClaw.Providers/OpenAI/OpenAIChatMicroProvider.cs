@@ -32,21 +32,21 @@ public sealed class OpenAIChatMicroProvider : ChatMicroProvider
     protected override IChatClient BuildClient()
     {
         var options = new OpenAIClientOptions();
-        if (!string.IsNullOrWhiteSpace(Entity.BaseUrl))
-            options.Endpoint = new Uri(Entity.BaseUrl);
+        if (!string.IsNullOrWhiteSpace(ResolvedBaseUrl))
+            options.Endpoint = new Uri(ResolvedBaseUrl);
 
-        var credential = new ApiKeyCredential(Entity.ApiKey);
+        var credential = new ApiKeyCredential(ResolvedApiKey);
 
         // 自定义 BaseUrl 时必须降级为 Chat Completions（Responses API 仅对接官方端点）。
-        bool useResponsesApi = Entity.Capabilities.Features.HasFlag(ProviderFeature.ResponsesApi)
-            && string.IsNullOrWhiteSpace(Entity.BaseUrl);
+        bool useResponsesApi = Capabilities.Features.HasFlag(ProviderFeature.ResponsesApi)
+            && string.IsNullOrWhiteSpace(ResolvedBaseUrl);
 
         if (useResponsesApi)
         {
             var client = new OpenAIClient(credential, options);
-            return client.GetResponsesClient().AsIChatClient(Entity.ModelName);
+            return client.GetResponsesClient().AsIChatClient(ResolvedModelName);
         }
 
-        return new ChatClient(Entity.ModelName, credential, options).AsIChatClient();
+        return new ChatClient(ResolvedModelName, credential, options).AsIChatClient();
     }
 }

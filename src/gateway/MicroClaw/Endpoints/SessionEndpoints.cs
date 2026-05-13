@@ -30,10 +30,10 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.ProviderId))
                 return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
             
-            ProviderEntity? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
+            ProviderEntityConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
-            if (provider.ModelType == ModelType.Embedding)
+            if (string.Equals(provider.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
             
             // 解析 ChannelId：默认使用内置 web channel
@@ -128,10 +128,10 @@ public static class SessionEndpoints
             if (string.IsNullOrWhiteSpace(req.ProviderId))
                 return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
             
-            ProviderEntity? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
+            ProviderEntityConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
             if (provider is null || !provider.IsEnabled)
                 return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found or disabled.", errorCode = "NOT_FOUND" });
-            if (provider.ModelType == ModelType.Embedding)
+            if (string.Equals(provider.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
             
             MicroSession? session = service.Get(req.Id) as MicroSession;

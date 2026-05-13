@@ -9,7 +9,7 @@ public static class ChatExecutionOptionsFactory
 {
     public static ChatOptions Build(
         IReadOnlyList<AITool> tools,
-        ProviderEntity provider,
+        ChatMicroProvider provider,
         string? modelOverride = null,
         string? effortOverride = null,
         float? temperatureOverride = null,
@@ -20,7 +20,7 @@ public static class ChatExecutionOptionsFactory
 
         var options = new ChatOptions
         {
-            ModelId = modelOverride ?? provider.ModelName,
+            ModelId = modelOverride ?? provider.ResolvedModelName,
             MaxOutputTokens = provider.MaxOutputTokens,
             Temperature = temperatureOverride,
             TopP = topPOverride,

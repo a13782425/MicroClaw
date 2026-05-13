@@ -27,17 +27,14 @@ public sealed class PetModelSelector(
     /// <param name="scenario">当前使用场景。</param>
     /// <param name="preferredProviderId">首选 Provider ID（来自 PetConfig）。null 表示无偏好。</param>
     /// <returns>选中的 Provider 配置；无可用 Provider 时返回 <c>null</c>。</returns>
-    public ProviderEntity? Select(PetModelScenario scenario, string? preferredProviderId = null)
+    public ChatMicroProvider? Select(PetModelScenario scenario, string? preferredProviderId = null)
     {
-        var allProviders = _providerService.All;
+        var allProviders = _providerService.GetEnabledChatProviders();
 
         // 优先使用首选 Provider（若指定且可用）
         if (!string.IsNullOrWhiteSpace(preferredProviderId))
         {
-            var preferred = allProviders.FirstOrDefault(p =>
-                p.Id == preferredProviderId &&
-                p.IsEnabled &&
-                p.ModelType != ModelType.Embedding);
+            var preferred = allProviders.FirstOrDefault(p => p.ProviderId == preferredProviderId);
 
             if (preferred is not null)
                 return preferred;
@@ -54,16 +51,16 @@ public sealed class PetModelSelector(
     /// <param name="scenario">当前使用场景。</param>
     /// <param name="preferredProviderId">首选 Provider ID。</param>
     /// <returns>排序后的 Provider 列表，第一个为最优选择。</returns>
-    public IReadOnlyList<ProviderEntity> GetFallbackChain(PetModelScenario scenario, string? preferredProviderId = null)
+    public IReadOnlyList<ChatMicroProvider> GetFallbackChain(PetModelScenario scenario, string? preferredProviderId = null)
     {
-        var allProviders = _providerService.All;
+        var allProviders = _providerService.GetEnabledChatProviders();
         var strategy = MapScenarioToStrategy(scenario);
         var chain = _providerRouter.GetFallbackChain(allProviders, strategy).ToList();
 
         // 若有首选 Provider 且在链中，将其提升到第一位
         if (!string.IsNullOrWhiteSpace(preferredProviderId))
         {
-            int idx = chain.FindIndex(p => p.Id == preferredProviderId);
+            int idx = chain.FindIndex(p => p.ProviderId == preferredProviderId);
             if (idx > 0)
             {
                 var preferred = chain[idx];

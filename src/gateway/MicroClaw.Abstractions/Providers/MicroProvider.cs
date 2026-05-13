@@ -1,6 +1,6 @@
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Configuration.Options;
-using MicroClaw.Core.Logging;
+using MicroClaw.Core;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Abstractions.Providers;
@@ -18,11 +18,8 @@ namespace MicroClaw.Abstractions.Providers;
 ///   <item>子类应把所有自持有的底层 SDK 客户端在 <see cref="OnDisposeAsync"/> 中释放。</item>
 /// </list>
 /// </summary>
-public abstract class MicroProvider : IAsyncDisposable
+public abstract class MicroProvider : MicroObject
 {
-    private readonly IMicroLogger _logger;
-    private int _disposed;
-    
     /// <summary>创建 Provider 实例，保存配置快照。</summary>
     /// <param name="entityConfig">Provider 配置快照（实例生命周期内不可变）。</param>
     /// <param name="usageTracker">Token usage 追踪器；具体子类通过 <see cref="TrackUsageAsync"/> 等 helper 上报。</param>
@@ -32,7 +29,6 @@ public abstract class MicroProvider : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(usageTracker);
         EntityConfig = entityConfig;
         UsageTracker = usageTracker;
-        _logger = MicroLogger.Factory.CreateLogger(GetType());
     }
     
     /// <summary>Provider 配置快照，对实例生命周期内不可变。</summary>
@@ -40,12 +36,6 @@ public abstract class MicroProvider : IAsyncDisposable
     
     /// <summary>Token usage 追踪器。子类在调用底层 SDK 后调用对应 helper 上报。</summary>
     protected IUsageTracker UsageTracker { get; }
-    
-    /// <summary>日志器，分类名取自运行时类型。</summary>
-    protected IMicroLogger Logger => _logger;
-    
-    /// <summary>当前实例是否已被 dispose。</summary>
-    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
     /// <summary>
     /// 将一次 chat 调用的 usage 数据按 Provider 价格计算后写入 <see cref="IUsageTracker"/>。
     /// 取消路径（<see cref="OperationCanceledException"/>）下由调用方捕获并决定是否上报，
@@ -84,17 +74,8 @@ public abstract class MicroProvider : IAsyncDisposable
     /// <see cref="DataContentItem"/>（图片/音频等）、<see cref="ToolCallItem"/>、<see cref="ToolResultItem"/>。
     /// </para>
     /// </summary>
-    /// <param name="ctx">统一调用上下文；<see cref="MicroChatContext.Ct"/> 与 <paramref name="ct"/> 之间以参数为准（通常两者相同）。</param>
-    /// <param name="messages">初始消息序列。</param>
-    /// <param name="tools">工具列表；为空表示禁止 function calling。</param>
-    /// <param name="options">
-    ///     可选的 <see cref="ChatOptions"/> 覆盖；传入 <c>null</c> 时由
-    /// </param>
-    /// <param name="internalToolNames">
-    ///     可选的"内部工具"名单。命中时对应的 <see cref="ToolCallItem"/> / <see cref="ToolResultItem"/>
-    ///     的 <see cref="StreamItem.Visibility"/> 会被设为
-    /// </param>
-    public virtual IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx, IEnumerable<ChatMessage> messages, IReadOnlyList<AITool> tools, ChatOptions? options = null, IReadOnlySet<string>? internalToolNames = null)
+    /// <param name="ctx">统一调用上下文；消息、工具、执行选项均从 ctx 字段中取得。</param>
+    public virtual IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx)
     {
         throw new NotImplementedException("AgentStreamAsync should be implemented by derived classes.");
     }
@@ -172,24 +153,5 @@ public abstract class MicroProvider : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(ctx.Source))
             throw new ArgumentException("MicroChatContext.Source is required.", nameof(ctx));
         return ctx.Ct;
-    }
-    
-    /// <summary>释放底层 SDK 客户端；子类实现。基类保证只触发一次。</summary>
-    protected virtual ValueTask OnDisposeAsync() => ValueTask.CompletedTask;
-    
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-        try
-        {
-            await OnDisposeAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "MicroProvider {ProviderId} OnDisposeAsync threw; continuing teardown.", EntityConfig.Id);
-        }
-        GC.SuppressFinalize(this);
     }
 }

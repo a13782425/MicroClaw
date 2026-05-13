@@ -1,3 +1,5 @@
+using System.Text.Json;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 
 namespace MicroClaw.Endpoints;
@@ -12,15 +14,15 @@ public static class SystemEndpoints
             {
                 p.Id,
                 p.DisplayName,
-                Protocol = SerializeProtocol(p.Protocol),
-                ModelType = SerializeModelType(p.ModelType),
+                p.Protocol,
+                p.ModelType,
                 p.BaseUrl,
                 ApiKey = MaskApiKey(p.ApiKey),
                 p.ModelName,
                 p.MaxOutputTokens,
                 p.IsEnabled,
                 p.IsDefault,
-                p.Capabilities
+                Capabilities = ProviderUtils.DeserializeCapabilities(p.CapabilitiesJson)
             });
             return Results.Ok(result);
         })
@@ -35,20 +37,22 @@ public static class SystemEndpoints
             if (string.IsNullOrWhiteSpace(req.ApiKey))
                 return ApiErrors.BadRequest("ApiKey is required.");
 
-            ProviderEntity entity = new()
+            ProviderEntityConfig entity = new()
             {
+                Id = string.Empty,
                 DisplayName = req.DisplayName.Trim(),
-                Protocol = ParseProtocol(req.Protocol),
-                ModelType = ParseModelType(req.ModelType),
-                BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim(),
+                Protocol = SerializeProtocol(ParseProtocol(req.Protocol)),
+                ModelType = SerializeModelType(ParseModelType(req.ModelType)),
+                BaseUrl = string.IsNullOrWhiteSpace(req.BaseUrl) ? string.Empty : req.BaseUrl.Trim(),
                 ApiKey = req.ApiKey.Trim(),
                 ModelName = req.ModelName.Trim(),
                 MaxOutputTokens = req.MaxOutputTokens,
                 IsEnabled = req.IsEnabled,
-                Capabilities = req.Capabilities ?? new()
+                IsDefault = false,
+                CapabilitiesJson = JsonSerializer.Serialize(req.Capabilities ?? new ProviderCapabilities()),
             };
 
-            ProviderEntity created = store.Add(entity);
+            ProviderEntityConfig created = store.Add(entity);
             return Results.Ok(new { created.Id });
         })
         .WithTags("Providers");
@@ -58,24 +62,24 @@ public static class SystemEndpoints
             if (string.IsNullOrWhiteSpace(req.Id))
                 return ApiErrors.BadRequest("Id is required.");
 
-            ProviderEntity? existing = store.GetById(req.Id);
+            ProviderEntityConfig? existing = store.GetById(req.Id);
             if (existing is null)
                 return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 
-            ProviderEntity incoming = existing with
+            ProviderEntityConfig incoming = existing with
             {
                 DisplayName = req.DisplayName?.Trim() ?? existing.DisplayName,
-                Protocol = req.Protocol != null ? ParseProtocol(req.Protocol) : existing.Protocol,
-                ModelType = req.ModelType != null ? ParseModelType(req.ModelType) : existing.ModelType,
-                BaseUrl = req.BaseUrl != null ? (string.IsNullOrWhiteSpace(req.BaseUrl) ? null : req.BaseUrl.Trim()) : existing.BaseUrl,
+                Protocol = req.Protocol != null ? SerializeProtocol(ParseProtocol(req.Protocol)) : existing.Protocol,
+                ModelType = req.ModelType != null ? SerializeModelType(ParseModelType(req.ModelType)) : existing.ModelType,
+                BaseUrl = req.BaseUrl != null ? (string.IsNullOrWhiteSpace(req.BaseUrl) ? string.Empty : req.BaseUrl.Trim()) : existing.BaseUrl,
                 ApiKey = req.ApiKey?.Trim() ?? string.Empty,
                 ModelName = req.ModelName?.Trim() ?? existing.ModelName,
                 MaxOutputTokens = req.MaxOutputTokens ?? existing.MaxOutputTokens,
                 IsEnabled = req.IsEnabled,
-                Capabilities = req.Capabilities ?? existing.Capabilities
+                CapabilitiesJson = req.Capabilities != null ? JsonSerializer.Serialize(req.Capabilities) : existing.CapabilitiesJson,
             };
 
-            ProviderEntity? updated = store.Update(req.Id, incoming);
+            ProviderEntityConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
                 return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
 

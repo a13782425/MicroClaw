@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Providers;
 using MicroClaw.Configuration;
@@ -44,8 +42,6 @@ public sealed class ProviderService : MicroService
     protected override ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         _usageTracker ??= _serviceProvider.GetRequiredService<IUsageTracker>();
-        foreach (var item in MicroClawConfig.Get<ProvidersOptions>().Items)
-            _ = item.ToEntity();
         return ValueTask.CompletedTask;
     }
     
@@ -74,19 +70,19 @@ public sealed class ProviderService : MicroService
     // ── Provider 实例获取 ───────────────────────────────────────────────
     
     /// <summary>
-    /// 按 <see cref="ProviderEntity.Id"/> 查找启用中的 Chat Provider。
+    /// 按 <see cref="ProviderDto.Id"/> 查找启用中的 Chat Provider。
     /// </summary>
     /// <exception cref="InvalidOperationException">Id 未命中或对应 Provider 已禁用。</exception>
     /// <exception cref="NotSupportedException">配置的 <see cref="ProviderProtocol"/> / <see cref="ModelType"/> 组合不被支持。</exception>
     public ChatMicroProvider GetProvider(string id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        ProviderEntity? cfg = GetById(id);
+        ProviderEntityConfig? cfg = GetConfigById(id);
         if (cfg is null)
             throw new InvalidOperationException($"Provider '{id}' not found.");
         if (!cfg.IsEnabled)
             throw new InvalidOperationException($"Provider '{id}' is disabled.");
-        if (cfg.ModelType != ModelType.Chat)
+        if (ProviderUtils.ParseModelType(cfg.ModelType) != ModelType.Chat)
             throw new InvalidOperationException($"Provider '{id}' is of ModelType '{cfg.ModelType}', not Chat. Use GetEmbeddingProvider instead.");
         return (ChatMicroProvider)GetOrCreate(cfg);
     }
@@ -95,22 +91,22 @@ public sealed class ProviderService : MicroService
     public ChatMicroProvider? TryGetProvider(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
-        ProviderEntity? cfg = GetById(id);
-        if (cfg is null || !cfg.IsEnabled || cfg.ModelType != ModelType.Chat) return null;
+        ProviderEntityConfig? cfg = GetConfigById(id);
+        if (cfg is null || !cfg.IsEnabled || ProviderUtils.ParseModelType(cfg.ModelType) != ModelType.Chat) return null;
         return (ChatMicroProvider)GetOrCreate(cfg);
     }
     
     /// <summary>获取默认（或首个启用的）Chat Provider；无可用 Provider 时返回 <c>null</c>。</summary>
     public ChatMicroProvider? GetDefaultProvider()
     {
-        ProviderEntity? cfg = GetDefault();
+        ProviderEntityConfig? cfg = GetDefaultConfig();
         return cfg is null ? null : (ChatMicroProvider)GetOrCreate(cfg);
     }
     
     /// <summary>获取默认（或首个启用的）Embedding Provider；无可用 Provider 时返回 <c>null</c>。</summary>
     public EmbeddingMicroProvider? GetDefaultEmbeddingProvider()
     {
-        ProviderEntity? cfg = GetEmbeddingProviders().OrderByDescending(p => p.IsDefault).FirstOrDefault();
+        ProviderEntityConfig? cfg = GetEmbeddingConfigs().OrderByDescending(p => p.IsDefault).FirstOrDefault();
         return cfg is null ? null : (EmbeddingMicroProvider)GetOrCreate(cfg);
     }
     
@@ -118,22 +114,22 @@ public sealed class ProviderService : MicroService
     public EmbeddingMicroProvider? TryGetEmbeddingProvider(string id)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
-        ProviderEntity? cfg = GetById(id);
-        if (cfg is null || !cfg.IsEnabled || cfg.ModelType != ModelType.Embedding) return null;
+        ProviderEntityConfig? cfg = GetConfigById(id);
+        if (cfg is null || !cfg.IsEnabled || ProviderUtils.ParseModelType(cfg.ModelType) != ModelType.Embedding) return null;
         return (EmbeddingMicroProvider)GetOrCreate(cfg);
     }
     
     // ── 缓存（按 config 哈希）──────────────────────────────────────────
-    private MicroProvider GetOrCreate(ProviderEntity entity)
+    private MicroProvider GetOrCreate(ProviderEntityConfig cfg)
     {
         if (_usageTracker is null)
             throw new InvalidOperationException("ProviderService is not started. Ensure it is registered as MicroService and the engine is running.");
         
-        CacheKey key = CacheKey.From(entity);
+        CacheKey key = CacheKey.From(cfg);
         if (_providerCache.TryGetValue(key, out MicroProvider? cached))
             return cached;
         
-        MicroProvider created = Build(entity, _usageTracker);
+        MicroProvider created = Build(cfg, _usageTracker);
         MicroProvider actual = _providerCache.GetOrAdd(key, created);
         if (!ReferenceEquals(created, actual))
         {
@@ -143,20 +139,20 @@ public sealed class ProviderService : MicroService
         else
         {
             // 新实例上位：把同一 (ProviderId, ModelType) 的旧 hash 清理并释放。
-            PurgeStaleEntries(entity.Id, entity.ModelType, keep: key);
+            PurgeStaleEntries(cfg.Id, ProviderUtils.ParseModelType(cfg.ModelType), keep: key);
         }
         
         return actual;
     }
     
-    private static MicroProvider Build(ProviderEntity entity, IUsageTracker tracker)
+    private static MicroProvider Build(ProviderEntityConfig cfg, IUsageTracker tracker)
     {
-        return (entity.Protocol, entity.ModelType) switch
+        return (ProviderUtils.ParseProtocol(cfg.Protocol), ProviderUtils.ParseModelType(cfg.ModelType)) switch
         {
-            (ProviderProtocol.OpenAI, ModelType.Chat) => new OpenAIChatMicroProvider(entity.ToConfig(), tracker),
-            (ProviderProtocol.Anthropic, ModelType.Chat) => new AnthropicChatMicroProvider(entity.ToConfig(), tracker),
-            (ProviderProtocol.OpenAI, ModelType.Embedding) => new OpenAIEmbeddingMicroProvider(entity.ToConfig(), tracker),
-            _ => throw new NotSupportedException($"No MicroProvider is registered for protocol '{entity.Protocol}' and ModelType '{entity.ModelType}'."),
+            (ProviderProtocol.OpenAI, ModelType.Chat) => new OpenAIChatMicroProvider(cfg, tracker),
+            (ProviderProtocol.Anthropic, ModelType.Chat) => new AnthropicChatMicroProvider(cfg, tracker),
+            (ProviderProtocol.OpenAI, ModelType.Embedding) => new OpenAIEmbeddingMicroProvider(cfg, tracker),
+            _ => throw new NotSupportedException($"No MicroProvider is registered for protocol '{cfg.Protocol}' and ModelType '{cfg.ModelType}'."),
         };
     }
     
@@ -174,17 +170,17 @@ public sealed class ProviderService : MicroService
         }
     }
     
-    // ── Config CRUD（保持与旧实现一致）──────────────────────────────────
+    // ── Config CRUD ──────────────────────────────────────────────────────
     
-    /// <summary>返回配置快照列表（解析环境变量后）。</summary>
-    public IReadOnlyList<ProviderEntity> All
+    /// <summary>返回配置快照列表（原始 <see cref="ProviderEntityConfig"/>，endpoint 层负责映射为 DTO）。</summary>
+    public IReadOnlyList<ProviderEntityConfig> All
     {
         get
         {
             _configLock.EnterReadLock();
             try
             {
-                return GetItems().Select(e => e.ToEntity()).ToList().AsReadOnly();
+                return GetItems().ToList().AsReadOnly();
             }
             finally
             {
@@ -193,58 +189,26 @@ public sealed class ProviderService : MicroService
         }
     }
     
-    /// <summary>返回第一个启用的非 Embedding Provider（按 IsDefault 降序）。</summary>
-    public ProviderEntity? GetDefault()
-    {
-        _configLock.EnterReadLock();
-        try
-        {
-            return GetItems().Where(p => p.IsEnabled && p.ModelType != "embedding").OrderByDescending(p => p.IsDefault).Select(e => e.ToEntity()).FirstOrDefault();
-        }
-        finally
-        {
-            _configLock.ExitReadLock();
-        }
-    }
+    /// <summary>返回第一个启用的非 Embedding Provider 的原始配置（按 IsDefault 降序）。</summary>
+    public ProviderEntityConfig? GetDefault() => GetDefaultConfig();
     
-    /// <summary>返回全部启用的 Embedding Provider。</summary>
-    public IReadOnlyList<ProviderEntity> GetEmbeddingProviders()
-    {
-        _configLock.EnterReadLock();
-        try
-        {
-            return GetItems().Where(p => p.IsEnabled && p.ModelType == "embedding").Select((e) => e.ToEntity()).ToList().AsReadOnly();
-        }
-        finally
-        {
-            _configLock.ExitReadLock();
-        }
-    }
+    /// <summary>返回全部启用的 Embedding Provider 的原始配置列表。</summary>
+    public IReadOnlyList<ProviderEntityConfig> GetEmbeddingProviders() => GetEmbeddingConfigs();
     
-    /// <summary>按 id 查找配置（解析环境变量后）。</summary>
-    public ProviderEntity? GetById(string id)
-    {
-        _configLock.EnterReadLock();
-        try
-        {
-            return GetItems().FirstOrDefault(e => e.Id == id) is { } e ? e.ToEntity() : null;
-        }
-        finally
-        {
-            _configLock.ExitReadLock();
-        }
-    }
+    /// <summary>按 id 查找原始配置。</summary>
+    public ProviderEntityConfig? GetById(string id) => GetConfigById(id);
     
-    /// <summary>新增 Provider 配置，返回带分配 id 的副本。</summary>
-    public ProviderEntity Add(ProviderEntity entity)
+    /// <summary>新增 Provider 配置，自动分配 Id，返回带 Id 的副本。</summary>
+    public ProviderEntityConfig Add(ProviderEntityConfig incoming)
     {
-        var entityConfig = (entity with { Id = Guid.NewGuid().ToString("N") }).ToConfig();
+        var entityConfig = incoming with { Id = Guid.NewGuid().ToString("N") };
         
         _configLock.EnterWriteLock();
         try
         {
             var opts = MicroClawConfig.Get<ProvidersOptions>();
-            if (!opts.Items.Any()) entity = entity with { IsDefault = true };
+            if (!opts.Items.Any())
+                entityConfig = entityConfig with { IsDefault = true };
             MicroClawConfig.Save(new ProvidersOptions { Items = [.. opts.Items, entityConfig] });
         }
         finally
@@ -252,11 +216,11 @@ public sealed class ProviderService : MicroService
             _configLock.ExitWriteLock();
         }
         
-        return entityConfig.ToEntity();
+        return entityConfig;
     }
     
-    /// <summary>更新 Provider 配置（留空的 ApiKey 不覆盖旧值）；未命中返回 null。</summary>
-    public ProviderEntity? Update(string id, ProviderEntity incoming)
+    /// <summary>更新 Provider 配置（ApiKey 为空或 "***" 时保留旧值）；未命中返回 null。</summary>
+    public ProviderEntityConfig? Update(string id, ProviderEntityConfig incoming)
     {
         _configLock.EnterWriteLock();
         try
@@ -269,22 +233,40 @@ public sealed class ProviderService : MicroService
             var updated = current with
             {
                 DisplayName = incoming.DisplayName,
-                Protocol = ProviderUtils.SerializeProtocol(incoming.Protocol),
-                ModelType = ProviderUtils.SerializeModelType(incoming.ModelType),
-                BaseUrl = string.IsNullOrWhiteSpace(incoming.BaseUrl) ? null : incoming.BaseUrl,
+                Protocol = incoming.Protocol,
+                ModelType = incoming.ModelType,
+                BaseUrl = incoming.BaseUrl,
                 ModelName = incoming.ModelName,
                 MaxOutputTokens = incoming.MaxOutputTokens,
                 IsEnabled = incoming.IsEnabled,
-                CapabilitiesJson = JsonSerializer.Serialize(incoming.Capabilities),
+                CapabilitiesJson = incoming.CapabilitiesJson,
                 ApiKey = !string.IsNullOrWhiteSpace(incoming.ApiKey) && incoming.ApiKey != "***" ? incoming.ApiKey : current.ApiKey,
             };
             var newItems = new List<ProviderEntityConfig>(opts.Items) { [idx] = updated };
             MicroClawConfig.Save(new ProvidersOptions { Items = newItems });
-            return updated.ToEntity();
+            return updated;
         }
         finally
         {
             _configLock.ExitWriteLock();
+        }
+    }
+    
+    /// <summary>返回全部启用的 Chat Provider 实例列表，供 Agent 路由器和业务层直接使用。</summary>
+    public IReadOnlyList<ChatMicroProvider> GetEnabledChatProviders()
+    {
+        _configLock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(p => p.IsEnabled && !string.Equals(p.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
+                .Select(cfg => (ChatMicroProvider)GetOrCreate(cfg))
+                .ToList()
+                .AsReadOnly();
+        }
+        finally
+        {
+            _configLock.ExitReadLock();
         }
     }
     
@@ -326,26 +308,69 @@ public sealed class ProviderService : MicroService
     // ── Private Helpers ─────────────────────────────────────────────────
     private static List<ProviderEntityConfig> GetItems() => MicroClawConfig.Get<ProvidersOptions>().Items;
     
+    private ProviderEntityConfig? GetConfigById(string id)
+    {
+        _configLock.EnterReadLock();
+        try
+        {
+            return GetItems().FirstOrDefault(e => e.Id == id);
+        }
+        finally
+        {
+            _configLock.ExitReadLock();
+        }
+    }
+    
+    private ProviderEntityConfig? GetDefaultConfig()
+    {
+        _configLock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(p => p.IsEnabled && !string.Equals(p.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(p => p.IsDefault)
+                .FirstOrDefault();
+        }
+        finally
+        {
+            _configLock.ExitReadLock();
+        }
+    }
+    
+    private IReadOnlyList<ProviderEntityConfig> GetEmbeddingConfigs()
+    {
+        _configLock.EnterReadLock();
+        try
+        {
+            return GetItems()
+                .Where(p => p.IsEnabled && string.Equals(p.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
+                .ToList()
+                .AsReadOnly();
+        }
+        finally
+        {
+            _configLock.ExitReadLock();
+        }
+    }
+    
     /// <summary>
     /// 缓存键：按 (ProviderId, ModelType, ConfigHash) 唯一识别一份 provider 实例。
     /// 任一字段变化都会产生新 key，从而触发旧实例 dispose 与新实例创建。
     /// </summary>
     private readonly record struct CacheKey(string ProviderId, ModelType ModelType, int ConfigHash)
     {
-        public static CacheKey From(ProviderEntity entity) => new(entity.Id, entity.ModelType, ComputeHash(entity));
+        public static CacheKey From(ProviderEntityConfig cfg) => new(cfg.Id, ProviderUtils.ParseModelType(cfg.ModelType), ComputeHash(cfg));
         
-        private static int ComputeHash(ProviderEntity c)
+        private static int ComputeHash(ProviderEntityConfig cfg)
         {
-            // 在 UpdateProvider 场景下，API Key、BaseUrl、ModelName 等任一变化都要求重建实例，
-            // 因此把所有会影响底层 SDK 构造与路由的字段纳入哈希。
             var hash = new HashCode();
-            hash.Add(c.Protocol);
-            hash.Add(c.ModelType);
-            hash.Add(c.BaseUrl, StringComparer.Ordinal);
-            hash.Add(c.ApiKey, StringComparer.Ordinal);
-            hash.Add(c.ModelName, StringComparer.Ordinal);
-            hash.Add(c.MaxOutputTokens);
-            hash.Add(JsonSerializer.Serialize(c.Capabilities), StringComparer.Ordinal);
+            hash.Add(cfg.Protocol, StringComparer.Ordinal);
+            hash.Add(cfg.ModelType, StringComparer.Ordinal);
+            hash.Add(cfg.BaseUrl, StringComparer.Ordinal);
+            hash.Add(cfg.ApiKey, StringComparer.Ordinal);
+            hash.Add(cfg.ModelName, StringComparer.Ordinal);
+            hash.Add(cfg.MaxOutputTokens);
+            hash.Add(cfg.CapabilitiesJson, StringComparer.Ordinal);
             return hash.ToHashCode();
         }
     }

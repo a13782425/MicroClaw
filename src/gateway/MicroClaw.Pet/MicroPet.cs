@@ -12,6 +12,7 @@ using MicroClaw.Pet.Observer;
 using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
@@ -572,7 +573,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     
     private IReadOnlyList<ProviderSummary> BuildProviderSummaries()
     {
-        return _providerStore.All.Where(p => p.IsEnabled && p.ModelType != ModelType.Embedding).Select(p => new ProviderSummary(p.Id, p.DisplayName, p.ModelName, p.Capabilities.QualityScore, p.Capabilities.LatencyTier.ToString(), p.Capabilities.InputPricePerMToken, p.Capabilities.OutputPricePerMToken, p.IsDefault)).ToList();
+        return _providerStore.GetEnabledChatProviders().Select(p => new ProviderSummary(p.ProviderId, p.ProviderDisplayName, p.ResolvedModelName, p.Capabilities.QualityScore, p.Capabilities.LatencyTier.ToString(), p.Capabilities.InputPricePerMToken, p.Capabilities.OutputPricePerMToken, p.IsDefault)).ToList();
     }
     
     private static IReadOnlyList<string> BuildToolGroupNames()
@@ -610,16 +611,16 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         
         if (!string.IsNullOrWhiteSpace(preferredProviderId))
         {
-            ProviderEntity? preferred = _providerStore.GetById(preferredProviderId);
-            if (preferred is { IsEnabled: true, ModelType: ModelType.Chat })
+            ProviderEntityConfig? preferred = _providerStore.GetById(preferredProviderId);
+            if (preferred is { IsEnabled: true } && !string.Equals(preferred.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
                 return preferred.Id;
         }
         
         if (_providerRouter is not null)
         {
-            ProviderEntity? routed = _providerRouter.Route(_providerStore.All, agent.RoutingStrategy);
+            ChatMicroProvider? routed = _providerRouter.Route(_providerStore.GetEnabledChatProviders(), agent.RoutingStrategy);
             if (routed is not null)
-                return routed.Id;
+                return routed.ProviderId;
         }
         
         return _providerStore.GetDefault()?.Id ?? throw new InvalidOperationException("No enabled provider found for this dispatch.");
@@ -755,13 +756,11 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
             throw new InvalidOperationException("No enabled agent found for this dispatch.");
         
         string providerId = ResolveProviderId(agent, ctx.TargetProviderId ?? MicroSession.ProviderId);
-        ProviderEntity provider = _providerStore.GetById(providerId) ?? throw new InvalidOperationException($"Provider '{providerId}' not found.");
-        if (!provider.IsEnabled || provider.ModelType != ModelType.Chat)
-            throw new InvalidOperationException($"Provider '{providerId}' is not an enabled chat provider.");
+        ChatMicroProvider provider = _providerStore.TryGetProvider(providerId) ?? throw new InvalidOperationException($"Provider '{providerId}' not found or is not an enabled chat provider.");
         
         ctx.TargetAgentId ??= agent.Id;
         ctx.TargetAgentName ??= agent.Name;
-        ctx.TargetProviderId ??= provider.Id;
+        ctx.TargetProviderId ??= provider.ProviderId;
         
         ChatMessageAssemblyResult assembly = await _messageAssembler.AssembleAsync(agent, provider, ctx.History ?? [], ctx.Session.Id, behaviorSuffix: ctx.PromptBehaviorSuffix, petKnowledge: ctx.PetKnowledge, ct: ctx.Ct);
         ctx.AssembledMessages = assembly.Messages;
@@ -818,14 +817,12 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         ArgumentException.ThrowIfNullOrWhiteSpace(providerId);
         ArgumentNullException.ThrowIfNull(tools);
         
-        ProviderEntity provider = _providerStore.GetById(providerId) ?? throw new InvalidOperationException($"Provider '{providerId}' not found.");
-        if (!provider.IsEnabled || provider.ModelType != ModelType.Chat)
-            throw new InvalidOperationException($"Provider '{providerId}' is not an enabled chat provider.");
+        ChatMicroProvider provider = _providerStore.TryGetProvider(providerId) ?? throw new InvalidOperationException($"Provider '{providerId}' not found or is not an enabled chat provider.");
         
         ctx.TargetAgentId ??= agent.Id;
         ctx.TargetAgentName ??= agent.Name;
-        ctx.TargetProviderId = provider.Id;
-        ctx.ProviderFallbackIds ??= ResolveProviderFallbackIds(agent, provider.Id);
+        ctx.TargetProviderId = provider.ProviderId;
+        ctx.ProviderFallbackIds ??= ResolveProviderFallbackIds(agent, provider.ProviderId);
         
         List<AITool> assembledTools = [.. tools];
         ctx.AssembledTools = assembledTools.AsReadOnly();
@@ -841,16 +838,16 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentException.ThrowIfNullOrWhiteSpace(primaryProviderId);
         
-        IReadOnlyList<ProviderEntity> allProviders = _providerStore.All;
-        IReadOnlyList<ProviderEntity> orderedChain = _providerRouter is not null ? _providerRouter.GetFallbackChain(allProviders, agent.RoutingStrategy) : allProviders.Where(static provider => provider.IsEnabled && provider.ModelType == ModelType.Chat).OrderByDescending(static provider => provider.IsDefault ? 1 : 0).ToList().AsReadOnly();
+        IReadOnlyList<ChatMicroProvider> allProviders = _providerStore.GetEnabledChatProviders();
+        IReadOnlyList<ChatMicroProvider> orderedChain = _providerRouter is not null ? _providerRouter.GetFallbackChain(allProviders, agent.RoutingStrategy) : allProviders.OrderByDescending(static provider => provider.IsDefault ? 1 : 0).ToList().AsReadOnly();
         
         List<string> fallbackIds = [];
-        foreach (ProviderEntity provider in orderedChain)
+        foreach (ChatMicroProvider provider in orderedChain)
         {
-            if (string.Equals(provider.Id, primaryProviderId, StringComparison.Ordinal))
+            if (string.Equals(provider.ProviderId, primaryProviderId, StringComparison.Ordinal))
                 continue;
             
-            fallbackIds.Add(provider.Id);
+            fallbackIds.Add(provider.ProviderId);
         }
         
         return fallbackIds.AsReadOnly();

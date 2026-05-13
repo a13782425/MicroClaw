@@ -288,7 +288,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         ArgumentNullException.ThrowIfNull(output);
         
         string primaryProviderId = ResolveExecutionProviderId(chatContext);
-        IReadOnlyList<ProviderEntity> chain = BuildPreparedFallbackChain(chatContext);
+        IReadOnlyList<ChatMicroProvider> chain = BuildPreparedFallbackChain(chatContext);
         if (chain.Count == 0)
         {
             output.Writer.TryComplete(new InvalidOperationException($"Provider '{primaryProviderId}' not found or disabled."));
@@ -307,7 +307,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         {
             for (int attempt = 0; attempt < chain.Count; attempt++)
             {
-                ProviderEntity provider = chain[attempt];
+                ChatMicroProvider chatProvider = chain[attempt];
                 bool isLastAttempt = attempt == chain.Count - 1;
                 bool anyItemWritten = false;
                 
@@ -318,7 +318,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 }
                 
                 if (attempt > 0)
-                    Logger!.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].Id, provider.Id, attempt + 1, chain.Count);
+                    Logger!.LogWarning("Provider '{PrimaryId}' failed, falling back to '{FallbackId}' (attempt {Attempt}/{Total})", chain[attempt - 1].ProviderId, chatProvider.ProviderId, attempt + 1, chain.Count);
                 
                 bool succeeded = false;
                 Exception? streamingException = null;
@@ -327,11 +327,9 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 {
                     chatContext.TargetAgentId ??= Id;
                     chatContext.TargetAgentName ??= Name;
-                    chatContext.TargetProviderId = provider.Id;
+                    chatContext.TargetProviderId = chatProvider.ProviderId;
                     
-                    Logger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Id, effectiveTools.Count, provider.Id);
-                    
-                    ChatMicroProvider chatProvider = _providerService!.TryGetProvider(provider.Id) ?? throw new InvalidOperationException($"Chat provider '{provider.Id}' is not available in cache.");
+                    Logger!.LogInformation("Agent {AgentId} streaming with {ToolCount} tools via provider {ProviderId}", Id, effectiveTools.Count, chatProvider.ProviderId);
                     
                     if (!string.IsNullOrWhiteSpace(sessionId))
                         await _agentStatusNotifier!.NotifyAsync(sessionId, Id, "running", chatContext.Ct);
@@ -343,7 +341,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     try
                     {
                         var responseAccumulator = new System.Text.StringBuilder();
-                        await foreach (StreamItem item in chatProvider.AgentStreamAsync(chatContext, messages, effectiveTools, options: preparedOptions, internalToolNames: internalToolNames, ct: chatContext.Ct))
+                        await foreach (StreamItem item in chatProvider.AgentStreamAsync(chatContext))
                         {
                             anyItemWritten = true;
                             if (item is TokenItem tokenItem)
@@ -389,7 +387,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                     if (streamingException is not null)
                     {
                         lastException = streamingException;
-                        Logger!.LogWarning(streamingException, "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                        Logger!.LogWarning(streamingException, "Provider '{ProviderId}' streaming failed without output (attempt {Attempt}/{Total}), will try fallback", chatProvider.ProviderId, attempt + 1, chain.Count);
                         continue;
                     }
                     
@@ -408,7 +406,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
                 catch (Exception ex) when (!anyItemWritten && !isLastAttempt)
                 {
                     lastException = ex;
-                    Logger!.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", provider.Id, attempt + 1, chain.Count);
+                    Logger!.LogWarning(ex, "Provider '{ProviderId}' setup failed (attempt {Attempt}/{Total}), will try fallback", chatProvider.ProviderId, attempt + 1, chain.Count);
                 }
             }
             
@@ -436,7 +434,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         throw new InvalidOperationException("Context-first MicroAgent.StreamAsync requires MicroChatContext.TargetProviderId to be populated.");
     }
     
-    private IReadOnlyList<ProviderEntity> BuildPreparedFallbackChain(MicroChatContext chatContext)
+    private IReadOnlyList<ChatMicroProvider> BuildPreparedFallbackChain(MicroChatContext chatContext)
     {
         ArgumentNullException.ThrowIfNull(chatContext);
         
@@ -450,14 +448,13 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
         if (preferredIds.Count == 0)
             return [];
         
-        Dictionary<string, ProviderEntity> providersById = _providerService!.All.Where(static p => p.IsEnabled && p.ModelType == ModelType.Chat).GroupBy(static p => p.Id, StringComparer.Ordinal).ToDictionary(static g => g.Key, static g => g.First(), StringComparer.Ordinal);
-        
-        List<ProviderEntity> plannedChain = [];
+        List<ChatMicroProvider> plannedChain = [];
         HashSet<string> seenIds = new(StringComparer.Ordinal);
         foreach (string providerId in preferredIds)
         {
             if (!seenIds.Add(providerId)) continue;
-            if (providersById.TryGetValue(providerId, out ProviderEntity? p))
+            ChatMicroProvider? p = _providerService!.TryGetProvider(providerId);
+            if (p is not null)
                 plannedChain.Add(p);
         }
         

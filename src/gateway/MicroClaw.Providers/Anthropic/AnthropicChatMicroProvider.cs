@@ -23,12 +23,12 @@ public sealed class AnthropicChatMicroProvider : ChatMicroProvider
     {
         var client = new AnthropicClient
         {
-            ApiKey = Entity.ApiKey,
-            BaseUrl = string.IsNullOrWhiteSpace(Entity.BaseUrl)
+            ApiKey = ResolvedApiKey,
+            BaseUrl = string.IsNullOrWhiteSpace(ResolvedBaseUrl)
                 ? "https://api.anthropic.com"
-                : Entity.BaseUrl.TrimEnd('/'),
+                : ResolvedBaseUrl.TrimEnd('/'),
         };
 
-        return client.AsIChatClient(Entity.ModelName);
+        return client.AsIChatClient(ResolvedModelName);
     }
 }

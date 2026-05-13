@@ -23,18 +23,18 @@ public sealed class OpenAIEmbeddingMicroProvider : EmbeddingMicroProvider
     /// <inheritdoc />
     protected override IEmbeddingGenerator<string, Embedding<float>> BuildGenerator()
     {
-        string endpoint = string.IsNullOrWhiteSpace(Entity.BaseUrl) ? "(OpenAI 默认)" : Entity.BaseUrl;
+        string endpoint = string.IsNullOrWhiteSpace(ResolvedBaseUrl) ? "(OpenAI 默认)" : ResolvedBaseUrl;
         Logger.LogDebug(
             "创建 OpenAI Embedding 客户端 — Endpoint: {Endpoint}, Model: {Model}",
-            endpoint, Entity.ModelName);
+            endpoint, ResolvedModelName);
 
         var options = new OpenAIClientOptions();
-        if (!string.IsNullOrWhiteSpace(Entity.BaseUrl))
-            options.Endpoint = new Uri(Entity.BaseUrl);
+        if (!string.IsNullOrWhiteSpace(ResolvedBaseUrl))
+            options.Endpoint = new Uri(ResolvedBaseUrl);
 
-        var credential = new ApiKeyCredential(Entity.ApiKey);
+        var credential = new ApiKeyCredential(ResolvedApiKey);
         var client = new OpenAIClient(credential, options);
 
-        return client.GetEmbeddingClient(Entity.ModelName).AsIEmbeddingGenerator();
+        return client.GetEmbeddingClient(ResolvedModelName).AsIEmbeddingGenerator();
     }
 }
