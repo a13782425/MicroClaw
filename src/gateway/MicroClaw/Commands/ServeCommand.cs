@@ -276,7 +276,6 @@ public class ServeCommand : Command
 		builder.Services.MapAs<MicroClaw.Abstractions.Pet.IPetFactory, MicroClaw.Pet.PetFactory>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>();
 		builder.Services.AddService<MicroClaw.Pet.PetService>();
-		builder.Services.MapAs<MicroClaw.Pet.IPetService, MicroClaw.Pet.PetService>();
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();

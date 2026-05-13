@@ -73,16 +73,6 @@ public sealed class SessionMessagesComponent : MicroComponent
     /// <summary>返回当前会话的全部消息。</summary>
     public IReadOnlyList<SessionMessage> GetMessages() => ReadAllMessages();
 
-    /// <summary>分页读取会话消息（按时间倒序 skip + limit）。</summary>
-    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(int skip, int limit)
-    {
-        List<SessionMessage> all = ReadAllMessages();
-        int total = all.Count;
-        int endIdx = Math.Max(0, total - skip);
-        int startIdx = Math.Max(0, endIdx - limit);
-        return (all.Skip(startIdx).Take(endIdx - startIdx).ToList().AsReadOnly(), total);
-    }
-
     /// <summary>按 Id 集合批量移除会话消息。</summary>
     public void RemoveMessages(IReadOnlySet<string> messageIds)
     {

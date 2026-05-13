@@ -23,7 +23,7 @@ public static class SessionEndpoints
         endpoints.MapGet("/sessions", (ISessionService repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
         
         // POST /api/sessions— 创建会话
-        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService sessions, ProviderService providerStore, IMicroAgentService agentService, ChannelService channelStore, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService service, ProviderService providerStore, IMicroAgentService agentService, ChannelService channelStore, SessionDnaService sessionDna) =>
         {
             if (string.IsNullOrWhiteSpace(req.Title))
                 return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
@@ -47,18 +47,18 @@ public static class SessionEndpoints
             if (!string.IsNullOrWhiteSpace(req.AgentId) && agentService.GetById(req.AgentId) is null)
                 return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
             
-            IMicroSession created = await sessions.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
+            IMicroSession created = await service.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
             sessionDna.InitializeSession(created.Id);
             return Results.Ok(created.ToInfo());
         }).WithTags("Sessions");
         
         // POST /api/sessions/delete — 删除会话
-        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService repo, SessionDnaService sessionDna, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService service, SessionDnaService sessionDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
 
-            IMicroSession? session = repo.Get(req.Id);
+            IMicroSession? session = service.Get(req.Id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
 
@@ -77,24 +77,24 @@ public static class SessionEndpoints
             // Delete session DNA files (USER.md / AGENTS.md)
             sessionDna.DeleteSessionDnaFiles(req.Id);
 
-            repo.Delete(req.Id);
+            service.Delete(req.Id);
             return Results.Ok();
         }).WithTags("Sessions");
         
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionService repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionService service, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
             
-            MicroSession? session = repo.Get(req.Id) as MicroSession;
+            MicroSession? session = service.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             
             session.Approve(req.Reason);
-            repo.Save(session);
+            service.Save(session);
             
             
             await hub.Clients.All.SendAsync("sessionApproved", new { sessionId = session.Id, title = session.Title }, ct);
@@ -102,26 +102,26 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/disable — 禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionService repo, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionService service, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
             
-            MicroSession? session = repo.Get(req.Id) as MicroSession;
+            MicroSession? session = service.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             
             session.Disable(req.Reason);
-            repo.Save(session);
+            service.Save(session);
             
             await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = session.Id, title = session.Title }, ct);
             return Results.Ok(session.ToInfo());
         }).WithTags("Sessions");
         
         // POST /api/sessions/switch-provider — 切换会话绑定的 Provider
-        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionService repo, ProviderService providerStore, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/switch-provider", async (SwitchProviderRequest req, ISessionService service, ProviderService providerStore, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
@@ -134,42 +134,32 @@ public static class SessionEndpoints
             if (provider.ModelType == ModelType.Embedding)
                 return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
             
-            MicroSession? session = repo.Get(req.Id) as MicroSession;
+            MicroSession? session = service.Get(req.Id) as MicroSession;
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             
             session.UpdateProvider(req.ProviderId);
-            repo.Save(session);
+            service.Save(session);
             
             return Results.Ok(session.ToInfo());
         }).WithTags("Sessions");
         
         // GET /api/sessions/{id}/messages — 获取消息历史
-        // 可选分页参数：?skip=0&limit=50（skip 从末尾计数，省略时返回全量）
-        endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionService repo, int? skip, int? limit) =>
+        endpoints.MapGet("/sessions/{id}/messages", (string id, ISessionService service) =>
         {
-            IMicroSession? session = repo.Get(id);
+            IMicroSession? session = service.Get(id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             
-            if (limit.HasValue)
-            {
-                int actualSkip = Math.Max(0, skip ?? 0);
-                int actualLimit = Math.Clamp(limit.Value, 1, 500);
-                (IReadOnlyList<SessionMessage> messages, int total) = repo.GetMessagesPaged(id, actualSkip, actualLimit);
-                var filtered = messages.Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
-                return Results.Ok(new { messages = filtered, total, hasMore = total > actualSkip + messages.Count });
-            }
-            
-            var allMessages = repo.GetMessages(id).Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
+            var allMessages = service.GetMessages(id).Where(m => MessageVisibility.IsVisibleToFrontend(m.Visibility)).ToList();
             return Results.Ok(allMessages);
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService repo, PetContextFactory petContextFactory, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService service, PetContextFactory petContextFactory, HttpContext ctx, CancellationToken ct) =>
         {
             // ──  找到 Session ──
-            IMicroSession? session = repo.Get(id);
+            IMicroSession? session = service.Get(id);
             if (session is null)
             {
                 ctx.Response.StatusCode = 404;
@@ -216,18 +206,18 @@ public static class SessionEndpoints
         // SOUL.md 已迁移至 Agent 级别（通过 /agents/{id}/dna 管理）
         
         // GET /api/sessions/{id}/dna — 列出固定 DNA 文件（USER / AGENTS）
-        endpoints.MapGet("/sessions/{id}/dna", (string id, ISessionService repo, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna", (string id, ISessionService service, SessionDnaService sessionDna) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             
             return Results.Ok(sessionDna.ListFiles(id));
         }).WithTags("SessionDNA");
         
         // GET /api/sessions/{id}/dna/{fileName} — 读取指定固定 DNA 文件
-        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, ISessionService repo, SessionDnaService sessionDna) =>
+        endpoints.MapGet("/sessions/{id}/dna/{fileName}", (string id, string fileName, ISessionService service, SessionDnaService sessionDna) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             
             SessionDnaFileInfo? file = sessionDna.Read(id, fileName);
@@ -235,9 +225,9 @@ public static class SessionEndpoints
         }).WithTags("SessionDNA");
         
         // POST /api/sessions/{id}/dna — 更新固定 DNA 文件内容（body: fileName + content）
-        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, ISessionService repo, SessionDnaService sessionDna) =>
+        endpoints.MapPost("/sessions/{id}/dna", (string id, SessionDnaUpdateRequest req, ISessionService service, SessionDnaService sessionDna) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(req.FileName))
                 return Results.BadRequest(new { success = false, message = "FileName is required.", errorCode = "BAD_REQUEST" });
@@ -251,9 +241,9 @@ public static class SessionEndpoints
         // ── 会话记忆端点（B-02）────────────────────────────────────────────────────
         
         // GET /api/sessions/{id}/memory — 获取长期记忆（MEMORY.md）
-        endpoints.MapGet("/sessions/{id}/memory", (string id, ISessionService repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory", (string id, ISessionService service, MemoryService memory) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             
             string content = memory.GetLongTermMemory(id);
@@ -265,9 +255,9 @@ public static class SessionEndpoints
         endpoints.MapPost("/sessions/{id}/memory", () => Results.StatusCode(405)).WithTags("SessionMemory");
         
         // GET /api/sessions/{id}/memory/daily — 列出所有每日记忆（日期列表，降序）
-        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, ISessionService repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily", (string id, ISessionService service, MemoryService memory) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             
             IReadOnlyList<string> dates = memory.ListDailyMemories(id);
@@ -275,9 +265,9 @@ public static class SessionEndpoints
         }).WithTags("SessionMemory");
         
         // GET /api/sessions/{id}/memory/daily/{date} — 获取指定日期记忆（YYYY-MM-DD）
-        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, ISessionService repo, MemoryService memory) =>
+        endpoints.MapGet("/sessions/{id}/memory/daily/{date}", (string id, string date, ISessionService service, MemoryService memory) =>
         {
-            if (repo.Get(id) is null)
+            if (service.Get(id) is null)
                 return Results.NotFound(new { success = false, message = $"Session '{id}' not found.", errorCode = "NOT_FOUND" });
             if (!MemoryService.IsValidDateFormat(date))
                 return Results.BadRequest(new { success = false, message = $"Invalid date format: '{date}'. Expected YYYY-MM-DD.", errorCode = "BAD_REQUEST" });

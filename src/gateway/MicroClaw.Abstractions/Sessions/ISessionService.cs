@@ -23,9 +23,6 @@ public interface ISessionService
 
     IReadOnlyList<SessionMessage> GetMessages(string sessionId);
 
-    (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(
-        string sessionId, int skip, int limit);
-
     void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds);
 
     // ── Channel session management ───────────────────────────────────────

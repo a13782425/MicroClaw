@@ -234,9 +234,6 @@ public sealed class SessionService : MicroService, ISessionService
     public IReadOnlyList<SessionMessage> GetMessages(string sessionId) => ResolveMessages(sessionId).GetMessages();
     
     /// <inheritdoc />
-    public (IReadOnlyList<SessionMessage> Messages, int Total) GetMessagesPaged(string sessionId, int skip, int limit) => ResolveMessages(sessionId).GetMessagesPaged(skip, limit);
-    
-    /// <inheritdoc />
     public void RemoveMessages(string sessionId, IReadOnlySet<string> messageIds) => ResolveMessages(sessionId).RemoveMessages(messageIds);
     
     

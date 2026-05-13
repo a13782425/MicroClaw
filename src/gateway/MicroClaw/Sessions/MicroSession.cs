@@ -62,13 +62,13 @@ public class MicroSession : MicroObject, IMicroSession
     public void Approve(string? reason = null)
     {
         Entity.IsApproved = true;
-        Entity.ApprovalReason = reason;
+        Entity.ApprovalReason = reason ?? "";
     }
     
     public void Disable(string? reason = null)
     {
         Entity.IsApproved = false;
-        Entity.ApprovalReason = reason;
+        Entity.ApprovalReason = reason ?? "";
     }
     
     public void UpdateProvider(string newProviderId)
