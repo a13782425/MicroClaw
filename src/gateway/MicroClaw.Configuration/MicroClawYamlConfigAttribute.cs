@@ -19,13 +19,6 @@ public sealed class MicroClawYamlConfigAttribute(string sectionKey) : Attribute
     public string? FileName { get; set; }
 
     /// <summary>
-    /// Gets or sets the directory path used for YAML write-back and template materialization.
-    /// Relative paths are resolved from the MicroClaw HOME root during normal startup.
-    /// When omitted, <see cref="MicroClawConfig"/> falls back to its configured config directory.
-    /// </summary>
-    public string? DirectoryPath { get; set; }
-
-    /// <summary>
     /// Gets or sets the header comment that should be emitted before the YAML document.
     /// </summary>
     public string? HeaderComment { get; set; }

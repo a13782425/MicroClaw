@@ -235,16 +235,8 @@ public static class MicroClawConfig
         {
             throw new InvalidOperationException($"配置类型 {optionType.Name} 的 SectionKey 不能为空。");
         }
-
-        if (!string.IsNullOrWhiteSpace(metadata.DirectoryPath) && string.IsNullOrWhiteSpace(metadata.FileName))
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 声明了 DirectoryPath 时必须同时声明 FileName。");
-        }
         
         string? fileName = string.IsNullOrWhiteSpace(metadata.FileName) ? null : metadata.FileName.Trim();
-        string? directoryPath = string.IsNullOrWhiteSpace(metadata.DirectoryPath)
-            ? null
-            : MicroClawConfigPathResolver.NormalizeDirectoryPath(optionType, metadata.DirectoryPath, Env.Home);
 
         if (typeof(IMicroClawConfigTemplate).IsAssignableFrom(optionType) && string.IsNullOrWhiteSpace(fileName))
         {
@@ -256,7 +248,7 @@ public static class MicroClawConfig
 
         bool isWritable = metadata.IsWritable && !string.IsNullOrWhiteSpace(fileName);
         
-        return new MicroClawConfigTypeDescriptor(optionType, sectionKey, fileName, directoryPath, isWritable);
+    return new MicroClawConfigTypeDescriptor(optionType, sectionKey, fileName, isWritable);
     }
     
     private static void EnsureNoDescriptorConflict(MicroClawConfigTypeDescriptor descriptor)
@@ -414,7 +406,7 @@ public static class MicroClawConfig
 
     private static string GetDescriptorFilePath(MicroClawConfigTypeDescriptor descriptor)
     {
-        return MicroClawConfigPathResolver.ResolveFilePath(_configDir!, descriptor.OptionsType, descriptor.FileName, descriptor.DirectoryPath);
+        return MicroClawConfigPathResolver.ResolveFilePath(_configDir!, descriptor.OptionsType, descriptor.FileName);
     }
     
     private static Lazy<object> CreateValueLazy(object value)

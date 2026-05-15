@@ -2,7 +2,7 @@ namespace MicroClaw.Configuration;
 
 internal static class MicroClawConfigPathResolver
 {
-    public static string ResolveFilePath(string configDir, Type optionType, string? fileName, string? directoryPath)
+    public static string ResolveFilePath(string configDir, Type optionType, string? fileName, string? directoryPath = null)
     {
         if (string.IsNullOrWhiteSpace(fileName))
             throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少可落盘的 FileName 元数据。");
@@ -17,13 +17,24 @@ internal static class MicroClawConfigPathResolver
             return null;
 
         string trimmedDirectoryPath = directoryPath.Trim();
-        string pathToResolve = Path.IsPathRooted(trimmedDirectoryPath)
-            ? trimmedDirectoryPath
-            : Path.Combine(rootDirectory, trimmedDirectoryPath);
+        if (Path.IsPathRooted(trimmedDirectoryPath))
+        {
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 的 directoryPath 必须是相对于配置根目录的子目录。");
+        }
 
         try
         {
-            return Path.GetFullPath(pathToResolve);
+            string normalizedRootDirectory = Path.GetFullPath(rootDirectory);
+            string normalizedCandidate = Path.GetFullPath(Path.Combine(normalizedRootDirectory, trimmedDirectoryPath));
+            string rootWithSeparator = normalizedRootDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+
+            if (!normalizedCandidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"配置类型 {optionType.Name} 的 directoryPath 必须位于配置根目录下的子目录内。");
+            }
+
+            return normalizedCandidate;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {

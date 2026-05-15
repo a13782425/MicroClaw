@@ -155,7 +155,7 @@ public sealed class SessionService : MicroService, ISessionService
             ChannelType = ChannelUtils.SerializeChannelType(channelType),
             ChannelId = channelId ?? ChannelUtils.WebChannelId,
             CreatedAtMs = TimeUtils.NowMs(),
-            AgentId = agentId,
+            AgentId = agentId ?? "",
         };
         
         MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
