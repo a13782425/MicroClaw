@@ -7,10 +7,14 @@ using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Hubs;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
+using MicroClaw.Pet.Storage;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace MicroClaw.Tests.Sessions;
@@ -28,7 +32,7 @@ public sealed class SessionServiceMicroTests : IDisposable
     {
         InitializeConfig(
         [
-            new SessionEntity
+            new SessionEntityConfig
             {
                 Id = "s1",
                 Title = "T1",
@@ -37,7 +41,7 @@ public sealed class SessionServiceMicroTests : IDisposable
                 ChannelId = "web",
                 CreatedAtMs = 1,
             },
-            new SessionEntity
+            new SessionEntityConfig
             {
                 Id = "s2",
                 Title = "T2",
@@ -72,7 +76,7 @@ public sealed class SessionServiceMicroTests : IDisposable
     {
         InitializeConfig(
         [
-            new SessionEntity
+            new SessionEntityConfig
             {
                 Id = "s-stop",
                 Title = "T",
@@ -123,7 +127,7 @@ public sealed class SessionServiceMicroTests : IDisposable
     {
         InitializeConfig(
         [
-            new SessionEntity
+            new SessionEntityConfig
             {
                 Id = "s-delete",
                 Title = "T",
@@ -162,24 +166,33 @@ public sealed class SessionServiceMicroTests : IDisposable
             Directory.Delete(_tempRoot, recursive: true);
     }
 
-    private (SessionService Service, IPetFactory PetFactory) CreateSessionService()
+    private (SessionService Service, PetService PetService) CreateSessionService()
     {
         IHubContext<GatewayHub> hubContext = Substitute.For<IHubContext<GatewayHub>>();
-        IPetFactory petFactory = Substitute.For<IPetFactory>();
-        petFactory.CreateOrLoadAsync(Arg.Any<IMicroSession>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IPet?>(null));
-
         IMicroAgentService agentService = Substitute.For<IMicroAgentService>();
+        IMicroAgent defaultAgent = Substitute.For<IMicroAgent>();
+        defaultAgent.Id.Returns("agent-default");
+        agentService.GetDefault().Returns(defaultAgent);
+        PetStateStore stateStore = new();
+        IEmotionStore emotionStore = new EmotionStore();
+        ILogger<PetService> logger = Substitute.For<ILogger<PetService>>();
 
         IServiceProvider sp = Substitute.For<IServiceProvider>();
         sp.GetService(typeof(IMicroAgentService)).Returns(agentService);
         sp.GetService(typeof(IHubContext<GatewayHub>)).Returns(hubContext);
-        sp.GetService(typeof(IPetFactory)).Returns(petFactory);
+        sp.GetService(typeof(PetStateStore)).Returns(stateStore);
+        sp.GetService(typeof(IEmotionStore)).Returns(emotionStore);
+        sp.GetService(typeof(ILogger<PetService>)).Returns(logger);
 
-        return (new SessionService(sp), petFactory);
+        PetService petService = Substitute.For<PetService>(sp);
+        petService.CreateOrLoadAsync(Arg.Any<IMicroSession>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IPet?>(null));
+        sp.GetService(typeof(PetService)).Returns(petService);
+
+        return (new SessionService(sp), petService);
     }
 
-    private void InitializeConfig(SessionEntity[] sessions)
+    private void InitializeConfig(SessionEntityConfig[] sessions)
     {
         ResetMicroClawConfig();
         Directory.CreateDirectory(_tempRoot);
@@ -190,7 +203,7 @@ public sealed class SessionServiceMicroTests : IDisposable
         Dictionary<string, string?> data = new();
         for (int i = 0; i < sessions.Length; i++)
         {
-            SessionEntity e = sessions[i];
+            SessionEntityConfig e = sessions[i];
             data[$"sessions:items:{i}:id"] = e.Id;
             data[$"sessions:items:{i}:title"] = e.Title;
             data[$"sessions:items:{i}:provider_id"] = e.ProviderId;

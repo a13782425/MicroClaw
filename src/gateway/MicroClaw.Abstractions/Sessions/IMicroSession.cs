@@ -15,7 +15,7 @@ public interface IMicroSession
     bool IsApproved { get; }
     ChannelType ChannelType { get; }
     string ChannelId { get; }
-    SessionEntity Entity { get; }
+    SessionEntityConfig EntityConfig { get; }
     DateTimeOffset CreatedAt { get; }
     string? AgentId { get; }
     string? ApprovalReason { get; }

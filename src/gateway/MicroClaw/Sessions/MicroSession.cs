@@ -6,6 +6,7 @@ using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
+using MicroClaw.Pet;
 using MicroClaw.Streaming;
 using MicroClaw.Utils;
 
@@ -27,21 +28,21 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public class MicroSession : MicroObject, IMicroSession
 {
-    private MicroSession(SessionEntity entity)
+    private MicroSession(SessionEntityConfig entityConfig)
     {
-        Entity = entity ?? throw new ArgumentNullException(nameof(entity));
+        EntityConfig = entityConfig ?? throw new ArgumentNullException(nameof(entityConfig));
     }
-    public SessionEntity Entity { get; private set; }
+    public SessionEntityConfig EntityConfig { get; private set; }
     
-    public string Id => Entity.Id;
-    public string Title => Entity.Title;
-    public string ProviderId => Entity.ProviderId;
-    public bool IsApproved => Entity.IsApproved;
-    public ChannelType ChannelType => ChannelUtils.ParseChannelType(Entity.ChannelType);
-    public string ChannelId => string.IsNullOrEmpty(Entity.ChannelId) ? ChannelUtils.WebChannelId : Entity.ChannelId;
-    public DateTimeOffset CreatedAt => TimeUtils.FromMs(Entity.CreatedAtMs);
-    public string? AgentId => Entity.AgentId;
-    public string? ApprovalReason => Entity.ApprovalReason;
+    public string Id => EntityConfig.Id;
+    public string Title => EntityConfig.Title;
+    public string ProviderId => EntityConfig.ProviderId;
+    public bool IsApproved => EntityConfig.IsApproved;
+    public ChannelType ChannelType => ChannelUtils.ParseChannelType(EntityConfig.ChannelType);
+    public string ChannelId => string.IsNullOrEmpty(EntityConfig.ChannelId) ? ChannelUtils.WebChannelId : EntityConfig.ChannelId;
+    public DateTimeOffset CreatedAt => TimeUtils.FromMs(EntityConfig.CreatedAtMs);
+    public string? AgentId => EntityConfig.AgentId;
+    public string? ApprovalReason => EntityConfig.ApprovalReason;
     public IChannel? Channel { get; private set; }
     public IPet? Pet { get; private set; }
     
@@ -51,34 +52,34 @@ public class MicroSession : MicroObject, IMicroSession
     /// </summary>
     public SessionMessagesComponent Messages => GetComponent<SessionMessagesComponent>() ?? throw new InvalidOperationException($"Session '{Id}' does not have {nameof(SessionMessagesComponent)} attached yet.");
     
-    public static async Task<MicroSession> CreateAsync(SessionEntity entity, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+    public static async Task<MicroSession> CreateAsync(SessionEntityConfig entityConfig, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
-        MicroSession session = new(entity);
+        MicroSession session = new(entityConfig);
         await session.AddComponentAsync<SessionMessagesComponent>(cancellationToken);
-        session.Pet = await serviceProvider.GetRequiredService<IPetFactory>()!.CreateOrLoadAsync(session, cancellationToken);
+        session.Pet = await serviceProvider.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
         return session;
     }
     
     public void Approve(string? reason = null)
     {
-        Entity.IsApproved = true;
-        Entity.ApprovalReason = reason ?? "";
+        EntityConfig.IsApproved = true;
+        EntityConfig.ApprovalReason = reason ?? "";
     }
     
     public void Disable(string? reason = null)
     {
-        Entity.IsApproved = false;
-        Entity.ApprovalReason = reason ?? "";
+        EntityConfig.IsApproved = false;
+        EntityConfig.ApprovalReason = reason ?? "";
     }
     
     public void UpdateProvider(string newProviderId)
     {
-        Entity.ProviderId = newProviderId;
+        EntityConfig.ProviderId = newProviderId;
     }
     
     public void UpdateTitle(string newTitle)
     {
-        Entity.Title = newTitle;
+        EntityConfig.Title = newTitle;
     }
     
     public SessionInfo ToInfo() => new(Id, Title, ProviderId, IsApproved, ChannelType, ChannelId, CreatedAt, AgentId, ApprovalReason);

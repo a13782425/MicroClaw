@@ -238,7 +238,7 @@ public sealed class MicroChatContext
         public IChannel? Channel => null;
         public IPet? Pet => null;
 
-        public SessionEntity Entity =>
+        public SessionEntityConfig EntityConfig =>
             throw new NotSupportedException(
                 "System-created MicroChatContext does not back a real SessionEntity; use ForSystem(IMicroSession,...) if the caller needs the aggregate.");
 

@@ -13,7 +13,7 @@ namespace MicroClaw.Pet.Prompt;
 ///   <item><c>dispatch-rules.yaml</c> — 调度规则</item>
 ///   <item><c>knowledge-interests.yaml</c> — 学习方向</item>
 /// </list>
-/// 首次读取时若文件不存在，使用 PetFactory 写入的默认模板返回默认值。
+/// 首次读取时若文件不存在，使用 PetService 写入的默认模板返回默认值。
 /// </para>
 /// </summary>
 public sealed class PetPromptStore

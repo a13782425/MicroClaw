@@ -183,7 +183,7 @@ public abstract class ChatMicroProvider : MicroProvider
     private async Task RunStreamingCoreAsync(MicroChatContext ctx, ChatOptions options, string agentName, IReadOnlySet<string>? internalToolNames, Channel<StreamItem> output, CancellationToken ct)
     {
         IReadOnlyList<ChatMessage> messages = ctx.AssembledMessages!;
-        var tracker = new StreamMessageIdTracker();
+        var tracker = new StreamMessageId();
         var usage = new UsageCaptureBox();
         
         try
@@ -203,7 +203,7 @@ public abstract class ChatMicroProvider : MicroProvider
                 AdditionalProperties = options.AdditionalProperties,
             });
             
-            ChatClientAgent agent = new(funcClient, agentOptions, loggerFactory: null, services: null);
+            ChatClientAgent agent = new ChatClientAgent(funcClient, agentOptions, loggerFactory: null, services: null);
             AgentSession session = await agent.CreateSessionAsync(ct);
             
             await foreach (AgentResponseUpdate update in agent.RunStreamingAsync(messages, session: session, runOptions, ct))
@@ -233,7 +233,7 @@ public abstract class ChatMicroProvider : MicroProvider
     }
     
     // ── 工具调用事件桥接 ────────────────────────────────────────────────
-    private Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(ChannelWriter<StreamItem> writer, StreamMessageIdTracker tracker, IReadOnlySet<string>? internalToolNames)
+    private Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(ChannelWriter<StreamItem> writer, StreamMessageId tracker, IReadOnlySet<string>? internalToolNames)
     {
         return async (FunctionInvocationContext fctx, CancellationToken ct) =>
         {
@@ -345,7 +345,7 @@ public abstract class ChatMicroProvider : MicroProvider
     }
     
     // ── 私有辅助类型 ────────────────────────────────────────────────────
-    private sealed class StreamMessageIdTracker
+    private sealed class StreamMessageId
     {
         public string? Current { get; set; }
     }

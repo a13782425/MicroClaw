@@ -10,9 +10,13 @@ using MicroClaw.Configuration.Models;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Hubs;
+using MicroClaw.Pet;
+using MicroClaw.Pet.Emotion;
+using MicroClaw.Pet.Storage;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace MicroClaw.Tests;
@@ -95,7 +99,7 @@ public sealed class ChannelServiceTests : IDisposable
             channels: [],
             sessions:
             [
-                new SessionEntity
+                new SessionEntityConfig
                 {
                     Id = "session-a",
                     Title = "Session A",
@@ -107,7 +111,7 @@ public sealed class ChannelServiceTests : IDisposable
                     AgentId = "agent-a",
                     ApprovalReason = "ok"
                 },
-                new SessionEntity
+                new SessionEntityConfig
                 {
                     Id = "session-b",
                     Title = "Session B",
@@ -119,7 +123,7 @@ public sealed class ChannelServiceTests : IDisposable
                 }
             ]);
 
-        var (_, petFactory, service) = CreateSessionService();
+        var (_, petService, service) = CreateSessionService();
 
         await StartServiceAsync(service);
 
@@ -128,7 +132,7 @@ public sealed class ChannelServiceTests : IDisposable
 
         ReferenceEquals(first, second).Should().BeTrue();
         ((MicroClaw.Abstractions.Sessions.ISessionService)service).GetAll().Should().HaveCount(2);
-        await petFactory.Received(2).CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>());
+        await petService.Received(2).CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -138,7 +142,7 @@ public sealed class ChannelServiceTests : IDisposable
             channels: [],
             sessions:
             [
-                new SessionEntity
+                new SessionEntityConfig
                 {
                     Id = "session-a",
                     Title = "Old Title",
@@ -159,7 +163,7 @@ public sealed class ChannelServiceTests : IDisposable
         repo.Save(session);
 
         MicroClawConfig.Get<SessionsOptions>().Items.Should().ContainSingle(x => x.Id == "session-a" && x.Title == "New Title");
-        session.Entity.Title.Should().Be("New Title");
+        session.EntityConfig.Title.Should().Be("New Title");
     }
 
     [Fact]
@@ -169,7 +173,7 @@ public sealed class ChannelServiceTests : IDisposable
             channels: [],
             sessions:
             [
-                new SessionEntity
+                new SessionEntityConfig
                 {
                     Id = "session-a",
                     Title = "Session A",
@@ -202,21 +206,30 @@ public sealed class ChannelServiceTests : IDisposable
             Directory.Delete(_tempRoot, recursive: true);
     }
 
-    private (IHubContext<GatewayHub> HubContext, IPetFactory PetFactory, MicroClaw.Sessions.SessionService Service) CreateSessionService()
+    private (IHubContext<GatewayHub> HubContext, PetService PetService, MicroClaw.Sessions.SessionService Service) CreateSessionService()
     {
         var hubContext = Substitute.For<IHubContext<GatewayHub>>();
-        var petFactory = Substitute.For<IPetFactory>();
-        petFactory.CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IPet?>(null));
-
         var agentService = Substitute.For<IMicroAgentService>();
+        IMicroAgent defaultAgent = Substitute.For<IMicroAgent>();
+        defaultAgent.Id.Returns("agent-default");
+        agentService.GetDefault().Returns(defaultAgent);
+        PetStateStore stateStore = new();
+        IEmotionStore emotionStore = new EmotionStore();
+        ILogger<PetService> logger = Substitute.For<ILogger<PetService>>();
 
         var sp = Substitute.For<IServiceProvider>();
         sp.GetService(typeof(IMicroAgentService)).Returns(agentService);
         sp.GetService(typeof(IHubContext<GatewayHub>)).Returns(hubContext);
-        sp.GetService(typeof(IPetFactory)).Returns(petFactory);
+        sp.GetService(typeof(PetStateStore)).Returns(stateStore);
+        sp.GetService(typeof(IEmotionStore)).Returns(emotionStore);
+        sp.GetService(typeof(ILogger<PetService>)).Returns(logger);
 
-        return (hubContext, petFactory, new MicroClaw.Sessions.SessionService(sp));
+        PetService petService = Substitute.For<PetService>(sp);
+        petService.CreateOrLoadAsync(Arg.Any<MicroClaw.Abstractions.Sessions.IMicroSession>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IPet?>(null));
+        sp.GetService(typeof(PetService)).Returns(petService);
+
+        return (hubContext, petService, new MicroClaw.Sessions.SessionService(sp));
     }
 
     private static async Task StartServiceAsync(MicroClaw.Sessions.SessionService service)
@@ -230,7 +243,7 @@ public sealed class ChannelServiceTests : IDisposable
         public object? GetService(Type serviceType) => null;
     }
 
-    private void InitializeConfig(ChannelEntityConfig[]? channels = null, SessionEntity[]? sessions = null)
+    private void InitializeConfig(ChannelEntityConfig[]? channels = null, SessionEntityConfig[]? sessions = null)
     {
         ResetMicroClawConfig();
 
@@ -246,7 +259,7 @@ public sealed class ChannelServiceTests : IDisposable
         };
 
         ChannelEntityConfig[] effectiveChannels = channels ?? [];
-        SessionEntity[] effectiveSessions = sessions ?? [];
+        SessionEntityConfig[] effectiveSessions = sessions ?? [];
 
         for (int i = 0; i < effectiveChannels.Length; i++)
         {
@@ -260,7 +273,7 @@ public sealed class ChannelServiceTests : IDisposable
 
         for (int i = 0; i < effectiveSessions.Length; i++)
         {
-            SessionEntity session = effectiveSessions[i];
+            SessionEntityConfig session = effectiveSessions[i];
             data[$"sessions:items:{i}:id"] = session.Id;
             data[$"sessions:items:{i}:title"] = session.Title;
             data[$"sessions:items:{i}:provider_id"] = session.ProviderId;

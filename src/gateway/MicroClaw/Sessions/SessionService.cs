@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using MicroClaw.Agent;
 using MicroClaw.Abstractions.Agent;
-using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Channels;
 using MicroClaw.Configuration;
@@ -31,7 +30,6 @@ public sealed class SessionService : MicroService, ISessionService
 {
     private IMicroAgentService? agentService;
     private IHubContext<GatewayHub>? hubContext;
-    private IPetFactory? _petFactory;
     private readonly IServiceProvider serviceProvider;
     private ConcurrentDictionary<string, MicroSession> _sessions = new();
     
@@ -56,11 +54,10 @@ public sealed class SessionService : MicroService, ISessionService
     {
         agentService ??= serviceProvider.GetRequiredService<IMicroAgentService>();
         hubContext ??= serviceProvider.GetRequiredService<IHubContext<GatewayHub>>();
-        _petFactory ??= serviceProvider.GetRequiredService<IPetFactory>();
         MicroClawUtils.CheckDirectory(MicroClawConfig.Env.SessionsDir);
         
         ConcurrentDictionary<string, MicroSession> warmedSessions = new();
-        foreach (SessionEntity entity in MicroClawConfig.Get<SessionsOptions>().Items)
+        foreach (SessionEntityConfig entity in MicroClawConfig.Get<SessionsOptions>().Items)
         {
             cancellationToken.ThrowIfCancellationRequested();
             MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
@@ -109,7 +106,7 @@ public sealed class SessionService : MicroService, ISessionService
         
         string senderShort = senderId.Length > 8 ? senderId[..8] : senderId;
         string title = $"{channelDisplayName}-{senderShort}";
-        SessionEntity entity = new()
+        SessionEntityConfig entityConfig = new()
         {
             Id = sessionId,
             Title = title,
@@ -119,7 +116,7 @@ public sealed class SessionService : MicroService, ISessionService
             CreatedAtMs = TimeUtils.NowMs(),
             AgentId = agentService!.GetDefault()!.Id,
         };
-        MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
+        MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
         AddToCacheAndPersist(microSession);
         
         _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = microSession.Id, title = microSession.Title, channelType = ChannelUtils.SerializeChannelType(channelType) });
@@ -150,7 +147,7 @@ public sealed class SessionService : MicroService, ISessionService
     /// <inheritdoc/>
     public async Task<IMicroSession> CreateSession(string title, string providerId, ChannelType channelType = ChannelType.Web, string? id = null, string? agentId = null, string? channelId = null)
     {
-        SessionEntity entity = new()
+        SessionEntityConfig entityConfig = new()
         {
             Id = id ?? MicroClawUtils.GetUniqueId(),
             Title = title,
@@ -161,7 +158,7 @@ public sealed class SessionService : MicroService, ISessionService
             AgentId = agentId,
         };
         
-        MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider);
+        MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
         AddToCacheAndPersist(microSession);
         return microSession;
     }
@@ -274,7 +271,7 @@ public sealed class SessionService : MicroService, ISessionService
     
     private void PersistCacheSnapshot()
     {
-        List<SessionEntity> newItems = _sessions.Values.OrderBy(s => s.CreatedAt).Select(s => s.Entity.DeepClone()).ToList();
+        List<SessionEntityConfig> newItems = _sessions.Values.OrderBy(s => s.CreatedAt).Select(s => s.EntityConfig.DeepClone()).ToList();
         
         MicroClawConfig.Save(new SessionsOptions { Items = newItems });
     }

@@ -156,7 +156,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/{id}/chat — SSE 流式对话
-        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService service, PetContextFactory petContextFactory, HttpContext ctx, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/{id}/chat", async (string id, ChatRequest req, ISessionService service, HttpContext ctx, CancellationToken ct) =>
         {
             // ──  找到 Session ──
             IMicroSession? session = service.Get(id);

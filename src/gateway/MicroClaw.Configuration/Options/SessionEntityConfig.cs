@@ -2,7 +2,7 @@ namespace MicroClaw.Configuration.Options;
 /// <summary>
 /// 会话元数据持久化实体。
 /// </summary>
-public sealed record SessionEntity
+public sealed record SessionEntityConfig
 {
     /// <summary>
     /// 会话唯一标识。
@@ -58,7 +58,7 @@ public sealed record SessionEntity
     [YamlMember(Alias = "approval_reason", Description = "审批原因或备注。")]
     public string ApprovalReason { get; set; } = string.Empty;
     
-    public SessionEntity DeepClone() =>
+    public SessionEntityConfig DeepClone() =>
         new()
         {
             Id = this.Id,

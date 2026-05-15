@@ -27,7 +27,7 @@ namespace MicroClaw.Pet;
 /// </summary>
 internal enum PetContextState
 {
-    /// <summary>尚未初始化（Pet 目录未创建、或 PetFactory 尚未调用前的默认状态）。</summary>
+    /// <summary>尚未初始化（Pet 目录未创建、或 PetService 尚未调用前的默认状态）。</summary>
     Uninitialized,
     
     /// <summary>已激活，正常参与消息编排。</summary>
@@ -47,7 +47,7 @@ internal enum PetContextState
 /// </list>
 /// </para>
 /// <para>
-/// 生命周期：由 <see cref="PetContextFactory"/> 在审批时创建（或在首次使用时懒加载），
+/// 生命周期：由 <see cref="PetService"/> 在审批时创建（或在首次使用时懒加载），
 /// 通过 <c>Session.AttachPet(petCtx)</c> 挂载到会话上。
 /// 作为 <see cref="MicroClaw.Core.MicroObject"/>，在会话删除时由外层调用
 /// <see cref="System.IAsyncDisposable.DisposeAsync"/> 进入

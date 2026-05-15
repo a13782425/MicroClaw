@@ -271,11 +271,8 @@ public class ServeCommand : Command
 		builder.Services.AddSingleton<MicroClaw.Pet.StateMachine.PetSelfAwarenessReportBuilder>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Prompt.PetPromptStore>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Prompt.PetPromptEvolver>();
-		builder.Services.AddSingleton<MicroClaw.Pet.PetContextFactory>();
-		builder.Services.AddSingleton<MicroClaw.Pet.PetFactory>();
-		builder.Services.MapAs<MicroClaw.Abstractions.Pet.IPetFactory, MicroClaw.Pet.PetFactory>();
 		builder.Services.AddSingleton<MicroClaw.Pet.Observer.PetSessionObserver>();
-		builder.Services.AddService<MicroClaw.Pet.PetService>();
+		builder.Services.AddMicroService<MicroClaw.Pet.PetService>();
 
 		// Workflow 服务
 		builder.Services.AddSingleton<MicroClaw.Agent.Workflows.WorkflowStore>();
