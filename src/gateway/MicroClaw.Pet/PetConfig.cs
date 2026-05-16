@@ -5,9 +5,6 @@ namespace MicroClaw.Pet;
 /// </summary>
 public sealed class PetConfig
 {
-    /// <summary>是否启用 Pet 编排层。默认 false（向后兼容）。</summary>
-    public bool Enabled { get; set; } = false;
-
     /// <summary>
     /// 活跃时段开始小时（0-23, UTC+0）。Pet 在此时段外不主动发起 LLM 调用。
     /// null 表示全天活跃。

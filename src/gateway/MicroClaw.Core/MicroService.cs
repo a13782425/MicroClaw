@@ -17,6 +17,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 {
     private readonly SemaphoreSlim _serviceTransitionGate = new(1, 1);
     private readonly AsyncLocal<ServiceTransitionScopeState?> _serviceTransitionScope = new();
+    private readonly MicroEvent _events = new();
     private bool _activationFailed;
 
     /// <summary>
@@ -38,6 +39,31 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
     /// <summary>服务是否处于 Running 且 Active 状态。</summary>
     public bool IsStarted => State == MicroServiceState.Running && LifeCycleState == MicroLifeCycleState.Active;
+
+    /// <summary>Subscribes to an event type on this service only.</summary>
+    public IDisposable Subscribe<TEvent>(Func<TEvent, CancellationToken, ValueTask> handler) where TEvent : class
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        ThrowIfDisposed();
+
+        IDisposable subscription = _events.Subscribe(handler);
+
+        if (IsDisposed)
+        {
+            subscription.Dispose();
+            ThrowIfDisposed();
+        }
+
+        return subscription;
+    }
+
+    /// <summary>Publishes an event to subscribers registered for the event instance runtime type on this service only.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default) where TEvent : class
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        ThrowIfDisposed();
+        return _events.PublishAsync(domainEvent, cancellationToken);
+    }
 
     /// <summary>释放服务；若已注册则交给引擎统一销毁。</summary>
     public override async ValueTask DisposeAsync()
@@ -257,6 +283,7 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
                 errors.Add(ex);
             }
 
+            _events.Clear();
             State = MicroServiceState.Stopped;
             ResetActivationHookTracking();
             _activationFailed = false;
@@ -325,7 +352,13 @@ public abstract class MicroService : MicroLifeCycle<MicroEngine>
 
     /// <summary>子类重写此方法以实现停止逻辑；默认为空操作。</summary>
     protected virtual ValueTask StopAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-    
+
+    private void ThrowIfDisposed()
+    {
+        if (IsDisposed)
+            throw new ObjectDisposedException(GetType().Name);
+    }
+
     /// <summary>描述当前异步流持有的服务运行态转换作用域。</summary>
     private sealed class ServiceTransitionScopeState
     {

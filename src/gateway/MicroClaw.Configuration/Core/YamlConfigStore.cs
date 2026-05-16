@@ -11,7 +11,7 @@ public sealed class YamlConfigStore
     private readonly string _configRootDir;
     private readonly ConcurrentDictionary<string, object> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, MicroClawConfigTypeDescriptor> _descriptors = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object DescriptorCacheLock = new();
+    private readonly object _descriptorCacheLock = new();
     public YamlConfigStore(string configRootDir)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configRootDir);
@@ -146,7 +146,7 @@ public sealed class YamlConfigStore
         string? resolvedDirectoryPath = ResolveDirectoryPath(valueType, directoryPath);
         string cacheKey = MicroClawConfigPathResolver.ResolveFilePath(_configRootDir, valueType, resolvedFileName, resolvedDirectoryPath);
         
-        lock (DescriptorCacheLock)
+        lock (_descriptorCacheLock)
         {
             if (_descriptors.TryGetValue(cacheKey, out MicroClawConfigTypeDescriptor? cachedDescriptor))
                 return cachedDescriptor;

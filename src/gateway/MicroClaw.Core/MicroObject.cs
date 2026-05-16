@@ -7,6 +7,7 @@ namespace MicroClaw.Core;
 public class MicroObject : MicroLifeCycle<MicroEngine>
 {
     private readonly Lock _gate = new();
+    private readonly MicroEvent _events = new();
     private readonly Dictionary<Type, MicroComponent> _components = new();
     private bool _isTransitioning;
 
@@ -23,6 +24,31 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
                 return _components.Values.ToArray();
             }
         }
+    }
+
+    /// <summary>Subscribes to an event type on this object only.</summary>
+    public IDisposable Subscribe<TEvent>(Func<TEvent, CancellationToken, ValueTask> handler) where TEvent : class
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        ThrowIfDisposed();
+
+        IDisposable subscription = _events.Subscribe(handler);
+
+        if (IsDisposed)
+        {
+            subscription.Dispose();
+            ThrowIfDisposed();
+        }
+
+        return subscription;
+    }
+
+    /// <summary>Publishes an event to subscribers registered for the event instance runtime type on this object only.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default) where TEvent : class
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        ThrowIfDisposed();
+        return _events.PublishAsync(domainEvent, cancellationToken);
     }
 
     /// <summary>创建并挂载指定类型的组件（使用无参构造函数）。</summary>
@@ -521,6 +547,8 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
             }
         }
 
+        _events.Clear();
+
         ThrowIfNeeded(errors);
     }
 
@@ -659,7 +687,7 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
             rollbackErrors.Add(ex);
         }
     }
-    
+
     /// <summary>将主异常与回滚异常合并为一个扁平化聚合异常，避免嵌套的 <see cref="AggregateException"/>。</summary>
     private static AggregateException CreateAggregate(Exception primaryException, Exception rollbackException)
     {
@@ -670,4 +698,5 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
 
         return new AggregateException(errors);
     }
+
 }

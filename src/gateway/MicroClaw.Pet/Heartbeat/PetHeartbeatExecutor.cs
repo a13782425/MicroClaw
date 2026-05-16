@@ -53,7 +53,7 @@ public sealed class PetHeartbeatExecutor
         var petState = await _stateStore.LoadAsync(sessionId, ct);
         var petConfig = await _stateStore.LoadConfigAsync(sessionId, ct);
 
-        if (petState is null || petConfig is not { Enabled: true })
+        if (petState is null)
         {
             _logger.LogDebug("Pet [{SessionId}] 未启用或不存在，跳过心跳", sessionId);
             return HeartbeatResult.Skipped("Pet 未启用");

@@ -432,6 +432,130 @@ public sealed class MicroObjectTests
         await addTask.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Fact]
+    public async Task PublishAsync_SameObjectInvokesSubscribersInSubscriptionOrder()
+    {
+        var host = new MicroObject();
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add($"first:{domainEvent.Value}");
+            return ValueTask.CompletedTask;
+        });
+        host.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add($"second:{domainEvent.Value}");
+            return ValueTask.CompletedTask;
+        });
+
+        await host.PublishAsync(new TestDomainEvent("ready"));
+
+        observed.Should().Equal("first:ready", "second:ready");
+    }
+
+    [Fact]
+    public async Task PublishAsync_DoesNotPublishAcrossMicroObjects()
+    {
+        var firstHost = new MicroObject();
+        var secondHost = new MicroObject();
+        var observed = new List<string>();
+
+        firstHost.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        await secondHost.PublishAsync(new TestDomainEvent("ignored"));
+        await firstHost.PublishAsync(new TestDomainEvent("local"));
+
+        observed.Should().Equal("local");
+    }
+
+    [Fact]
+    public async Task PublishAsync_UsesExactEventType()
+    {
+        var host = new MicroObject();
+        var observed = new List<string>();
+
+        host.Subscribe<BaseDomainEvent>((_, _) =>
+        {
+            observed.Add("base");
+            return ValueTask.CompletedTask;
+        });
+
+        BaseDomainEvent polymorphicEvent = new DerivedDomainEvent();
+
+        await host.PublishAsync(polymorphicEvent);
+        await host.PublishAsync(new DerivedDomainEvent());
+        await host.PublishAsync(new BaseDomainEvent());
+
+        observed.Should().Equal("base");
+    }
+
+    [Fact]
+    public async Task Subscribe_DisposeHandle_RemovesSubscriptionAndIsIdempotent()
+    {
+        var host = new MicroObject();
+        var observed = new List<string>();
+
+        IDisposable subscription = host.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        await host.PublishAsync(new TestDomainEvent("before"));
+        subscription.Dispose();
+        subscription.Dispose();
+        await host.PublishAsync(new TestDomainEvent("after"));
+
+        observed.Should().Equal("before");
+    }
+
+    [Fact]
+    public async Task PublishAsync_DoesNotHoldSubscriptionLockWhileAwaitingHandler()
+    {
+        var host = new MicroObject();
+        var handlerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHandler = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        host.Subscribe<TestDomainEvent>(async (_, cancellationToken) =>
+        {
+            handlerStarted.SetResult();
+            await releaseHandler.Task.WaitAsync(cancellationToken);
+        });
+
+        Task publishTask = host.PublishAsync(new TestDomainEvent("waiting")).AsTask();
+        await handlerStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Task<IDisposable> subscribeTask = Task.Run(() => host.Subscribe<TestDomainEvent>((_, _) => ValueTask.CompletedTask));
+        IDisposable subscription = await subscribeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        subscription.Dispose();
+        releaseHandler.SetResult();
+        await publishTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task MicroEvent_Clear_RemovesAllSubscriptions()
+    {
+        var events = new MicroEvent();
+        var observed = new List<string>();
+
+        events.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        events.Clear();
+        await events.PublishAsync(new TestDomainEvent("after"));
+
+        observed.Should().BeEmpty();
+    }
+
     private sealed class NullServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
@@ -644,4 +768,10 @@ public sealed class MicroObjectTests
             await AddComponentAsync<TrackingComponent>(cancellationToken);
         }
     }
+
+    private sealed record TestDomainEvent(string Value);
+
+    private class BaseDomainEvent;
+
+    private sealed class DerivedDomainEvent : BaseDomainEvent;
 }

@@ -122,7 +122,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     public IMicroSession MicroSession { get; }
     
     /// <inheritdoc/>
-    public bool IsEnabled => !IsDisposed && State == PetContextState.Active && Config.Enabled;
+    public bool IsEnabled => !IsDisposed && State == PetContextState.Active;
     
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Microsoft.Extensions.AI.AIFunction>> CollectChannelToolsAsync(CancellationToken cancellationToken = default)
