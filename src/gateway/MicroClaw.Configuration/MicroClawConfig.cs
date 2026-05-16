@@ -132,18 +132,12 @@ public static class MicroClawConfig
             T? storedInstance = _store!.Get<T>();
 
             MicroClawYamlConfigAttribute metadata = GetYamlMetadataOrThrow(optionType);
-            string sectionKey = metadata.SectionKey.Trim();
             string? fileName = NormalizeFileName(metadata.FileName);
             T instance = storedInstance ?? new T();
-            IConfigurationSection runtimeSection = configuration.GetSection(sectionKey);
-            bool runtimeSectionExists = runtimeSection.Exists();
-            if (runtimeSectionExists)
-                YamlAwareBinder.Bind(runtimeSection, instance);
-            
             if (instance is not IMicroClawConfigTemplate templateProvider)
                 return instance;
             
-            if (storedInstance is not null || runtimeSectionExists)
+            if (storedInstance is not null)
                 return instance;
 
             if (string.IsNullOrWhiteSpace(fileName))

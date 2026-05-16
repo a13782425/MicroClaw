@@ -17,7 +17,7 @@ public sealed class YamlConfigStore
         _descriptors = new ConcurrentDictionary<Type, MicroClawConfigTypeDescriptor>();
         _configRootDir = configRootDir;
     }
-    public T? Get<T>(string? directoryPath = null, string? fileName = null) where T : class, new()
+    public T? Get<T>(string? fileName = null, string? directoryPath = null) where T : class, new()
     {
         MicroClawConfigTypeDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
         
@@ -39,7 +39,7 @@ public sealed class YamlConfigStore
         return Deserializer.Deserialize<T>(sectionYaml);
     }
     
-    public T Save<T>(T value, string? directoryPath = null, string? fileName = null) where T : class
+    public T Save<T>(T value, string? fileName = null, string? directoryPath = null) where T : class
     {
         ArgumentNullException.ThrowIfNull(value);
         
@@ -51,7 +51,7 @@ public sealed class YamlConfigStore
         return value;
     }
     
-    public bool Delete<T>(string? directoryPath = null, string? fileName = null) where T : class
+    public bool Delete<T>(string? fileName = null, string? directoryPath = null) where T : class
     {
         MicroClawConfigTypeDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
         
