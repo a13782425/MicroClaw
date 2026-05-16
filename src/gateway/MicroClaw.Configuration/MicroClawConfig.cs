@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Reflection;
 using Microsoft.Extensions.Configuration;
 
 namespace MicroClaw.Configuration;
@@ -9,15 +7,11 @@ namespace MicroClaw.Configuration;
 /// </summary>
 public static class MicroClawConfig
 {
-    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
-    
     private static MicroClawConfigEnv? _env;
     private static IConfiguration? _configuration;
-    private static ConcurrentDictionary<Type, Lazy<object>>? _options;
     private static YamlConfigStore? _store;
     private static string? _configDir;
     private static int _initialized;
-    private static readonly object OptionsCacheLock = new();
     
     /// <summary>
     /// 环境变量和路径访问入口。
@@ -38,22 +32,7 @@ public static class MicroClawConfig
     public static T Get<T>() where T : class, new()
     {
         EnsureInitialized();
-        Type optionType = typeof(T);
-        
-        lock (OptionsCacheLock)
-        {
-            Lazy<object> lazyValue = _options!.GetOrAdd(optionType, _ => CreateBoundOptionsLazy<T>(_configuration!));
-            
-            try
-            {
-                return (T)lazyValue.Value;
-            }
-            catch
-            {
-                _options!.TryRemove(new KeyValuePair<Type, Lazy<object>>(optionType, lazyValue));
-                throw;
-            }
-        }
+        return _store!.Get<T>()!;
     }
     
     /// <summary>
@@ -65,13 +44,7 @@ public static class MicroClawConfig
         ArgumentNullException.ThrowIfNull(value);
         
         EnsureInitialized();
-        Type optionType = typeof(T);
-
-        lock (OptionsCacheLock)
-        {
-            _store!.Save(value);
-            _options![optionType] = CreateValueLazy(value);
-        }
+        _store!.Save(value);
     }
     
     /// <summary>
@@ -91,12 +64,10 @@ public static class MicroClawConfig
             _configuration = configuration;
             _configDir = configDir;
             _store = new YamlConfigStore(configDir);
-            _options = new ConcurrentDictionary<Type, Lazy<object>>();
         }
         catch
         {
             _configuration = null;
-            _options = null;
             _configDir = null;
             _store = null;
             Interlocked.Exchange(ref _initialized, 0);
@@ -111,7 +82,6 @@ public static class MicroClawConfig
     {
         _env = null;
         _configuration = null;
-        _options = null;
         _store = null;
         _configDir = null;
         Interlocked.Exchange(ref _initialized, 0);
@@ -120,61 +90,7 @@ public static class MicroClawConfig
     
     private static void EnsureInitialized()
     {
-        if (_configuration is null || _options is null || _store is null || _configDir is null)
+        if (_configuration is null || _store is null || _configDir is null)
             throw new InvalidOperationException("MicroClawConfig 尚未初始化，请先调用 MicroClawConfig.Initialize()。");
-    }
-    
-    private static Lazy<object> CreateBoundOptionsLazy<T>(IConfiguration configuration) where T : class, new()
-    {
-        return new Lazy<object>(() =>
-        {
-            Type optionType = typeof(T);
-            T? storedInstance = _store!.Get<T>();
-
-            MicroClawYamlConfigAttribute metadata = GetYamlMetadataOrThrow(optionType);
-            string? fileName = NormalizeFileName(metadata.FileName);
-            T instance = storedInstance ?? new T();
-            if (instance is not IMicroClawConfigTemplate templateProvider)
-                return instance;
-            
-            if (storedInstance is not null)
-                return instance;
-
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                throw new InvalidOperationException($"配置类型 {optionType.Name} 实现了 {nameof(IMicroClawConfigTemplate)}，必须显式声明 FileName。");
-            }
-            
-            return MaterializeTemplate<T>(optionType, fileName, templateProvider);
-        }, LazyThreadSafetyMode.ExecutionAndPublication);
-    }
-
-    private static T MaterializeTemplate<T>(Type optionType, string fileName, IMicroClawConfigTemplate templateProvider) where T : class, new()
-    {
-        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate() ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板不能为空。");
-        
-        if (template is not T typedTemplate)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板实例类型必须与 {optionType.Name} 兼容。");
-        }
-        
-        _store!.Save(typedTemplate, fileName: fileName);
-        return typedTemplate;
-    }
-
-    private static MicroClawYamlConfigAttribute GetYamlMetadataOrThrow(Type optionType)
-    {
-        return optionType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false)
-               ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少 [MicroClawYamlConfig]。");
-    }
-
-    private static string? NormalizeFileName(string? fileName)
-    {
-        return string.IsNullOrWhiteSpace(fileName) ? null : fileName.Trim();
-    }
-    
-    private static Lazy<object> CreateValueLazy(object value)
-    {
-        return new Lazy<object>(() => value, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }
