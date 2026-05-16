@@ -184,6 +184,54 @@ await session.RemoveComponentAsync<MessagesComponent>(ct);
 - Object `Dispose` 时会级联 `Dispose` 所有组件。
 - 组件支持按基类/接口查询，但如果有多个组件都能赋值给该接口则 `GetComponent<I>` 会抛异常。
 
+### 本地事件与组件 helper
+
+`MicroObject` 内置对象本地 typed event bus，适合组件之间发布同一宿主内的领域事实；它不接入全局 `IAsyncEventBus`，也不会跨 `MicroObject` 广播。
+
+```csharp
+IDisposable subscription = session.Subscribe<MessageStored>(async (domainEvent, ct) =>
+{
+    // 处理同一个 MicroObject 内发布的 MessageStored。
+});
+
+await session.PublishAsync(new MessageStored(session.Id, message.Id), ct);
+subscription.Dispose(); // 幂等，可重复调用
+```
+
+`MicroComponent` 提供同名 helper，组件内通常直接转调宿主：
+
+```csharp
+public sealed class SummaryComponent : MicroComponent
+{
+    private IDisposable? _subscription;
+
+    protected override ValueTask OnInitializedAsync(CancellationToken ct = default)
+    {
+        _subscription = Subscribe<MessageStored>(OnMessageStoredAsync);
+        return ValueTask.CompletedTask;
+    }
+
+    protected override ValueTask OnUninitializedAsync(CancellationToken ct = default)
+    {
+        _subscription?.Dispose();
+        _subscription = null;
+        return ValueTask.CompletedTask;
+    }
+
+    private ValueTask OnMessageStoredAsync(MessageStored domainEvent, CancellationToken ct)
+        => PublishAsync(new SummaryInvalidated(domainEvent.SessionId), ct);
+}
+```
+
+事件分发语义：
+
+- 订阅按事件实例的运行时精确类型匹配，不做基类或接口广播。
+- 发布前复制订阅快照，释放订阅表锁后按订阅顺序 `await` handler。
+- handler 内允许再次 `PublishAsync`；重入发布会使用当时的新快照。
+- 普通异常会继续调用后续 handler；单个失败原样重新抛出，多个失败抛 `AggregateException`。
+- 传入 token 已取消时会停止分发并传播取消；handler 抛出的 `OperationCanceledException` 只有在该 token 已取消时才按取消处理，否则按普通异常收集。
+- `MicroComponent.GetRequiredComponent<T>()` 可用于强依赖组件读取；缺失时抛 `InvalidOperationException`，可选依赖仍使用 `GetComponent<T>()`。
+
 ### 不走引擎的局部使用
 
 `MicroObject` 不是必须注册到引擎。如果只是想借用"对象 + 组件"这个组合模式，可以直接 `new MyObject()`，然后 `AddComponentAsync` 手动挂组件——此时组件停在 `Attached` 态，`OnInitializedAsync` 等钩子**不会**自动触发。需要的话手动调 `component.InitializeAsync()`（`internal`，同 assembly / `InternalsVisibleTo` 下可见）。

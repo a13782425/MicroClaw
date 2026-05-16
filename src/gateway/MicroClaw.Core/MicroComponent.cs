@@ -10,6 +10,21 @@ public abstract class MicroComponent : MicroLifeCycle<MicroObject>
     public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
         => Host?.GetComponent<TComponent>();
 
+    /// <summary>Gets a required component from the host object.</summary>
+    public TComponent GetRequiredComponent<TComponent>() where TComponent : MicroComponent
+    {
+        TComponent? component = GetRequiredHost().GetComponent<TComponent>();
+        return component ?? throw new InvalidOperationException($"Component type '{typeof(TComponent).Name}' is required by '{GetType().Name}' but is not attached to the host MicroObject.");
+    }
+
+    /// <summary>Subscribes to an event type on the host object.</summary>
+    public IDisposable Subscribe<TEvent>(Func<TEvent, CancellationToken, ValueTask> handler) where TEvent : class
+        => GetRequiredHost().Subscribe(handler);
+
+    /// <summary>Publishes an event through the host object.</summary>
+    public ValueTask PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default) where TEvent : class
+        => GetRequiredHost().PublishAsync(domainEvent, cancellationToken);
+
     /// <summary>向宿主对象追加一个已有组件实例。</summary>
     public ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
         => GetRequiredHost().AddComponentAsync(component, cancellationToken);

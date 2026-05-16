@@ -1,4 +1,5 @@
 using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
 
 namespace MicroClaw.Pet;
 
@@ -47,6 +48,36 @@ namespace MicroClaw.Pet;
 /// </remarks>
 public abstract class PetComponent : MicroClaw.Core.MicroComponent
 {
+    /// <summary>Gets the current host as a <see cref="MicroPet"/> when this component is attached to one.</summary>
+    public MicroPet? Pet => Host as MicroPet;
+
+    /// <summary>Gets the current host as a required <see cref="MicroPet"/>.</summary>
+    public MicroPet GetRequiredPet()
+    {
+        MicroPet? pet = Pet;
+        return pet ?? throw new InvalidOperationException($"Pet component '{GetType().Name}' requires a MicroPet host.");
+    }
+
+    /// <summary>Gets the session associated with the host <see cref="MicroPet"/>.</summary>
+    public IMicroSession MicroSession => GetRequiredPet().MicroSession;
+
+    /// <summary>Gets the session id associated with the host <see cref="MicroPet"/>.</summary>
+    public string SessionId => MicroSession.Id;
+
+    /// <summary>Gets a Pet component from the same host.</summary>
+    public TComponent? GetPetComponent<TComponent>() where TComponent : PetComponent
+    {
+        GetRequiredPet();
+        return GetComponent<TComponent>();
+    }
+
+    /// <summary>Gets a required Pet component from the same host.</summary>
+    public TComponent GetRequiredPetComponent<TComponent>() where TComponent : PetComponent
+    {
+        GetRequiredPet();
+        return GetRequiredComponent<TComponent>();
+    }
+
     /// <summary>
     /// 同一 <see cref="MicroChatLifecyclePhase"/> 内的排序权值，越小越先执行，默认 0。
     /// </summary>

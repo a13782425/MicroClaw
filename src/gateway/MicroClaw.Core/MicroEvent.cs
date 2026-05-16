@@ -50,11 +50,27 @@ internal sealed class MicroEvent
             snapshot = subscriptions.ToArray();
         }
 
+        List<Exception>? errors = null;
+
         foreach (Subscription subscription in snapshot)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await subscription.Handler(domainEvent, cancellationToken);
+
+            try
+            {
+                await subscription.Handler(domainEvent, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                (errors ??= []).Add(ex);
+            }
         }
+
+        ThrowIfNeeded(errors);
     }
 
     /// <summary>Clears all subscriptions.</summary>
@@ -82,6 +98,17 @@ internal sealed class MicroEvent
             if (subscriptions.Count == 0)
                 _subscriptions.Remove(eventType);
         }
+    }
+
+    private static void ThrowIfNeeded(IReadOnlyList<Exception>? errors)
+    {
+        if (errors is null || errors.Count == 0)
+            return;
+
+        if (errors.Count == 1)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
+
+        throw new AggregateException(errors);
     }
 
     private sealed class Subscription(

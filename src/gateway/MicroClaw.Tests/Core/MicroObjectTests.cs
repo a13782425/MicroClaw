@@ -44,6 +44,49 @@ public sealed class MicroObjectTests
     }
 
     [Fact]
+    public void GetRequiredComponent_WhenSiblingExists_ReturnsComponent()
+    {
+        var host = new MicroObject();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
+        var sibling = Await(host.AddComponentAsync<RequiredComponent>());
+
+        sibling.GetRequiredComponent<TrackingComponent>().Should().BeSameAs(component);
+    }
+
+    [Fact]
+    public void GetRequiredComponent_WhenSiblingIsMissing_ThrowsInvalidOperationException()
+    {
+        var host = new MicroObject();
+        var component = Await(host.AddComponentAsync<TrackingComponent>());
+
+        Action act = () => component.GetRequiredComponent<RequiredComponent>();
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*RequiredComponent*");
+    }
+
+    [Fact]
+    public async Task MicroComponentEventHelpers_SubscribeAndPublishThroughHostEvents()
+    {
+        var host = new MicroObject();
+        var publisher = await host.AddComponentAsync<TrackingComponent>();
+        var subscriber = await host.AddComponentAsync<RequiredComponent>();
+        var observed = new List<string>();
+
+        IDisposable subscription = subscriber.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        await publisher.PublishAsync(new TestDomainEvent("before"));
+        subscription.Dispose();
+        await publisher.PublishAsync(new TestDomainEvent("after"));
+
+        observed.Should().Equal("before");
+    }
+
+    [Fact]
     public void AddComponent_HostAlreadyActive_InitializesAndActivatesComponent()
     {
         var host = new MicroObject();
@@ -556,6 +599,139 @@ public sealed class MicroObjectTests
         observed.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task PublishAsync_WhenMultipleHandlersThrow_AggregatesFailuresAndInvokesAllHandlers()
+    {
+        var host = new MicroObject();
+        var firstFailure = new InvalidOperationException("first failed");
+        var secondFailure = new ApplicationException("second failed");
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((_, _) => throw firstFailure);
+        host.Subscribe<TestDomainEvent>((_, _) =>
+        {
+            observed.Add("middle");
+            return ValueTask.CompletedTask;
+        });
+        host.Subscribe<TestDomainEvent>((_, _) => throw secondFailure);
+
+        Func<Task> act = () => host.PublishAsync(new TestDomainEvent("aggregate")).AsTask();
+
+        var exception = await act.Should().ThrowAsync<AggregateException>();
+        exception.Which.InnerExceptions.Should().Equal(firstFailure, secondFailure);
+        observed.Should().Equal("middle");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenSingleHandlerThrows_RethrowsOriginalFailureAfterInvokingAllHandlers()
+    {
+        var host = new MicroObject();
+        var failure = new InvalidOperationException("single failed");
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((_, _) => throw failure);
+        host.Subscribe<TestDomainEvent>((_, _) =>
+        {
+            observed.Add("after-failure");
+            return ValueTask.CompletedTask;
+        });
+
+        Func<Task> act = () => host.PublishAsync(new TestDomainEvent("single")).AsTask();
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Should().BeSameAs(failure);
+        observed.Should().Equal("after-failure");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenHandlerThrowsOperationCanceledWithoutRequestedToken_TreatsItAsOrdinaryFailure()
+    {
+        var host = new MicroObject();
+        var failure = new OperationCanceledException("not requested");
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((_, _) => throw failure);
+        host.Subscribe<TestDomainEvent>((_, _) =>
+        {
+            observed.Add("after-cancel-exception");
+            return ValueTask.CompletedTask;
+        });
+
+        Func<Task> act = () => host.PublishAsync(new TestDomainEvent("not-canceled")).AsTask();
+
+        var exception = await act.Should().ThrowAsync<OperationCanceledException>();
+        exception.Which.Should().BeSameAs(failure);
+        observed.Should().Equal("after-cancel-exception");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenHandlerThrowsOperationCanceledWithRequestedToken_StopsAndPropagatesCancellation()
+    {
+        var host = new MicroObject();
+        using var cts = new CancellationTokenSource();
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((_, _) =>
+        {
+            observed.Add("before-cancel");
+            cts.Cancel();
+            throw new OperationCanceledException(cts.Token);
+        });
+        host.Subscribe<TestDomainEvent>((_, _) =>
+        {
+            observed.Add("after-cancel");
+            return ValueTask.CompletedTask;
+        });
+
+        Func<Task> act = () => host.PublishAsync(new TestDomainEvent("canceled"), cts.Token).AsTask();
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        observed.Should().Equal("before-cancel");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenTokenAlreadyCanceled_DoesNotInvokeHandlers()
+    {
+        var host = new MicroObject();
+        using var cts = new CancellationTokenSource();
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        await cts.CancelAsync();
+
+        Func<Task> act = () => host.PublishAsync(new TestDomainEvent("canceled-before-publish"), cts.Token).AsTask();
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        observed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenHandlerPublishesAnotherEvent_AllowsReentrantPublish()
+    {
+        var host = new MicroObject();
+        var observed = new List<string>();
+
+        host.Subscribe<TestDomainEvent>(async (domainEvent, cancellationToken) =>
+        {
+            observed.Add($"outer:{domainEvent.Value}");
+            await host.PublishAsync(new NestedDomainEvent($"nested:{domainEvent.Value}"), cancellationToken);
+        });
+        host.Subscribe<NestedDomainEvent>((domainEvent, _) =>
+        {
+            observed.Add(domainEvent.Value);
+            return ValueTask.CompletedTask;
+        });
+
+        await host.PublishAsync(new TestDomainEvent("root"));
+
+        observed.Should().Equal("outer:root", "nested:root");
+    }
+
     private sealed class NullServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
@@ -601,6 +777,10 @@ public sealed class MicroObjectTests
             DisposedCount++;
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class RequiredComponent : MicroComponent
+    {
     }
 
     private sealed class BlockingAttachComponent : MicroComponent
@@ -770,6 +950,8 @@ public sealed class MicroObjectTests
     }
 
     private sealed record TestDomainEvent(string Value);
+
+    private sealed record NestedDomainEvent(string Value);
 
     private class BaseDomainEvent;
 
