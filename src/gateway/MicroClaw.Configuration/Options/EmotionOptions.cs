@@ -5,7 +5,7 @@ namespace MicroClaw.Configuration;
 /// 情绪行为模式配置，从配置文件 emotion: 节点读取。
 /// 阈值决定当前情绪状态映射到哪种行为模式；各模式的推理参数影响 LLM 的 Temperature / TopP 和 System Prompt 后缀。
 /// </summary>
-[MicroClawYamlConfig("emotion", FileName = "emotion.yaml", IsWritable = true)]
+[MicroClawYamlConfig("emotion", FileName = "emotion.yaml")]
 public sealed class EmotionOptions : IMicroClawConfigTemplate
 {
     // ── 模式切换阈值 ─────────────────────────────────────────────────────────

@@ -83,7 +83,7 @@ public sealed class YamlConfigStoreTests : IDisposable
         File.ReadAllText(filePath).Should().Contain("value: saved");
     }
 
-    [MicroClawYamlConfig("test_store", FileName = "test-store.yaml", IsWritable = true)]
+    [MicroClawYamlConfig("test_store", FileName = "test-store.yaml")]
     private sealed class TestStoreOptions
     {
         public string Value { get; set; } = string.Empty;

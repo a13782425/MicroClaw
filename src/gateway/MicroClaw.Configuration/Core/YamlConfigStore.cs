@@ -1,24 +1,25 @@
-﻿using System.Reflection;
+﻿using System.Collections.Concurrent;
+using System.Reflection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace MicroClaw.Configuration;
-
 public sealed class YamlConfigStore
 {
     private static readonly ISerializer Serializer = new SerializerBuilder().WithNamingConvention(UnderscoredNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.Preserve).Build();
     private static readonly IDeserializer Deserializer = new DeserializerBuilder().WithNamingConvention(UnderscoredNamingConvention.Instance).IgnoreUnmatchedProperties().Build();
     private readonly string _configRootDir;
-    
+    private static ConcurrentDictionary<Type, MicroClawConfigTypeDescriptor>? _descriptors;
+    private static readonly object DescriptorCacheLock = new();
     public YamlConfigStore(string configRootDir)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configRootDir);
-        
+        _descriptors = new ConcurrentDictionary<Type, MicroClawConfigTypeDescriptor>();
         _configRootDir = configRootDir;
     }
     public T? Get<T>(string? directoryPath = null, string? fileName = null) where T : class, new()
     {
-        YamlDocumentDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
+        MicroClawConfigTypeDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
         
         if (string.IsNullOrWhiteSpace(descriptor.FileName))
             return null;
@@ -38,21 +39,11 @@ public sealed class YamlConfigStore
         return Deserializer.Deserialize<T>(sectionYaml);
     }
     
-    public T Update<T>(Func<T, T> updater, string? directoryPath = null, string? fileName = null) where T : class, new()
-    {
-        ArgumentNullException.ThrowIfNull(updater);
-        
-        T current = Get<T>(directoryPath, fileName) ?? new T();
-        T next = updater(current) ?? throw new InvalidOperationException("配置更新委托不能返回 null。");
-        
-        return Save(next, directoryPath, fileName);
-    }
-    
     public T Save<T>(T value, string? directoryPath = null, string? fileName = null) where T : class
     {
         ArgumentNullException.ThrowIfNull(value);
         
-        YamlDocumentDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: true);
+        MicroClawConfigTypeDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: true);
         string filePath = ResolveFilePath(descriptor);
         string yaml = BuildDocument(descriptor, value);
         
@@ -62,7 +53,7 @@ public sealed class YamlConfigStore
     
     public bool Delete<T>(string? directoryPath = null, string? fileName = null) where T : class
     {
-        YamlDocumentDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
+        MicroClawConfigTypeDescriptor descriptor = CreateDescriptor<T>(directoryPath, fileName, requireFileName: false);
         
         if (string.IsNullOrWhiteSpace(descriptor.FileName))
             return false;
@@ -91,14 +82,34 @@ public sealed class YamlConfigStore
         return false;
     }
     
-    private YamlDocumentDescriptor CreateDescriptor<T>(string? directoryPath, string? fileName, bool requireFileName) where T : class
+    private MicroClawConfigTypeDescriptor CreateDescriptor<T>(string? directoryPath, string? fileName, bool requireFileName) where T : class
     {
         Type valueType = typeof(T);
+        lock (DescriptorCacheLock)
+        {
+            if (_descriptors!.TryGetValue(valueType, out MicroClawConfigTypeDescriptor? cachedDescriptor))
+                return cachedDescriptor;
+        }
+        bool implementsContract = typeof(IMicroClawConfigOptions).IsAssignableFrom(valueType);
         MicroClawYamlConfigAttribute? metadata = valueType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false);
+        
+        if (!implementsContract && metadata is null)
+        {
+            throw new InvalidOperationException($"配置类型 {valueType.Name} 必须同时实现 {nameof(IMicroClawConfigOptions)} 并标注 [MicroClawYamlConfig]。");
+        }
+        
+        if (!implementsContract)
+        {
+            throw new InvalidOperationException($"配置类型 {valueType.Name} 标注了 [MicroClawYamlConfig]，但未实现 {nameof(IMicroClawConfigOptions)}。");
+        }
         
         if (metadata is null)
             throw new InvalidOperationException($"配置类型 {valueType.Name} 缺少 [MicroClawYamlConfig]。");
         
+        if (!valueType.IsClass || valueType.IsAbstract)
+        {
+            throw new InvalidOperationException($"配置类型 {valueType.Name} 必须是可实例化的具体 class。");
+        }
         string sectionKey = metadata.SectionKey?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(sectionKey))
             throw new InvalidOperationException($"配置类型 {valueType.Name} 的 SectionKey 不能为空。");
@@ -108,14 +119,24 @@ public sealed class YamlConfigStore
         if (requireFileName && string.IsNullOrWhiteSpace(resolvedFileName))
             throw new InvalidOperationException($"配置类型 {valueType.Name} 缺少可落盘的 FileName 元数据。");
         
+        if (valueType.GetConstructor(Type.EmptyTypes) is null)
+        {
+            throw new InvalidOperationException($"配置类型 {valueType.Name} 必须提供无参构造函数以支持配置绑定。");
+        }
         if (!string.IsNullOrWhiteSpace(resolvedFileName))
             MicroClawConfigPathResolver.EnsureSafeFileName(valueType, resolvedFileName);
         
         string? resolvedDirectoryPath = ResolveDirectoryPath(valueType, directoryPath);
         
-        return new YamlDocumentDescriptor(valueType, sectionKey, resolvedFileName, resolvedDirectoryPath, NormalizeNullable(metadata.HeaderComment));
+        MicroClawConfigTypeDescriptor descriptor = new MicroClawConfigTypeDescriptor(valueType, sectionKey, resolvedFileName, resolvedDirectoryPath, NormalizeNullable(metadata.HeaderComment));
+        lock (DescriptorCacheLock)
+        {
+            EnsureNoDescriptorConflict(descriptor);
+            _descriptors[valueType] = descriptor;
+            return descriptor;
+        }
     }
-
+    
     private string? ResolveDirectoryPath(Type valueType, string? explicitDirectoryPath)
     {
         string? candidate = NormalizeNullable(explicitDirectoryPath);
@@ -125,13 +146,13 @@ public sealed class YamlConfigStore
         
         return MicroClawConfigPathResolver.NormalizeDirectoryPath(valueType, candidate, _configRootDir);
     }
-
-    private string ResolveFilePath(YamlDocumentDescriptor descriptor)
+    
+    private string ResolveFilePath(MicroClawConfigTypeDescriptor descriptor)
     {
-        return MicroClawConfigPathResolver.ResolveFilePath(_configRootDir, descriptor.ValueType, descriptor.FileName, descriptor.DirectoryPath);
+        return MicroClawConfigPathResolver.ResolveFilePath(_configRootDir, descriptor.OptionsType, descriptor.FileName, descriptor.DirectoryPath);
     }
     
-    private static string BuildDocument(YamlDocumentDescriptor descriptor, object value)
+    private static string BuildDocument(MicroClawConfigTypeDescriptor descriptor, object value)
     {
         var wrapper = new Dictionary<string, object> { [descriptor.SectionKey] = value };
         
@@ -144,7 +165,7 @@ public sealed class YamlConfigStore
         
         return string.Join(Environment.NewLine, commentLines) + Environment.NewLine + Environment.NewLine + body;
     }
-
+    
     private static string? ExtractSectionYaml(string content, string sectionKey)
     {
         using var reader = new StringReader(content);
@@ -170,7 +191,7 @@ public sealed class YamlConfigStore
         
         return null;
     }
-
+    
     private static string SerializeNode(YamlNode node)
     {
         var stream = new YamlStream(new YamlDocument(node));
@@ -204,11 +225,19 @@ public sealed class YamlConfigStore
             }
         }
     }
-
+    
     private static string? NormalizeNullable(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
-
-    private sealed record YamlDocumentDescriptor(Type ValueType, string SectionKey, string? FileName, string? DirectoryPath, string? HeaderComment);
+    private static void EnsureNoDescriptorConflict(MicroClawConfigTypeDescriptor descriptor)
+    {
+        foreach (MicroClawConfigTypeDescriptor existingDescriptor in _descriptors!.Values)
+        {
+            if (string.Equals(existingDescriptor.SectionKey, descriptor.SectionKey, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"配置节 '{descriptor.SectionKey}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
+            }
+        }
+    }
 }

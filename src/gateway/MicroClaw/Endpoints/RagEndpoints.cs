@@ -66,20 +66,7 @@ public static class RagEndpoints
                     MaxStorageSizeMb = req.MaxStorageSizeMb,
                     PruneTargetPercent = req.PruneTargetPercent,
                 };
-                MicroClawConfig.Update(updated);
-
-                try
-                {
-                    string configDir = Path.Combine(MicroClawConfig.Env.Home, "config");
-                    Directory.CreateDirectory(configDir);
-                    string yamlContent = $"""
-                                          rag:
-                                            maxStorageSizeMb: {req.MaxStorageSizeMb}
-                                            pruneTargetPercent: {req.PruneTargetPercent}
-                                          """;
-                    File.WriteAllText(Path.Combine(configDir, "rag.yaml"), yamlContent);
-                }
-                catch { }
+                MicroClawConfig.Save(updated);
 
                 return Results.Ok(new { success = true, maxStorageSizeMb = req.MaxStorageSizeMb, pruneTargetPercent = req.PruneTargetPercent });
             })

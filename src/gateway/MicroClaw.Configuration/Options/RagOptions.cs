@@ -4,7 +4,7 @@ namespace MicroClaw.Configuration;
 /// <summary>
 /// RAG 自动遗忘相关配置，映射到配置节 rag。
 /// </summary>
-[MicroClawYamlConfig("rag", FileName = "rag.yaml", IsWritable = true)]
+[MicroClawYamlConfig("rag", FileName = "rag.yaml")]
 public sealed class RagOptions : IMicroClawConfigTemplate
 {
     /// <summary>

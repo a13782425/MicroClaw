@@ -7,7 +7,7 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <c>workflows.yaml</c> 持久化，通过 <see cref="MicroClawConfig.Get{T}"/> 读取，
 /// 通过 <see cref="MicroClawConfig.Save{T}(T)"/> 写回。
 /// </summary>
-[MicroClawYamlConfig("workflows", FileName = "workflows.yaml", IsWritable = true)]
+[MicroClawYamlConfig("workflows", FileName = "workflows.yaml")]
 public sealed class WorkflowsOptions : IMicroClawConfigTemplate
 {
     /// <summary>

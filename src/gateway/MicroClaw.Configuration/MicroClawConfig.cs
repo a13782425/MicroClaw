@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
-using YamlDotNet.RepresentationModel;
 
 namespace MicroClaw.Configuration;
 /// <summary>
@@ -10,17 +9,14 @@ namespace MicroClaw.Configuration;
 /// </summary>
 public static class MicroClawConfig
 {
-    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder()
-        .AddInMemoryCollection([])
-        .Build();
-
+    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
+    
     private static MicroClawConfigEnv? _env;
     private static IConfiguration? _configuration;
     private static ConcurrentDictionary<Type, Lazy<object>>? _options;
-    private static ConcurrentDictionary<Type, MicroClawConfigTypeDescriptor>? _descriptors;
+    private static YamlConfigStore? _store;
     private static string? _configDir;
     private static int _initialized;
-    private static readonly object DescriptorCacheLock = new();
     private static readonly object OptionsCacheLock = new();
     
     /// <summary>
@@ -43,11 +39,10 @@ public static class MicroClawConfig
     {
         EnsureInitialized();
         Type optionType = typeof(T);
-        MicroClawConfigTypeDescriptor descriptor = GetDescriptorOrAdd(optionType);
         
         lock (OptionsCacheLock)
         {
-            Lazy<object> lazyValue = _options!.GetOrAdd(optionType, _ => CreateBoundOptionsLazy(descriptor, _configuration!));
+            Lazy<object> lazyValue = _options!.GetOrAdd(optionType, _ => CreateBoundOptionsLazy<T>(_configuration!));
             
             try
             {
@@ -55,37 +50,9 @@ public static class MicroClawConfig
             }
             catch
             {
-                _options.TryRemove(new KeyValuePair<Type, Lazy<object>>(optionType, lazyValue));
+                _options!.TryRemove(new KeyValuePair<Type, Lazy<object>>(optionType, lazyValue));
                 throw;
             }
-        }
-    }
-
-    /// <summary>
-    /// Registers an additional configuration type for startup-time auto-discovery.
-    /// Call this before building configuration when the type lives outside the core configuration assembly.
-    /// </summary>
-    public static void RegisterConfigType<T>() where T : class
-    {
-        MicroClawConfigTypeRegistry.RegisterType(typeof(T));
-    }
-    
-    /// <summary>
-    /// Hot-update a registered options instance in memory (does NOT persist to YAML).
-    /// Used when API endpoints modify config at runtime.
-    /// </summary>
-    public static void Update<T>(T value) where T : class, new()
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        
-        EnsureInitialized();
-        Type optionType = typeof(T);
-        
-        _ = GetDescriptorOrAdd(optionType);
-        
-        lock (OptionsCacheLock)
-        {
-            _options![optionType] = CreateValueLazy(value);
         }
     }
     
@@ -99,23 +66,10 @@ public static class MicroClawConfig
         
         EnsureInitialized();
         Type optionType = typeof(T);
-        
-        MicroClawConfigTypeDescriptor descriptor = GetDescriptorOrAdd(optionType);
-        if (!descriptor.IsWritable)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 未声明为可写 YAML，不能调用 Save。");
-        }
-        
-        if (string.IsNullOrWhiteSpace(descriptor.FileName))
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少可写 YAML 的 FileName 元数据。");
-        }
 
-        string filePath = GetDescriptorFilePath(descriptor);
-        
         lock (OptionsCacheLock)
         {
-            YamlSectionWriter.Write(filePath, descriptor.SectionKey, value);
+            _store!.Save(value);
             _options![optionType] = CreateValueLazy(value);
         }
     }
@@ -129,17 +83,26 @@ public static class MicroClawConfig
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(configDir);
+        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+            throw new InvalidOperationException("MicroClawConfig.Initialize() 不可重复调用。");
         
-        InitializeCore(configuration, configDir);
+        try
+        {
+            _configuration = configuration;
+            _configDir = configDir;
+            _store = new YamlConfigStore(configDir);
+            _options = new ConcurrentDictionary<Type, Lazy<object>>();
+        }
+        catch
+        {
+            _configuration = null;
+            _options = null;
+            _configDir = null;
+            _store = null;
+            Interlocked.Exchange(ref _initialized, 0);
+            throw;
+        }
     }
-    
-    internal static int CachedDescriptorCount => _descriptors?.Count ?? 0;
-    
-    internal static int CachedOptionsCount => _options?.Count ?? 0;
-    
-    internal static bool IsDescriptorCached<T>() where T : class, new() => _descriptors?.ContainsKey(typeof(T)) ?? false;
-    
-    internal static bool IsOptionCached<T>() where T : class, new() => _options?.ContainsKey(typeof(T)) ?? false;
     
     /// <summary>
     /// 仅供测试使用：重置初始化状态。
@@ -149,264 +112,71 @@ public static class MicroClawConfig
         _env = null;
         _configuration = null;
         _options = null;
-        _descriptors = null;
+        _store = null;
         _configDir = null;
         Interlocked.Exchange(ref _initialized, 0);
     }
-    
-    private static void InitializeCore(IConfiguration configuration, string configDir)
-    {
-        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
-            throw new InvalidOperationException("MicroClawConfig.Initialize() 不可重复调用。");
-        
-        try
-        {
-            _configuration = configuration;
-            _configDir = configDir;
-            _descriptors = new ConcurrentDictionary<Type, MicroClawConfigTypeDescriptor>();
-            _options = new ConcurrentDictionary<Type, Lazy<object>>();
-        }
-        catch
-        {
-            _configuration = null;
-            _options = null;
-            _descriptors = null;
-            _configDir = null;
-            Interlocked.Exchange(ref _initialized, 0);
-            throw;
-        }
-    }
+
     
     private static void EnsureInitialized()
     {
-        if (_configuration is null || _options is null || _descriptors is null || _configDir is null)
+        if (_configuration is null || _options is null || _store is null || _configDir is null)
             throw new InvalidOperationException("MicroClawConfig 尚未初始化，请先调用 MicroClawConfig.Initialize()。");
     }
     
-    private static MicroClawConfigTypeDescriptor GetDescriptorOrAdd(Type optionType)
-    {
-        if (_descriptors!.TryGetValue(optionType, out MicroClawConfigTypeDescriptor? cachedDescriptor))
-            return cachedDescriptor;
-        
-        lock (DescriptorCacheLock)
-        {
-            if (_descriptors.TryGetValue(optionType, out cachedDescriptor))
-                return cachedDescriptor;
-            
-            MicroClawConfigTypeDescriptor descriptor = CreateDescriptor(optionType);
-            EnsureNoDescriptorConflict(descriptor);
-            _descriptors[optionType] = descriptor;
-            return descriptor;
-        }
-    }
-    
-    private static MicroClawConfigTypeDescriptor CreateDescriptor(Type optionType)
-    {
-        bool implementsContract = typeof(IMicroClawConfigOptions).IsAssignableFrom(optionType);
-        MicroClawYamlConfigAttribute? metadata = optionType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false);
-        
-        if (!implementsContract && metadata is null)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 必须同时实现 {nameof(IMicroClawConfigOptions)} 并标注 [MicroClawYamlConfig]。");
-        }
-        
-        if (!implementsContract)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 标注了 [MicroClawYamlConfig]，但未实现 {nameof(IMicroClawConfigOptions)}。");
-        }
-        
-        if (metadata is null)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 实现了 {nameof(IMicroClawConfigOptions)}，但缺少 [MicroClawYamlConfig]。");
-        }
-        
-        if (!optionType.IsClass || optionType.IsAbstract)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 必须是可实例化的具体 class。");
-        }
-        
-        if (optionType.GetConstructor(Type.EmptyTypes) is null)
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 必须提供无参构造函数以支持配置绑定。");
-        }
-        
-        string sectionKey = metadata.SectionKey.Trim();
-        if (string.IsNullOrWhiteSpace(sectionKey))
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 的 SectionKey 不能为空。");
-        }
-        
-        string? fileName = string.IsNullOrWhiteSpace(metadata.FileName) ? null : metadata.FileName.Trim();
-
-        if (typeof(IMicroClawConfigTemplate).IsAssignableFrom(optionType) && string.IsNullOrWhiteSpace(fileName))
-        {
-            throw new InvalidOperationException($"配置类型 {optionType.Name} 实现了 {nameof(IMicroClawConfigTemplate)}，必须显式声明 FileName。");
-        }
-        
-        if (fileName is not null)
-            MicroClawConfigPathResolver.EnsureSafeFileName(optionType, fileName);
-
-        bool isWritable = metadata.IsWritable && !string.IsNullOrWhiteSpace(fileName);
-        
-    return new MicroClawConfigTypeDescriptor(optionType, sectionKey, fileName, isWritable);
-    }
-    
-    private static void EnsureNoDescriptorConflict(MicroClawConfigTypeDescriptor descriptor)
-    {
-        foreach (MicroClawConfigTypeDescriptor existingDescriptor in _descriptors!.Values)
-        {
-            if (string.Equals(existingDescriptor.SectionKey, descriptor.SectionKey, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"配置节 '{descriptor.SectionKey}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
-            }
-            
-            if (descriptor.FileName is { } fileName && existingDescriptor.FileName is not null)
-            {
-                string descriptorPath = GetDescriptorFilePath(descriptor);
-                string existingFilePath = GetDescriptorFilePath(existingDescriptor);
-
-                if (string.Equals(existingFilePath, descriptorPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidOperationException($"YAML 文件 '{fileName}' 被类型 {existingDescriptor.OptionsType.FullName} 和 {descriptor.OptionsType.FullName} 重复声明。");
-                }
-            }
-        }
-    }
-    
-    private static Lazy<object> CreateBoundOptionsLazy(MicroClawConfigTypeDescriptor descriptor, IConfiguration configuration)
+    private static Lazy<object> CreateBoundOptionsLazy<T>(IConfiguration configuration) where T : class, new()
     {
         return new Lazy<object>(() =>
         {
-            object instance = Activator.CreateInstance(descriptor.OptionsType)!;
-            IConfigurationSection runtimeSection = configuration.GetSection(descriptor.SectionKey);
-            (Dictionary<string, string?> dedicatedValues, bool dedicatedSectionExists) = LoadDedicatedValues(descriptor);
-            bool runtimeSectionExists = runtimeSection.Exists();
-            if (dedicatedSectionExists || runtimeSectionExists)
-            {
-                IConfigurationSection effectiveSection = BuildEffectiveSection(descriptor.SectionKey, dedicatedValues, runtimeSection, runtimeSectionExists);
-                YamlAwareBinder.Bind(effectiveSection, instance);
-            }
+            Type optionType = typeof(T);
+            T? storedInstance = _store!.Get<T>();
 
+            MicroClawYamlConfigAttribute metadata = GetYamlMetadataOrThrow(optionType);
+            string sectionKey = metadata.SectionKey.Trim();
+            string? fileName = NormalizeFileName(metadata.FileName);
+            T instance = storedInstance ?? new T();
+            IConfigurationSection runtimeSection = configuration.GetSection(sectionKey);
+            bool runtimeSectionExists = runtimeSection.Exists();
+            if (runtimeSectionExists)
+                YamlAwareBinder.Bind(runtimeSection, instance);
+            
             if (instance is not IMicroClawConfigTemplate templateProvider)
                 return instance;
-
-            if (dedicatedSectionExists || runtimeSectionExists)
+            
+            if (storedInstance is not null || runtimeSectionExists)
                 return instance;
 
-            return MaterializeTemplate(descriptor, templateProvider);
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                throw new InvalidOperationException($"配置类型 {optionType.Name} 实现了 {nameof(IMicroClawConfigTemplate)}，必须显式声明 FileName。");
+            }
+            
+            return MaterializeTemplate<T>(optionType, fileName, templateProvider);
         }, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
-    private static (Dictionary<string, string?> Values, bool Exists) LoadDedicatedValues(MicroClawConfigTypeDescriptor descriptor)
+    private static T MaterializeTemplate<T>(Type optionType, string fileName, IMicroClawConfigTemplate templateProvider) where T : class, new()
     {
-        if (string.IsNullOrWhiteSpace(descriptor.FileName))
-            return ([], false);
-
-        string filePath = GetDescriptorFilePath(descriptor);
-        if (!File.Exists(filePath))
-            return ([], false);
-
-        Dictionary<string, string?> values = ParseYamlFile(filePath);
-        IConfiguration dedicatedConfiguration = new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
-            .Build();
-
-        IConfigurationSection section = dedicatedConfiguration.GetSection(descriptor.SectionKey);
-        return (values, section.Exists());
-    }
-
-    private static IConfigurationSection BuildEffectiveSection(
-        string sectionKey,
-        Dictionary<string, string?> dedicatedValues,
-        IConfigurationSection runtimeSection,
-        bool runtimeSectionExists)
-    {
-        var mergedValues = new Dictionary<string, string?>(dedicatedValues, StringComparer.OrdinalIgnoreCase);
-
-        if (runtimeSectionExists)
+        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate() ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板不能为空。");
+        
+        if (template is not T typedTemplate)
         {
-            foreach ((string key, string? value) in runtimeSection.AsEnumerable())
-            {
-                if (string.IsNullOrWhiteSpace(key))
-                    continue;
-
-                mergedValues[key] = value;
-            }
+            throw new InvalidOperationException($"配置类型 {optionType.Name} 的默认模板实例类型必须与 {optionType.Name} 兼容。");
         }
-
-        IConfiguration mergedConfiguration = new ConfigurationBuilder()
-            .AddInMemoryCollection(mergedValues)
-            .Build();
-
-        return mergedConfiguration.GetSection(sectionKey);
+        
+        _store!.Save(typedTemplate, fileName: fileName);
+        return typedTemplate;
     }
 
-    private static Dictionary<string, string?> ParseYamlFile(string filePath)
+    private static MicroClawYamlConfigAttribute GetYamlMetadataOrThrow(Type optionType)
     {
-        using var reader = new StreamReader(filePath);
-        var yaml = new YamlStream();
-        yaml.Load(reader);
-
-        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        if (yaml.Documents.Count == 0)
-            return result;
-
-        if (yaml.Documents[0].RootNode is YamlMappingNode root)
-            FlattenNode(root, string.Empty, result);
-
-        return result;
+        return optionType.GetCustomAttribute<MicroClawYamlConfigAttribute>(inherit: false)
+               ?? throw new InvalidOperationException($"配置类型 {optionType.Name} 缺少 [MicroClawYamlConfig]。");
     }
 
-    private static void FlattenNode(YamlNode node, string prefix, Dictionary<string, string?> result)
+    private static string? NormalizeFileName(string? fileName)
     {
-        switch (node)
-        {
-            case YamlMappingNode mapping:
-                foreach (var entry in mapping.Children)
-                {
-                    var key = ((YamlScalarNode)entry.Key).Value!;
-                    var fullKey = string.IsNullOrEmpty(prefix)
-                        ? key
-                        : ConfigurationPath.Combine(prefix, key);
-                    FlattenNode(entry.Value, fullKey, result);
-                }
-                break;
-
-            case YamlSequenceNode sequence:
-                int index = 0;
-                foreach (var item in sequence.Children)
-                {
-                    var fullKey = ConfigurationPath.Combine(prefix, index.ToString());
-                    FlattenNode(item, fullKey, result);
-                    index++;
-                }
-                break;
-
-            case YamlScalarNode scalar:
-                result[prefix] = scalar.Value;
-                break;
-        }
-    }
-
-    private static object MaterializeTemplate(MicroClawConfigTypeDescriptor descriptor, IMicroClawConfigTemplate templateProvider)
-    {
-        IMicroClawConfigOptions template = templateProvider.CreateDefaultTemplate()
-            ?? throw new InvalidOperationException($"配置类型 {descriptor.OptionsType.Name} 的默认模板不能为空。");
-
-        if (!descriptor.OptionsType.IsInstanceOfType(template))
-        {
-            throw new InvalidOperationException(
-                $"配置类型 {descriptor.OptionsType.Name} 的默认模板实例类型必须与 {descriptor.OptionsType.Name} 兼容。");
-        }
-
-        string filePath = GetDescriptorFilePath(descriptor);
-        YamlSectionWriter.Write(filePath, descriptor.SectionKey, template);
-        return template;
-    }
-
-    private static string GetDescriptorFilePath(MicroClawConfigTypeDescriptor descriptor)
-    {
-        return MicroClawConfigPathResolver.ResolveFilePath(_configDir!, descriptor.OptionsType, descriptor.FileName);
+        return string.IsNullOrWhiteSpace(fileName) ? null : fileName.Trim();
     }
     
     private static Lazy<object> CreateValueLazy(object value)

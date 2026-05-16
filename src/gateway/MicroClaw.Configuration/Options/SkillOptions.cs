@@ -3,7 +3,7 @@ namespace MicroClaw.Configuration;
 /// <summary>
 /// Skills 模块配置选项，从配置文件 skills: 节点读取。
 /// </summary>
-[MicroClawYamlConfig("skills", FileName = "skills.yaml", IsWritable = true)]
+[MicroClawYamlConfig("skills", FileName = "skills.yaml")]
 public sealed class SkillOptions : IMicroClawConfigTemplate
 {
     /// <summary>

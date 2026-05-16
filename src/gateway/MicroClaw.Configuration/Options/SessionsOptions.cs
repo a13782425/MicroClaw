@@ -7,7 +7,7 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <c>sessions.yaml</c> 持久化，通过 <see cref="MicroClawConfig.Get{T}"/> 读取，
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
-[MicroClawYamlConfig("sessions", FileName = "sessions.yaml", IsWritable = true)]
+[MicroClawYamlConfig("sessions", FileName = "sessions.yaml")]
 public sealed class SessionsOptions : IMicroClawConfigTemplate
 {
     /// <summary>

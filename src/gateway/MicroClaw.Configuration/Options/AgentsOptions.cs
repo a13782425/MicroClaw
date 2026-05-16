@@ -6,7 +6,7 @@ namespace MicroClaw.Configuration.Options;
 /// 通过 <c>agents.yaml</c> 持久化，通过 <see cref="MicroClawConfig.Get{T}"/> 读取，
 /// 通过 <see cref="MicroClawConfig.Save{T}"/> 写回。
 /// </summary>
-[MicroClawYamlConfig("agents", FileName = "agents.yaml", IsWritable = true)]
+[MicroClawYamlConfig("agents", FileName = "agents.yaml")]
 public sealed class AgentsOptions : IMicroClawConfigTemplate
 {
     /// <summary>

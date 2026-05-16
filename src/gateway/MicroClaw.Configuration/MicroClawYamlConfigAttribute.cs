@@ -22,10 +22,4 @@ public sealed class MicroClawYamlConfigAttribute(string sectionKey) : Attribute
     /// Gets or sets the header comment that should be emitted before the YAML document.
     /// </summary>
     public string? HeaderComment { get; set; }
-    
-    /// <summary>
-    /// Gets or sets a value indicating whether the option type supports YAML write-back.
-    /// Effective write-back still requires an explicit <see cref="FileName"/>.
-    /// </summary>
-    public bool IsWritable { get; set; } = true;
 }
