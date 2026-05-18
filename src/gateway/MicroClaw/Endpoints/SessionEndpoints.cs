@@ -6,6 +6,7 @@ using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Endpoints.Session;
 using MicroClaw.Hubs;
 using MicroClaw.Pet;
 using MicroClaw.Providers;
@@ -20,48 +21,19 @@ public static class SessionEndpoints
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）
-        endpoints.MapGet("/sessions", (ISessionService repo) => Results.Ok(repo.GetAll().Select(s => s.ToInfo()).ToList())).WithTags("Sessions");
-        
-        // POST /api/sessions— 创建会话
-        endpoints.MapPost("/sessions", async (CreateSessionRequest req, ISessionService service, ProviderService providerStore, IMicroAgentService agentService, ChannelService channelStore, SessionDnaService sessionDna) =>
-        {
-            if (string.IsNullOrWhiteSpace(req.Title))
-                return Results.BadRequest(new { success = false, message = "Title is required.", errorCode = "BAD_REQUEST" });
-            if (string.IsNullOrWhiteSpace(req.ProviderId))
-                return Results.BadRequest(new { success = false, message = "ProviderId is required.", errorCode = "BAD_REQUEST" });
-            
-            ProviderEntityConfig? provider = providerStore.All.FirstOrDefault(p => p.Id == req.ProviderId);
-            if (provider is null)
-                return Results.NotFound(new { success = false, message = $"Provider '{req.ProviderId}' not found.", errorCode = "NOT_FOUND" });
-            if (string.Equals(provider.ModelType, "embedding", StringComparison.OrdinalIgnoreCase))
-                return Results.BadRequest(new { success = false, message = "Embedding providers cannot be bound to sessions.", errorCode = "BAD_REQUEST" });
-            
-            // 解析 ChannelId：默认使用内置 web channel
-            string channelId = string.IsNullOrWhiteSpace(req.ChannelId) ? ChannelUtils.WebChannelId : req.ChannelId;
-            ChannelEntityConfig? channel = channelStore.GetById(channelId);
-            if (channel is null)
-                return Results.NotFound(new { success = false, message = $"Channel '{channelId}' not found.", errorCode = "NOT_FOUND" });
-            
-            // 解析 AgentId：默认使用 main agent
-            string? agentId = string.IsNullOrWhiteSpace(req.AgentId) ? agentService.GetDefault()?.Id : req.AgentId;
-            if (!string.IsNullOrWhiteSpace(req.AgentId) && agentService.GetById(req.AgentId) is null)
-                return Results.NotFound(new { success = false, message = $"Agent '{req.AgentId}' not found.", errorCode = "NOT_FOUND" });
-            
-            IMicroSession created = await service.CreateSession(req.Title.Trim(), req.ProviderId, channel.ChannelType, channelId: channelId, agentId: agentId);
-            sessionDna.InitializeSession(created.Id);
-            return Results.Ok(created.ToInfo());
-        }).WithTags("Sessions");
-        
+        endpoints.RegisterEndpoint(new GetSessionsEndpoint())
+            .RegisterEndpoint(new CreateSessionEndpoint());
+    
         // POST /api/sessions/delete — 删除会话
         endpoints.MapPost("/sessions/delete", async (DeleteSessionRequest req, ISessionService service, SessionDnaService sessionDna, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
                 return Results.BadRequest(new { success = false, message = "Id is required.", errorCode = "BAD_REQUEST" });
-
+            
             IMicroSession? session = service.Get(req.Id);
             if (session is null)
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
-
+            
             // Release Pet context before deletion
             if (session.Pet is IAsyncDisposable asyncDisposable)
             {
@@ -71,18 +43,18 @@ public static class SessionEndpoints
             {
                 disposable.Dispose();
             }
-
+            
             // TODO: Close MicroRag database when session is deleted
-
+            
             // Delete session DNA files (USER.md / AGENTS.md)
             sessionDna.DeleteSessionDnaFiles(req.Id);
-
+            
             service.Delete(req.Id);
             return Results.Ok();
         }).WithTags("Sessions");
         
         // POST /api/sessions/approve — 审批会话（仅 admin）
-        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionService service, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/approve", async (ApproveSessionRequest req, ISessionService service, PetService petService, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -94,6 +66,7 @@ public static class SessionEndpoints
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             
             session.Approve(req.Reason);
+            await petService.ActivateAsync(session, ct);
             service.Save(session);
             
             
@@ -102,7 +75,7 @@ public static class SessionEndpoints
         }).WithTags("Sessions");
         
         // POST /api/sessions/disable — 禁用会话（仅 admin）
-        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionService service, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
+        endpoints.MapPost("/sessions/disable", async (DisableSessionRequest req, ISessionService service, PetService petService, ClaimsPrincipal user, IHubContext<GatewayHub> hub, CancellationToken ct) =>
         {
             if (!user.IsInRole("admin"))
                 return Results.Forbid();
@@ -114,6 +87,7 @@ public static class SessionEndpoints
                 return Results.NotFound(new { success = false, message = $"Session '{req.Id}' not found.", errorCode = "NOT_FOUND" });
             
             session.Disable(req.Reason);
+            await petService.DeactivateAsync(session, ct);
             service.Save(session);
             
             await hub.Clients.All.SendAsync("sessionDisabled", new { sessionId = session.Id, title = session.Title }, ct);
@@ -180,7 +154,7 @@ public static class SessionEndpoints
                     if (MessageVisibility.IsVisibleToFrontend(item.Visibility))
                         await WriteSseAsync(ctx.Response, StreamItemSerializer.Serialize(item), ct);
                     
-                    if (item is ErrorItem) break;  // 错误终止，不再发 done
+                    if (item is ErrorItem) break; // 错误终止，不再发 done
                 }
                 
                 await WriteSseAsync(ctx.Response, JsonSerializer.Serialize(new { type = "done" }, JsonOpts), ct);

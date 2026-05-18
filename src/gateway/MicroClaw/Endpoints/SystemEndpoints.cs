@@ -31,11 +31,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers", (ProviderCreateRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
-                return ApiErrors.BadRequest("DisplayName is required.");
+                return EndpointErrors.BadRequest("DisplayName is required.");
             if (string.IsNullOrWhiteSpace(req.ModelName))
-                return ApiErrors.BadRequest("ModelName is required.");
+                return EndpointErrors.BadRequest("ModelName is required.");
             if (string.IsNullOrWhiteSpace(req.ApiKey))
-                return ApiErrors.BadRequest("ApiKey is required.");
+                return EndpointErrors.BadRequest("ApiKey is required.");
 
             ProviderEntityConfig entity = new()
             {
@@ -60,11 +60,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers/update", (ProviderUpdateRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return ApiErrors.BadRequest("Id is required.");
+                return EndpointErrors.BadRequest("Id is required.");
 
             ProviderEntityConfig? existing = store.GetById(req.Id);
             if (existing is null)
-                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Provider '{req.Id}' not found.");
 
             ProviderEntityConfig incoming = existing with
             {
@@ -81,7 +81,7 @@ public static class SystemEndpoints
 
             ProviderEntityConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
-                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Provider '{req.Id}' not found.");
 
             return Results.Ok(new { updated.Id });
         })
@@ -90,11 +90,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers/delete", (ProviderDeleteRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return ApiErrors.BadRequest("Id is required.");
+                return EndpointErrors.BadRequest("Id is required.");
 
             bool deleted = store.Delete(req.Id);
             if (!deleted)
-                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Provider '{req.Id}' not found.");
 
             return Results.Ok();
         })
@@ -103,11 +103,11 @@ public static class SystemEndpoints
         endpoints.MapPost("/providers/set-default", (ProviderSetDefaultRequest req, ProviderService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return ApiErrors.BadRequest("Id is required.");
+                return EndpointErrors.BadRequest("Id is required.");
 
             bool ok = store.SetDefault(req.Id);
             if (!ok)
-                return ApiErrors.NotFound($"Provider '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Provider '{req.Id}' not found.");
 
             return Results.Ok();
         })

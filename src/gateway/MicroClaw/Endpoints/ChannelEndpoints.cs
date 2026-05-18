@@ -66,7 +66,7 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels", (ChannelCreateRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.DisplayName))
-                return ApiErrors.BadRequest("DisplayName is required.");
+                return EndpointErrors.BadRequest("DisplayName is required.");
 
             ChannelEntityConfig channel = new()
             {
@@ -84,7 +84,7 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels/update", (ChannelUpdateRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return ApiErrors.BadRequest("Id is required.");
+                return EndpointErrors.BadRequest("Id is required.");
 
             ChannelEntityConfig incoming = new()
             {
@@ -96,7 +96,7 @@ public static class ChannelEndpoints
 
             ChannelEntityConfig? updated = store.Update(req.Id, incoming);
             if (updated is null)
-                return ApiErrors.NotFound($"Channel '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Channel '{req.Id}' not found.");
 
             return Results.Ok(new { updated.Id });
         })
@@ -105,11 +105,11 @@ public static class ChannelEndpoints
         endpoints.MapPost("/channels/delete", (ChannelDeleteRequest req, ChannelService store) =>
         {
             if (string.IsNullOrWhiteSpace(req.Id))
-                return ApiErrors.BadRequest("Id is required.");
+                return EndpointErrors.BadRequest("Id is required.");
 
             bool deleted = store.Delete(req.Id);
             if (!deleted)
-                return ApiErrors.NotFound($"Channel '{req.Id}' not found.");
+                return EndpointErrors.NotFound($"Channel '{req.Id}' not found.");
 
             return Results.Ok();
         })
@@ -121,7 +121,7 @@ public static class ChannelEndpoints
             CancellationToken ct) =>
         {
             if (!channelService.TryGet(id, out IChannel? channel))
-                return ApiErrors.NotFound($"Channel '{id}' not found.");
+                return EndpointErrors.NotFound($"Channel '{id}' not found.");
 
             ChannelTestResult result = await channel.TestConnectionAsync(ct);
             return Results.Ok(result);
@@ -135,12 +135,12 @@ public static class ChannelEndpoints
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.TargetId))
-                return ApiErrors.BadRequest("TargetId is required.");
+                return EndpointErrors.BadRequest("TargetId is required.");
             if (string.IsNullOrWhiteSpace(req.Content))
-                return ApiErrors.BadRequest("Content is required.");
+                return EndpointErrors.BadRequest("Content is required.");
 
             if (!channelService.TryGet(id, out IChannel? channel) || !channel.Config.IsEnabled)
-                return ApiErrors.NotFound($"Channel '{id}' not found or disabled.");
+                return EndpointErrors.NotFound($"Channel '{id}' not found or disabled.");
 
             ChannelMessage message = new(req.TargetId.Trim(), req.Content, DateTimeOffset.UtcNow);
             await channel.PublishAsync(message, ct);
@@ -156,7 +156,7 @@ public static class ChannelEndpoints
             CancellationToken ct) =>
         {
             if (!channelService.TryGet(id, out IChannel? channel))
-                return ApiErrors.NotFound($"Channel '{id}' not found.");
+                return EndpointErrors.NotFound($"Channel '{id}' not found.");
 
             ChannelDiagnostics diag = await channel.GetDiagnosticsAsync(ct);
             return Results.Ok(diag);
@@ -170,7 +170,7 @@ public static class ChannelEndpoints
             CancellationToken ct) =>
         {
             if (!channelService.TryGet(id, out IChannel? channel))
-                return ApiErrors.NotFound($"Channel '{id}' not found.");
+                return EndpointErrors.NotFound($"Channel '{id}' not found.");
 
             ChannelDiagnostics diag = await channel.GetDiagnosticsAsync(ct);
             return Results.Ok(new
@@ -204,7 +204,7 @@ public static class ChannelEndpoints
             if (!channelService.TryGet(channelId, out IChannel? channel) || !channel.Config.IsEnabled)
             {
                 logger.LogWarning("渠道未找到或已禁用 channelId={ChannelId}", channelId);
-                return ApiErrors.NotFound("Channel not found or disabled.");
+                return EndpointErrors.NotFound("Channel not found or disabled.");
             }
 
             Dictionary<string, string?> headers = BuildHeaders(context);
@@ -228,7 +228,7 @@ public static class ChannelEndpoints
             if (!channelService.TryGet(channelId, out IChannel? channel) || !channel.Config.IsEnabled)
             {
                 logger.LogWarning("渠道未找到或已禁用 channelId={ChannelId}", channelId);
-                return ApiErrors.NotFound("Channel not found or disabled.");
+                return EndpointErrors.NotFound("Channel not found or disabled.");
             }
 
             using StreamReader reader = new(context.Request.Body);

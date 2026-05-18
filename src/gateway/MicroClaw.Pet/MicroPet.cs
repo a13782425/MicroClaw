@@ -192,6 +192,15 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         State = PetContextState.Active;
     }
+
+    /// <summary>
+    /// Marks the current PetContext as disabled without driving MicroObject lifecycle transitions.
+    /// </summary>
+    internal void Disable()
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        State = PetContextState.Disabled;
+    }
     
     // ── IPet.HandleChatAsync — 完整消息处理 ─────────────────────────────────
     

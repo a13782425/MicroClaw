@@ -28,9 +28,12 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public class MicroSession : MicroObject, IMicroSession
 {
-    private MicroSession(SessionEntityConfig entityConfig)
+    private readonly IServiceProvider _serviceProvider;
+
+    private MicroSession(SessionEntityConfig entityConfig, IServiceProvider serviceProvider)
     {
         EntityConfig = entityConfig ?? throw new ArgumentNullException(nameof(entityConfig));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
     public SessionEntityConfig EntityConfig { get; private set; }
     
@@ -54,7 +57,7 @@ public class MicroSession : MicroObject, IMicroSession
     
     public static async Task<MicroSession> CreateAsync(SessionEntityConfig entityConfig, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
-        MicroSession session = new(entityConfig);
+        MicroSession session = new(entityConfig, serviceProvider);
         await session.AddComponentAsync<SessionMessagesComponent>(cancellationToken);
         session.Pet = await serviceProvider.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
         return session;
@@ -92,6 +95,8 @@ public class MicroSession : MicroObject, IMicroSession
             yield return new ErrorItem("会话尚未获得批准，请联系管理员。");
             yield break;
         }
+
+        Pet = await _serviceProvider.GetRequiredService<PetService>().ActivateAsync(this, ct);
         
         if (Pet is null)
         {
