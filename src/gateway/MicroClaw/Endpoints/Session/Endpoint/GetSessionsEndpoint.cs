@@ -1,5 +1,5 @@
 ﻿using MicroClaw.Abstractions.Sessions;
-namespace MicroClaw.Endpoints.Session;
+namespace MicroClaw.Endpoints;
 
 /// <summary>
 /// GET /api/sessions — 获取顶层会话（子代理会话不对外暴露）

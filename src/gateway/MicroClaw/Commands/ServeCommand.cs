@@ -196,6 +196,7 @@ public class ServeCommand : Command
 		{
 			options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 			options.SerializerOptions.PropertyNameCaseInsensitive = true;
+			options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 		});
 
 		builder.Services.AddEndpointsApiExplorer();

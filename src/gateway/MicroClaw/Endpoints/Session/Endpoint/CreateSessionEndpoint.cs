@@ -6,7 +6,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Providers;
 using Microsoft.AspNetCore.Mvc;
 
-namespace MicroClaw.Endpoints.Session;
+namespace MicroClaw.Endpoints;
 /// <summary>
 /// POST /api/sessions— 创建会话
 /// </summary>
