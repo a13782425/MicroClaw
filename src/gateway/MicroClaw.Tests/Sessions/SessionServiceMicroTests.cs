@@ -10,6 +10,7 @@ using MicroClaw.Hubs;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Sessions.Components;
 using MicroClaw.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -72,6 +73,49 @@ public sealed class SessionServiceMicroTests : IDisposable
     }
 
     [Fact]
+    public async Task StartAsync_WhenWarmupFails_DisposesCreatedSessions()
+    {
+        InitializeConfig(
+        [
+            new SessionEntityConfig
+            {
+                Id = "s-duplicate",
+                Title = "T1",
+                ProviderId = "p",
+                ChannelType = "web",
+                ChannelId = "web",
+                CreatedAtMs = 1,
+            },
+            new SessionEntityConfig
+            {
+                Id = "s-duplicate",
+                Title = "T2",
+                ProviderId = "p",
+                ChannelType = "web",
+                ChannelId = "web",
+                CreatedAtMs = 2,
+            },
+        ]);
+
+        List<(MicroSession Session, SessionMessagesComponent Component)> createdSessions = [];
+        (SessionService service, _) = CreateSessionService(session =>
+        {
+            var microSession = (MicroSession)session;
+            createdSessions.Add((microSession, microSession.GetComponent<SessionMessagesComponent>()!));
+        });
+        MicroEngine engine = new(new TestServiceProvider(), [service]);
+
+        Func<Task> act = async () => await engine.StartAsync();
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Duplicate session id 's-duplicate'*");
+        createdSessions.Should().ContainSingle();
+        createdSessions[0].Session.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
+        createdSessions[0].Component.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
+        ((ISessionService)service).GetAll().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task StopAsync_DisposesEachSessionAndReleasesComponents()
     {
         InitializeConfig(
@@ -123,6 +167,39 @@ public sealed class SessionServiceMicroTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateSession_WhenDuplicateId_DisposesRejectedSession()
+    {
+        InitializeConfig([]);
+
+        List<(MicroSession Session, SessionMessagesComponent Component)> createdSessions = [];
+        (SessionService service, _) = CreateSessionService(session =>
+        {
+            var microSession = (MicroSession)session;
+            createdSessions.Add((microSession, microSession.GetComponent<SessionMessagesComponent>()!));
+        });
+        MicroEngine engine = new(new TestServiceProvider(), [service]);
+
+        await engine.StartAsync();
+        try
+        {
+            IMicroSession first = await service.CreateSession(title: "first", providerId: "p", id: "same-id");
+            Func<Task> act = async () => await service.CreateSession(title: "second", providerId: "p", id: "same-id");
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*Session 'same-id' already exists in cache.*");
+            createdSessions.Should().HaveCount(2);
+            createdSessions[0].Session.Should().BeSameAs(first);
+            createdSessions[0].Session.LifeCycleState.Should().NotBe(MicroLifeCycleState.Disposed);
+            createdSessions[1].Session.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
+            createdSessions[1].Component.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
+        }
+        finally
+        {
+            await engine.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task Delete_DisposesSessionAndReleasesComponents()
     {
         InitializeConfig(
@@ -166,7 +243,7 @@ public sealed class SessionServiceMicroTests : IDisposable
             Directory.Delete(_tempRoot, recursive: true);
     }
 
-    private (SessionService Service, PetService PetService) CreateSessionService()
+    private (SessionService Service, PetService PetService) CreateSessionService(Action<IMicroSession>? onCreateOrLoad = null)
     {
         IHubContext<GatewayHub> hubContext = Substitute.For<IHubContext<GatewayHub>>();
         IMicroAgentService agentService = Substitute.For<IMicroAgentService>();
@@ -185,7 +262,7 @@ public sealed class SessionServiceMicroTests : IDisposable
         sp.GetService(typeof(ILogger<PetService>)).Returns(logger);
 
         PetService petService = Substitute.For<PetService>(sp);
-        petService.CreateOrLoadAsync(Arg.Any<IMicroSession>(), Arg.Any<CancellationToken>())
+        petService.CreateOrLoadAsync(Arg.Do<IMicroSession>(session => onCreateOrLoad?.Invoke(session)), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IPet?>(null));
         sp.GetService(typeof(PetService)).Returns(petService);
 
@@ -217,6 +294,7 @@ public sealed class SessionServiceMicroTests : IDisposable
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(data).Build();
         MicroClawConfig.Initialize(configuration, Path.Combine(_tempRoot, "config"));
+        MicroClawConfig.Save(new SessionsOptions { Items = sessions.Select(e => e.DeepClone()).ToList() });
     }
 
     private static void ResetMicroClawConfig()

@@ -7,6 +7,7 @@ using MicroClaw.Channels;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Pet;
+using MicroClaw.Sessions.Components;
 using MicroClaw.Streaming;
 using MicroClaw.Utils;
 
@@ -58,9 +59,17 @@ public class MicroSession : MicroObject, IMicroSession
     public static async Task<MicroSession> CreateAsync(SessionEntityConfig entityConfig, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
         MicroSession session = new(entityConfig, serviceProvider);
-        await session.AddComponentAsync<SessionMessagesComponent>(cancellationToken);
-        session.Pet = await serviceProvider.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
-        return session;
+        try
+        {
+            await session.AddComponentAsync<SessionMessagesComponent>(cancellationToken);
+            session.Pet = await serviceProvider.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
+            return session;
+        }
+        catch
+        {
+            await session.DisposeAsync();
+            throw;
+        }
     }
     
     public void Approve(string? reason = null)

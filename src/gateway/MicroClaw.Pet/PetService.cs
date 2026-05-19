@@ -34,7 +34,7 @@ public class PetService : MicroService
     /// <summary>
     /// 为指定 Session 创建或加载运行时 Pet。
     /// </summary>
-    public async Task<IPet?> CreateOrLoadAsync(IMicroSession session, CancellationToken ct = default)
+    public virtual async Task<IPet?> CreateOrLoadAsync(IMicroSession session, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentException.ThrowIfNullOrWhiteSpace(session.Id);
@@ -90,7 +90,7 @@ public class PetService : MicroService
     /// <summary>
     /// 激活指定 Session 的运行时 Pet。
     /// </summary>
-    public async Task<IPet?> ActivateAsync(IMicroSession session, CancellationToken ct = default)
+    public virtual async Task<IPet?> ActivateAsync(IMicroSession session, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         
@@ -107,7 +107,7 @@ public class PetService : MicroService
     /// <summary>
     /// 停用指定 Session 的运行时 Pet。
     /// </summary>
-    public async Task<IPet?> DeactivateAsync(IMicroSession session, CancellationToken ct = default)
+    public virtual async Task<IPet?> DeactivateAsync(IMicroSession session, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         

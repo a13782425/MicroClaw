@@ -10,6 +10,7 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Hubs;
 using MicroClaw.Infrastructure;
+using MicroClaw.Sessions.Components;
 using MicroClaw.Utils;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,16 +58,34 @@ public sealed class SessionService : MicroService, ISessionService
         MicroClawUtils.CheckDirectory(MicroClawConfig.Env.SessionsDir);
         
         ConcurrentDictionary<string, MicroSession> warmedSessions = new();
-        foreach (SessionEntityConfig entity in MicroClawConfig.Get<SessionsOptions>().Items)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
-            if (!warmedSessions.TryAdd(microSession.Id, microSession))
-                throw new InvalidOperationException($"Duplicate session id '{microSession.Id}' found while warming cache.");
-            await Engine!.RegisterObjectAsync(microSession);
+            foreach (SessionEntityConfig entity in MicroClawConfig.Get<SessionsOptions>().Items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (warmedSessions.ContainsKey(entity.Id))
+                    throw new InvalidOperationException($"Duplicate session id '{entity.Id}' found while warming cache.");
+
+                MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
+                if (!warmedSessions.TryAdd(microSession.Id, microSession))
+                {
+                    await microSession.DisposeAsync();
+                    throw new InvalidOperationException($"Duplicate session id '{microSession.Id}' found while warming cache.");
+                }
+            }
+            
+            _sessions = warmedSessions;
         }
-        
-        _sessions = warmedSessions;
+        catch (Exception ex)
+        {
+            List<Exception> cleanupErrors = await DisposeSessionsAsync(warmedSessions.Values);
+            if (cleanupErrors.Count == 0)
+                throw;
+
+            cleanupErrors.Insert(0, ex);
+            throw new AggregateException(cleanupErrors);
+        }
     }
     
     /// <summary>
@@ -78,8 +97,18 @@ public sealed class SessionService : MicroService, ISessionService
     {
         ConcurrentDictionary<string, MicroSession> snapshot = Interlocked.Exchange(ref _sessions, new());
         
+        List<Exception> errors = await DisposeSessionsAsync(snapshot.Values);
+        
+        if (errors.Count == 1)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
+        if (errors.Count > 1)
+            throw new AggregateException(errors);
+    }
+
+    private static async ValueTask<List<Exception>> DisposeSessionsAsync(IEnumerable<MicroSession> sessions)
+    {
         List<Exception> errors = [];
-        foreach (MicroSession session in snapshot.Values)
+        foreach (MicroSession session in sessions)
         {
             try
             {
@@ -90,11 +119,8 @@ public sealed class SessionService : MicroService, ISessionService
                 errors.Add(ex);
             }
         }
-        
-        if (errors.Count == 1)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(errors[0]).Throw();
-        if (errors.Count > 1)
-            throw new AggregateException(errors);
+
+        return errors;
     }
     
     /// <inheritdoc/>
@@ -117,7 +143,7 @@ public sealed class SessionService : MicroService, ISessionService
             AgentId = agentService!.GetDefault()!.Id,
         };
         MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
-        AddToCacheAndPersist(microSession);
+        await AddToCacheAndPersistAsync(microSession);
         
         _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = microSession.Id, title = microSession.Title, channelType = ChannelUtils.SerializeChannelType(channelType) });
         
@@ -159,7 +185,7 @@ public sealed class SessionService : MicroService, ISessionService
         };
         
         MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
-        AddToCacheAndPersist(microSession);
+        await AddToCacheAndPersistAsync(microSession);
         return microSession;
     }
     
@@ -244,28 +270,36 @@ public sealed class SessionService : MicroService, ISessionService
     
     private string GetSessionDir(string id) => Path.Combine(MicroClawConfig.Env.SessionsDir, id);
     
-    private void AddToCacheAndPersist(MicroSession microSession)
+    private async Task AddToCacheAndPersistAsync(MicroSession microSession)
     {
-        _metaLock.EnterWriteLock();
         try
         {
-            if (!_sessions.TryAdd(microSession.Id, microSession))
-                throw new InvalidOperationException($"Session '{microSession.Id}' already exists in cache.");
-            
+            _metaLock.EnterWriteLock();
             try
             {
-                MicroClawUtils.CheckDirectory(GetSessionDir(microSession.Id));
-                PersistCacheSnapshot();
+                if (!_sessions.TryAdd(microSession.Id, microSession))
+                    throw new InvalidOperationException($"Session '{microSession.Id}' already exists in cache.");
+
+                try
+                {
+                    MicroClawUtils.CheckDirectory(GetSessionDir(microSession.Id));
+                    PersistCacheSnapshot();
+                }
+                catch
+                {
+                    _sessions.TryRemove(microSession.Id, out _);
+                    throw;
+                }
             }
-            catch
+            finally
             {
-                _sessions.TryRemove(microSession.Id, out _);
-                throw;
+                _metaLock.ExitWriteLock();
             }
         }
-        finally
+        catch
         {
-            _metaLock.ExitWriteLock();
+            await microSession.DisposeAsync();
+            throw;
         }
     }
     

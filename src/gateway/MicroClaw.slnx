@@ -1,5 +1,4 @@
 <Solution>
-  <Project Path="MicroClaw.Channels/MicroClaw.Channels.csproj" />
   <Folder Name="/Cli/">
     <Project Path="MicroClaw.Cli/MicroClaw.Cli.csproj" />
     <Project Path="MicroClaw.Gateway/MicroClaw.Gateway.csproj" />
@@ -11,9 +10,11 @@
   </Folder>
   <Folder Name="/Feature/">
     <Project Path="MicroClaw.Agent/MicroClaw.Agent.csproj" />
+    <Project Path="MicroClaw.Channels/MicroClaw.Channels.csproj" />
     <Project Path="MicroClaw.Jobs/MicroClaw.Jobs.csproj" />
     <Project Path="MicroClaw.Pet/MicroClaw.Pet.csproj" />
     <Project Path="MicroClaw.Plugins/MicroClaw.Plugins.csproj" />
+    <Project Path="MicroClaw.Providers/MicroClaw.Providers.csproj" />
     <Project Path="MicroClaw.RAG/MicroClaw.RAG.csproj" />
     <Project Path="MicroClaw.Safety/MicroClaw.Safety.csproj" />
     <Project Path="MicroClaw.Session/MicroClaw.Session.csproj" />
@@ -24,7 +25,6 @@
   <Project Path="MicroClaw/MicroClaw.csproj" />
   <Project Path="MicroClaw.Core/MicroClaw.Core.csproj" />
   <Project Path="MicroClaw.Infrastructure/MicroClaw.Infrastructure.csproj" />
-  <Project Path="MicroClaw.Providers/MicroClaw.Providers.csproj" />
   <Project Path="MicroClaw.Tests/MicroClaw.Tests.csproj" />
   <Project Path="MicroClaw.Runtime/MicroClaw.Runtime.csproj" />
   <Project Path="MicroClaw.Configuration/MicroClaw.Configuration.csproj" />

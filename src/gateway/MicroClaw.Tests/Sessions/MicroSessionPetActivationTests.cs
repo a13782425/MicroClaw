@@ -1,12 +1,15 @@
 using System.Reflection;
+using FluentAssertions;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Core;
 using MicroClaw.Pet;
 using MicroClaw.Pet.Emotion;
 using MicroClaw.Pet.Storage;
+using MicroClaw.Sessions.Components;
 using MicroClaw.Sessions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -47,6 +50,37 @@ public sealed class MicroSessionPetActivationTests : IDisposable
 
         await petService.Received(1).ActivateAsync(session, Arg.Any<CancellationToken>());
         pet.Received(1).HandleMessageAsync(Arg.Any<IReadOnlyList<SessionMessage>>(), Arg.Any<CancellationToken>(), "web");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenPetInitializationFails_DisposesSessionAndMessagesComponent()
+    {
+        InitializeConfig();
+        (IServiceProvider serviceProvider, PetService petService) = CreateServiceProvider();
+        var entityConfig = new SessionEntityConfig
+        {
+            Id = "session-pet-failure",
+            Title = "T",
+            ProviderId = "p",
+            ChannelType = "web",
+            ChannelId = "web",
+            CreatedAtMs = 1,
+        };
+        List<(MicroSession Session, SessionMessagesComponent Component)> createdSessions = [];
+        petService.CreateOrLoadAsync(Arg.Do<IMicroSession>(session =>
+        {
+            var microSession = (MicroSession)session;
+            createdSessions.Add((microSession, microSession.GetComponent<SessionMessagesComponent>()!));
+        }), Arg.Any<CancellationToken>())
+            .Returns<Task<IPet?>>(_ => throw new InvalidOperationException("pet failed"));
+
+        Func<Task> act = async () => await MicroSession.CreateAsync(entityConfig, serviceProvider, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("pet failed");
+        createdSessions.Should().ContainSingle();
+        createdSessions[0].Session.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
+        createdSessions[0].Component.LifeCycleState.Should().Be(MicroLifeCycleState.Disposed);
     }
 
     public void Dispose()

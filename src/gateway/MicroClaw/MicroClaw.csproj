@@ -14,6 +14,7 @@
     <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
     <ProjectReference Include="..\MicroClaw.Plugins\MicroClaw.Plugins.csproj" />
     <ProjectReference Include="..\MicroClaw.Jobs\MicroClaw.Jobs.csproj" />
+    <ProjectReference Include="..\MicroClaw.Session\MicroClaw.Session.csproj" />
   </ItemGroup>
 
   <ItemGroup>

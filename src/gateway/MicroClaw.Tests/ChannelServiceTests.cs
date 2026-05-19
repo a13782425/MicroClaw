@@ -290,7 +290,18 @@ public sealed class ChannelServiceTests : IDisposable
             .Build();
 
         MicroClawConfig.Initialize(configuration, Path.Combine(_tempRoot, "config"));
+        MicroClawConfig.Save(new ChannelOptions { Channels = effectiveChannels.Select(CloneChannel).ToList() });
+        MicroClawConfig.Save(new SessionsOptions { Items = effectiveSessions.Select(session => session.DeepClone()).ToList() });
     }
+
+    private static ChannelEntityConfig CloneChannel(ChannelEntityConfig channel) => new()
+    {
+        Id = channel.Id,
+        DisplayName = channel.DisplayName,
+        ChannelType = channel.ChannelType,
+        IsEnabled = channel.IsEnabled,
+        SettingJson = channel.SettingJson,
+    };
 
     private static void ResetMicroClawConfig()
     {
