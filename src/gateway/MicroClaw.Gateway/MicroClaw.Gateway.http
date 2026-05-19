@@ -1,0 +1,6 @@
+@MicroClaw.Gateway_HostAddress = http://localhost:5169
+
+GET {{MicroClaw.Gateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
