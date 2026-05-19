@@ -10,6 +10,7 @@
         <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
         <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
         <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
+        <ProjectReference Include="..\MicroClaw.Pet\MicroClaw.Pet.csproj" />
     </ItemGroup>
 
 </Project>

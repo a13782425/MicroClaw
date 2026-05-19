@@ -1,9 +1,8 @@
 ﻿using System.Text;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
-using MicroClaw.Streaming.PersistenceHandlers;
 
-namespace MicroClaw.Streaming;
+namespace MicroClaw.Sessions;
 
 /// <summary>
 /// 有状态的 StreamItem 持久化管道。累积 TokenItem/ThinkingItem 文本和 DataContentItem 附件，

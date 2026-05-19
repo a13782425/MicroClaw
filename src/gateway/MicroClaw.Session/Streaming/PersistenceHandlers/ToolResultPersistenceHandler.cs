@@ -1,7 +1,7 @@
 ﻿using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 
-namespace MicroClaw.Streaming.PersistenceHandlers;
+namespace MicroClaw.Sessions;
 
 /// <summary>ToolResultItem → SessionMessage（role=tool, messageType=tool_result）。</summary>
 public sealed class ToolResultPersistenceHandler : IStreamItemPersistenceHandler

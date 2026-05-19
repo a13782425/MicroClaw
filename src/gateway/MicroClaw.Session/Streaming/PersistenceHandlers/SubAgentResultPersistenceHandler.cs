@@ -1,7 +1,7 @@
 ﻿using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 
-namespace MicroClaw.Streaming.PersistenceHandlers;
+namespace MicroClaw.Sessions;
 
 /// <summary>SubAgentResultItem → SessionMessage（role=system, messageType=sub_agent_result）。</summary>
 public sealed class SubAgentResultPersistenceHandler : IStreamItemPersistenceHandler

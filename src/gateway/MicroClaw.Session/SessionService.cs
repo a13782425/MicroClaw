@@ -1,19 +1,14 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using MicroClaw.Agent;
 using MicroClaw.Abstractions.Agent;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Channels;
 using MicroClaw.Configuration;
 using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
-using MicroClaw.Hubs;
-using MicroClaw.Infrastructure;
 using MicroClaw.Sessions.Components;
 using MicroClaw.Utils;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MicroClaw.Sessions;
 /// <summary>
@@ -30,13 +25,10 @@ namespace MicroClaw.Sessions;
 public sealed class SessionService : MicroService, ISessionService
 {
     private IMicroAgentService? agentService;
-    private IHubContext<GatewayHub>? hubContext;
-    private readonly IServiceProvider serviceProvider;
     private ConcurrentDictionary<string, MicroSession> _sessions = new();
     
-    public SessionService(IServiceProvider sp)
+    public SessionService()
     {
-        serviceProvider = sp;
     }
     
     /// <inheritdoc />
@@ -53,8 +45,7 @@ public sealed class SessionService : MicroService, ISessionService
     /// </summary>
     protected override async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
-        agentService ??= serviceProvider.GetRequiredService<IMicroAgentService>();
-        hubContext ??= serviceProvider.GetRequiredService<IHubContext<GatewayHub>>();
+        agentService ??= MicroEngine.Instance.GetRequiredService<IMicroAgentService>();
         MicroClawUtils.CheckDirectory(MicroClawConfig.Env.SessionsDir);
         
         ConcurrentDictionary<string, MicroSession> warmedSessions = new();
@@ -67,7 +58,7 @@ public sealed class SessionService : MicroService, ISessionService
                 if (warmedSessions.ContainsKey(entity.Id))
                     throw new InvalidOperationException($"Duplicate session id '{entity.Id}' found while warming cache.");
 
-                MicroSession microSession = await MicroSession.CreateAsync(entity, serviceProvider, cancellationToken);
+                MicroSession microSession = await MicroSession.CreateAsync(entity, cancellationToken);
                 if (!warmedSessions.TryAdd(microSession.Id, microSession))
                 {
                     await microSession.DisposeAsync();
@@ -142,10 +133,10 @@ public sealed class SessionService : MicroService, ISessionService
             CreatedAtMs = TimeUtils.NowMs(),
             AgentId = agentService!.GetDefault()!.Id,
         };
-        MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
+        MicroSession microSession = await MicroSession.CreateAsync(entityConfig);
         await AddToCacheAndPersistAsync(microSession);
         
-        _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = microSession.Id, title = microSession.Title, channelType = ChannelUtils.SerializeChannelType(channelType) });
+        // _ = hubContext!.Clients.All.SendAsync("sessionCreated", new { sessionId = microSession.Id, title = microSession.Title, channelType = ChannelUtils.SerializeChannelType(channelType) });
         
         return microSession;
     }
@@ -159,7 +150,7 @@ public sealed class SessionService : MicroService, ISessionService
         
         NotifyThrottle[sessionId] = now;
         
-        await hubContext!.Clients.All.SendAsync("sessionPendingApproval", new { sessionId, sessionTitle, channelType = ChannelUtils.SerializeChannelType(channelType), timestamp = now });
+        // await hubContext!.Clients.All.SendAsync("sessionPendingApproval", new { sessionId, sessionTitle, channelType = ChannelUtils.SerializeChannelType(channelType), timestamp = now });
     }
     
     /// <inheritdoc/>
@@ -184,7 +175,7 @@ public sealed class SessionService : MicroService, ISessionService
             AgentId = agentId ?? "",
         };
         
-        MicroSession microSession = await MicroSession.CreateAsync(entityConfig, serviceProvider);
+        MicroSession microSession = await MicroSession.CreateAsync(entityConfig);
         await AddToCacheAndPersistAsync(microSession);
         return microSession;
     }

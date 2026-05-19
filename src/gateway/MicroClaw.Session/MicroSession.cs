@@ -8,7 +8,6 @@ using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Pet;
 using MicroClaw.Sessions.Components;
-using MicroClaw.Streaming;
 using MicroClaw.Utils;
 
 namespace MicroClaw.Sessions;
@@ -29,12 +28,9 @@ namespace MicroClaw.Sessions;
 /// </summary>
 public class MicroSession : MicroObject, IMicroSession
 {
-    private readonly IServiceProvider _serviceProvider;
-
-    private MicroSession(SessionEntityConfig entityConfig, IServiceProvider serviceProvider)
+    private MicroSession(SessionEntityConfig entityConfig)
     {
         EntityConfig = entityConfig ?? throw new ArgumentNullException(nameof(entityConfig));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
     public SessionEntityConfig EntityConfig { get; private set; }
     
@@ -56,13 +52,13 @@ public class MicroSession : MicroObject, IMicroSession
     /// </summary>
     public SessionMessagesComponent Messages => GetComponent<SessionMessagesComponent>() ?? throw new InvalidOperationException($"Session '{Id}' does not have {nameof(SessionMessagesComponent)} attached yet.");
     
-    public static async Task<MicroSession> CreateAsync(SessionEntityConfig entityConfig, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+    public static async Task<MicroSession> CreateAsync(SessionEntityConfig entityConfig, CancellationToken cancellationToken = default)
     {
-        MicroSession session = new(entityConfig, serviceProvider);
+        MicroSession session = new(entityConfig);
         try
         {
             await session.AddComponentAsync<SessionMessagesComponent>(cancellationToken);
-            session.Pet = await serviceProvider.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
+            session.Pet = await MicroEngine.Instance.GetRequiredService<PetService>().CreateOrLoadAsync(session, cancellationToken);
             return session;
         }
         catch
@@ -104,8 +100,8 @@ public class MicroSession : MicroObject, IMicroSession
             yield return new ErrorItem("会话尚未获得批准，请联系管理员。");
             yield break;
         }
-
-        Pet = await _serviceProvider.GetRequiredService<PetService>().ActivateAsync(this, ct);
+        
+        Pet = await MicroEngine.Instance.GetRequiredService<PetService>().ActivateAsync(this, ct);
         
         if (Pet is null)
         {

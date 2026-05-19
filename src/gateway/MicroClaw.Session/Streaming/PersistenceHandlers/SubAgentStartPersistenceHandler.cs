@@ -1,7 +1,7 @@
 ﻿using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
 
-namespace MicroClaw.Streaming.PersistenceHandlers;
+namespace MicroClaw.Sessions;
 
 /// <summary>SubAgentStartItem → SessionMessage（role=system, messageType=sub_agent_start）。</summary>
 public sealed class SubAgentStartPersistenceHandler : IStreamItemPersistenceHandler
