@@ -1,0 +1,6 @@
+﻿<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StyleInclude Source="avares://shadui-app/Styles/Menu.axaml" />
+    <StyleInclude Source="avares://shadui-app/Styles/TextBlock.axaml" />
+    <StyleInclude Source="avares://shadui-app/Styles/Tooltip.axaml" />
+    <StyleInclude Source="avares://shadui-app/Styles/Window.axaml" />
+</Styles>

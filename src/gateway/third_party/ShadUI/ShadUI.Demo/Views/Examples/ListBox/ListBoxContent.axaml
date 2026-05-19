@@ -1,0 +1,41 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.Examples.ListBox.ListBoxContent"
+    x:DataType="listBox:ListBoxViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:converters="clr-namespace:ShadUI.Demo.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:listBox="clr-namespace:ShadUI.Demo.ViewModels.Examples.ListBox"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <shadui:Card
+        HasShadow="True"
+        HorizontalAlignment="Center"
+        Width="350">
+        <shadui:Card.Header>
+            <StackPanel Spacing="4">
+                <shadui:CardTitle FontSize="18">Favorite Web Framework</shadui:CardTitle>
+                <shadui:CardDescription>Select your best ever web framework</shadui:CardDescription>
+                <ComboBox
+                    HorizontalAlignment="Left"
+                    ItemsSource="{Binding SelectionModes}"
+                    Margin="0,16,0,0"
+                    PlaceholderText="Select a mode"
+                    SelectedValue="{Binding SelectionMode}"
+                    Width="164"
+                    shadui:ControlAssist.Label="Selection Mode" />
+            </StackPanel>
+        </shadui:Card.Header>
+        <ListBox
+            Height="256"
+            ItemsSource="{Binding Items}"
+            Selection="{Binding SelectionModel}"
+            SelectionMode="{Binding SelectionMode, Converter={x:Static converters:StringConverters.ToSelectionMode}}" />
+        <shadui:Card.Footer>
+            <TextBlock Classes="Small Muted" Text="{Binding SelectedCount}" />
+        </shadui:Card.Footer>
+    </shadui:Card>
+</UserControl>

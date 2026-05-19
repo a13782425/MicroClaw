@@ -1,0 +1,479 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.SidebarPage"
+    x:DataType="viewModels:SidebarViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:controls="clr-namespace:ShadUI.Demo.Controls"
+    xmlns:converters="clr-namespace:ShadUI.Demo.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:viewModels="clr-namespace:ShadUI.Demo.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel LastChildFill="True">
+        <StackPanel
+            DockPanel.Dock="Top"
+            Margin="{StaticResource PageMargin}"
+            MaxWidth="{StaticResource PageMaxWidth}"
+            Spacing="4">
+            <Grid ColumnDefinitions="* Auto">
+                <TextBlock Classes="h2" Text="Sidebar" />
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding BackPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57420;" />
+                        </Viewbox>
+                    </Button>
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding NextPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57421;" />
+                        </Viewbox>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <TextBlock
+                Classes="p"
+                Text="A composable and customizable sidebar component."
+                TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer>
+            <StackPanel
+                Margin="{StaticResource PageMargin}"
+                MaxWidth="{StaticResource PageMaxWidth}"
+                Spacing="32">
+                <controls:ControlBlock Title="Default" Xaml="{Binding DefaultCode}">
+                    <Border
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        ClipToBounds="True"
+                        CornerRadius="{DynamicResource XlCornerRadius}"
+                        Name="Border">
+                        <Grid ColumnDefinitions="Auto *">
+                            <shadui:Sidebar
+                                Background="{DynamicResource CardBackgroundColor}"
+                                BorderThickness="0,0,1,0"
+                                CornerRadius="{CompiledBinding #Border.CornerRadius,
+                                                               Converter={x:Static shadui:CornerRadiusConverters.LeftOnly}}"
+                                Expanded="{Binding #Toggler.IsChecked}"
+                                Grid.Column="0"
+                                Height="600"
+                                ItemIconContentSpacing="12"
+                                MinWidth="56"
+                                Padding="8"
+                                Width="255">
+                                <shadui:Sidebar.Header>
+                                    <Menu Classes="Single">
+                                        <MenuItem
+                                            Classes="NoPressedAnimation"
+                                            CornerRadius="{DynamicResource LgCornerRadius}"
+                                            HorizontalAlignment="Stretch"
+                                            Margin="0,0,0,16"
+                                            shadui:MenuItemAssist.PopupHorizontalOffset="4"
+                                            shadui:MenuItemAssist.PopupPlacement="RightEdgeAlignedTop"
+                                            shadui:MenuItemAssist.PopupVerticalOffset="0">
+                                            <MenuItem.Header>
+                                                <Panel>
+                                                    <Border
+                                                        Background="#1447E6"
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Height="36"
+                                                        IsVisible="{Binding !$parent[shadui:Sidebar].Expanded}"
+                                                        Margin="0,-4"
+                                                        Opacity="{Binding !$parent[shadui:Sidebar].Expanded, Converter={x:Static converters:BooleanConverters.Opaque}}"
+                                                        Width="38">
+                                                        <Border.Transitions>
+                                                            <Transitions>
+                                                                <DoubleTransition Duration="0:0:0.20" Property="Opacity" />
+                                                            </Transitions>
+                                                        </Border.Transitions>
+                                                        <Viewbox Height="16" Width="16">
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="White"
+                                                                Text="&#58583;" />
+                                                        </Viewbox>
+                                                    </Border>
+                                                    <Grid
+                                                        ColumnDefinitions="Auto * Auto"
+                                                        HorizontalAlignment="Stretch"
+                                                        IsVisible="{Binding $parent[shadui:Sidebar].Expanded}"
+                                                        Margin="0,4">
+                                                        <Border
+                                                            Background="#1447E6"
+                                                            CornerRadius="{DynamicResource XlCornerRadius}"
+                                                            Height="36"
+                                                            Margin="0,0,8,0"
+                                                            Width="36">
+                                                            <Viewbox Height="16" Width="16">
+                                                                <TextBlock
+                                                                    Classes="LucideIcon"
+                                                                    Foreground="White"
+                                                                    Text="&#58583;" />
+                                                            </Viewbox>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Classes="Small" Text="Acme Inc" />
+                                                            <TextBlock
+                                                                Classes="Caption"
+                                                                Margin="0,-4,0,0"
+                                                                Text="Enterprise" />
+                                                        </StackPanel>
+                                                        <Viewbox
+                                                            Grid.Column="2"
+                                                            Height="16"
+                                                            Width="16">
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource ForegroundColor}"
+                                                                Text="&#57873;" />
+                                                        </Viewbox>
+                                                    </Grid>
+                                                </Panel>
+
+                                            </MenuItem.Header>
+                                            <shadui:MenuItemAssist.Label>
+                                                <TextBlock
+                                                    Classes="Caption Muted"
+                                                    Text="Teams"
+                                                    Width="220 " />
+                                            </shadui:MenuItemAssist.Label>
+                                            <MenuItem Header="Acme Inc" InputGesture="Ctrl + F1">
+                                                <MenuItem.Icon>
+                                                    <Border
+                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Height="24"
+                                                        Padding="4"
+                                                        Width="24">
+                                                        <Viewbox>
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource MutedColor}"
+                                                                Text="&#58583;" />
+                                                        </Viewbox>
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Acme Corp." InputGesture="Ctrl + F2">
+                                                <MenuItem.Icon>
+                                                    <Border
+                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Height="24"
+                                                        Padding="4"
+                                                        Width="24">
+                                                        <Viewbox>
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource MutedColor}"
+                                                                Text="&#58720;" />
+                                                        </Viewbox>
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Saint Corp." InputGesture="Ctrl + F3">
+                                                <MenuItem.Icon>
+                                                    <Border
+                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Height="24"
+                                                        Padding="4"
+                                                        Width="24">
+                                                        <Viewbox>
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource MutedColor}"
+                                                                Text="&#57502;" />
+                                                        </Viewbox>
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <Separator />
+                                            <MenuItem Header="Add team" InputGesture="Ctrl + A">
+                                                <MenuItem.Icon>
+                                                    <Border
+                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Height="24"
+                                                        Padding="4"
+                                                        Width="24">
+                                                        <Viewbox>
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource MutedColor}"
+                                                                Text="&#57665;" />
+                                                        </Viewbox>
+                                                    </Border>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </MenuItem>
+                                    </Menu>
+                                </shadui:Sidebar.Header>
+                                <StackPanel Spacing="4">
+                                    <TextBlock
+                                        Classes="Caption Muted"
+                                        FontWeight="DemiBold"
+                                        IsVisible="{Binding $parent[shadui:Sidebar].Expanded}"
+                                        Margin="8"
+                                        Text="Projects" />
+                                    <shadui:SidebarItem Content="Design Engineering">
+                                        <shadui:SidebarItem.Icon>
+                                            <Viewbox>
+                                                <TextBlock
+                                                    Classes="LucideIcon"
+                                                    Foreground="{DynamicResource ForegroundColor}"
+                                                    Text="&#58001;" />
+                                            </Viewbox>
+                                        </shadui:SidebarItem.Icon>
+                                    </shadui:SidebarItem>
+                                    <shadui:SidebarItem Content="Sales &amp; Marketing">
+                                        <shadui:SidebarItem.Icon>
+                                            <Viewbox>
+                                                <TextBlock
+                                                    Classes="LucideIcon"
+                                                    Foreground="{DynamicResource ForegroundColor}"
+                                                    Text="&#57455;" />
+                                            </Viewbox>
+                                        </shadui:SidebarItem.Icon>
+                                    </shadui:SidebarItem>
+                                    <shadui:SidebarItem Content="Travel">
+                                        <shadui:SidebarItem.Icon>
+                                            <Viewbox>
+                                                <TextBlock
+                                                    Classes="LucideIcon"
+                                                    Foreground="{DynamicResource ForegroundColor}"
+                                                    Text="&#57620;" />
+                                            </Viewbox>
+                                        </shadui:SidebarItem.Icon>
+                                    </shadui:SidebarItem>
+                                    <shadui:SidebarItem Content="Support">
+                                        <shadui:SidebarItem.Icon>
+                                            <Viewbox>
+                                                <TextBlock
+                                                    Classes="LucideIcon"
+                                                    Foreground="{DynamicResource ForegroundColor}"
+                                                    Text="&#57607;" />
+                                            </Viewbox>
+                                        </shadui:SidebarItem.Icon>
+                                    </shadui:SidebarItem>
+                                    <shadui:SidebarItem Content="Feedback">
+                                        <shadui:SidebarItem.Icon>
+                                            <Viewbox>
+                                                <TextBlock
+                                                    Classes="LucideIcon"
+                                                    Foreground="{DynamicResource ForegroundColor}"
+                                                    Text="&#57686;" />
+                                            </Viewbox>
+                                        </shadui:SidebarItem.Icon>
+                                    </shadui:SidebarItem>
+                                    <shadui:SidebarItem Content="More..." />
+                                </StackPanel>
+                                <shadui:Sidebar.Footer>
+                                    <Menu Classes="Single">
+                                        <MenuItem
+                                            Classes="NoPressedAnimation"
+                                            CornerRadius="{DynamicResource LgCornerRadius}"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="8,0"
+                                            shadui:MenuItemAssist.PopupHorizontalOffset="4"
+                                            shadui:MenuItemAssist.PopupPlacement="RightEdgeAlignedBottom"
+                                            shadui:MenuItemAssist.PopupVerticalOffset="4">
+                                            <MenuItem.Header>
+                                                <Panel>
+                                                    <shadui:Avatar
+                                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                                        Fallback="CN"
+                                                        IsVisible="{Binding !$parent[shadui:Sidebar].Expanded}"
+                                                        Opacity="{Binding !$parent[shadui:Sidebar].Expanded, Converter={x:Static converters:BooleanConverters.Opaque}}"
+                                                        Source="../../Assets/user.png">
+                                                        <shadui:Avatar.Transitions>
+                                                            <Transitions>
+                                                                <DoubleTransition Duration="0:0:0.20" Property="Opacity" />
+                                                            </Transitions>
+                                                        </shadui:Avatar.Transitions>
+                                                    </shadui:Avatar>
+                                                    <Grid
+                                                        ColumnDefinitions="Auto * Auto"
+                                                        IsVisible="{Binding $parent[shadui:Sidebar].Expanded}"
+                                                        Margin="0,8">
+                                                        <shadui:Avatar
+                                                            CornerRadius="{DynamicResource XlCornerRadius}"
+                                                            Fallback="CN"
+                                                            Height="36"
+                                                            Margin="0,0,8,0"
+                                                            Source="../../Assets/user.png"
+                                                            Width="36" />
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Classes="Small" Text="shadui" />
+                                                            <TextBlock
+                                                                Classes="Caption"
+                                                                Margin="0,-4,0,0"
+                                                                Text="m@example.com" />
+                                                        </StackPanel>
+                                                        <Viewbox
+                                                            Grid.Column="2"
+                                                            Height="16"
+                                                            Width="16">
+                                                            <TextBlock
+                                                                Classes="LucideIcon"
+                                                                Foreground="{DynamicResource ForegroundColor}"
+                                                                Text="&#57873;" />
+                                                        </Viewbox>
+                                                    </Grid>
+                                                </Panel>
+                                            </MenuItem.Header>
+                                            <shadui:MenuItemAssist.Label>
+                                                <Grid
+                                                    ColumnDefinitions="Auto *"
+                                                    HorizontalAlignment="Stretch"
+                                                    Width="220">
+                                                    <shadui:Avatar
+                                                        CornerRadius="{DynamicResource XlCornerRadius}"
+                                                        Fallback="CN"
+                                                        Height="36"
+                                                        Margin="0,0,8,0"
+                                                        Source="../../Assets/user.png"
+                                                        Width="36" />
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Classes="Small" Text="shadui" />
+                                                        <TextBlock
+                                                            Classes="Caption"
+                                                            Margin="0,-4,0,0"
+                                                            Text="m@example.com" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </shadui:MenuItemAssist.Label>
+                                            <Separator />
+                                            <MenuItem Header="Upgrade to Pro">
+                                                <MenuItem.Icon>
+                                                    <Viewbox Height="16" Width="16">
+                                                        <TextBlock
+                                                            Classes="LucideIcon"
+                                                            Foreground="{DynamicResource MutedColor}"
+                                                            Text="&#58391;" />
+                                                    </Viewbox>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <Separator />
+                                            <MenuItem Header="Account">
+                                                <MenuItem.Icon>
+                                                    <Viewbox Height="16" Width="16">
+                                                        <TextBlock
+                                                            Classes="LucideIcon"
+                                                            Foreground="{DynamicResource MutedColor}"
+                                                            Text="&#57921;" />
+                                                    </Viewbox>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Billing">
+                                                <MenuItem.Icon>
+                                                    <Viewbox Height="16" Width="16">
+                                                        <TextBlock
+                                                            Classes="LucideIcon"
+                                                            Foreground="{DynamicResource MutedColor}"
+                                                            Text="&#57518;" />
+                                                    </Viewbox>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Notifications">
+                                                <MenuItem.Icon>
+                                                    <Viewbox Height="16" Width="16">
+                                                        <TextBlock
+                                                            Classes="LucideIcon"
+                                                            Foreground="{DynamicResource MutedColor}"
+                                                            Text="&#57437;" />
+                                                    </Viewbox>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <Separator />
+                                            <MenuItem Header="Log out">
+                                                <MenuItem.Icon>
+                                                    <Viewbox Height="16" Width="16">
+                                                        <TextBlock
+                                                            Classes="LucideIcon"
+                                                            Foreground="{DynamicResource MutedColor}"
+                                                            Text="&#57618;" />
+                                                    </Viewbox>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </MenuItem>
+                                    </Menu>
+                                </shadui:Sidebar.Footer>
+                            </shadui:Sidebar>
+                            <DockPanel
+                                Grid.Column="1"
+                                LastChildFill="True"
+                                VerticalSpacing="16">
+                                <Border
+                                    BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,0,0,1"
+                                    DockPanel.Dock="Top">
+                                    <StackPanel
+                                        Margin="16"
+                                        Orientation="Horizontal"
+                                        Spacing="16">
+                                        <ToggleButton
+                                            Height="28"
+                                            HorizontalAlignment="Left"
+                                            Name="Toggler"
+                                            Padding="6"
+                                            Theme="{DynamicResource SideTogglerTheme}"
+                                            VerticalAlignment="Top"
+                                            Width="28">
+                                            <Viewbox>
+                                                <TextBlock Classes="LucideIcon" Text="&#57646;" />
+                                            </Viewbox>
+                                        </ToggleButton>
+                                        <Rectangle
+                                            Fill="{DynamicResource BorderColor}"
+                                            Height="16"
+                                            VerticalAlignment="Center"
+                                            Width="1" />
+                                        <TextBlock
+                                            Classes="Small"
+                                            Text="Build your application"
+                                            VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                                <UniformGrid
+                                    ColumnSpacing="16"
+                                    Columns="3"
+                                    DockPanel.Dock="Top"
+                                    Height="215"
+                                    Margin="16,0"
+                                    RowSpacing="16">
+                                    <Border Background="{DynamicResource CardBackgroundColor}" CornerRadius="{DynamicResource XlCornerRadius}" />
+                                    <Border Background="{DynamicResource CardBackgroundColor}" CornerRadius="{DynamicResource XlCornerRadius}" />
+                                    <Border Background="{DynamicResource CardBackgroundColor}" CornerRadius="{DynamicResource XlCornerRadius}" />
+                                </UniformGrid>
+                                <Border
+                                    Background="{DynamicResource CardBackgroundColor}"
+                                    CornerRadius="{DynamicResource XlCornerRadius}"
+                                    Margin="16,0,16,16" />
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                </controls:ControlBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

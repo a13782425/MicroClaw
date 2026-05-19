@@ -1,0 +1,61 @@
+﻿<ResourceDictionary
+    x:ClassModifier="internal"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ControlTheme TargetType="TextBlock" x:Key="{x:Type TextBlock}">
+        <Style Selector="^.h1">
+            <Setter Property="FontSize" Value="36" />
+            <Setter Property="FontWeight" Value="ExtraBold" />
+            <Setter Property="LetterSpacing" Value="-0.9" />
+        </Style>
+        <Style Selector="^.h2">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="-0.75" />
+        </Style>
+
+        <Style Selector="^.h3">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="-0.6" />
+        </Style>
+
+        <Style Selector="^.h4">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="-0.5" />
+        </Style>
+
+        <Style Selector="^.p">
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+
+        <Style Selector="^.Lead">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundLeadColor}" />
+        </Style>
+
+        <Style Selector="^.Large">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="^.Small">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <Style Selector="^.Caption">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <Style Selector="^.Muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+
+        <Style Selector="^.Error">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>

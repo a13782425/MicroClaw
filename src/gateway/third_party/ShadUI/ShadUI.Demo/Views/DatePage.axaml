@@ -1,0 +1,101 @@
+﻿<UserControl
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.DatePage"
+    x:DataType="viewModels:DateViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:controls="clr-namespace:ShadUI.Demo.Controls"
+    xmlns:converters="clr-namespace:ShadUI.Demo.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:viewModels="clr-namespace:ShadUI.Demo.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel LastChildFill="True">
+        <StackPanel
+            DockPanel.Dock="Top"
+            Margin="{StaticResource PageMargin}"
+            MaxWidth="{StaticResource PageMaxWidth}"
+            Spacing="4">
+            <Grid ColumnDefinitions="* Auto">
+                <TextBlock Classes="h2" Text="Date Control" />
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding BackPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57420;" />
+                        </Viewbox>
+                    </Button>
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding NextPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57421;" />
+                        </Viewbox>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <TextBlock
+                Classes="p"
+                Text="Calendar, date picker and input controls that enable users to enter and edit date."
+                TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer>
+            <StackPanel
+                Margin="{StaticResource PageMargin}"
+                MaxWidth="{StaticResource PageMaxWidth}"
+                Spacing="32">
+                <controls:ControlBlock Title="Calendar" Xaml="{Binding CalendarCode}">
+                    <StackPanel>
+                        <Calendar HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Date Picker" Xaml="{Binding DatePickerCode}">
+                    <CalendarDatePicker
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Width="240" />
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Read-only Date Picker" Xaml="{Binding ReadOnlyDatePickerCode}">
+                    <CalendarDatePicker
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Width="240"
+                        shadui:ControlAssist.ReadOnly="True" />
+                </controls:ControlBlock>
+                <controls:ControlBlock
+                    CSharp="{Binding DatePickerForm.CSharpCode}"
+                    Title="Date Picker Form Validation"
+                    Xaml="{Binding DatePickerForm.XamlCode}">
+                    <ContentControl Content="{Binding DatePickerForm}" />
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Date Input" Xaml="{Binding DateInputCode}">
+                    <StackPanel>
+                        <shadui:DateInput HorizontalAlignment="Center" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Disabled Date Input" Xaml="{Binding DisabledDateInputCode}">
+                    <StackPanel>
+                        <shadui:DateInput HorizontalAlignment="Center" IsEnabled="False" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock
+                    CSharp="{Binding DateInputForm.CSharpCode}"
+                    Title="Date Input Form Validation"
+                    Xaml="{Binding DateInputForm.XamlCode}">
+                    <ContentControl Content="{Binding DateInputForm}" />
+                </controls:ControlBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

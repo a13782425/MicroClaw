@@ -1,0 +1,164 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.Examples.DataTable.BasicDataTableContent"
+    x:DataType="viewModel:BasicDataTableViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:viewModel="clr-namespace:ShadUI.Demo.ViewModels.Examples.DataTable"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer HorizontalScrollBarVisibility="Auto">
+        <StackPanel
+            HorizontalAlignment="Center"
+            Spacing="16"
+            Width="600">
+            <Grid ColumnDefinitions="* Auto">
+                <TextBox
+                    Classes="Clearable"
+                    HorizontalAlignment="Left"
+                    Text="{Binding SearchString, Mode=TwoWay}"
+                    PlaceholderText="Filter emails..."
+                    Width="384"
+                    shadui:ControlAssist.ShowProgress="{Binding IsSearching}">
+                    <TextBox.InnerRightContent>
+                        <PathIcon
+                            Data="{x:Static shadui:Icons.Search}"
+                            Opacity="0.75"
+                            Width="16" />
+                    </TextBox.InnerRightContent>
+                </TextBox>
+                <Menu Grid.Column="1">
+                    <MenuItem Classes="Outline NoPressedAnimation" shadui:MenuItemAssist.PopupPlacement="Bottom">
+                        <MenuItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Columns" />
+                                <TextBlock Classes="LucideIcon" Text="&#57457;" />
+                            </StackPanel>
+                        </MenuItem.Header>
+                        <MenuItem
+                            Command="{Binding ToggleStatusColumnCommand}"
+                            Header="Status"
+                            Width="128">
+                            <MenuItem.Icon>
+                                <TextBlock
+                                    Classes="LucideIcon"
+                                    IsVisible="{Binding ShowStatusColumn}"
+                                    Text="&#57456;" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Command="{Binding ToggleEmailColumnCommand}" Header="Email">
+                            <MenuItem.Icon>
+                                <TextBlock
+                                    Classes="LucideIcon"
+                                    IsVisible="{Binding ShowEmailColumn}"
+                                    Text="&#57456;" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Command="{Binding ToggleAmountColumnCommand}" Header="Amount">
+                            <MenuItem.Icon>
+                                <TextBlock
+                                    Classes="LucideIcon"
+                                    IsVisible="{Binding ShowAmountColumn}"
+                                    Text="&#57456;" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </MenuItem>
+                </Menu>
+            </Grid>
+            <DataGrid
+                CanUserReorderColumns="False"
+                CanUserSortColumns="True"
+                GridLinesVisibility="Horizontal"
+                ItemsSource="{Binding Items}"
+                SelectionMode="Single"
+                Height="300"
+                x:Name="DataGrid">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Binding="{Binding IsSelected}" CanUserSort="False">
+                        <DataGridCheckBoxColumn.Header>
+                            <CheckBox
+                                Command="{Binding ToggleSelectionCommand}"
+                                CommandParameter="{Binding #SelectToggler.IsChecked}"
+                                IsChecked="{Binding SelectAll}"
+                                x:Name="SelectToggler" />
+                        </DataGridCheckBoxColumn.Header>
+                    </DataGridCheckBoxColumn>
+                    <DataGridTextColumn
+                        Binding="{Binding Status}"
+                        CanUserSort="False"
+                        Header="Status"
+                        IsReadOnly="True"
+                        IsVisible="{Binding ShowStatusColumn}" />
+                    <DataGridTextColumn
+                        Binding="{Binding Email, Mode=TwoWay}"
+                        Header="Email"
+                        IsVisible="{Binding ShowEmailColumn}"
+                        Width="*" />
+                    <DataGridTemplateColumn IsVisible="{Binding ShowAmountColumn}" SortMemberPath="Amount">
+                        <DataGridTemplateColumn.Header>
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Text="Amount"
+                                TextAlignment="Center" />
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="viewModel:DataGridItem">
+                                <TextBlock
+                                    HorizontalAlignment="Right"
+                                    Text="{Binding Amount, StringFormat={}{0:C}}"
+                                    TextAlignment="Right" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                        <DataGridTemplateColumn.CellEditingTemplate>
+                            <DataTemplate DataType="viewModel:DataGridItem">
+                                <TextBox Text="{Binding Amount}" TextAlignment="End" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellEditingTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn CanUserResize="False" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="viewModel:DataGridItem">
+                                <shadui:SimpleDropdown
+                                    Classes="Icon Grid"
+                                    CornerRadius="{DynamicResource MdCornerRadius}"
+                                    HorizontalAlignment="Center"
+                                    PopupPlacement="BottomEdgeAlignedLeft"
+                                    PopupWidth="190"
+                                    VerticalAlignment="Center">
+                                    <shadui:SimpleDropdown.TriggerContent>
+                                        <TextBlock Classes="LucideIcon" Text="&#57530;" />
+                                    </shadui:SimpleDropdown.TriggerContent>
+                                    <shadui:SimpleDropdown.MenuLabel>
+                                        <TextBlock Classes="Caption Muted" Text="Actions" />
+                                    </shadui:SimpleDropdown.MenuLabel>
+                                    <Separator />
+                                    <Button Content="Copy payment ID" />
+                                    <Button Content="View customer" />
+                                    <Button Content="View payment details" />
+                                </shadui:SimpleDropdown>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+            <Grid ColumnDefinitions="* Auto">
+                <TextBlock Classes="Small Muted" VerticalAlignment="Center">
+                    <Run Text="{Binding SelectedCount}" />
+                    <Run Text="of" />
+                    <Run Text="{Binding TotalCount}" />
+                    <Run Text="row(s) selected." />
+                </TextBlock>
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button Classes="Outline" IsEnabled="False">Previous</Button>
+                    <Button Classes="Outline" IsEnabled="False">Next</Button>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

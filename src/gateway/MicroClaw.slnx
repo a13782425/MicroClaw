@@ -7,6 +7,8 @@
     <Project Path="MicroClaw.Desktop.Mac/MicroClaw.Desktop.Mac.csproj" />
     <Project Path="MicroClaw.Desktop.Windows/MicroClaw.Desktop.Windows.csproj" />
     <Project Path="MicroClaw.Desktop/MicroClaw.Desktop.csproj" />
+    <Project Path="third_party/ShadUI/ShadUI.Demo/ShadUI.Demo.csproj" />
+    <Project Path="third_party/ShadUI/ShadUI/ShadUI.csproj" />
   </Folder>
   <Folder Name="/Feature/">
     <Project Path="MicroClaw.Agent/MicroClaw.Agent.csproj" />

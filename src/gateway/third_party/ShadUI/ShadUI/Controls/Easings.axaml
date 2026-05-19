@@ -1,0 +1,7 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SplineEasing x:Key="EaseOut" X1="0.23" Y1="1" X2="0.32" Y2="1" />
+    <SplineEasing x:Key="EaseInOut" X1="0.77" Y1="0" X2="0.175" Y2="1" />
+    <SplineEasing x:Key="EaseDrawer" X1="0.32" Y1="0.72" X2="0" Y2="1" />
+
+</ResourceDictionary>

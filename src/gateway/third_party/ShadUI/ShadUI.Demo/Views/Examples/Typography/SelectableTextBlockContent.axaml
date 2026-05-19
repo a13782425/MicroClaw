@@ -1,0 +1,84 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.Examples.Typography.SelectableTextBlockContent"
+    x:DataType="typography:SelectableTextBlockViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:controls="clr-namespace:ShadUI.Demo.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:typography="clr-namespace:ShadUI.Demo.ViewModels.Examples.Typography"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel
+        Margin="{StaticResource PageMargin}"
+        MaxWidth="{StaticResource PageMaxWidth}"
+        Spacing="32">
+        <controls:ControlBlock Title="h1" Xaml="{Binding H1Code}">
+            <SelectableTextBlock
+                Classes="h1"
+                Text="Taxing Laughter: The Joke Tax Chronicles"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="h2" Xaml="{Binding H2Code}">
+            <SelectableTextBlock
+                Classes="h2"
+                Text="The People of the Kingdom"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="h3" Xaml="{Binding H3Code}">
+            <SelectableTextBlock
+                Classes="h3"
+                Text="The Joke Tax"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="h4" Xaml="{Binding H4Code}">
+            <SelectableTextBlock
+                Classes="h4"
+                Text="People stopped telling jokes"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="p" Xaml="{Binding PCode}">
+            <SelectableTextBlock
+                Classes="p"
+                Text="The king, seeing how much happier his subjects were, realized the error of his ways and repealed the joke tax."
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Lead" Xaml="{Binding LeadCode}">
+            <SelectableTextBlock
+                Classes="Lead"
+                Text="A modal dialog that interrupts the user with important content and expects a response."
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Large" Xaml="{Binding LargeCode}">
+            <SelectableTextBlock
+                Classes="Large"
+                Text="Are you absolutely sure?"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Small" Xaml="{Binding SmallCode}">
+            <SelectableTextBlock
+                Classes="Small"
+                Text="Email address"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Caption" Xaml="{Binding CaptionCode}">
+            <SelectableTextBlock
+                Classes="Caption"
+                Text="Username"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Muted" Xaml="{Binding MutedCode}">
+            <SelectableTextBlock
+                Classes="Muted"
+                Text="Enter your email address"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+        <controls:ControlBlock Title="Error" Xaml="{Binding ErrorCode}">
+            <SelectableTextBlock
+                Classes="Caption Error"
+                Text="Invalid email address"
+                TextWrapping="Wrap" />
+        </controls:ControlBlock>
+    </StackPanel>
+</UserControl>

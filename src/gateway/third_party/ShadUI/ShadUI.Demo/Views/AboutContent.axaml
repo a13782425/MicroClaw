@@ -1,0 +1,45 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.AboutContent"
+    x:DataType="viewModels:AboutViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:viewModels="clr-namespace:ShadUI.Demo.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="0,24">
+        <PathIcon
+            Data="{x:Static shadui:Icons.Logo}"
+            Height="48"
+            Margin="8,8,0,8"
+            Width="48" />
+        <TextBlock
+            Classes="h2"
+            Margin="0,24,0,8"
+            Text="ShadUI"
+            TextAlignment="Center" />
+        <TextBlock
+            Classes="Small"
+            Margin="24,0"
+            Text="ShadUI is an Avalonia-based Desktop UI Library inspired by shadcn/ui and Suki UI Library to deliver a modern, beautiful, and intuitive UI library for Avalonia."
+            TextAlignment="Center"
+            TextWrapping="Wrap"
+            Width="400" />
+        <TextBlock
+            Classes="Muted Small"
+            Margin="8"
+            Text="{Binding AppVersion}"
+            TextAlignment="Center" />
+        <Button
+            Classes="Primary"
+            Command="{Binding CloseCommand}"
+            HorizontalAlignment="Center"
+            Margin="0,36"
+            Width="64">
+            OK
+        </Button>
+    </StackPanel>
+</UserControl>

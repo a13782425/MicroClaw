@@ -1,0 +1,47 @@
+﻿<UserControl
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.Examples.Input.FormInputContent"
+    x:DataType="input:FormInputViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:input="clr-namespace:ShadUI.Demo.ViewModels.Examples.Input"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <shadui:Card
+        HasShadow="True"
+        HorizontalAlignment="Center"
+        Width="350">
+        <shadui:Card.Header>
+            <StackPanel Spacing="4">
+                <shadui:CardTitle FontSize="18">Create new account</shadui:CardTitle>
+                <shadui:CardDescription>Enter your account details</shadui:CardDescription>
+            </StackPanel>
+        </shadui:Card.Header>
+        <StackPanel Spacing="16">
+            <TextBox
+                Classes="Clearable"
+                Text="{Binding Email, Mode=TwoWay}"
+                PlaceholderText="user@example.com"
+                shadui:ControlAssist.Hint="This is your public display name."
+                shadui:ControlAssist.Label="Email" />
+            <TextBox
+                Classes="PasswordReveal"
+                PasswordChar="•"
+                Text="{Binding Password, Mode=TwoWay}"
+                PlaceholderText="Enter password"
+                shadui:ControlAssist.Label="Password" />
+            <TextBox
+                Classes="PasswordReveal"
+                PasswordChar="•"
+                Text="{Binding ConfirmPassword, Mode=TwoWay}"
+                PlaceholderText="Confirm password"
+                shadui:ControlAssist.Label="Confirm" />
+        </StackPanel>
+        <shadui:Card.Footer>
+            <Button Classes="Primary" Command="{Binding SubmitCommand}">Submit</Button>
+        </shadui:Card.Footer>
+    </shadui:Card>
+</UserControl>

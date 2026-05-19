@@ -1,0 +1,101 @@
+﻿<UserControl
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="ShadUI.Demo.Views.NumericPage"
+    x:DataType="viewModels:NumericViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:controls="clr-namespace:ShadUI.Demo.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:viewModels="clr-namespace:ShadUI.Demo.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel LastChildFill="True">
+        <StackPanel
+            DockPanel.Dock="Top"
+            Margin="{StaticResource PageMargin}"
+            MaxWidth="{StaticResource PageMaxWidth}"
+            Spacing="4">
+            <Grid ColumnDefinitions="* Auto">
+                <TextBlock Classes="h2" Text="Numeric Input" />
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding BackPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57420;" />
+                        </Viewbox>
+                    </Button>
+                    <Button
+                        Background="{DynamicResource GhostHoverColor}"
+                        Classes="Icon"
+                        Command="{Binding NextPageCommand}"
+                        Height="28"
+                        Width="28">
+                        <Viewbox Margin="6">
+                            <TextBlock Classes="LucideIcon" Text="&#57421;" />
+                        </Viewbox>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <TextBlock
+                Classes="p"
+                Text="Displays a numeric input field with increment/decrement buttons."
+                TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer>
+            <StackPanel
+                Margin="{StaticResource PageMargin}"
+                MaxWidth="{StaticResource PageMaxWidth}"
+                Spacing="32">
+                <controls:ControlBlock Title="Default" Xaml="{Binding DefaultNumericCode}">
+                    <StackPanel>
+                        <NumericUpDown Width="225" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Disabled" Xaml="{Binding DisabledCode}">
+                    <StackPanel>
+                        <NumericUpDown IsEnabled="False" Width="225" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="Left Aligned" Xaml="{Binding WithLabelCode}">
+                    <StackPanel>
+                        <NumericUpDown ButtonSpinnerLocation="Left" Width="225" />
+                    </StackPanel>
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="With Label" Xaml="{Binding WithLabelCode}">
+                    <NumericUpDown
+                        PlaceholderText="Enter quantity"
+                        Width="225"
+                        shadui:ControlAssist.Label="Quantity" />
+                </controls:ControlBlock>
+                <controls:ControlBlock Title="With Custom Label" Xaml="{Binding WithCustomLabelCode}">
+                    <NumericUpDown
+                        Classes="Clearable"
+                        FormatString="N2"
+                        ShowButtonSpinner="False"
+                        PlaceholderText="0.00"
+                        Width="225"
+                        shadui:ControlAssist.Hint="Enter the product price"
+                        shadui:ControlAssist.Label="Price">
+                        <NumericUpDown.InnerLeftContent>
+                            <TextBlock Margin="8,0,-8,0" Text="$" />
+                        </NumericUpDown.InnerLeftContent>
+                    </NumericUpDown>
+                </controls:ControlBlock>
+                <controls:ControlBlock
+                    CSharp="{Binding Form.CSharpCode}"
+                    Title="Form Validation"
+                    Xaml="{Binding Form.XamlCode}">
+                    <ContentControl Content="{Binding Form}" />
+                </controls:ControlBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
