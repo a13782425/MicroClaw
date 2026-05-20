@@ -1,4 +1,4 @@
-<shadui:Window
+<UserControl
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -8,58 +8,18 @@
     mc:Ignorable="d"
     d:DesignWidth="1164"
     d:DesignHeight="768"
-    x:Class="MicroClaw.Desktop.Views.MainWindow"
+    x:Class="MicroClaw.Desktop.Views.MainView"
     x:DataType="vm:MainWindowViewModel"
-    x:CompileBindings="True"
-    Width="1164"
-    Height="768"
-    MinWidth="980"
-    MinHeight="640"
-    Background="{DynamicResource WindowBackgroundColor}"
-    BorderThickness="0"
-    ExtendClientAreaToDecorationsHint="True"
-    Icon="/Assets/icon.ico"
-    IsTitleBarVisible="False"
-    RootCornerRadius="10"
-    SaveWindowState="False"
-    ShowBottomBorder="False"
-    ShowTitlebarBackground="False"
-    Title="MicroClaw"
-    TitleBarAnimationEnabled="False"
-    TransparencyLevelHint="Transparent"
-    WindowDecorations="None"
-    WindowStartupLocation="CenterScreen">
+    x:CompileBindings="True">
 
-    <Grid ColumnDefinitions="242,*" ClipToBounds="True">
+    <Grid ColumnDefinitions="242,*" ClipToBounds="True" Background="{DynamicResource WindowBackgroundColor}">
         <Border
             Grid.Column="0"
             Background="{DynamicResource SidebarBackgroundColor}"
             BorderBrush="{DynamicResource BorderColor30}"
             BorderThickness="0,0,1,0">
             <Grid RowDefinitions="44,*,54">
-                <Grid
-                    ColumnDefinitions="Auto,*,Auto"
-                    Margin="14,0,10,0">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Button Width="14" Height="14" Padding="0" Background="Transparent" BorderThickness="0" Click="OnCloseClicked">
-                            <Ellipse Width="12" Height="12" Fill="#D4D7D3" />
-                        </Button>
-                        <Button Width="14" Height="14" Padding="0" Background="Transparent" BorderThickness="0" Click="OnMinimizeClicked">
-                            <Ellipse Width="12" Height="12" Fill="#D4D7D3" />
-                        </Button>
-                        <Button Width="14" Height="14" Padding="0" Background="Transparent" BorderThickness="0" Click="OnToggleMaximizeClicked">
-                            <Ellipse Width="12" Height="12" Fill="#D4D7D3" />
-                        </Button>
-                        <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" Margin="6,0,0,0" />
-                    </StackPanel>
-
-                    <Border Grid.Column="1" Background="Transparent" PointerPressed="OnChromePointerPressed" />
-
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                        <PathIcon Data="{x:Static shadui:Icons.ChevronLeft}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
-                        <PathIcon Data="{x:Static shadui:Icons.ChevronRight}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
-                    </StackPanel>
-                </Grid>
+                <Border Grid.Row="0" />
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Disabled">
                     <StackPanel Margin="8,4,8,0" Spacing="2">
@@ -132,7 +92,7 @@
         </Border>
 
         <Grid Grid.Column="1" RowDefinitions="44,*">
-            <Border Background="Transparent" PointerPressed="OnChromePointerPressed" />
+            <Border Grid.Row="0" />
 
             <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel HorizontalAlignment="Center" Margin="0,80,0,32" MaxWidth="668" Spacing="0">
@@ -250,14 +210,5 @@
                 </StackPanel>
             </ScrollViewer>
         </Grid>
-
-        <Border Width="6" HorizontalAlignment="Left" Background="Transparent" PointerPressed="OnResizeWestPointerPressed" />
-        <Border Width="6" HorizontalAlignment="Right" Background="Transparent" PointerPressed="OnResizeEastPointerPressed" />
-        <Border Height="6" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthPointerPressed" />
-        <Border Height="6" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthPointerPressed" />
-        <Border Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthWestPointerPressed" />
-        <Border Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthEastPointerPressed" />
-        <Border Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthWestPointerPressed" />
-        <Border Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthEastPointerPressed" />
     </Grid>
-</shadui:Window>
+</UserControl>

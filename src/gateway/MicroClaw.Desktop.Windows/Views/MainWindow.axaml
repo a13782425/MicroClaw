@@ -1,0 +1,70 @@
+<shadui:Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:desktopViews="using:MicroClaw.Desktop.Views"
+    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    mc:Ignorable="d"
+    d:DesignWidth="1164"
+    d:DesignHeight="768"
+    x:Class="MicroClaw.Desktop.Windows.Views.MainWindow"
+    Width="1164"
+    Height="768"
+    MinWidth="980"
+    MinHeight="640"
+    Background="{DynamicResource WindowBackgroundColor}"
+    BorderThickness="0"
+    ExtendClientAreaToDecorationsHint="True"
+    Icon="avares://MicroClaw.Desktop/Assets/icon.ico"
+    IsTitleBarVisible="False"
+    RootCornerRadius="10"
+    SaveWindowState="False"
+    ShowBottomBorder="False"
+    ShowTitlebarBackground="False"
+    Title="MicroClaw"
+    TitleBarAnimationEnabled="False"
+    TransparencyLevelHint="Transparent"
+    WindowDecorations="None"
+    WindowStartupLocation="CenterScreen">
+
+    <Grid ColumnDefinitions="242,*" ClipToBounds="True">
+        <desktopViews:MainView Grid.ColumnSpan="2" />
+
+        <Grid
+            Grid.ColumnSpan="2"
+            ColumnDefinitions="Auto,*,Auto"
+            Height="44"
+            Margin="14,0,10,0"
+            VerticalAlignment="Top">
+            <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
+                <PathIcon Data="{x:Static shadui:Icons.ChevronLeft}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
+                <PathIcon Data="{x:Static shadui:Icons.ChevronRight}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
+            </StackPanel>
+
+            <Border Grid.Column="1" Background="Transparent" PointerPressed="OnChromePointerPressed" />
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <Button Width="34" Height="30" Padding="10" Background="Transparent" BorderThickness="0" Click="OnMinimizeClicked" ToolTip.Tip="最小化">
+                    <PathIcon Data="{x:Static shadui:Icons.WindowMinimize}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
+                </Button>
+                <Button Width="34" Height="30" Padding="10" Background="Transparent" BorderThickness="0" Click="OnToggleMaximizeClicked" ToolTip.Tip="最大化">
+                    <PathIcon Data="{x:Static shadui:Icons.WindowMaximize}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
+                </Button>
+                <Button Width="34" Height="30" Padding="10" Background="Transparent" BorderThickness="0" Click="OnCloseClicked" ToolTip.Tip="关闭">
+                    <PathIcon Data="{x:Static shadui:Icons.WindowClose}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.ColumnSpan="2" Width="6" HorizontalAlignment="Left" Background="Transparent" PointerPressed="OnResizeWestPointerPressed" />
+        <Border Grid.ColumnSpan="2" Width="6" HorizontalAlignment="Right" Background="Transparent" PointerPressed="OnResizeEastPointerPressed" />
+        <Border Grid.ColumnSpan="2" Height="6" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthPointerPressed" />
+        <Border Grid.ColumnSpan="2" Height="6" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthPointerPressed" />
+        <Border Grid.ColumnSpan="2" Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthWestPointerPressed" />
+        <Border Grid.ColumnSpan="2" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" PointerPressed="OnResizeNorthEastPointerPressed" />
+        <Border Grid.ColumnSpan="2" Width="10" Height="10" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthWestPointerPressed" />
+        <Border Grid.ColumnSpan="2" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent" PointerPressed="OnResizeSouthEastPointerPressed" />
+    </Grid>
+</shadui:Window>

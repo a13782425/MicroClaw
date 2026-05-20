@@ -1,9 +1,9 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 
-namespace MicroClaw.Desktop.Views;
+namespace MicroClaw.Desktop.Windows.Views;
 
 public partial class MainWindow : ShadUI.Window
 {
