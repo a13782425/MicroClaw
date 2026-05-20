@@ -19,7 +19,6 @@
 
 	<Application.Styles>
 		<shadui:ShadTheme />
-
 		<Style Selector="shadui|Window">
 			<Setter Property="FontFamily" Value="{StaticResource PuHuiFont}" />
 		</Style>

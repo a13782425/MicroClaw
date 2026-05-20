@@ -1,14 +1,18 @@
 ﻿using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using MicroClaw.Desktop.Views;
+using ShadUI;
+using Window = Avalonia.Controls.Window;
 
 namespace MicroClaw.Desktop;
 
 public partial class App : Application
 {
-    public static Func<Window>? MainWindowFactory { get; set; }
+    public static Func<ShadUI.Window>? MainWindowFactory { get; set; }
+    
+    public static ThemeWatcher ThemeWatcher { get; private set; } = null!;
+    
 
     public override void Initialize()
     {
@@ -16,7 +20,8 @@ public partial class App : Application
     }
 
     public override void OnFrameworkInitializationCompleted()
-    {  
+    {
+        ThemeWatcher = new ThemeWatcher(this);
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = MainWindowFactory?.Invoke() ?? CreateFallbackMainWindow();

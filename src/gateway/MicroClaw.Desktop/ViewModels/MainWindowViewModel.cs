@@ -47,25 +47,6 @@ public partial class MainWindowViewModel : ObservableObject
         new("工作流", Icons.Calendar, RouteWorkflows),
         new("搜索", Icons.Search, RouteSearch),
     ];
-    
-    [RelayCommand]
-    private void Navigate(string? route)
-    {
-        if (string.IsNullOrEmpty(route))
-        {
-            return;
-        }
-        
-        CurrentRoute = route;
-        CurrentPage = route switch
-        {
-            RouteHome => _home,
-            RouteInbox => _inbox,
-            RouteWorkflows => _workflow,
-            RouteSearch => _search,
-            _ => _home,
-        };
-    }
     public static IReadOnlyList<Control> SettingsMenuItems { get; } =
     [
         new MenuItem { Header = "首选项", Icon = new PathIcon { Data = Icons.Settings, Width = 14, Height = 14 } },
@@ -86,22 +67,26 @@ public partial class MainWindowViewModel : ObservableObject
     
     public IReadOnlyList<ThemeOption> ThemeOptions { get; } =
     [
-        new("跟随系统", "使用操作系统主题", ThemeVariant.Default),
-        new("浅色", "明亮工作台预览", ThemeVariant.Light),
-        new("深色", "低亮度工作台预览", ThemeVariant.Dark)
+        new("跟随系统", "使用操作系统主题", ThemeMode.System),
+        new("浅色", "明亮工作台预览", ThemeMode.Light),
+        new("深色", "低亮度工作台预览", ThemeMode.Dark)
     ];
     
     public string ActiveThemeLabel => SelectedTheme?.DisplayName ?? "跟随系统";
     
-    public Geometry ThemeIcon
+    public HeroIconsAvalonia.Enums.IconType ThemeIcon
     {
         get
         {
-            if (SelectedTheme?.Variant == ThemeVariant.Light)
-                return Icons.ArrowDown;
-            if (SelectedTheme?.Variant == ThemeVariant.Dark)
-                return Icons.Calendar;
-            return Icons.ChevronDown;
+            switch (SelectedTheme?.Mode)
+            {
+                case ThemeMode.Light:
+                    return HeroIconsAvalonia.Enums.IconType.Sun;
+                case ThemeMode.Dark:
+                    return HeroIconsAvalonia.Enums.IconType.Moon;
+                default:
+                    return HeroIconsAvalonia.Enums.IconType.ComputerDesktop;
+            }
         }
     }
     public string ThemeButtonToolTip => $"主题：{ActiveThemeLabel}";
@@ -116,7 +101,24 @@ public partial class MainWindowViewModel : ObservableObject
         var nextIndex = currentIndex < 0 || currentIndex + 1 >= ThemeOptions.Count ? 0 : currentIndex + 1;
         SelectedTheme = ThemeOptions[nextIndex];
     }
-    
+    [RelayCommand]
+    private void Navigate(string? route)
+    {
+        if (string.IsNullOrEmpty(route))
+        {
+            return;
+        }
+        
+        CurrentRoute = route;
+        CurrentPage = route switch
+        {
+            RouteHome => _home,
+            RouteInbox => _inbox,
+            RouteWorkflows => _workflow,
+            RouteSearch => _search,
+            _ => _home,
+        };
+    }
     private int GetSelectedThemeIndex()
     {
         for (var index = 0; index < ThemeOptions.Count; index++)
@@ -137,12 +139,12 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
         
-        app.RequestedThemeVariant = value.Variant;
+        App.ThemeWatcher.SwitchTheme(value.Mode);
     }
     
 }
 public sealed record SessionPreview(string Title, string Meta, bool IsActive);
-public sealed record ThemeOption(string DisplayName, string Description, ThemeVariant Variant)
+public sealed record ThemeOption(string DisplayName, string Description, ThemeMode Mode)
 {
     public override string ToString() => DisplayName;
 }
