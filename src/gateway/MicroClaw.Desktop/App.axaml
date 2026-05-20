@@ -1,38 +1,44 @@
 <Application xmlns="https://github.com/avaloniaui"
 			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 			 xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+			 xmlns:desktop="clr-namespace:MicroClaw.Desktop"
+			 xmlns:views="clr-namespace:MicroClaw.Desktop.Views"
 			 x:Class="MicroClaw.Desktop.App"
 			 RequestedThemeVariant="Default">
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 	<Application.Resources>
 		<ResourceDictionary>
-			<FontFamily x:Key="ManropeFont">avares://MicroClaw.Desktop/Assets/Fonts#Manrope</FontFamily>
-			<FontFamily x:Key="LucideIcon">avares://MicroClaw.Desktop/Assets/Fonts#lucide</FontFamily>
+			<FontFamily x:Key="PuHuiFont">avares://MicroClaw.Desktop/Assets/Fonts02#AlibabaPuHuiTi</FontFamily>
+			<FontFamily x:Key="DaoLi">avares://MicroClaw.Desktop/Assets/Fonts02#AlimamaDaoLiTi</FontFamily>
 		</ResourceDictionary>
 	</Application.Resources>
+
+	<Application.DataTemplates>
+		<desktop:ViewLocator />
+	</Application.DataTemplates>
 
 	<Application.Styles>
 		<shadui:ShadTheme />
 
 		<Style Selector="shadui|Window">
-			<Setter Property="FontFamily" Value="{StaticResource ManropeFont}" />
+			<Setter Property="FontFamily" Value="{StaticResource PuHuiFont}" />
 		</Style>
 
-		<Style Selector="TextBlock.LucideIcon">
-			<Setter Property="Height" Value="18" />
-			<Setter Property="Width" Value="18" />
-			<Setter Property="VerticalAlignment" Value="Center" />
-			<Setter Property="TextAlignment" Value="Center" />
-			<Setter Property="FontFamily" Value="{StaticResource LucideIcon}" />
-			<Setter Property="FontSize" Value="18" />
-			<Setter Property="FontWeight" Value="ExtraLight" />
-		</Style>
-
-		<Style Selector="TextBlock.MicroLabel">
-			<Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
-			<Setter Property="FontSize" Value="12" />
-			<Setter Property="FontWeight" Value="Medium" />
-		</Style>
+		<!-- <Style Selector="TextBlock.LucideIcon"> -->
+		<!-- 	<Setter Property="Height" Value="18" /> -->
+		<!-- 	<Setter Property="Width" Value="18" /> -->
+		<!-- 	<Setter Property="VerticalAlignment" Value="Center" /> -->
+		<!-- 	<Setter Property="TextAlignment" Value="Center" /> -->
+		<!-- 	<Setter Property="FontFamily" Value="{StaticResource LucideIcon}" /> -->
+		<!-- 	<Setter Property="FontSize" Value="18" /> -->
+		<!-- 	<Setter Property="FontWeight" Value="ExtraLight" /> -->
+		<!-- </Style> -->
+		<!-- -->
+		<!-- <Style Selector="TextBlock.MicroLabel"> -->
+		<!-- 	<Setter Property="Foreground" Value="{DynamicResource MutedColor}" /> -->
+		<!-- 	<Setter Property="FontSize" Value="12" /> -->
+		<!-- 	<Setter Property="FontWeight" Value="Medium" /> -->
+		<!-- </Style> -->
 	</Application.Styles>
 
 	<TrayIcon.Icons>
