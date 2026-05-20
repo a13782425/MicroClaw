@@ -1,7 +1,10 @@
 ﻿using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShadUI;
 
 namespace MicroClaw.Desktop;
 
@@ -16,10 +19,33 @@ public partial class MainWindowViewModel : ObservableObject
 	[ObservableProperty]
 	private string draftPrompt = string.Empty;
 
+	[ObservableProperty]
+	private bool isSidebarOpen = true;
+
 	public MainWindowViewModel()
 	{
 		SelectedTheme = ThemeOptions[0];
 	}
+
+	public IReadOnlyList<NavItem> NavItems { get; } =
+	[
+		new("主页", Icons.SidePanel, true),
+		new("收件箱", Icons.Info, false),
+		new("工作流", Icons.Calendar, false),
+		new("搜索", Icons.Search, false),
+	];
+
+	public IReadOnlyList<Control> ExpandedSettingsMenuItems { get; } = BuildSettingsMenu();
+
+	public IReadOnlyList<Control> CollapsedSettingsMenuItems { get; } = BuildSettingsMenu();
+
+	private static IReadOnlyList<Control> BuildSettingsMenu() =>
+	[
+		new MenuItem { Header = "首选项", Icon = new PathIcon { Data = Icons.Settings, Width = 14, Height = 14 } },
+		new MenuItem { Header = "调色板", Icon = new PathIcon { Data = Icons.Palette, Width = 14, Height = 14 } },
+		new Separator(),
+		new MenuItem { Header = "关于", Icon = new PathIcon { Data = Icons.Info, Width = 14, Height = 14 } },
+	];
 
 	public IReadOnlyList<SessionPreview> Sessions { get; } =
 	[
@@ -69,6 +95,9 @@ public partial class MainWindowViewModel : ObservableObject
 	public string ThemeButtonToolTip => $"主题：{ActiveThemeLabel}";
 
 	[RelayCommand]
+	private void ToggleSidebar() => IsSidebarOpen = !IsSidebarOpen;
+
+	[RelayCommand]
 	private void CycleTheme()
 	{
 		var currentIndex = GetSelectedThemeIndex();
@@ -109,3 +138,5 @@ public sealed record ThemeOption(string DisplayName, string Description, ThemeVa
 {
 	public override string ToString() => DisplayName;
 }
+
+public sealed record NavItem(string Title, Geometry? Icon, bool IsActive);

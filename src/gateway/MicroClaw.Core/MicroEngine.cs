@@ -697,7 +697,7 @@ public sealed class MicroEngine : IAsyncDisposable
     /// <summary>引擎内部的 Tick 调度与后台循环执行器。</summary>
     private sealed class MicroTickSchedulerRunner
     {
-        private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(8);
+        private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(4);
         
         private readonly MicroEngine _owner;
         private readonly Lock _gate = new();

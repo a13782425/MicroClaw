@@ -5,10 +5,12 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:desktopViews="using:MicroClaw.Desktop.Views"
     xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+    xmlns:vm="using:MicroClaw.Desktop"
     mc:Ignorable="d"
     d:DesignWidth="1164"
     d:DesignHeight="768"
     x:Class="MicroClaw.Desktop.Windows.Views.MainWindow"
+    x:DataType="vm:MainWindowViewModel"
     Width="1164"
     Height="768"
     MinWidth="980"
@@ -37,8 +39,14 @@
             Height="44"
             Margin="14,0,10,0"
             VerticalAlignment="Top">
-            <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-                <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button
+                    Width="26" Height="26" Padding="6"
+                    Background="Transparent" BorderThickness="0"
+                    Command="{Binding ToggleSidebarCommand}"
+                    ToolTip.Tip="切换侧边栏">
+                    <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
+                </Button>
                 <PathIcon Data="{x:Static shadui:Icons.ChevronLeft}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
                 <PathIcon Data="{x:Static shadui:Icons.ChevronRight}" Width="12" Height="12" Foreground="{DynamicResource MutedColor}" />
             </StackPanel>

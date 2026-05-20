@@ -12,92 +12,163 @@
     x:DataType="vm:MainWindowViewModel"
     x:CompileBindings="True">
 
-    <Grid ColumnDefinitions="242,*" ClipToBounds="True" Background="{DynamicResource WindowBackgroundColor}">
-        <Border
+    <Grid ColumnDefinitions="Auto,*" ClipToBounds="True" Background="{DynamicResource WindowBackgroundColor}">
+        <shadui:Sidebar
             Grid.Column="0"
+            Expanded="{Binding IsSidebarOpen}"
+            Width="242"
+            MinWidth="56"
             Background="{DynamicResource SidebarBackgroundColor}"
             BorderBrush="{DynamicResource BorderColor30}"
-            BorderThickness="0,0,1,0">
-            <Grid RowDefinitions="44,*,54">
-                <Border Grid.Row="0" />
+            BorderThickness="0,0,1,0"
+            Padding="8">
 
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="8,4,8,0" Spacing="2">
-                        <Border Background="{DynamicResource SelectionColor}" CornerRadius="6" Padding="8,7">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="14" Height="14" Foreground="{DynamicResource ForegroundColor}" />
-                                <TextBlock Grid.Column="1" Text="Home" Classes="Small" />
-                            </Grid>
-                        </Border>
-                        <Border CornerRadius="6" Padding="8,7">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <PathIcon Data="{x:Static shadui:Icons.Info}" Width="14" Height="14" Foreground="{DynamicResource ForegroundColor}" />
-                                <TextBlock Grid.Column="1" Text="Inbox" Classes="Small" />
-                            </Grid>
-                        </Border>
-                        <Border CornerRadius="6" Padding="8,7">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <PathIcon Data="{x:Static shadui:Icons.Calendar}" Width="14" Height="14" Foreground="{DynamicResource ForegroundColor}" />
-                                <TextBlock Grid.Column="1" Text="Workflows" Classes="Small" />
-                            </Grid>
-                        </Border>
-                        <Border CornerRadius="6" Padding="8,7">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                <PathIcon Data="{x:Static shadui:Icons.Search}" Width="14" Height="14" Foreground="{DynamicResource ForegroundColor}" />
-                                <TextBlock Grid.Column="1" Text="Search" Classes="Small" />
-                            </Grid>
-                        </Border>
+            <shadui:Sidebar.Header>
+                <Border Height="44" />
+            </shadui:Sidebar.Header>
 
-                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14" Margin="6,26,6,8">
-                            <TextBlock Text="Sessions" Classes="Caption Muted" VerticalAlignment="Center" />
-                            <PathIcon Grid.Column="1" Data="{x:Static shadui:Icons.Settings}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
-                            <TextBlock Grid.Column="2" Text="+" Classes="Small" Foreground="{DynamicResource MutedColor}" />
-                        </Grid>
+            <StackPanel Spacing="2">
+                <ItemsControl ItemsSource="{Binding NavItems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:NavItem">
+                            <shadui:SidebarItem
+                                IsChecked="{Binding IsActive, Mode=OneWay}"
+                                Content="{Binding Title}">
+                                <shadui:SidebarItem.Icon>
+                                    <PathIcon Data="{Binding Icon}" Width="14" Height="14"
+                                              Foreground="{DynamicResource ForegroundColor}" />
+                                </shadui:SidebarItem.Icon>
+                            </shadui:SidebarItem>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                        <ItemsControl ItemsSource="{Binding Sessions}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:SessionPreview">
-                                    <Grid Margin="0,1">
-                                        <Border Background="{DynamicResource SelectionColor}" CornerRadius="6" IsVisible="{Binding IsActive}" />
-                                        <Border Padding="8,6">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
-                                                <PathIcon Data="{x:Static shadui:Icons.ClipBoard}" Width="14" Height="14" Foreground="{DynamicResource ForegroundColor}" Margin="0,2,0,0" />
-                                                <StackPanel Grid.Column="1" Spacing="1">
-                                                    <TextBlock Text="{Binding Title}" Classes="Small" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{Binding Meta}" Classes="Caption Muted" TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                                <Border Grid.Column="2" Width="18" Height="18" CornerRadius="5" Background="{DynamicResource SelectionColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" IsVisible="{Binding IsActive}">
-                                                    <PathIcon Data="{x:Static shadui:Icons.Check}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryColor}" />
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="9" Margin="10,0,12,10" VerticalAlignment="Bottom">
-                    <Border Width="18" Height="18" CornerRadius="9" Background="{DynamicResource PrimaryColor}">
-                        <TextBlock Text="F" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryForegroundColor}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="Fernanda Sarmento" Classes="Small" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                    <Button Grid.Column="2" Classes="Icon" Width="26" Height="26" Padding="6" Background="Transparent" Command="{Binding CycleThemeCommand}" ToolTip.Tip="{Binding ThemeButtonToolTip}">
-                        <TextBlock Classes="LucideIcon" Text="{Binding ThemeIcon}" FontSize="14" />
-                    </Button>
-                    <PathIcon Grid.Column="3" Data="{x:Static shadui:Icons.Settings}" Width="14" Height="14" Foreground="{DynamicResource MutedColor}" VerticalAlignment="Center" />
+                <Grid
+                    ColumnDefinitions="*,Auto,Auto"
+                    ColumnSpacing="14"
+                    Margin="6,26,6,8"
+                    IsVisible="{Binding IsSidebarOpen}">
+                    <TextBlock Text="Sessions" Classes="Caption Muted" VerticalAlignment="Center" />
+                    <PathIcon Grid.Column="1" Data="{x:Static shadui:Icons.Settings}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
+                    <TextBlock Grid.Column="2" Text="+" Classes="Small" Foreground="{DynamicResource MutedColor}" />
                 </Grid>
-            </Grid>
-        </Border>
+
+                <ItemsControl ItemsSource="{Binding Sessions}" IsVisible="{Binding IsSidebarOpen}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SessionPreview">
+                            <shadui:SidebarItem IsChecked="{Binding IsActive, Mode=OneWay}">
+                                <shadui:SidebarItem.Icon>
+                                    <PathIcon Data="{x:Static shadui:Icons.ClipBoard}" Width="14" Height="14"
+                                              Foreground="{DynamicResource ForegroundColor}" />
+                                </shadui:SidebarItem.Icon>
+                                <shadui:SidebarItem.Content>
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Meta}" Classes="Caption Muted" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </shadui:SidebarItem.Content>
+                            </shadui:SidebarItem>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <shadui:Sidebar.Footer>
+                <Panel Margin="0,4,0,6">
+
+                    <!-- Expanded: two small buttons side-by-side -->
+                    <StackPanel
+                        IsVisible="{Binding $parent[shadui:Sidebar].Expanded}"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        HorizontalAlignment="Right">
+                        <Button
+                            Width="30" Height="30" Padding="0"
+                            Background="Transparent" BorderThickness="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            Command="{Binding CycleThemeCommand}"
+                            ToolTip.Tip="{Binding ThemeButtonToolTip}">
+                            <TextBlock
+                                Classes="LucideIcon"
+                                Text="{Binding ThemeIcon}"
+                                FontSize="14"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        </Button>
+                        <Menu Classes="Single">
+                            <MenuItem
+                                Classes="NoPressedAnimation"
+                                Padding="0"
+                                CornerRadius="{DynamicResource MdCornerRadius}"
+                                shadui:MenuItemAssist.PopupHorizontalOffset="0"
+                                shadui:MenuItemAssist.PopupPlacement="TopEdgeAlignedRight"
+                                shadui:MenuItemAssist.PopupVerticalOffset="-4"
+                                ItemsSource="{Binding ExpandedSettingsMenuItems}"
+                                ToolTip.Tip="设置">
+                                <MenuItem.Header>
+                                    <Border Width="30" Height="30">
+                                        <PathIcon
+                                            Data="{x:Static shadui:Icons.Settings}"
+                                            Width="14" Height="14"
+                                            Foreground="{DynamicResource ForegroundColor}" />
+                                    </Border>
+                                </MenuItem.Header>
+                            </MenuItem>
+                        </Menu>
+                    </StackPanel>
+
+                    <!-- Collapsed: stacked vertically, centered -->
+                    <StackPanel
+                        IsVisible="{Binding !$parent[shadui:Sidebar].Expanded}"
+                        Orientation="Vertical"
+                        Spacing="4"
+                        HorizontalAlignment="Center">
+                        <Button
+                            Width="30" Height="30" Padding="0"
+                            Background="Transparent" BorderThickness="0"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            Command="{Binding CycleThemeCommand}"
+                            ToolTip.Tip="{Binding ThemeButtonToolTip}">
+                            <TextBlock
+                                Classes="LucideIcon"
+                                Text="{Binding ThemeIcon}"
+                                FontSize="14"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center" />
+                        </Button>
+                        <Menu Classes="Single" HorizontalAlignment="Center">
+                            <MenuItem
+                                Classes="NoPressedAnimation"
+                                Padding="0"
+                                CornerRadius="{DynamicResource MdCornerRadius}"
+                                shadui:MenuItemAssist.PopupHorizontalOffset="4"
+                                shadui:MenuItemAssist.PopupPlacement="RightEdgeAlignedBottom"
+                                shadui:MenuItemAssist.PopupVerticalOffset="0"
+                                ItemsSource="{Binding CollapsedSettingsMenuItems}"
+                                ToolTip.Tip="设置">
+                                <MenuItem.Header>
+                                    <Border Width="30" Height="30">
+                                        <PathIcon
+                                            Data="{x:Static shadui:Icons.Settings}"
+                                            Width="14" Height="14"
+                                            Foreground="{DynamicResource ForegroundColor}" />
+                                    </Border>
+                                </MenuItem.Header>
+                            </MenuItem>
+                        </Menu>
+                    </StackPanel>
+
+                </Panel>
+            </shadui:Sidebar.Footer>
+        </shadui:Sidebar>
 
         <Grid Grid.Column="1" RowDefinitions="44,*">
             <Border Grid.Row="0" />
 
             <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel HorizontalAlignment="Center" Margin="0,80,0,32" MaxWidth="668" Spacing="0">
-                    <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource MutedColor}" HorizontalAlignment="Center" Margin="0,0,0,34">
-                        <PathIcon Data="{x:Static shadui:Icons.Logo}" Width="34" Height="34" Foreground="{DynamicResource WindowBackgroundColor}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource MutedColor}" HorizontalAlignment="Center" Margin="0,0,0,34" ClipToBounds="True">
+                        <Image Source="avares://MicroClaw.Desktop/Assets/Image/Head.png" Stretch="UniformToFill" />
                     </Border>
 
                     <shadui:Card HasShadow="True" Padding="0" CornerRadius="10" Width="668">
@@ -178,35 +249,6 @@
                             <TextBlock Text="Clone from URL" Classes="Caption" />
                         </StackPanel>
                     </StackPanel>
-
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,116,0,16">
-                        <TextBlock Text="On your radar" FontSize="14" FontWeight="SemiBold" />
-                        <Button Grid.Column="1" Classes="Ghost" Content="View inbox" Padding="8,4" />
-                    </Grid>
-
-                    <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
-                        <ItemsControl ItemsSource="{Binding RadarItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:RadarItem">
-                                    <Border BorderBrush="{DynamicResource BorderColor30}" BorderThickness="0,0,0,1" Padding="14,11">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                            <Grid Width="12" Height="12" Margin="0,4,0,0">
-                                                <Ellipse Stroke="{DynamicResource SuccessColor}" StrokeThickness="2" />
-                                                <PathIcon Data="{x:Static shadui:Icons.Check}" Width="7" Height="7" IsVisible="{Binding IsCompleted}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource SuccessColor}" />
-                                            </Grid>
-                                            <StackPanel Grid.Column="1" Spacing="2">
-                                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                                    <TextBlock Text="{Binding Title}" Classes="Small" />
-                                                    <TextBlock Text="{Binding Number}" Classes="Small Muted" />
-                                                </StackPanel>
-                                                <TextBlock Text="{Binding Meta}" Classes="Caption Muted" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
