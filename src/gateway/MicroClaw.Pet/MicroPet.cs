@@ -13,6 +13,7 @@ using MicroClaw.Pet.RateLimit;
 using MicroClaw.Pet.StateMachine;
 using MicroClaw.Pet.Storage;
 using MicroClaw.Configuration.Options;
+using MicroClaw.Core;
 using MicroClaw.Providers;
 using MicroClaw.Skills;
 using MicroClaw.Tools;
@@ -87,30 +88,29 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     private readonly ToolCollector _toolCollector;
     private readonly ILogger _logger;
     
-    internal MicroPet(IServiceProvider sp, IMicroSession microSession, PetState state, PetConfig config, EmotionState emotion, PetContextState initialState)
+    internal MicroPet(IMicroSession microSession, PetState state, PetConfig config, EmotionState emotion, PetContextState initialState)
     {
-        ArgumentNullException.ThrowIfNull(sp);
         MicroSession = microSession ?? throw new ArgumentNullException(nameof(microSession));
         _petState = state ?? throw new ArgumentNullException(nameof(state));
         Config = config ?? throw new ArgumentNullException(nameof(config));
         Emotion = emotion;
         State = initialState;
-        
-        _decisionEngine = sp.GetRequiredService<PetDecisionEngine>();
-        _emotionStore = sp.GetRequiredService<IEmotionStore>();
-        _emotionRuleEngine = sp.GetRequiredService<IEmotionRuleEngine>();
-        _emotionBehaviorMapper = sp.GetRequiredService<IEmotionBehaviorMapper>();
-        _stateStore = sp.GetRequiredService<PetStateStore>();
-        _sessionObserver = sp.GetRequiredService<PetSessionObserver>();
-        _rateLimiter = sp.GetRequiredService<PetRateLimiter>();
-        _reportBuilder = sp.GetRequiredService<PetSelfAwarenessReportBuilder>();
-        _providerStore = sp.GetRequiredService<ProviderService>();
-        _providerRouter = sp.GetService<IProviderRouter>();
-        _sessionService = sp.GetRequiredService<ISessionService>();
-        _agentService = sp.GetRequiredService<MicroAgentService>();
-        _messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
-        _toolCollector = sp.GetRequiredService<ToolCollector>();
-        _logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
+        var engine = MicroEngine.Instance;
+        _decisionEngine = engine.GetRequiredService<PetDecisionEngine>();
+        _emotionStore = engine.GetRequiredService<IEmotionStore>();
+        _emotionRuleEngine = engine.GetRequiredService<IEmotionRuleEngine>();
+        _emotionBehaviorMapper = engine.GetRequiredService<IEmotionBehaviorMapper>();
+        _stateStore = engine.GetRequiredService<PetStateStore>();
+        _sessionObserver = engine.GetRequiredService<PetSessionObserver>();
+        _rateLimiter = engine.GetRequiredService<PetRateLimiter>();
+        _reportBuilder = engine.GetRequiredService<PetSelfAwarenessReportBuilder>();
+        _providerStore = engine.GetRequiredService<ProviderService>();
+        _providerRouter = engine.GetService<IProviderRouter>();
+        _sessionService = engine.GetRequiredService<ISessionService>();
+        _agentService = engine.GetRequiredService<MicroAgentService>();
+        // _messageAssembler = ActivatorUtilities.CreateInstance<ChatMessageAssembler>(sp);
+        _toolCollector = engine.GetRequiredService<ToolCollector>();
+        _logger = engine.GetRequiredService<ILoggerFactory>().CreateLogger<MicroPet>();
     }
     
     // ── IPet ──────────────────────────────────────────────────────────────

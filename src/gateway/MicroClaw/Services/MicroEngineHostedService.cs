@@ -13,28 +13,33 @@ public sealed class MicroEngineHostedService(MicroEngine microEngine, ILogger<Mi
     
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await _microEngine.StartAsync(cancellationToken);
+        await _microEngine.StartEngine(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
     
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using CancellationTokenSource executionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _stopLoopSignal.Token);
-        CancellationToken executionToken = executionCts.Token;
-        
-        try
-        {
-            await _microEngine.RunAsync(executionToken);
-        }
-        catch (OperationCanceledException) when (executionToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MicroEngine run loop failed.");
-            throw;
-        }
+        return  Task.CompletedTask;
     }
+    
+    // protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    // {
+    //     using CancellationTokenSource executionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _stopLoopSignal.Token);
+    //     CancellationToken executionToken = executionCts.Token;
+    //     
+    //     try
+    //     {
+    //         await _microEngine.RunAsync(executionToken);
+    //     }
+    //     catch (OperationCanceledException) when (executionToken.IsCancellationRequested)
+    //     {
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         _logger.LogError(ex, "MicroEngine run loop failed.");
+    //         throw;
+    //     }
+    // }
     
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -62,7 +67,7 @@ public sealed class MicroEngineHostedService(MicroEngine microEngine, ILogger<Mi
                 engineStopCts.CancelAfter(StopTimeout);
             
             CancellationToken engineStopToken = engineStopCts.Token;
-            await _microEngine.StopAsync(engineStopToken);
+            await _microEngine.StopEngine(engineStopToken);
         }
         catch (Exception ex)
         {

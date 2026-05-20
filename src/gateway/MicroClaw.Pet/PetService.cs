@@ -14,19 +14,17 @@ namespace MicroClaw.Pet;
 /// </summary>
 public class PetService : MicroService
 {
-    private readonly IServiceProvider _serviceProvider;
     private readonly PetStateStore _stateStore;
     private readonly IEmotionStore _emotionStore;
     private readonly string _sessionsDir;
     private readonly ILogger<PetService> _logger;
     
-    public PetService(IServiceProvider sp)
+    public PetService()
     {
-        _serviceProvider = sp ?? throw new ArgumentNullException(nameof(sp));
-        _stateStore = sp.GetRequiredService<PetStateStore>();
-        _emotionStore = sp.GetRequiredService<IEmotionStore>();
+        _stateStore = MicroEngine.Instance.GetRequiredService<PetStateStore>();
+        _emotionStore = MicroEngine.Instance.GetRequiredService<IEmotionStore>();
         _sessionsDir = MicroClawConfig.Env.SessionsDir;
-        _logger = sp.GetRequiredService<ILogger<PetService>>();
+        _logger = MicroEngine.Instance.GetRequiredService<ILogger<PetService>>();
     }
     
     public override int Order => 25;
@@ -131,7 +129,7 @@ public class PetService : MicroService
         EmotionState emotion = await _emotionStore.GetCurrentAsync(session.Id, ct);
         PetContextState initialState = PetContextState.Disabled;
         
-        var pet = new MicroPet(_serviceProvider, session, petState, petConfig, emotion, initialState);
+        var pet = new MicroPet(session, petState, petConfig, emotion, initialState);
         await AttachDefaultComponentsAsync(pet, ct);
         return pet;
     }
