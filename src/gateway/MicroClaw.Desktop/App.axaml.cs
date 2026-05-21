@@ -2,6 +2,7 @@
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using DotNetEnv;
+using MicroClaw.Configuration;
 using MicroClaw.Desktop.Views;
 using ShadUI;
 using Window = Avalonia.Controls.Window;
@@ -21,6 +22,7 @@ public partial class App : Application
         try
         {
             Env.Load(); // 或 Env.Load(".env.local");
+            MicroClawConfig.Initialize();
         }
         catch (Exception ex)
         {

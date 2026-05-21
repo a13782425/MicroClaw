@@ -1,6 +1,6 @@
 ﻿namespace MicroClaw.Configuration;
 
-public static class ConfigDefine
+internal static class ConfigDefine
 {
     /// <summary>
     /// 运行主目录
