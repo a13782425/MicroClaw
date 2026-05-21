@@ -13,7 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
     <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
-    <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

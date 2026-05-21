@@ -1,6 +1,6 @@
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
 using MicroClaw.Providers.Mapping;
 using Microsoft.Extensions.AI;

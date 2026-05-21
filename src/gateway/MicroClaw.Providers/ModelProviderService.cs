@@ -1,6 +1,5 @@
 using MicroClaw.Abstractions;
 using MicroClaw.Configuration;
-using MicroClaw.Configuration.Options;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
 using MicroClaw.Providers.Anthropic;

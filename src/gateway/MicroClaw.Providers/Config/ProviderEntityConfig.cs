@@ -1,4 +1,5 @@
-namespace MicroClaw.Configuration.Options;
+using YamlDotNet.Serialization;
+namespace MicroClaw.Configuration;
 
 /// <summary>
 /// 单个模型提供方的持久化配置（YAML 表示）。所有结构化字段使用字符串/列表，

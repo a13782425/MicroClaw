@@ -1,7 +1,7 @@
 using MicroClaw.Abstractions.Channel;
 using MicroClaw.Abstractions.Pet;
 using MicroClaw.Abstractions.Streaming;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 
 namespace MicroClaw.Abstractions.Sessions;
 /// <summary>

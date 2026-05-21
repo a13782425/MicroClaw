@@ -1,6 +1,7 @@
 using MicroClaw.Configuration;
+using YamlDotNet.Serialization;
 
-namespace MicroClaw.Configuration.Options;
+namespace MicroClaw.Configuration;
 
 /// <summary>
 /// Model Provider 配置列表。

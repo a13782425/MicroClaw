@@ -1,4 +1,4 @@
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 
 namespace MicroClaw.Abstractions.Sessions;
 /// <summary>

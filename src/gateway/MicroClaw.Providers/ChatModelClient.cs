@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using MicroClaw.Abstractions;
 using MicroClaw.Abstractions.Sessions;
 using MicroClaw.Abstractions.Streaming;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
 using MicroClaw.Providers.Mapping;
 using Microsoft.Agents.AI;

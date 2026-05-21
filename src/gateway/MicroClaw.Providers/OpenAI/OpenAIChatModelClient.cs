@@ -1,6 +1,6 @@
 using System.ClientModel;
 using MicroClaw.Abstractions;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;

@@ -1,6 +1,6 @@
 using Anthropic;
 using MicroClaw.Abstractions;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Providers.Anthropic;

@@ -1,6 +1,6 @@
 using System.ClientModel;
 using MicroClaw.Abstractions;
-using MicroClaw.Configuration.Options;
+using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
 using Microsoft.Extensions.AI;
 using OpenAI;
