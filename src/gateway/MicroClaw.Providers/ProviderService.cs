@@ -23,16 +23,14 @@ namespace MicroClaw.Providers;
 /// </summary>
 public sealed class ProviderService : MicroService
 {
-    private readonly IServiceProvider _serviceProvider;
     private readonly ReaderWriterLockSlim _configLock = new(LockRecursionPolicy.NoRecursion);
     private readonly ConcurrentDictionary<CacheKey, MicroProvider> _providerCache = new();
     
     private IUsageTracker? _usageTracker;
     
     /// <summary>通过 DI 注入 <see cref="IServiceProvider"/>，运行时依赖在 <see cref="StartAsync"/> 中惰性解析。</summary>
-    public ProviderService(IServiceProvider serviceProvider)
+    public ProviderService()
     {
-        _serviceProvider = serviceProvider;
     }
     
     /// <inheritdoc />
@@ -41,7 +39,7 @@ public sealed class ProviderService : MicroService
     /// <inheritdoc />
     protected override ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
-        _usageTracker ??= _serviceProvider.GetRequiredService<IUsageTracker>();
+        _usageTracker ??= Engine!.GetRequiredService<IUsageTracker>();
         return ValueTask.CompletedTask;
     }
     

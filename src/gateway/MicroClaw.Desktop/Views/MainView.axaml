@@ -136,13 +136,6 @@
                                 Foreground="{DynamicResource ForegroundColor}"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"/>
-                            <!-- <PathIcon -->
-                            <!--     Data="{Binding ThemeIcon}" -->
-                            <!--     Width="14" -->
-                            <!--     Height="14" -->
-                            <!--     Foreground="{DynamicResource ForegroundColor}" -->
-                            <!--     HorizontalAlignment="Center" -->
-                            <!--     VerticalAlignment="Center" /> -->
                         </Button>
 
                         <Menu

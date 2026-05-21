@@ -9,6 +9,7 @@
     <ItemGroup>
       <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
       <ProjectReference Include="..\MicroClaw.Pet\MicroClaw.Pet.csproj" />
+      <ProjectReference Include="..\MicroClaw.Session\MicroClaw.Session.csproj" />
     </ItemGroup>
 
 </Project>
