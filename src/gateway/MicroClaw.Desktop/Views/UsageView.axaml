@@ -1,0 +1,91 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:charts="clr-namespace:LiveChartsCore.SkiaSharpView.Avalonia;assembly=LiveChartsCore.SkiaSharpView.Avalonia"
+    xmlns:vm="using:MicroClaw.Desktop"
+    mc:Ignorable="d"
+    d:DesignWidth="900"
+    d:DesignHeight="700"
+    x:Class="MicroClaw.Desktop.Views.UsageView"
+    x:DataType="vm:UsageViewModel"
+    x:CompileBindings="True">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32" MaxWidth="960" Spacing="24">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Description}" Classes="Caption Muted" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Metrics}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:UsageMetric">
+                        <Border Width="220" MinHeight="118" Padding="18" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding Label}" Classes="Caption Muted" />
+                                <TextBlock Text="{Binding Value}" FontSize="28" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Caption}" Classes="Caption Muted" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                <Border Grid.Column="0" Padding="18" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="最近 7 天请求量" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="模拟日请求峰值与波动，用于验证桌面壳图表承载。" Classes="Caption Muted" />
+                        </StackPanel>
+                        <charts:CartesianChart
+                            Name="DailyChart"
+                            Height="280"
+                            Series="{Binding DailySeries}"
+                            TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"
+                            TooltipTextPaint="{Binding TooltipTextPaint}"
+                            TooltipTextSize="14"
+                            XAxes="{Binding DailyXAxes}"
+                            YAxes="{Binding DailyYAxes}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Padding="18" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="提供商请求分布" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="当前静态样本分为 Claude、OpenAI 与 Local 三类。" Classes="Caption Muted" />
+                        </StackPanel>
+                        <charts:CartesianChart
+                            Name="ProviderChart"
+                            Height="280"
+                            Series="{Binding ProviderSeries}"
+                            TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"
+                            TooltipTextPaint="{Binding TooltipTextPaint}"
+                            TooltipTextSize="14"
+                            XAxes="{Binding ProviderXAxes}"
+                            YAxes="{Binding ProviderYAxes}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Padding="20" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="18">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="说明" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="本页只验证静态图表、主题联动与设置路由，不代表真实资源统计。" Classes="Caption Muted" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="采样窗口：7 天" Classes="Caption Muted" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="刷新策略：静态" Classes="Caption Muted" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

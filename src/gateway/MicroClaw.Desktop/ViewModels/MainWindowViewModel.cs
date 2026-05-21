@@ -1,5 +1,4 @@
 ﻿using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,10 +8,16 @@ using ShadUI;
 namespace MicroClaw.Desktop;
 public partial class MainWindowViewModel : ObservableObject
 {
-    public const string RouteHome = "/home";
-    public const string RouteInbox = "/inbox";
-    public const string RouteWorkflows = "/workflows";
-    public const string RouteSearch = "/search";
+    public const string RouteSessionPrefix = "/sessions/";
+    public const string RouteSessionDefault = "/sessions/default";
+    public const string RouteMicroAgents = "/micro/agents";
+    public const string RouteMicroSkills = "/micro/skills";
+    public const string RouteMicroMcp = "/micro/mcp";
+    public const string RouteMicroTools = "/micro/tools";
+    public const string RouteMicroPlugins = "/micro/plugins";
+    public const string RouteSettingsProviders = "/settings/providers";
+    public const string RouteSettingsUsage = "/settings/usage";
+    public const string RouteSettingsAbout = "/settings/about";
     
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActiveThemeLabel))]
@@ -24,45 +29,39 @@ public partial class MainWindowViewModel : ObservableObject
     private bool isSidebarOpen = true;
     
     [ObservableProperty]
-    private string currentRoute = RouteHome;
+    private string currentRoute = RouteSessionDefault;
     
     [ObservableProperty]
     private ObservableObject? currentPage;
     
-    private readonly HomeViewModel _home = new();
-    private readonly InboxViewModel _inbox = new();
-    private readonly WorkflowViewModel _workflow = new();
-    private readonly SearchViewModel _search = new();
+    private readonly SessionViewModel _defaultSession = SessionViewModel.CreateDefault();
+    private readonly MicroAgentsViewModel _microAgents = new();
+    private readonly MicroSkillsViewModel _microSkills = new();
+    private readonly MicroMcpViewModel _microMcp = new();
+    private readonly MicroToolsViewModel _microTools = new();
+    private readonly MicroPluginsViewModel _microPlugins = new();
+    private readonly ProvidersViewModel _providers = new();
+    private readonly AboutViewModel _about = new();
+    private readonly UsageViewModel _usage = new();
     
     public MainWindowViewModel()
     {
         SelectedTheme = ThemeOptions[0];
-        CurrentPage = _home;
+        Navigate(RouteSessionDefault);
     }
     
-    public IReadOnlyList<NavItem> NavItems { get; } =
+    public IReadOnlyList<SessionNavItem> Sessions { get; } =
     [
-        new("主页", Icons.SidePanel, RouteHome),
-        new("收件箱", Icons.Info, RouteInbox),
-        new("工作流", Icons.Calendar, RouteWorkflows),
-        new("搜索", Icons.Search, RouteSearch),
+        new(SessionViewModel.DefaultSessionId, "默认会话", "静态模板预览", RouteSessionDefault),
     ];
-    public static IReadOnlyList<Control> SettingsMenuItems { get; } =
+
+    public IReadOnlyList<MicroNavItem> MicroItems { get; } =
     [
-        new MenuItem { Header = "首选项", Icon = new PathIcon { Data = Icons.Settings, Width = 14, Height = 14 } },
-        new MenuItem { Header = "调色板", Icon = new PathIcon { Data = Icons.Palette, Width = 14, Height = 14 } },
-        new Separator(),
-        new MenuItem { Header = "关于", Icon = new PathIcon { Data = Icons.Info, Width = 14, Height = 14 } },
-    ];
-    
-    public IReadOnlyList<SessionPreview> Sessions { get; } =
-    [
-        new("Quick chats", "", false),
-        new("microclaw-desktop", "visual-spike", false),
-        new("feat: borderless shell", "in-progress", true),
-        new("agent-runtime", "preview", false),
-        new("workflow-lab", "draft", false),
-        new("rag-memory", "notes", false)
+        new("全局 Agent", Icons.Logo, RouteMicroAgents),
+        new("全局 Skill", Icons.Marker, RouteMicroSkills),
+        new("全局 MCP", Icons.Search, RouteMicroMcp),
+        new("全局 Tools", Icons.Swatch, RouteMicroTools),
+        new("全局插件", Icons.Settings, RouteMicroPlugins),
     ];
     
     public IReadOnlyList<ThemeOption> ThemeOptions { get; } =
@@ -104,21 +103,40 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void Navigate(string? route)
     {
-        if (string.IsNullOrEmpty(route))
+        if (string.IsNullOrWhiteSpace(route))
         {
             return;
         }
-        
+
         CurrentRoute = route;
+
+        if (route.StartsWith(RouteSessionPrefix, StringComparison.Ordinal))
+        {
+            CurrentPage = CreateSessionPage(route[RouteSessionPrefix.Length..]);
+            return;
+        }
+
         CurrentPage = route switch
         {
-            RouteHome => _home,
-            RouteInbox => _inbox,
-            RouteWorkflows => _workflow,
-            RouteSearch => _search,
-            _ => _home,
+            RouteMicroAgents => _microAgents,
+            RouteMicroSkills => _microSkills,
+            RouteMicroMcp => _microMcp,
+            RouteMicroTools => _microTools,
+            RouteMicroPlugins => _microPlugins,
+            RouteSettingsProviders => _providers,
+            RouteSettingsUsage => _usage,
+            RouteSettingsAbout => _about,
+            _ => _defaultSession,
         };
     }
+
+    private SessionViewModel CreateSessionPage(string sessionId)
+    {
+        return sessionId == SessionViewModel.DefaultSessionId
+            ? _defaultSession
+            : SessionViewModel.CreatePreview(sessionId);
+    }
+
     private int GetSelectedThemeIndex()
     {
         for (var index = 0; index < ThemeOptions.Count; index++)
@@ -143,9 +161,9 @@ public partial class MainWindowViewModel : ObservableObject
     }
     
 }
-public sealed record SessionPreview(string Title, string Meta, bool IsActive);
+public sealed record SessionNavItem(string SessionId, string Title, string Meta, string Route);
 public sealed record ThemeOption(string DisplayName, string Description, ThemeMode Mode)
 {
     public override string ToString() => DisplayName;
 }
-public sealed record NavItem(string Title, Geometry? Icon, string Route);
+public sealed record MicroNavItem(string Title, Geometry? Icon, string Route);

@@ -36,57 +36,30 @@
 
             <StackPanel
                 Spacing="2">
-                <ItemsControl
-                    ItemsSource="{Binding NavItems}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate
-                            x:DataType="vm:NavItem">
-                            <shadui:SidebarItem
-                                Route="{Binding Route}"
-                                Content="{Binding Title}"
-                                Tapped="OnNavItemTapped">
-                                <shadui:SidebarItem.Icon>
-                                    <PathIcon
-                                        Data="{Binding Icon}"
-                                        Width="14"
-                                        Height="14"
-                                        Foreground="{DynamicResource ForegroundColor}" />
-                                </shadui:SidebarItem.Icon>
-                            </shadui:SidebarItem>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
                 <Grid
-                    ColumnDefinitions="*,Auto,Auto"
-                    ColumnSpacing="14"
-                    Margin="6,26,6,8"
+                    ColumnDefinitions="*,Auto"
+                    ColumnSpacing="8"
+                    Margin="6,4,6,8"
                     IsVisible="{Binding IsSidebarOpen}">
                     <TextBlock
-                        Text="Sessions"
+                        Text="会话"
                         Classes="Caption Muted"
                         VerticalAlignment="Center" />
-                    <PathIcon
-                        Grid.Column="1"
-                        Data="{x:Static shadui:Icons.Settings}"
-                        Width="13"
-                        Height="13"
-                        Foreground="{DynamicResource MutedColor}" />
                     <TextBlock
-                        Grid.Column="2"
-                        Text="+"
-                        Classes="Small"
-                        Foreground="{DynamicResource MutedColor}" />
+                        Grid.Column="1"
+                        Text="1"
+                        Classes="Caption Muted"
+                        VerticalAlignment="Center" />
                 </Grid>
 
                 <ItemsControl
-                    ItemsSource="{Binding Sessions}"
-                    IsVisible="{Binding IsSidebarOpen}">
+                    ItemsSource="{Binding Sessions}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate
-                            x:DataType="vm:SessionPreview">
+                            x:DataType="vm:SessionNavItem">
                             <shadui:SidebarItem
-                                IsChecked="{Binding IsActive, Mode=OneWay}">
+                                Route="{Binding Route}"
+                                Tapped="OnSessionItemTapped">
                                 <shadui:SidebarItem.Icon>
                                     <PathIcon
                                         Data="{x:Static shadui:Icons.ClipBoard}"
@@ -106,6 +79,38 @@
                                             TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </shadui:SidebarItem.Content>
+                            </shadui:SidebarItem>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border
+                    Height="1"
+                    Margin="6,12,6,10"
+                    Background="{DynamicResource BorderColor30}" />
+
+                <TextBlock
+                    Margin="6,0,6,8"
+                    Text="Micro 能力"
+                    Classes="Caption Muted"
+                    IsVisible="{Binding IsSidebarOpen}" />
+
+                <ItemsControl
+                    ItemsSource="{Binding MicroItems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate
+                            x:DataType="vm:MicroNavItem">
+                            <shadui:SidebarItem
+                                Route="{Binding Route}"
+                                Content="{Binding Title}"
+                                Tapped="OnMicroItemTapped">
+                                <shadui:SidebarItem.Icon>
+                                    <PathIcon
+                                        Data="{Binding Icon}"
+                                        Width="14"
+                                        Height="14"
+                                        Foreground="{DynamicResource ForegroundColor}" />
+                                </shadui:SidebarItem.Icon>
                             </shadui:SidebarItem>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -146,7 +151,6 @@
                                 Classes="NoPressedAnimation"
                                 Padding="0"
                                 CornerRadius="{DynamicResource MdCornerRadius}"
-                                ItemsSource="{Binding SettingsMenuItems}"
                                 ToolTip.Tip="设置">
                                 <MenuItem.Header>
                                     <Border
@@ -159,6 +163,40 @@
                                             Foreground="{DynamicResource ForegroundColor}" />
                                     </Border>
                                 </MenuItem.Header>
+                                <MenuItem
+                                    Header="模型提供商"
+                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsProviders}"
+                                    Click="OnSettingsMenuItemClick">
+                                    <MenuItem.Icon>
+                                        <PathIcon
+                                            Data="{x:Static shadui:Icons.Logo}"
+                                            Width="14"
+                                            Height="14" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem
+                                    Header="使用情况"
+                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsUsage}"
+                                    Click="OnSettingsMenuItemClick">
+                                    <MenuItem.Icon>
+                                        <PathIcon
+                                            Data="{x:Static shadui:Icons.Calendar}"
+                                            Width="14"
+                                            Height="14" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem
+                                    Header="关于"
+                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsAbout}"
+                                    Click="OnSettingsMenuItemClick">
+                                    <MenuItem.Icon>
+                                        <PathIcon
+                                            Data="{x:Static shadui:Icons.Info}"
+                                            Width="14"
+                                            Height="14" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </MenuItem>
                         </Menu>
                     </StackPanel>

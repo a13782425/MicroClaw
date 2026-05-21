@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using DotNetEnv;
 using MicroClaw.Desktop.Views;
 using ShadUI;
 using Window = Avalonia.Controls.Window;
@@ -15,13 +16,23 @@ public partial class App : Application
     
 
     public override void Initialize()
-    {
+    {   
+        // 读取本地 .env 文件（可指定路径，也可默认当前目录下 .env）
+        try
+        {
+            Env.Load(); // 或 Env.Load(".env.local");
+        }
+        catch (Exception ex)
+        {
+            // 可选：记录日志或忽略
+        }
         AvaloniaXamlLoader.Load(this);
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
         ThemeWatcher = new ThemeWatcher(this);
+        ThemeWatcher.Initialize();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = MainWindowFactory?.Invoke() ?? CreateFallbackMainWindow();

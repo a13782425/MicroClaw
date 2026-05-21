@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using ShadUI;
 
@@ -15,13 +16,30 @@ public partial class MainView : UserControl
         UpdateFooterLayout(AppSidebar.Expanded);
     }
 
-    private void OnNavItemTapped(object? sender, TappedEventArgs e)
+    private void OnSessionItemTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { DataContext: NavItem item } && DataContext is MainWindowViewModel vm)
+        if (sender is Control { DataContext: SessionNavItem item } && DataContext is MainWindowViewModel vm)
         {
             vm.NavigateCommand.Execute(item.Route);
         }
-    }  
+    }
+
+    private void OnMicroItemTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: MicroNavItem item } && DataContext is MainWindowViewModel vm)
+        {
+            vm.NavigateCommand.Execute(item.Route);
+        }
+    }
+
+    private void OnSettingsMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string route } && DataContext is MainWindowViewModel vm)
+        {
+            vm.NavigateCommand.Execute(route);
+        }
+    }
+
     private void OnSidebarPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == Sidebar.ExpandedProperty)

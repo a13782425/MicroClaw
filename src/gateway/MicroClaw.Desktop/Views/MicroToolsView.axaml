@@ -1,0 +1,65 @@
+﻿<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:MicroClaw.Desktop"
+    mc:Ignorable="d"
+    d:DesignWidth="900"
+    d:DesignHeight="700"
+    x:Class="MicroClaw.Desktop.Views.MicroToolsView"
+    x:DataType="vm:MicroToolsViewModel"
+    x:CompileBindings="True">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32" MaxWidth="960" Spacing="24">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Description}" Classes="Caption Muted" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Metrics}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:StaticMetric">
+                        <Border Width="220" MinHeight="118" Padding="18" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding Label}" Classes="Caption Muted" />
+                                <TextBlock Text="{Binding Value}" FontSize="28" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Caption}" Classes="Caption Muted" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Padding="20" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="12">
+                <StackPanel Spacing="18">
+                    <TextBlock Text="{Binding SectionTitle}" FontSize="18" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StaticEntry">
+                                <Border Padding="0,0,0,16" BorderBrush="{DynamicResource BorderColor30}" BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Description}" Classes="Caption Muted" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="4" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding Status}" HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding Meta}" Classes="Caption Muted" HorizontalAlignment="Right" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

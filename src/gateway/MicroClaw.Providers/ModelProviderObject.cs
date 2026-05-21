@@ -1,0 +1,119 @@
+using MicroClaw.Abstractions;
+using MicroClaw.Abstractions.Sessions;
+using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Configuration.Options;
+using MicroClaw.Core;
+using MicroClaw.Core.Logging;
+using MicroClaw.Providers.Mapping;
+using Microsoft.Extensions.AI;
+
+namespace MicroClaw.Providers;
+
+/// <summary>
+/// 模型提供方运行时基类。一个 <see cref="ModelProviderObject"/> 实例对应一份 <see cref="ProviderEntityConfig"/>，
+/// 由 <see cref="ModelProviderService"/> 在启动阶段一次性创建并持有；不向引擎容器注册（避免在
+/// <see cref="MicroService.StartAsync"/> 内部触发引擎执行门重入）。
+/// <para>
+/// 落地配置只有一份：<see cref="Config"/>（YAML DTO）。所有强类型视图（枚举、Flags、Pricing 等）
+/// 通过 <see cref="ProviderConfigOps"/> 在访问时解析；配置变更通过 <see cref="ModelProviderService"/>
+/// 落盘 YAML 后替换 <see cref="ModelProviderObject"/> 实例。
+/// </para>
+/// </summary>
+public abstract class ModelProviderObject : MicroObject
+{
+    protected ModelProviderObject(ProviderEntityConfig config, IUsageTracker usageTracker)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(usageTracker);
+        if (string.IsNullOrWhiteSpace(config.Id))
+            throw new InvalidOperationException("ProviderEntityConfig.Id is required.");
+
+        Config = config;
+        UsageTracker = usageTracker;
+    }
+
+    /// <summary>底层 YAML 配置（仅子类可见，不向外公开）。</summary>
+    protected ProviderEntityConfig Config { get; }
+
+    /// <summary>用量追踪器。子类调用模型后通过它写入 usage。</summary>
+    protected IUsageTracker UsageTracker { get; }
+
+    /// <summary>Provider 的唯一标识。</summary>
+    public string Id => Config.Id;
+
+    /// <summary>面向用户的展示名称（缺省回落到 Id）。</summary>
+    public string DisplayName => string.IsNullOrWhiteSpace(Config.DisplayName) ? Config.Id : Config.DisplayName;
+
+    /// <summary>是否启用。</summary>
+    public bool IsEnabled => Config.IsEnabled;
+
+    /// <summary>是否被标记为同 ModelKind 下的默认。</summary>
+    public bool IsDefault => Config.IsDefault;
+
+    // ── Strongly-typed views over Config (parsed on demand) ──────────────
+
+    /// <summary>API 协议族。</summary>
+    protected ModelProviderApiKind ApiKind => ProviderConfigOps.ParseApiKind(Config.ApiKind);
+
+    /// <summary>模型用途（chat / embedding）。</summary>
+    protected ModelKind Kind => ProviderConfigOps.ParseModelKind(Config.ModelKind);
+
+    /// <summary>解析 <c>${ENV}</c> 后的模型名称。</summary>
+    protected string ModelName => ProviderConfigOps.ResolveEnv(Config.ModelName) ?? string.Empty;
+
+    /// <summary>解析 <c>${ENV}</c> 后的 API Key。</summary>
+    protected string ApiKey => ProviderConfigOps.ResolveEnv(Config.ApiKey) ?? string.Empty;
+
+    /// <summary>解析后并 trim 末尾斜杠的 BaseUrl；空时返回 null。</summary>
+    protected string? BaseUrl => ProviderConfigOps.NormalizeBaseUrl(ProviderConfigOps.ResolveEnv(Config.BaseUrl));
+
+    /// <summary>能力开关 Flags。</summary>
+    protected ModelCapability Capabilities => ProviderConfigOps.ParseCapabilities(Config.Capabilities);
+
+    /// <summary>输入模态 Flags。</summary>
+    protected ModelModality InputModalities => ProviderConfigOps.ParseModalities(Config.InputModalities, ModelModality.Text);
+
+    /// <summary>输出模态 Flags。</summary>
+    protected ModelModality OutputModalities => ProviderConfigOps.ParseModalities(Config.OutputModalities, ModelModality.Text);
+
+    /// <summary>价格视图（非负归一）。</summary>
+    protected ModelPricing Pricing => ProviderConfigOps.ToPricing(Config.Pricing);
+
+    /// <summary>单次输出的最大 Token 数（无效值回退 8192）。</summary>
+    protected int MaxOutputTokens => Config.MaxOutputTokens > 0 ? Config.MaxOutputTokens : 8192;
+
+    /// <summary>校验 <see cref="MicroChatContext"/> 的最小必需字段，并返回取消令牌。</summary>
+    protected static CancellationToken ValidateContext(MicroChatContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        if (ctx.Session is null)
+            throw new InvalidOperationException("MicroChatContext.Session is required.");
+        if (string.IsNullOrEmpty(ctx.Source))
+            throw new InvalidOperationException("MicroChatContext.Source is required.");
+        return ctx.Ct;
+    }
+
+    /// <summary>记录本次模型调用的 usage（可选 cached input）。</summary>
+    public virtual Task TrackUsageAsync(MicroChatContext ctx, long inputTokens, long outputTokens = 0L, long cachedInputTokens = 0L) =>
+        throw new NotImplementedException("Override in concrete provider.");
+
+    /// <summary>非流式对话。仅 Chat 类 Provider 需要实现。</summary>
+    public virtual Task<ChatResponse> ChatAsync(MicroChatContext ctx, IEnumerable<ChatMessage> messages, ChatOptions? options = null) =>
+        throw new NotImplementedException("ChatAsync is only supported by ChatModelClient.");
+
+    /// <summary>流式 Agent 循环。仅 Chat 类 Provider 需要实现。</summary>
+    public virtual IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx) =>
+        throw new NotImplementedException("AgentStreamAsync is only supported by ChatModelClient.");
+
+    /// <summary>批量嵌入。仅 Embedding 类 Provider 需要实现。</summary>
+    public virtual Task<IReadOnlyList<Embedding<float>>> EmbedBatchAsync(MicroChatContext ctx, IReadOnlyList<string> inputs) =>
+        throw new NotImplementedException("EmbedBatchAsync is only supported by EmbeddingModelClient.");
+    
+    /// <summary>
+    /// 刷新一下
+    /// </summary>
+    public virtual void RefreshClient()
+    {
+        
+    }
+}

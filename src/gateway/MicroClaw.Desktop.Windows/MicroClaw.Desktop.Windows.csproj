@@ -5,8 +5,20 @@
         <TargetFramework>net10.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+        <PublishSingleFile>true</PublishSingleFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <ApplicationIcon>icon.ico</ApplicationIcon>
+        <PublishAot>true</PublishAot>
     </PropertyGroup>
-
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
     <ItemGroup>
       <ProjectReference Include="..\MicroClaw.Desktop\MicroClaw.Desktop.csproj" />
     </ItemGroup>

@@ -20,6 +20,7 @@ public sealed class MicroEngine : IAsyncDisposable
     private readonly MicroEvent _events = new();
     private readonly List<MicroObject> _objects = [];
     private readonly List<MicroService> _services = [];
+    private readonly Dictionary<Type, object> _singletons = new();
     private readonly MicroTickSchedulerRunner _tickScheduler;
     private IMicroLogger? _logger;
     
@@ -63,6 +64,8 @@ public sealed class MicroEngine : IAsyncDisposable
     {
         lock (_gate)
         {
+            if (_singletons.TryGetValue(typeof(T), out object? singleton))
+                return (T)singleton;
             return _services.OfType<T>().FirstOrDefault();
         }
     }
@@ -237,6 +240,63 @@ public sealed class MicroEngine : IAsyncDisposable
             throw new AggregateException(errors);
     }
     
+    public bool RegisterSingleton<T>(T instance) where T : class => RegisterSingleton(typeof(T), instance);
+    
+    public bool RemoveSingleton<T>() where T : class
+    {
+        Type serviceType = typeof(T);
+        if (!_singletons.TryGetValue(serviceType, out object? existing))
+            return false;
+        return RemoveSingleton(serviceType, existing);
+    }
+    public bool RemoveSingleton<T>(object instance) where T : class
+    {
+        return RemoveSingleton(typeof(T), instance);
+    }
+    
+    public bool RemoveSingleton(object instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ThrowIfDisposed();
+        lock (_gate)
+        {
+            foreach (Type key in _singletons.Where(pair => ReferenceEquals(pair.Value, instance)).Select(pair => pair.Key).ToArray())
+            {
+                _singletons.Remove(key);
+            }
+            return true;
+        }
+    }
+    
+    public bool RemoveSingleton(Type serviceType, object instance)
+    {
+        ArgumentNullException.ThrowIfNull(serviceType);
+        ArgumentNullException.ThrowIfNull(instance);
+        ThrowIfDisposed();
+        lock (_gate)
+        {
+            if (!_singletons.TryGetValue(serviceType, out object? existing))
+                return false;
+            
+            if (!ReferenceEquals(existing, instance))
+                return false;
+            
+            _singletons.Remove(serviceType);
+            return true;
+        }
+    }
+    public bool MapSingleton<TService, TImplementation>() where TService : class where TImplementation : class, TService
+    {
+        ThrowIfDisposed();
+        
+        lock (_gate)
+        {
+            if (!_singletons.TryGetValue(typeof(TImplementation), out object? instance))
+                throw new InvalidOperationException($"Service '{typeof(TImplementation).FullName}' is not registered.");
+            return RegisterSingleton(typeof(TService), instance);
+        }
+    }
+    
     /// <summary>向引擎注册对象；若引擎已在运行则立即激活该对象。</summary>
     public async ValueTask<bool> RegisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
     {
@@ -370,6 +430,7 @@ public sealed class MicroEngine : IAsyncDisposable
             lock (_gate)
             {
                 _services.Add(service);
+                RegisterSingleton(service.GetType(), service);
             }
             
             WriteTrace($"Registered service {service.GetType().Name}.");
@@ -404,6 +465,7 @@ public sealed class MicroEngine : IAsyncDisposable
                 if (rollbackErrors.Count == 0 || service.State == MicroServiceState.Stopped)
                 {
                     _services.Remove(service);
+                    RemoveSingleton(service.GetType(), service);
                     shouldDetach = ReferenceEquals(service.Engine, this);
                 }
             }
@@ -468,6 +530,7 @@ public sealed class MicroEngine : IAsyncDisposable
             {
                 if (!_services.Remove(service))
                     return false;
+                RemoveSingleton(service);
             }
             
             await service.DetachFromEngineAsync(this, CancellationToken.None);
@@ -479,7 +542,26 @@ public sealed class MicroEngine : IAsyncDisposable
             
         }
     }
-    
+    private bool RegisterSingleton(Type serviceType, object instance)
+    {
+        ArgumentNullException.ThrowIfNull(serviceType);
+        ArgumentNullException.ThrowIfNull(instance);
+        ThrowIfDisposed();
+        
+        lock (_gate)
+        {
+            if (_singletons.TryGetValue(serviceType, out object? existing))
+            {
+                if (ReferenceEquals(existing, instance))
+                    return false;
+                
+                throw new InvalidOperationException($"Singleton '{serviceType.FullName}' is already registered.");
+            }
+            
+            _singletons.Add(serviceType, instance);
+            return true;
+        }
+    }
     /// <summary>尝试将活动对象或服务重新注册到调度器。</summary>
     private void TryRegisterTickable(object candidate, bool clearIsolation = true)
     {
@@ -649,7 +731,8 @@ public sealed class MicroEngine : IAsyncDisposable
             {
                 lock (_gate)
                 {
-                    _services.Remove(service);
+                    if (_services.Remove(service))
+                        RemoveSingleton(service);
                 }
                 
                 try
