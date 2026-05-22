@@ -29,5 +29,6 @@
   <Project Path="MicroClaw.Infrastructure/MicroClaw.Infrastructure.csproj" />
   <Project Path="MicroClaw.Tests/MicroClaw.Tests.csproj" />
   <Project Path="MicroClaw.Runtime/MicroClaw.Runtime.csproj" />
+  <Project Path="MicroClaw.Common/MicroClaw.Common.csproj" />
   <Project Path="MicroClaw.Configuration/MicroClaw.Configuration.csproj" />
 </Solution>

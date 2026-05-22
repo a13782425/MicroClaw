@@ -1,5 +1,5 @@
 using System.ClientModel;
-using MicroClaw.Abstractions;
+using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
 using Microsoft.Extensions.AI;

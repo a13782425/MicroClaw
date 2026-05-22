@@ -1,8 +1,6 @@
 using System.Text.Json;
 using System.Threading.Channels;
-using MicroClaw.Abstractions;
-using MicroClaw.Abstractions.Sessions;
-using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
 using MicroClaw.Providers.Mapping;
@@ -91,27 +89,27 @@ public abstract class ChatModelClient : ModelProviderObject
     }
     
     /// <inheritdoc />
-    public override async IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx)
+    public override async IAsyncEnumerable<ChatStreamItem> AgentStreamAsync(MicroChatContext ctx)
     {
         CancellationToken ct = ValidateContext(ctx);
         
-        IReadOnlyList<ChatMessage> messages = ctx.AssembledMessages ?? throw new InvalidOperationException("AssembledMessages not set on MicroChatContext.");
-        IReadOnlyList<AITool> tools = ctx.AssembledTools ?? [];
-        IReadOnlySet<string>? internalToolNames = ctx.InternalToolNames;
+        IReadOnlyList<ChatMessage> messages = ctx.Messages ?? throw new InvalidOperationException("AssembledMessages not set on MicroChatContext.");
+        IReadOnlyList<AITool> tools = ctx.Tools ?? [];
+        IReadOnlySet<string>? internalToolNames = null; //ctx.InternalToolNames;
         
-        string agentName = !string.IsNullOrWhiteSpace(ctx.TargetAgentName) ? ctx.TargetAgentName : !string.IsNullOrWhiteSpace(ctx.TargetAgentId) ? ctx.TargetAgentId : "agent";
+        string agentName = "agent"; // !string.IsNullOrWhiteSpace(ctx.TargetAgentName) ? ctx.TargetAgentName : !string.IsNullOrWhiteSpace(ctx.TargetAgentId) ? ctx.TargetAgentId : "agent";
         
-        ChatOptions resolvedOptions = ctx.ExecutionOptions ?? BuildDefaultChatOptions();
+        ChatOptions resolvedOptions = BuildDefaultChatOptions();
         if (resolvedOptions.Tools is null && tools.Count > 0 && Capabilities.HasFlag(ModelCapability.ToolCalling))
             resolvedOptions.Tools = [.. tools];
         
-        Channel<StreamItem> output = Channel.CreateUnbounded<StreamItem>(new UnboundedChannelOptions { SingleReader = true });
+        Channel<ChatStreamItem> output = Channel.CreateUnbounded<ChatStreamItem>(new UnboundedChannelOptions { SingleReader = true });
         
         Task exec = RunStreamingCoreAsync(ctx, resolvedOptions, agentName, internalToolNames, output, ct);
         
         try
         {
-            await foreach (StreamItem item in output.Reader.ReadAllAsync(ct))
+            await foreach (ChatStreamItem item in output.Reader.ReadAllAsync(ct))
                 yield return item;
         }
         finally
@@ -131,15 +129,15 @@ public abstract class ChatModelClient : ModelProviderObject
         }
     }
     
-    private async Task RunStreamingCoreAsync(MicroChatContext ctx, ChatOptions options, string agentName, IReadOnlySet<string>? internalToolNames, Channel<StreamItem> output, CancellationToken ct)
+    private async Task RunStreamingCoreAsync(MicroChatContext ctx, ChatOptions options, string agentName, IReadOnlySet<string>? internalToolNames, Channel<ChatStreamItem> output, CancellationToken ct)
     {
-        IReadOnlyList<ChatMessage> messages = ctx.AssembledMessages!;
+        IReadOnlyList<ChatMessage> messages = ctx.Messages!;
         var tracker = new StreamMessageId();
         var usage = new UsageCaptureBox();
         
         try
         {
-            var funcClient = new FunctionInvokingChatClient(Client) { MaximumIterationsPerRequest = ctx.MaxAgentIterations ?? 1, AllowConcurrentInvocation = true, FunctionInvoker = BuildFunctionInvoker(output.Writer, tracker, internalToolNames), };
+            var funcClient = new FunctionInvokingChatClient(Client) { MaximumIterationsPerRequest = ctx.MaxToolIterations, AllowConcurrentInvocation = true, FunctionInvoker = BuildFunctionInvoker(output.Writer, tracker, internalToolNames), };
             
             var agentOptions = new ChatClientAgentOptions { Name = SanitizeAgentName(agentName), UseProvidedChatClientAsIs = true, ChatOptions = options, };
             
@@ -162,7 +160,7 @@ public abstract class ChatModelClient : ModelProviderObject
                 if (!string.IsNullOrEmpty(update.MessageId))
                     tracker.Current = update.MessageId;
                 
-                foreach (StreamItem item in ConvertContents(update.Contents, tracker.Current, usage))
+                foreach (ChatStreamItem item in ConvertContents(update.Contents, tracker.Current, usage))
                     await output.Writer.WriteAsync(item, ct);
             }
             
@@ -183,14 +181,14 @@ public abstract class ChatModelClient : ModelProviderObject
         }
     }
     
-    private static Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(ChannelWriter<StreamItem> writer, StreamMessageId tracker, IReadOnlySet<string>? internalToolNames)
+    private static Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> BuildFunctionInvoker(ChannelWriter<ChatStreamItem> writer, StreamMessageId tracker, IReadOnlySet<string>? internalToolNames)
     {
         return async (FunctionInvocationContext fctx, CancellationToken ct) =>
         {
             string callId = fctx.CallContent?.CallId ?? fctx.Function.Name;
             IDictionary<string, object?>? args = fctx.Arguments?.ToDictionary(k => k.Key, v => v.Value);
             string? messageId = tracker.Current;
-            string? visibility = internalToolNames is not null && internalToolNames.Contains(fctx.Function.Name) ? MessageVisibility.LlmOnly : null;
+            string? visibility = internalToolNames is not null && internalToolNames.Contains(fctx.Function.Name) ? MicroChatMessageVisibility.LlmOnly : null;
             
             await writer.WriteAsync(new ToolCallItem(callId, fctx.Function.Name, args) { MessageId = messageId, Visibility = visibility, }, ct);
             
@@ -227,7 +225,7 @@ public abstract class ChatModelClient : ModelProviderObject
         };
     }
     
-    private static IEnumerable<StreamItem> ConvertContents(IList<AIContent> contents, string? messageId, UsageCaptureBox usage)
+    private static IEnumerable<ChatStreamItem> ConvertContents(IList<AIContent> contents, string? messageId, UsageCaptureBox usage)
     {
         foreach (AIContent content in contents)
         {

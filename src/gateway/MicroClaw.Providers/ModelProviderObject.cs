@@ -1,6 +1,4 @@
-using MicroClaw.Abstractions;
-using MicroClaw.Abstractions.Sessions;
-using MicroClaw.Abstractions.Streaming;
+using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
@@ -102,7 +100,7 @@ public abstract class ModelProviderObject : MicroObject
         throw new NotImplementedException("ChatAsync is only supported by ChatModelClient.");
 
     /// <summary>流式 Agent 循环。仅 Chat 类 Provider 需要实现。</summary>
-    public virtual IAsyncEnumerable<StreamItem> AgentStreamAsync(MicroChatContext ctx) =>
+    public virtual IAsyncEnumerable<ChatStreamItem> AgentStreamAsync(MicroChatContext ctx) =>
         throw new NotImplementedException("AgentStreamAsync is only supported by ChatModelClient.");
 
     /// <summary>批量嵌入。仅 Embedding 类 Provider 需要实现。</summary>
