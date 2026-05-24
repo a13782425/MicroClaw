@@ -17,6 +17,10 @@ public class ViewLocator : IDataTemplate
         {
             case SessionViewModel vm:
                 return new SessionView { DataContext = vm };
+            case SessionChatTabViewModel vm:
+                return new SessionChatTabView { DataContext = vm };
+            case SessionGameTabViewModel vm:
+                return new SessionGameTabView { DataContext = vm };
             case UsageViewModel vm:
                 return new UsageView { DataContext = vm };
             case MicroAgentsViewModel vm:

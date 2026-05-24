@@ -1,10 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace MicroClaw.Desktop;
 
 public partial class SessionViewModel : ViewModelBase
 {
     public const string DefaultSessionId = "default";
+    public const string RouteTabChat = "chat";
+    public const string RouteTabGame = "game";
 
     public SessionViewModel(
         string sessionId,
@@ -16,32 +19,40 @@ public partial class SessionViewModel : ViewModelBase
     {
         SessionId = sessionId;
         Title = title;
-        Subtitle = subtitle;
-        WorkspaceName = workspaceName;
-        WorktreeName = worktreeName;
-        BranchName = branchName;
+        _chatTab = new SessionChatTabViewModel(title, subtitle, workspaceName, worktreeName, branchName);
+        _gameTab = new SessionGameTabViewModel();
+        NavigateTab(RouteTabChat);
     }
+
+    private readonly SessionChatTabViewModel _chatTab;
+    private readonly SessionGameTabViewModel _gameTab;
 
     public string SessionId { get; }
 
     public string Title { get; }
 
-    public string Subtitle { get; }
-
-    public string WorkspaceName { get; }
-
-    public string WorktreeName { get; }
-
-    public string BranchName { get; }
-
-    public string ChatModeLabel { get; } = "交互模式";
-
-    public string ModelLabel { get; } = "Claude Sonnet 4.5";
-
-    public string ReasoningLabel { get; } = "中等深度";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsChatTabActive))]
+    [NotifyPropertyChangedFor(nameof(IsGameTabActive))]
+    private string currentTabRoute = RouteTabChat;
 
     [ObservableProperty]
-    private string draftPrompt = string.Empty;
+    private ObservableObject? currentTabPage;
+
+    public bool IsChatTabActive => CurrentTabRoute == RouteTabChat;
+
+    public bool IsGameTabActive => CurrentTabRoute == RouteTabGame;
+
+    [RelayCommand]
+    private void NavigateTab(string route)
+    {
+        CurrentTabRoute = route;
+        CurrentTabPage = route switch
+        {
+            RouteTabGame => (ObservableObject)_gameTab,
+            _ => _chatTab,
+        };
+    }
 
     public static SessionViewModel CreateDefault()
     {

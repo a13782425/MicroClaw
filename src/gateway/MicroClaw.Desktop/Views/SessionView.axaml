@@ -3,7 +3,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
     xmlns:vm="using:MicroClaw.Desktop"
     mc:Ignorable="d"
     d:DesignWidth="900"
@@ -12,95 +11,59 @@
     x:DataType="vm:SessionViewModel"
     x:CompileBindings="True">
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel HorizontalAlignment="Center" Margin="0,52,0,32" MaxWidth="668" Spacing="0">
-            <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource MutedColor}" HorizontalAlignment="Center" Margin="0,0,0,20" ClipToBounds="True">
-                <Image Source="avares://MicroClaw.Desktop/Assets/Image/Head.png" Stretch="UniformToFill" />
-            </Border>
+    <Grid RowDefinitions="*,Auto">
 
-            <StackPanel Margin="0,0,0,24" Spacing="4">
-                <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding Subtitle}" Classes="Caption Muted" HorizontalAlignment="Center" />
+        <!-- Content area — routed via ContentControl + ViewLocator -->
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
+            <ContentControl Content="{Binding CurrentTabPage}" HorizontalAlignment="Center" MaxWidth="668" />
+        </ScrollViewer>
+
+        <!-- Bottom tab bar -->
+        <Border
+            Grid.Row="1"
+            HorizontalAlignment="Center"
+            Margin="0,8,0,16"
+            Background="{DynamicResource MutedColor}"
+            CornerRadius="10"
+            Padding="3">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+
+                <!-- 聊天 tab -->
+                <Grid Width="80" Height="32">
+                    <Border
+                        CornerRadius="8"
+                        Background="{DynamicResource WindowBackgroundColor}"
+                        IsVisible="{Binding IsChatTabActive}" />
+                    <Button
+                        Classes="Ghost"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding NavigateTabCommand}"
+                        CommandParameter="chat">
+                        <TextBlock Text="聊天" Classes="Caption" />
+                    </Button>
+                </Grid>
+
+                <!-- 小游戏 tab -->
+                <Grid Width="80" Height="32">
+                    <Border
+                        CornerRadius="8"
+                        Background="{DynamicResource WindowBackgroundColor}"
+                        IsVisible="{Binding IsGameTabActive}" />
+                    <Button
+                        Classes="Ghost"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding NavigateTabCommand}"
+                        CommandParameter="game">
+                        <TextBlock Text="小游戏" Classes="Caption" />
+                    </Button>
+                </Grid>
+
             </StackPanel>
+        </Border>
 
-            <shadui:Card HasShadow="True" Padding="0" CornerRadius="10" Width="668">
-                <StackPanel>
-                    <TextBox
-                        Text="{Binding DraftPrompt}"
-                        AcceptsReturn="True"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Height="58"
-                        Padding="15,13,15,4"
-                        PlaceholderText="输入你的问题，或输入 / 调用命令与工具..."
-                        TextWrapping="Wrap" />
-                    <Grid ColumnDefinitions="Auto,*,Auto" Height="38" Margin="10,0,8,8">
-                        <Button Classes="Ghost" Width="30" Height="30" Padding="0" VerticalAlignment="Center" Content="+" />
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Button Classes="Ghost" Padding="8,5">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <TextBlock Text="{Binding ChatModeLabel}" Classes="Caption" />
-                                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="Ghost" Padding="8,5">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <TextBlock Text="{Binding ModelLabel}" Classes="Caption" />
-                                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                                </StackPanel>
-                            </Button>
-                            <Button Classes="Ghost" Padding="8,5">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <TextBlock Text="{Binding ReasoningLabel}" Classes="Caption" />
-                                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                        <Button Grid.Column="2" Width="28" Height="28" CornerRadius="14" Padding="7" Background="{DynamicResource MutedColor}" BorderThickness="0" VerticalAlignment="Center">
-                            <PathIcon Data="{x:Static shadui:Icons.ArrowDown}" Width="12" Height="12" Foreground="{DynamicResource WindowBackgroundColor}" RenderTransformOrigin="50%,50%">
-                                <PathIcon.RenderTransform>
-                                    <RotateTransform Angle="180" />
-                                </PathIcon.RenderTransform>
-                            </PathIcon>
-                        </Button>
-                    </Grid>
-                </StackPanel>
-            </shadui:Card>
-
-            <StackPanel Orientation="Horizontal" Spacing="18" Margin="14,8,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <PathIcon Data="{x:Static shadui:Icons.ClipBoard}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
-                    <TextBlock Text="{Binding WorkspaceName}" Classes="Caption" />
-                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <PathIcon Data="{x:Static shadui:Icons.Swatch}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
-                    <TextBlock Text="{Binding WorktreeName}" Classes="Caption" />
-                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <PathIcon Data="{x:Static shadui:Icons.Marker}" Width="13" Height="13" Foreground="{DynamicResource MutedColor}" />
-                    <TextBlock Text="{Binding BranchName}" Classes="Caption" />
-                    <PathIcon Data="{x:Static shadui:Icons.ChevronDown}" Width="10" Height="10" Foreground="{DynamicResource MutedColor}" />
-                </StackPanel>
-            </StackPanel>
-
-            <Border Width="42" Height="1" Background="{DynamicResource BorderColor}" HorizontalAlignment="Center" Margin="0,32,0,24" />
-
-            <StackPanel Orientation="Horizontal" Spacing="36" HorizontalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{x:Static shadui:Icons.ClipBoard}" Width="13" Height="13" Foreground="{DynamicResource ForegroundColor}" />
-                    <TextBlock Text="从当前工作区继续" Classes="Caption" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{x:Static shadui:Icons.Logo}" Width="13" Height="13" Foreground="{DynamicResource ForegroundColor}" />
-                    <TextBlock Text="查看全局能力配置" Classes="Caption" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{x:Static shadui:Icons.Calendar}" Width="13" Height="13" Foreground="{DynamicResource ForegroundColor}" />
-                    <TextBlock Text="从设置页查看使用情况" Classes="Caption" />
-                </StackPanel>
-            </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </UserControl>

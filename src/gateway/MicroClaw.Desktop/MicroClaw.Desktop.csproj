@@ -17,6 +17,7 @@
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
         <PackageReference Include="HeroIcons.Avalonia" Version="2.0.0" />
         <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-292" />
+        <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.4.1" />
     </ItemGroup>
 
     <ItemGroup>
