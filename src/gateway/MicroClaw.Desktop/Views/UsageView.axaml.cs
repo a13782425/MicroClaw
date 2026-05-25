@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using MicroClaw.Desktop.ViewModels;
 using ShadUI;
 
 namespace MicroClaw.Desktop.Views;

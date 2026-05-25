@@ -42,18 +42,6 @@ public static class MicroClawConfig
     }
     
     /// <summary>
-    /// 获取工作目录下的 "logs" 子目录路径，供日志文件输出使用。
-    /// </summary>
-    public static string LogDir
-    {
-        get
-        {
-            EnsureInitialized();
-            return Path.Combine(_homeDir!, "logs");
-        }
-    }
-    
-    /// <summary>
     /// Gets a strongly typed options instance.
     /// </summary>
     public static T Get<T>() where T : class, IMicroClawConfigOptions, new()

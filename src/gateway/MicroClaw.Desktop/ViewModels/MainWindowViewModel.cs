@@ -1,67 +1,50 @@
 ﻿using Avalonia;
 using Avalonia.Media;
-using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MicroClaw.Desktop.Modules;
+using MicroClaw.Runtime;
 using ShadUI;
 
-namespace MicroClaw.Desktop;
+namespace MicroClaw.Desktop.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
-    public const string RouteSessionPrefix = "/sessions/";
-    public const string RouteSessionDefault = "/sessions/default";
-    public const string RouteMicroAgents = "/micro/agents";
-    public const string RouteMicroSkills = "/micro/skills";
-    public const string RouteMicroMcp = "/micro/mcp";
-    public const string RouteMicroTools = "/micro/tools";
-    public const string RouteMicroPlugins = "/micro/plugins";
-    public const string RouteSettingsProviders = "/settings/providers";
-    public const string RouteSettingsUsage = "/settings/usage";
-    public const string RouteSettingsAbout = "/settings/about";
+    
+    private readonly MicroViewRouteModule _router = MicroRuntime.Engine.GetRequiredService<MicroViewRouteModule>();
     
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ActiveThemeLabel))]
     [NotifyPropertyChangedFor(nameof(ThemeIcon))]
     [NotifyPropertyChangedFor(nameof(ThemeButtonToolTip))]
-    private ThemeOption? selectedTheme;
+    private ThemeOption? _selectedTheme;
     
     [ObservableProperty]
-    private bool isSidebarOpen = true;
+    private bool _isSidebarOpen = true;
     
     [ObservableProperty]
-    private string currentRoute = RouteSessionDefault;
+    private string _currentRoute = PageRouteDefine.RouteMicroSession;
     
     [ObservableProperty]
-    private ObservableObject? currentPage;
-    
-    private readonly SessionViewModel _defaultSession = SessionViewModel.CreateDefault();
-    private readonly MicroAgentsViewModel _microAgents = new();
-    private readonly MicroSkillsViewModel _microSkills = new();
-    private readonly MicroMcpViewModel _microMcp = new();
-    private readonly MicroToolsViewModel _microTools = new();
-    private readonly MicroPluginsViewModel _microPlugins = new();
-    private readonly ProvidersViewModel _providers = new();
-    private readonly AboutViewModel _about = new();
-    private readonly UsageViewModel _usage = new();
+    private RouteViewModelBase? _currentPage;
     
     public MainWindowViewModel()
     {
         SelectedTheme = ThemeOptions[0];
-        Navigate(RouteSessionDefault);
+        Navigate(PageRouteDefine.RouteMicroSession);
     }
     
     public IReadOnlyList<SessionNavItem> Sessions { get; } =
     [
-        new(SessionViewModel.DefaultSessionId, "默认会话", "静态模板预览", RouteSessionDefault),
+        new(SessionViewModel.DefaultSessionId, "默认会话", "静态模板预览", PageRouteDefine.RouteMicroSession),
     ];
-
+    
     public IReadOnlyList<MicroNavItem> MicroItems { get; } =
     [
-        new("全局 Agent", Icons.Logo, RouteMicroAgents),
-        new("全局 Skill", Icons.Marker, RouteMicroSkills),
-        new("全局 MCP", Icons.Search, RouteMicroMcp),
-        new("全局 Tools", Icons.Swatch, RouteMicroTools),
-        new("全局插件", Icons.Settings, RouteMicroPlugins),
+        new("全局 Agent", Icons.Logo, PageRouteDefine.RouteMicroAgents),
+        new("全局 Skill", Icons.Marker, PageRouteDefine.RouteMicroSkills),
+        new("全局 MCP", Icons.Search, PageRouteDefine.RouteMicroMcp),
+        new("全局 Tools", Icons.Swatch, PageRouteDefine.RouteMicroTools),
+        new("全局插件", Icons.Settings, PageRouteDefine.RouteMicroPlugins),
     ];
     
     public IReadOnlyList<ThemeOption> ThemeOptions { get; } =
@@ -107,36 +90,18 @@ public partial class MainWindowViewModel : ObservableObject
         {
             return;
         }
-
+        
         CurrentRoute = route;
-
-        if (route.StartsWith(RouteSessionPrefix, StringComparison.Ordinal))
+        object? routeData = null;
+        if (route.StartsWith(PageRouteDefine.RouteMicroSession, StringComparison.Ordinal))
         {
-            CurrentPage = CreateSessionPage(route[RouteSessionPrefix.Length..]);
-            return;
+            var sessionId = route[PageRouteDefine.RouteMicroSession.Length..];
+            routeData = sessionId;
         }
-
-        CurrentPage = route switch
-        {
-            RouteMicroAgents => _microAgents,
-            RouteMicroSkills => _microSkills,
-            RouteMicroMcp => _microMcp,
-            RouteMicroTools => _microTools,
-            RouteMicroPlugins => _microPlugins,
-            RouteSettingsProviders => _providers,
-            RouteSettingsUsage => _usage,
-            RouteSettingsAbout => _about,
-            _ => _defaultSession,
-        };
+        CurrentPage = _router.Navigate(route, routeData);
+        
     }
-
-    private SessionViewModel CreateSessionPage(string sessionId)
-    {
-        return sessionId == SessionViewModel.DefaultSessionId
-            ? _defaultSession
-            : SessionViewModel.CreatePreview(sessionId);
-    }
-
+    
     private int GetSelectedThemeIndex()
     {
         for (var index = 0; index < ThemeOptions.Count; index++)

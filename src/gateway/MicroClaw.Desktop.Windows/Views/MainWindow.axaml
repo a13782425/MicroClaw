@@ -5,7 +5,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:desktopViews="using:MicroClaw.Desktop.Views"
     xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
-    xmlns:vm="using:MicroClaw.Desktop"
+    xmlns:vm="using:MicroClaw.Desktop.ViewModels"
     mc:Ignorable="d"
     d:DesignWidth="1164"
     d:DesignHeight="768"

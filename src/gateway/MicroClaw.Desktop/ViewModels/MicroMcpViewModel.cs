@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class MicroMcpViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteMicroMcp)]
+public sealed class MicroMcpViewModel : RouteViewModelBase
 {
     public string Title { get; } = "全局 MCP";
 

@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class ProvidersViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteSettingsProviders)]
+public sealed class ProvidersViewModel : RouteViewModelBase
 {
     public string Title { get; } = "模型提供商";
 

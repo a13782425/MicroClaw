@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using MicroClaw.Desktop.ViewModels;
 using ShadUI;
 
 namespace MicroClaw.Desktop.Views;

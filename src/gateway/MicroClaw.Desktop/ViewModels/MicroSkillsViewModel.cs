@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class MicroSkillsViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteMicroSkills)]
+public sealed class MicroSkillsViewModel : RouteViewModelBase
 {
     public string Title { get; } = "全局 Skill";
 

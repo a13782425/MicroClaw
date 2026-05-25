@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class MicroToolsViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteMicroTools)]
+public sealed class MicroToolsViewModel : RouteViewModelBase
 {
     public string Title { get; } = "全局 Tools";
 

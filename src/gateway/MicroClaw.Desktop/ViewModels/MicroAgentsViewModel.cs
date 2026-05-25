@@ -1,6 +1,8 @@
-﻿namespace MicroClaw.Desktop;
+﻿
+namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class MicroAgentsViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteMicroAgents)]
+public sealed class MicroAgentsViewModel : RouteViewModelBase
 {
     public string Title { get; } = "全局 Agent";
 

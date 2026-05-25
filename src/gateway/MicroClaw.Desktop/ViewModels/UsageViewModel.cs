@@ -6,9 +6,10 @@ using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 using ShadUI;
 
-namespace MicroClaw.Desktop;
+namespace MicroClaw.Desktop.ViewModels;
 
-public sealed partial class UsageViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteSettingsUsage)]
+public sealed partial class UsageViewModel : RouteViewModelBase
 {
     public UsageViewModel()
     {

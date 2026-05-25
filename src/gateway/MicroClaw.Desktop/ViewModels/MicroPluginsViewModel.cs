@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class MicroPluginsViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteMicroPlugins)]
+public sealed class MicroPluginsViewModel : RouteViewModelBase
 {
     public string Title { get; } = "全局插件";
 

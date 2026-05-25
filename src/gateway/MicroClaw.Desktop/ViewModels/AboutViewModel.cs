@@ -1,6 +1,7 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
-public sealed class AboutViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteSettingsAbout)]
+public sealed class AboutViewModel : RouteViewModelBase
 {
     public string Title { get; } = "关于桌面预览";
 

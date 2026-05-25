@@ -1,6 +1,7 @@
 ﻿using System;
 
 using Avalonia;
+using MicroClaw.Desktop.ViewModels;
 using MicroClaw.Desktop.Windows.Views;
 
 namespace MicroClaw.Desktop;

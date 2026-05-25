@@ -1,4 +1,4 @@
-﻿namespace MicroClaw.Desktop;
+﻿namespace MicroClaw.Desktop.ViewModels;
 
 public sealed record StaticMetric(string Label, string Value, string Caption);
 

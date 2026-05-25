@@ -5,7 +5,8 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
     xmlns:heroIcons="clr-namespace:HeroIconsAvalonia.Controls;assembly=HeroIconsAvalonia"
-    xmlns:vm="using:MicroClaw.Desktop"
+    xmlns:vm="using:MicroClaw.Desktop.ViewModels"
+    xmlns:desktop="using:MicroClaw.Desktop"
     mc:Ignorable="d"
     d:DesignWidth="1164"
     d:DesignHeight="768"
@@ -36,22 +37,12 @@
 
             <StackPanel
                 Spacing="2">
-                <Grid
-                    ColumnDefinitions="*,Auto"
-                    ColumnSpacing="8"
-                    Margin="6,4,6,8"
-                    IsVisible="{Binding IsSidebarOpen}">
-                    <TextBlock
-                        Text="会话"
-                        Classes="Caption Muted"
-                        VerticalAlignment="Center" />
-                    <TextBlock
-                        Grid.Column="1"
-                        Text="1"
-                        Classes="Caption Muted"
-                        VerticalAlignment="Center" />
-                </Grid>
-
+                <TextBlock
+                    Margin="6,0,6,8"
+                    Text="会话"
+                    Classes="Caption Muted"
+                    IsVisible="{Binding IsSidebarOpen}" />
+               
                 <ItemsControl
                     ItemsSource="{Binding Sessions}">
                     <ItemsControl.ItemTemplate>
@@ -140,7 +131,7 @@
                                 Height="14"
                                 Foreground="{DynamicResource ForegroundColor}"
                                 HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
+                                VerticalAlignment="Center" />
                         </Button>
 
                         <Menu
@@ -165,7 +156,7 @@
                                 </MenuItem.Header>
                                 <MenuItem
                                     Header="模型提供商"
-                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsProviders}"
+                                    Tag="{x:Static desktop:PageRouteDefine.RouteSettingsProviders}"
                                     Click="OnSettingsMenuItemClick">
                                     <MenuItem.Icon>
                                         <PathIcon
@@ -176,7 +167,7 @@
                                 </MenuItem>
                                 <MenuItem
                                     Header="使用情况"
-                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsUsage}"
+                                    Tag="{x:Static desktop:PageRouteDefine.RouteSettingsUsage}"
                                     Click="OnSettingsMenuItemClick">
                                     <MenuItem.Icon>
                                         <PathIcon
@@ -188,7 +179,7 @@
                                 <Separator />
                                 <MenuItem
                                     Header="关于"
-                                    Tag="{x:Static vm:MainWindowViewModel.RouteSettingsAbout}"
+                                    Tag="{x:Static desktop:PageRouteDefine.RouteSettingsAbout}"
                                     Click="OnSettingsMenuItemClick">
                                     <MenuItem.Icon>
                                         <PathIcon

@@ -1,8 +1,5 @@
 ﻿using MicroClaw.Core;
 using MicroClaw.Core.Logging;
-using MicroClaw.Pet;
-using MicroClaw.Providers;
-using MicroClaw.Sessions;
 namespace MicroClaw.Runtime;
 public static class MicroRuntime
 {
@@ -27,16 +24,16 @@ public static class MicroRuntime
     public static async Task StartAsync(IMicroLoggerFactory factory, CancellationToken cancellationToken = default)
     {
         _engine = new MicroEngine(factory);
-        await Engine.StartEngine(cancellationToken);
+        await _engine.StartEngine(cancellationToken);
         _isStart = true;
     }
     public static async Task RegisterServiceAsync(CancellationToken cancellationToken = default)
     {
         if (!_isStart)
             throw new InvalidOperationException("无法在引擎启动前注册服务。");
-        await Engine.RegisterServiceAsync(new ModelProviderService(), cancellationToken);
-        await Engine.RegisterServiceAsync(new PetService(), cancellationToken);
-        await Engine.RegisterServiceAsync(new SessionService(), cancellationToken);
+        // await Engine.RegisterServiceAsync(new ModelProviderService(), cancellationToken);
+        // await Engine.RegisterServiceAsync(new PetService(), cancellationToken);
+        // await Engine.RegisterServiceAsync(new SessionService(), cancellationToken);
     }
     
     public static async Task StopAsync(CancellationToken cancellationToken = default)

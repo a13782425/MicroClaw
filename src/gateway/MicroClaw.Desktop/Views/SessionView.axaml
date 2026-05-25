@@ -3,7 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:vm="using:MicroClaw.Desktop"
+    xmlns:vm="using:MicroClaw.Desktop.ViewModels"
+    xmlns:desktop="using:MicroClaw.Desktop"
     mc:Ignorable="d"
     d:DesignWidth="900"
     d:DesignHeight="700"
@@ -40,7 +41,7 @@
                         VerticalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
                         Command="{Binding NavigateTabCommand}"
-                        CommandParameter="chat">
+                        CommandParameter="{x:Static desktop:PageRouteDefine.RouteSessionChat}">
                         <TextBlock Text="聊天" Classes="Caption" />
                     </Button>
                 </Grid>
@@ -57,7 +58,7 @@
                         VerticalAlignment="Stretch"
                         HorizontalContentAlignment="Center"
                         Command="{Binding NavigateTabCommand}"
-                        CommandParameter="game">
+                        CommandParameter="{x:Static desktop:PageRouteDefine.RouteSessionGame}">
                         <TextBlock Text="小游戏" Classes="Caption" />
                     </Button>
                 </Grid>

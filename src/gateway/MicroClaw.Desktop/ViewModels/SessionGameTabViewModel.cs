@@ -1,9 +1,10 @@
 using MicroClaw.Desktop.Games;
 using Microsoft.Xna.Framework;
 
-namespace MicroClaw.Desktop;
+namespace MicroClaw.Desktop.ViewModels;
 
-public class SessionGameTabViewModel : ViewModelBase
+[PageRoute(PageRouteDefine.RouteSessionGame)]
+public class SessionGameTabViewModel : RouteViewModelBase
 {
     public Game PongGame { get; } = new PongGame();
 }

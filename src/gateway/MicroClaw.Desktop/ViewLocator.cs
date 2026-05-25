@@ -1,5 +1,6 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using MicroClaw.Desktop.ViewModels;
 using MicroClaw.Desktop.Views;
 
 namespace MicroClaw.Desktop;
