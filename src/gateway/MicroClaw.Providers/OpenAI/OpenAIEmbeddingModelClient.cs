@@ -12,8 +12,7 @@ namespace MicroClaw.Providers.OpenAI;
 /// </summary>
 public sealed class OpenAIEmbeddingModelClient : EmbeddingModelClient
 {
-    public OpenAIEmbeddingModelClient(ProviderEntityConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker) { }
+    public OpenAIEmbeddingModelClient(ProviderEntityConfig config) : base(config) { }
 
     /// <inheritdoc />
     protected override IEmbeddingGenerator<string, Embedding<float>> BuildGenerator()

@@ -1,0 +1,264 @@
+<svg width="1280" height="1280" viewBox="0 0 1280 1280" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .h1     { font: 600 28px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .h2     { font: 600 18px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .h3     { font: 600 14px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .muted  { font: 400 13px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #6B7280; }
+      .caption{ font: 400 12px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #6B7280; }
+      .label  { font: 500 12px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #6B7280; }
+      .value  { font: 500 14px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #111827; }
+      .axis   { font: 500 12px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #374151; }
+      .btn    { font: 500 13px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+      .tab    { font: 500 14px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Window background -->
+  <rect width="1280" height="1280" fill="#FAFAFA"/>
+
+  <!-- Header -->
+  <text x="32" y="56" class="h1">模型提供方</text>
+  <text x="32" y="84" class="muted">配置聊天与嵌入模型的接入参数、模态能力、价格与场景评分。</text>
+
+  <!-- Toolbar -->
+  <rect x="32" y="108" width="184" height="36" rx="8" fill="#F1F1F2" stroke="#E5E7EB"/>
+  <rect x="36" y="112" width="88" height="28" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="56" y="131" class="tab" fill="#0F172A">聊天模型</text>
+  <text x="142" y="131" class="tab" fill="#6B7280">嵌入</text>
+
+  <rect x="1100" y="108" width="68" height="36" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1119" y="131" class="btn" fill="#0F172A">导入</text>
+  <rect x="1176" y="108" width="72" height="36" rx="8" fill="#0F172A"/>
+  <text x="1190" y="131" class="btn" fill="#FAFAFA">+ 新建</text>
+
+  <!-- Left list panel -->
+  <rect x="32" y="164" width="316" height="1080" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+
+  <rect x="48" y="180" width="284" height="32" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <circle cx="62" cy="196" r="5" fill="none" stroke="#9CA3AF" stroke-width="1.4"/>
+  <line x1="66" y1="200" x2="70" y2="204" stroke="#9CA3AF" stroke-width="1.4" stroke-linecap="round"/>
+  <text x="80" y="200" class="muted">搜索提供方</text>
+
+  <rect x="48" y="224" width="284" height="68" rx="8" fill="#F5F6F8" stroke="#0F172A" stroke-width="1.4"/>
+  <text x="64" y="246" class="h3">Anthropic Production</text>
+  <text x="64" y="264" class="muted">claude-sonnet-4-5 · Anthropic</text>
+  <text x="64" y="282" class="caption">默认 · 已启用</text>
+
+  <rect x="48" y="304" width="284" height="68" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="64" y="326" class="h3">OpenAI Primary</text>
+  <text x="64" y="344" class="muted">gpt-4.1 · OpenAI</text>
+  <text x="64" y="362" class="caption">已启用</text>
+
+  <rect x="48" y="384" width="284" height="68" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="64" y="406" class="h3">Azure OpenAI</text>
+  <text x="64" y="424" class="muted">gpt-4o · OpenAI 兼容</text>
+  <text x="64" y="442" class="caption">已启用</text>
+
+  <rect x="48" y="464" width="284" height="68" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="64" y="486" class="h3">Local Experimental</text>
+  <text x="64" y="504" class="muted">qwen3-32b · OpenAI 兼容</text>
+  <text x="64" y="522" class="caption" fill="#B45309">待补全 API Key</text>
+
+  <text x="48" y="568" class="caption">共 4 个聊天模型 · 1 个待配置</text>
+
+  <!-- Right detail header -->
+  <text x="372" y="190" class="h2">Anthropic Production</text>
+  <text x="372" y="212" class="muted">anthropic-prod · 已启用 · 当前默认</text>
+
+  <rect x="1004" y="172" width="92" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1023" y="192" class="btn" fill="#0F172A">测试连接</text>
+  <rect x="1104" y="172" width="68" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1123" y="192" class="btn" fill="#0F172A">复制</text>
+  <rect x="1180" y="172" width="68" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1196" y="192" class="btn" fill="#B91C1C">删除</text>
+
+  <!-- 基础信息 -->
+  <rect x="364" y="232" width="884" height="148" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="384" y="260" class="h2">基础信息</text>
+
+  <text x="384" y="290" class="label">显示名称</text>
+  <rect x="384" y="298" width="260" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="396" y="319" class="value">Anthropic Production</text>
+
+  <text x="664" y="290" class="label">Provider ID</text>
+  <rect x="664" y="298" width="260" height="32" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="676" y="319" class="value" fill="#6B7280">anthropic-prod</text>
+
+  <text x="944" y="290" class="label">类型</text>
+  <rect x="944" y="298" width="124" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="956" y="319" class="value">Chat</text>
+
+  <text x="1088" y="290" class="label">协议</text>
+  <rect x="1088" y="298" width="140" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1100" y="319" class="value">Anthropic</text>
+
+  <text x="384" y="354" class="muted">启用</text>
+  <rect x="424" y="343" width="32" height="18" rx="9" fill="#0F172A"/>
+  <circle cx="448" cy="352" r="7" fill="#FFFFFF"/>
+
+  <text x="494" y="354" class="muted">设为默认</text>
+  <rect x="556" y="343" width="32" height="18" rx="9" fill="#0F172A"/>
+  <circle cx="580" cy="352" r="7" fill="#FFFFFF"/>
+
+  <!-- 接入信息 -->
+  <rect x="364" y="396" width="884" height="168" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="384" y="424" class="h2">接入信息</text>
+
+  <text x="384" y="454" class="label">Base URL</text>
+  <rect x="384" y="462" width="540" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="396" y="483" class="muted">留空，使用官方端点</text>
+
+  <text x="944" y="454" class="label">最大输出 Tokens</text>
+  <rect x="944" y="462" width="140" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="956" y="483" class="value">8192</text>
+
+  <text x="1104" y="454" class="label">典型延迟 (ms)</text>
+  <rect x="1104" y="462" width="124" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1116" y="483" class="value">1200</text>
+
+  <text x="384" y="514" class="label">API Key</text>
+  <rect x="384" y="522" width="540" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="396" y="543" class="value" fill="#6B7280">${ANTHROPIC__APIKEY}</text>
+  <text x="940" y="543" class="caption">从环境变量解析 · 切换为直接输入</text>
+
+  <!-- 模型与能力 -->
+  <rect x="364" y="580" width="884" height="168" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="384" y="608" class="h2">模型与能力</text>
+
+  <text x="384" y="638" class="label">模型名称</text>
+  <rect x="384" y="646" width="320" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="396" y="667" class="value">claude-sonnet-4-5</text>
+
+  <text x="724" y="638" class="label">输入模态</text>
+  <rect x="724" y="646" width="56" height="26" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="740" y="664" class="btn" fill="#0F172A">文本</text>
+  <rect x="788" y="646" width="56" height="26" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="804" y="664" class="btn" fill="#0F172A">图像</text>
+  <rect x="852" y="646" width="56" height="26" rx="6" fill="#FFFFFF" stroke="#E5E7EB" stroke-dasharray="3 3"/>
+  <text x="868" y="664" class="btn" fill="#6B7280">文件</text>
+
+  <text x="384" y="702" class="label">能力</text>
+  <rect x="384" y="710" width="84" height="26" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="397" y="728" class="btn" fill="#0F172A">工具调用</text>
+  <rect x="476" y="710" width="116" height="26" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="494" y="728" class="btn" fill="#0F172A">Responses API</text>
+
+  <text x="724" y="702" class="label">输出模态</text>
+  <rect x="724" y="710" width="56" height="26" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="740" y="728" class="btn" fill="#0F172A">文本</text>
+
+  <!-- 价格 -->
+  <rect x="364" y="764" width="884" height="148" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="384" y="792" class="h2">价格</text>
+  <text x="384" y="812" class="caption">单位：美元 / 1M tokens</text>
+
+  <text x="384" y="840" class="label">输入</text>
+  <rect x="384" y="848" width="120" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="396" y="869" class="value">3.00</text>
+
+  <text x="524" y="840" class="label">输出</text>
+  <rect x="524" y="848" width="120" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="536" y="869" class="value">15.00</text>
+
+  <text x="664" y="840" class="label">缓存输入</text>
+  <rect x="664" y="848" width="120" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="676" y="869" class="value">0.30</text>
+
+  <text x="804" y="840" class="label">缓存输出</text>
+  <rect x="804" y="848" width="120" height="32" rx="6" fill="#F5F6F8" stroke="#E5E7EB"/>
+  <text x="816" y="869" class="value" fill="#6B7280">—</text>
+
+  <text x="944" y="840" class="label">币种</text>
+  <rect x="944" y="848" width="120" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="956" y="869" class="value">USD</text>
+
+  <text x="1084" y="840" class="label">计费颗粒度</text>
+  <rect x="1084" y="848" width="144" height="32" rx="6" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="1096" y="869" class="value">每 1M tokens</text>
+
+  <!-- 场景评分 (radar + list) -->
+  <rect x="364" y="928" width="884" height="316" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="384" y="956" class="h2">场景评分</text>
+  <text x="384" y="976" class="caption">路由策略“质量优先”会按场景挑选高分模型 · 分数范围 0–100</text>
+
+  <!-- Radar chart: center (588, 1110), radius 90, ample padding from card edges -->
+  <g transform="translate(588 1110)">
+    <polygon points="0,-90 77.94,-45 77.94,45 0,90 -77.94,45 -77.94,-45"
+             fill="none" stroke="#E5E7EB"/>
+    <polygon points="0,-67.5 58.46,-33.75 58.46,33.75 0,67.5 -58.46,33.75 -58.46,-33.75"
+             fill="none" stroke="#E5E7EB"/>
+    <polygon points="0,-45 38.97,-22.5 38.97,22.5 0,45 -38.97,22.5 -38.97,-22.5"
+             fill="none" stroke="#E5E7EB"/>
+    <polygon points="0,-22.5 19.49,-11.25 19.49,11.25 0,22.5 -19.49,11.25 -19.49,-11.25"
+             fill="none" stroke="#E5E7EB"/>
+
+    <line x1="0" y1="0" x2="0"      y2="-90" stroke="#E5E7EB"/>
+    <line x1="0" y1="0" x2="77.94"  y2="-45" stroke="#E5E7EB"/>
+    <line x1="0" y1="0" x2="77.94"  y2="45"  stroke="#E5E7EB"/>
+    <line x1="0" y1="0" x2="0"      y2="90"  stroke="#E5E7EB"/>
+    <line x1="0" y1="0" x2="-77.94" y2="45"  stroke="#E5E7EB"/>
+    <line x1="0" y1="0" x2="-77.94" y2="-45" stroke="#E5E7EB"/>
+
+    <!-- data: 编码 92, 工具调用 95, 推理 88, 创意 70, 数学 75, 摘要 85 -->
+    <!-- r = score/100 * 90 -->
+    <polygon points="0,-82.8 74.04,-42.75 68.59,39.60 0,63.0 -58.46,33.75 -66.25,-38.25"
+             fill="#0F172A" fill-opacity="0.10" stroke="#0F172A" stroke-width="1.4"
+             stroke-linejoin="round"/>
+
+    <circle cx="0"      cy="-82.8" r="3" fill="#0F172A"/>
+    <circle cx="74.04"  cy="-42.75" r="3" fill="#0F172A"/>
+    <circle cx="68.59"  cy="39.60"  r="3" fill="#0F172A"/>
+    <circle cx="0"      cy="63.0"   r="3" fill="#0F172A"/>
+    <circle cx="-58.46" cy="33.75"  r="3" fill="#0F172A"/>
+    <circle cx="-66.25" cy="-38.25" r="3" fill="#0F172A"/>
+
+    <text x="0"    y="-100" text-anchor="middle" class="axis">编码</text>
+    <text x="90"   y="-45"  text-anchor="start"  class="axis">工具调用</text>
+    <text x="90"   y="50"   text-anchor="start"  class="axis">推理</text>
+    <text x="0"    y="106"  text-anchor="middle" class="axis">创意</text>
+    <text x="-90"  y="50"   text-anchor="end"    class="axis">数学</text>
+    <text x="-90"  y="-45"  text-anchor="end"    class="axis">摘要</text>
+  </g>
+
+  <!-- Score list (right side of card, well inside boundaries) -->
+  <text x="800" y="1020" class="label">场景</text>
+  <text x="996" y="1020" class="label">分布</text>
+  <text x="1196" y="1020" class="label" text-anchor="end">分数</text>
+  <line x1="800" y1="1028" x2="1228" y2="1028" stroke="#E5E7EB"/>
+
+  <text x="800" y="1052" class="value">编码</text>
+  <rect x="996" y="1043" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1043" width="165.6" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1052" class="value" text-anchor="end">92</text>
+
+  <text x="800" y="1080" class="value">工具调用</text>
+  <rect x="996" y="1071" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1071" width="171.0" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1080" class="value" text-anchor="end">95</text>
+
+  <text x="800" y="1108" class="value">推理</text>
+  <rect x="996" y="1099" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1099" width="158.4" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1108" class="value" text-anchor="end">88</text>
+
+  <text x="800" y="1136" class="value">创意</text>
+  <rect x="996" y="1127" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1127" width="126.0" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1136" class="value" text-anchor="end">70</text>
+
+  <text x="800" y="1164" class="value">数学</text>
+  <rect x="996" y="1155" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1155" width="135.0" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1164" class="value" text-anchor="end">75</text>
+
+  <text x="800" y="1192" class="value">摘要</text>
+  <rect x="996" y="1183" width="180" height="6" rx="3" fill="#F1F1F2"/>
+  <rect x="996" y="1183" width="153.0" height="6" rx="3" fill="#0F172A"/>
+  <text x="1196" y="1192" class="value" text-anchor="end">85</text>
+
+  <text x="800" y="1226" class="caption">点击右侧分数可调整 · 场景集合由路由策略统一定义</text>
+
+  <!-- Footer hint -->
+  <text x="32" y="1268" class="caption">Mockup · 设计稿 · 沿用 ShadUI 中性卡片风格</text>
+</svg>

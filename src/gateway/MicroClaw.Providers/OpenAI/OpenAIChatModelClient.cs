@@ -18,8 +18,7 @@ namespace MicroClaw.Providers.OpenAI;
 /// </summary>
 public sealed class OpenAIChatModelClient : ChatModelClient
 {
-    public OpenAIChatModelClient(ProviderEntityConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker) { }
+    public OpenAIChatModelClient(ProviderEntityConfig config) : base(config) { }
 
     /// <inheritdoc />
     protected override IChatClient BuildClient()

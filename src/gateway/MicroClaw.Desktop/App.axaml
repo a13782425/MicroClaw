@@ -8,8 +8,8 @@
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 	<Application.Resources>
 		<ResourceDictionary>
-			<FontFamily x:Key="PuHuiFont">avares://MicroClaw.Desktop/Assets/Fonts02#AlibabaPuHuiTi</FontFamily>
-			<FontFamily x:Key="DaoLi">avares://MicroClaw.Desktop/Assets/Fonts02#AlimamaDaoLiTi</FontFamily>
+			<FontFamily x:Key="PuHuiFont">avares://MicroClaw.Desktop/Assets/Fonts#AlibabaPuHuiTi</FontFamily>
+			<FontFamily x:Key="DaoLi">avares://MicroClaw.Desktop/Assets/Fonts#AlimamaDaoLiTi</FontFamily>
 		</ResourceDictionary>
 	</Application.Resources>
 

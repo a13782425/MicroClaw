@@ -10,8 +10,7 @@ namespace MicroClaw.Providers.Anthropic;
 /// </summary>
 public sealed class AnthropicChatModelClient : ChatModelClient
 {
-    public AnthropicChatModelClient(ProviderEntityConfig config, IUsageTracker usageTracker)
-        : base(config, usageTracker) { }
+    public AnthropicChatModelClient(ProviderEntityConfig config) : base(config) { }
 
     /// <inheritdoc />
     protected override IChatClient BuildClient()

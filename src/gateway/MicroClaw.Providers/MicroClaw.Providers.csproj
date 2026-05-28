@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Common\MicroClaw.Common.csproj" />
     <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
+    <ProjectReference Include="..\MicroClaw.Database\MicroClaw.Database.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -28,11 +28,11 @@ public static class ModelScenarioCatalog
     public static IReadOnlyDictionary<string, string> Descriptions { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            [ToolCalling] = "工具调用 / 函数调用稳定性",
-            [Planning] = "多步骤规划与任务拆解",
-            [Coding] = "代码生成与审阅",
+            [ToolCalling] = "工具调用",
+            [Planning] = "任务规划",
+            [Coding] = "代码生成",
             [Vision] = "图像理解",
-            [Summarization] = "长文档摘要",
+            [Summarization] = "文档摘要",
             [VideoUnderstanding] = "视频理解",
         };
 

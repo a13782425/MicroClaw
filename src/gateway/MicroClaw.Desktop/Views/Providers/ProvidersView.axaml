@@ -1,0 +1,449 @@
+﻿<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:MicroClaw.Desktop.ViewModels"
+    xmlns:views="using:MicroClaw.Desktop.Views"
+    mc:Ignorable="d"
+    d:DesignWidth="1280"
+    d:DesignHeight="820"
+    x:Class="MicroClaw.Desktop.Views.ProvidersView"
+    x:DataType="vm:ProvidersViewModel"
+    x:CompileBindings="True">
+
+  <UserControl.Styles>
+    <!-- Tag-style ToggleButton for modality / capability chips.
+         Inherits the default ShadUI ToggleButton template; only overrides
+         layout-related properties so the IsChecked visuals remain functional. -->
+    <Style Selector="ToggleButton.tag">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="Margin" Value="0,0,8,8" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <!-- Warning-colored caption (e.g. "待补全 API Key"). -->
+    <Style Selector="TextBlock.Warning">
+      <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*" Margin="24,20,24,20" RowSpacing="16">
+
+    <!-- ── Page header ─────────────────────────────────────────── -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="6">
+        <TextBlock Text="{Binding Title}" FontSize="24" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding Description}" Classes="Caption Muted" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Classes="Outline" Content="导入" Command="{Binding ImportCommand}" IsEnabled="False" />
+        <Button Classes="Primary" Content="＋ 新建提供方" Command="{Binding AddNewCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- ── Master / Detail area ────────────────────────────────── -->
+    <Grid Grid.Row="1" ColumnDefinitions="256,*" ColumnSpacing="16">
+
+      <!-- LEFT: list panel -->
+      <Border
+          Grid.Column="0"
+          Background="{DynamicResource CardBackgroundColor}"
+          BorderBrush="{DynamicResource BorderColor}"
+          BorderThickness="1"
+          CornerRadius="12">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12">
+
+          <!-- Tab toggle -->
+          <Border Grid.Row="0"
+                  Background="{DynamicResource MutedColor}"
+                  CornerRadius="10"
+                  Padding="3"
+                  HorizontalAlignment="Stretch"
+                  Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="2">
+              <Grid Grid.Column="0" Height="32">
+                <Border CornerRadius="8"
+                        Background="{DynamicResource WindowBackgroundColor}"
+                        IsVisible="{Binding IsChatTabActive}" />
+                <Button Classes="Ghost"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding SetActiveTabCommand}"
+                        CommandParameter="chat">
+                  <TextBlock Text="聊天模型" Classes="Caption" />
+                </Button>
+              </Grid>
+              <Grid Grid.Column="1" Height="32">
+                <Border CornerRadius="8"
+                        Background="{DynamicResource WindowBackgroundColor}"
+                        IsVisible="{Binding IsEmbeddingTabActive}" />
+                <Button Classes="Ghost"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Command="{Binding SetActiveTabCommand}"
+                        CommandParameter="embedding">
+                  <TextBlock Text="嵌入模型" Classes="Caption" />
+                </Button>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <!-- Search -->
+          <TextBox Grid.Row="1"
+                   PlaceholderText="搜索名称、ID 或模型"
+                   Text="{Binding SearchText, Mode=TwoWay}"
+                   Margin="0,0,0,10" />
+
+          <!-- List -->
+          <ListBox Grid.Row="2"
+                   ItemsSource="{Binding ActiveItems}"
+                   SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                   Background="Transparent"
+                   BorderThickness="0">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ProviderListItemVm">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="3" Margin="0,4,0,4">
+                  <!-- Row 0: title + default pill -->
+                  <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               VerticalAlignment="Center" />
+                    <Border Background="{DynamicResource SecondaryColor}"
+                            CornerRadius="999"
+                            Padding="8,1"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding IsDefault}">
+                      <TextBlock Text="默认"
+                                 FontSize="11"
+                                 Foreground="{DynamicResource SecondaryForegroundColor}" />
+                    </Border>
+                  </StackPanel>
+                  <!-- Row 1: consolidated subtitle -->
+                  <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                             Text="{Binding Subtitle}"
+                             FontSize="12"
+                             Foreground="{DynamicResource MutedColor}"
+                             Classes.Warning="{Binding HasConfigIssue}"
+                             TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- Footer counter -->
+          <TextBlock Grid.Row="3"
+                     Text="{Binding FooterStat}"
+                     Classes="Caption Muted"
+                     Margin="0,8,0,0" />
+        </Grid>
+      </Border>
+
+      <!-- RIGHT: detail panel -->
+      <Border Grid.Column="1"
+              Background="{DynamicResource CardBackgroundColor}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
+              CornerRadius="12">
+
+        <Grid>
+          <!-- Empty state -->
+          <StackPanel HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Spacing="8"
+                      IsVisible="{Binding !HasSelection}">
+            <TextBlock Text="未选择提供方"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="从左侧选择一个条目，或点击右上角“新建提供方”创建。"
+                       Classes="Caption Muted"
+                       HorizontalAlignment="Center" />
+          </StackPanel>
+
+          <!-- Detail editor — bound to DetailVm via DataContext -->
+          <Grid IsVisible="{Binding HasSelection}">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                        DataContext="{Binding DetailVm}"
+                        x:DataType="vm:ProviderDetailVm">
+            <StackPanel Margin="24" Spacing="16">
+
+              <!-- Action bar -->
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="2">
+                  <TextBlock FontSize="18" FontWeight="SemiBold">
+                    <Run Text="{Binding DisplayName, Mode=OneWay, FallbackValue=（新建提供方）}" />
+                  </TextBlock>
+                  <TextBlock Text="{Binding HeaderSubtitle}" Classes="Caption Muted" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <Button Classes="Outline" Content="测试连接" Command="{Binding TestConnectionCommand}" />
+                  <Button Classes="Outline" Content="复制一份" Command="{Binding DuplicateCommand}" IsEnabled="{Binding !IsNew}" />
+                  <Button Classes="Destructive" Content="删除" Command="{Binding DeleteCommand}" IsEnabled="{Binding !IsNew}" />
+                </StackPanel>
+              </Grid>
+
+              <!-- Test result line -->
+              <Border Padding="10,6"
+                      CornerRadius="8"
+                      Background="{DynamicResource MutedColor}"
+                      IsVisible="{Binding TestResult, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{Binding TestResult}" Classes="Caption" />
+              </Border>
+
+              <!-- Card 1: 基础信息 -->
+              <Border Padding="18"
+                      Background="{DynamicResource CardBackgroundColor}"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      BorderThickness="1"
+                      CornerRadius="10">
+                <StackPanel Spacing="14">
+                  <TextBlock Text="基础信息" FontWeight="SemiBold" FontSize="14" />
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="16" RowDefinitions="Auto,Auto" RowSpacing="12">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                      <TextBlock Text="显示名称" Classes="Caption Muted" />
+                      <TextBox Text="{Binding DisplayName, Mode=TwoWay}" PlaceholderText="例如：OpenAI · GPT-4o" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                      <TextBlock Text="提供方 ID" Classes="Caption Muted" />
+                      <TextBox Text="{Binding ProviderId, Mode=TwoWay}"
+                               PlaceholderText="留空将自动生成"
+                               IsEnabled="{Binding IsNew}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                      <TextBlock Text="协议类型" Classes="Caption Muted" />
+                      <ComboBox SelectedItem="{Binding ApiKind, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="openai" />
+                        <ComboBoxItem Content="anthropic" />
+                        <ComboBoxItem Content="other" />
+                      </ComboBox>
+                    </StackPanel>				    
+                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                      <TextBlock Text="模型类型" Classes="Caption Muted" />
+                      <ComboBox SelectedItem="{Binding ModelKind, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="chat" />
+                        <ComboBoxItem Content="embedding" />
+                      </ComboBox>
+                    </StackPanel>
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                      <ToggleSwitch IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                      <TextBlock Text="启用此提供方" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                      <ToggleSwitch IsChecked="{Binding IsDefault, Mode=TwoWay}" />
+                      <TextBlock Text="设为默认（同模型类型内唯一）" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <!-- Card 2: 接入信息 -->
+              <Border Padding="18"
+                      Background="{DynamicResource CardBackgroundColor}"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      BorderThickness="1"
+                      CornerRadius="10">
+                <StackPanel Spacing="14">
+                  <TextBlock Text="接入信息" FontWeight="SemiBold" FontSize="14" />
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Base URL" Classes="Caption Muted" />
+                    <TextBox Text="{Binding BaseUrl, Mode=TwoWay}" PlaceholderText="例如：https://api.openai.com/v1" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="API Key" Classes="Caption Muted" VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                              Classes="Ghost"
+                              Padding="6,2"
+                              Content="{Binding ApiKeyHelperText}"
+                              Command="{Binding ToggleApiKeyModeCommand}" />
+                    </Grid>
+                    <TextBox Text="{Binding ApiKey, Mode=TwoWay}"
+                             PlaceholderText="留空保留旧值；环境变量模式请填 ${VAR}"
+                             PasswordChar="●"
+                             RevealPassword="{Binding IsApiKeyEnvMode}" />
+                  </StackPanel>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                      <TextBlock Text="最大输出 Token" Classes="Caption Muted" />
+                      <NumericUpDown Minimum="256" Maximum="200000" Increment="512"
+                                     Value="{Binding MaxOutputTokens, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                      <TextBlock Text="参考延迟 (ms，可选)" Classes="Caption Muted" />
+                      <NumericUpDown Minimum="0" Maximum="60000" Increment="50"
+                                     Value="{Binding LatencyMs, Mode=TwoWay}" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <!-- Card 3: 模型与能力 -->
+              <Border Padding="18"
+                      Background="{DynamicResource CardBackgroundColor}"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      BorderThickness="1"
+                      CornerRadius="10">
+                <StackPanel Spacing="14">
+                  <TextBlock Text="模型与能力" FontWeight="SemiBold" FontSize="14" />
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="模型名称" Classes="Caption Muted" />
+                    <TextBox Text="{Binding ModelName, Mode=TwoWay}" PlaceholderText="例如：gpt-4o-mini / claude-sonnet-4-5" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="输入模态" Classes="Caption Muted" />
+                    <ItemsControl ItemsSource="{Binding InputModalities}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToggleItemVm">
+                          <ToggleButton Classes="tag"
+                                        Content="{Binding Label}"
+                                        IsChecked="{Binding IsOn, Mode=TwoWay}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="输出模态" Classes="Caption Muted" />
+                    <ItemsControl ItemsSource="{Binding OutputModalities}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToggleItemVm">
+                          <ToggleButton Classes="tag"
+                                        Content="{Binding Label}"
+                                        IsChecked="{Binding IsOn, Mode=TwoWay}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="附加能力" Classes="Caption Muted" />
+                    <ItemsControl ItemsSource="{Binding Features}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToggleItemVm">
+                          <ToggleButton Classes="tag"
+                                        Content="{Binding Label}"
+                                        IsChecked="{Binding IsOn, Mode=TwoWay}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <!-- Card 4: 价格 -->
+              <Border Padding="18"
+                      Background="{DynamicResource CardBackgroundColor}"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      BorderThickness="1"
+                      CornerRadius="10">
+                <StackPanel Spacing="14">
+                  <TextBlock Text="价格（每百万 Token，美元）" FontWeight="SemiBold" FontSize="14" />
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="16" RowDefinitions="Auto,Auto" RowSpacing="12">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                      <TextBlock Text="输入价格" Classes="Caption Muted" />
+                      <TextBox Text="{Binding InputPrice, Mode=TwoWay}" PlaceholderText="例如：2.50" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                      <TextBlock Text="输出价格" Classes="Caption Muted" />
+                      <TextBox Text="{Binding OutputPrice, Mode=TwoWay}" PlaceholderText="例如：10.00" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                      <TextBlock Text="缓存输入价格" Classes="Caption Muted" />
+                      <TextBox Text="{Binding CacheInputPrice, Mode=TwoWay}" PlaceholderText="可选" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                      <TextBlock Text="缓存输出价格" Classes="Caption Muted" />
+                      <TextBox Text="{Binding CacheOutputPrice, Mode=TwoWay}" PlaceholderText="可选" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <!-- Card 5: 场景评分 -->
+              <Border Padding="18"
+                      Background="{DynamicResource CardBackgroundColor}"
+                      BorderBrush="{DynamicResource BorderColor}"
+                      BorderThickness="1"
+                      CornerRadius="10">
+                <StackPanel Spacing="12">
+                  <TextBlock Text="场景评分（0-100）" FontWeight="SemiBold" FontSize="14" />
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="24">
+                    <views:ScenarioRadarView Grid.Column="0" VerticalAlignment="Top" />
+                    <ItemsControl Grid.Column="1"
+                                  ItemsSource="{Binding ScenarioScores}"
+                                  HorizontalAlignment="Stretch">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ScenarioScoreItemVm">
+                          <Grid ColumnDefinitions="110,*,32"
+                                Margin="0,6"
+                                HorizontalAlignment="Stretch">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Label}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Slider Grid.Column="1"
+                                    Minimum="0" Maximum="100"
+                                    TickFrequency="10"
+                                    MinWidth="120"
+                                    Value="{Binding Score, Mode=TwoWay}"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center"
+                                    Margin="8,0,8,0" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Score}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <!-- Save bar -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,8">
+                <TextBlock Classes="Caption Muted"
+                           VerticalAlignment="Center"
+                           Text="保存后将写入 providers.yaml；API Key 留空时保留旧值。" />
+                <Button Grid.Column="1"
+                        Classes="Primary"
+                        Padding="20,8"
+                        Content="保存配置"
+                        Command="{Binding SaveCommand}" />
+              </Grid>
+            </StackPanel>
+          </ScrollViewer>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

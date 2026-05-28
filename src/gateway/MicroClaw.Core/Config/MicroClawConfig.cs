@@ -1,10 +1,12 @@
 ﻿using DotNetEnv;
+using MicroClaw.Utils;
 namespace MicroClaw.Configuration;
+
 public static class MicroClawConfig
 {
     private static YamlConfigStore? _store;
     private static int _initialized;
-    
+
     private static string? _homeDir;
     /// <summary>
     /// 获取 MicroClaw 运行主目录，默认为当前工作目录下的 ".microclaw" 子目录，可通过环境变量 "MICROCLAW_HOME" 覆盖。
@@ -17,7 +19,7 @@ public static class MicroClawConfig
             return _homeDir;
         }
     }
-    
+
     /// <summary>
     /// 获取 YAML 默认的配置文件目录，默认为 <see cref="HomeDir"/> 下的 "config" 子目录。
     /// </summary>
@@ -40,7 +42,7 @@ public static class MicroClawConfig
             return Path.Combine(_homeDir!, "workspace");
         }
     }
-    
+
     /// <summary>
     /// Gets a strongly typed options instance.
     /// </summary>
@@ -49,7 +51,7 @@ public static class MicroClawConfig
         EnsureInitialized();
         return _store!.Get<T>()!;
     }
-    
+
     /// <summary>
     /// 热更新内存中的配置实例，并同步写回对应的 YAML 文件。
     /// 需在 <see cref="Initialize"/> 之后调用；线程安全（内部串行化缓存读写与写盘）。
@@ -60,38 +62,39 @@ public static class MicroClawConfig
         EnsureInitialized();
         _store!.Save(value);
     }
-    
+
     public static void Delete<T>() where T : class, IMicroClawConfigOptions, new()
     {
         EnsureInitialized();
         _store!.Delete<T>();
     }
-    
+
     /// <summary>
     /// 初始化配置系统。必须在应用启动时调用一次，重复调用将抛出异常。
     /// </summary>
     public static void Initialize()
     {
         _homeDir = Env.GetString(ConfigDefine.MICROCLAW_HOME, ".microclaw");
+
         if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
             throw new InvalidOperationException("MicroClawConfig.Initialize() 不可重复调用。");
-        
         try
         {
+            MicroClawUtils.CheckDirectory(_homeDir);
             _store = new YamlConfigStore(ConfigDir);
         }
         catch
         {
+            Interlocked.Exchange(ref _initialized, 0);
             _homeDir = null;
             _store = null;
-            Interlocked.Exchange(ref _initialized, 0);
             throw;
         }
     }
-    
+
     private static void EnsureInitialized()
     {
-        if (_store is null || _homeDir is null)
+        if (Volatile.Read(ref _initialized) == 0)
             throw new InvalidOperationException("MicroClawConfig 尚未初始化，请先调用 MicroClawConfig.Initialize()。");
     }
 }

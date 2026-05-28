@@ -2,8 +2,12 @@ using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
+using MicroClaw.Database;
 using MicroClaw.Providers.Mapping;
+using MicroClaw.Utils;
 using Microsoft.Extensions.AI;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MicroClaw.Providers;
 
@@ -19,22 +23,19 @@ namespace MicroClaw.Providers;
 /// </summary>
 public abstract class ModelProviderObject : MicroObject
 {
-    protected ModelProviderObject(ProviderEntityConfig config, IUsageTracker usageTracker)
+    private const decimal PerMillionFactor = 1 / 1_000_000m;
+
+    protected ModelProviderObject(ProviderEntityConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
-        ArgumentNullException.ThrowIfNull(usageTracker);
         if (string.IsNullOrWhiteSpace(config.Id))
             throw new InvalidOperationException("ProviderEntityConfig.Id is required.");
 
         Config = config;
-        UsageTracker = usageTracker;
     }
 
     /// <summary>底层 YAML 配置（仅子类可见，不向外公开）。</summary>
-    protected ProviderEntityConfig Config { get; }
-
-    /// <summary>用量追踪器。子类调用模型后通过它写入 usage。</summary>
-    protected IUsageTracker UsageTracker { get; }
+    public ProviderEntityConfig Config { get; }
 
     /// <summary>Provider 的唯一标识。</summary>
     public string Id => Config.Id;
@@ -91,10 +92,6 @@ public abstract class ModelProviderObject : MicroObject
         return ctx.Ct;
     }
 
-    /// <summary>记录本次模型调用的 usage（可选 cached input）。</summary>
-    public virtual Task TrackUsageAsync(MicroChatContext ctx, long inputTokens, long outputTokens = 0L, long cachedInputTokens = 0L) =>
-        throw new NotImplementedException("Override in concrete provider.");
-
     /// <summary>非流式对话。仅 Chat 类 Provider 需要实现。</summary>
     public virtual Task<ChatResponse> ChatAsync(MicroChatContext ctx, IEnumerable<ChatMessage> messages, ChatOptions? options = null) =>
         throw new NotImplementedException("ChatAsync is only supported by ChatModelClient.");
@@ -106,12 +103,62 @@ public abstract class ModelProviderObject : MicroObject
     /// <summary>批量嵌入。仅 Embedding 类 Provider 需要实现。</summary>
     public virtual Task<IReadOnlyList<Embedding<float>>> EmbedBatchAsync(MicroChatContext ctx, IReadOnlyList<string> inputs) =>
         throw new NotImplementedException("EmbedBatchAsync is only supported by EmbeddingModelClient.");
-    
+
+    /// <summary>记录本次模型调用的 usage（可选 cached input）。</summary>
+    protected async Task TrackUsageAsync(MicroChatContext ctx, long inputTokens, long outputTokens = 0L, long cachedInputTokens = 0L)
+    {
+        int day = TimeUtils.TodayDay();
+        string sessionId = ctx.Session.Id;
+        string source = ctx.Source;
+        string id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{day}:{Id}:{ctx.Session.Id}:{ctx.Source}"))).ToLowerInvariant();
+        var pricing = Config.Pricing;
+        long nonCachedInput = Math.Max(0L, inputTokens - cachedInputTokens);
+        decimal inputCostUsd = 0, outputCostUsd = 0, cacheInputCostUsd = 0;
+        // inputCostUsd = Math.Round(nonCachedInput * pricing.InputPerMillionTokens.Value * PerMillionFactor, 8); 这个可以保留八位
+        if (nonCachedInput > 0 && pricing.InputPerMillionTokens.HasValue)
+            inputCostUsd = nonCachedInput * pricing.InputPerMillionTokens.Value * PerMillionFactor;
+        
+        if (outputTokens > 0 && pricing.OutputPerMillionTokens.HasValue)
+            outputCostUsd = outputTokens * pricing.OutputPerMillionTokens.Value * PerMillionFactor;
+
+        if (cachedInputTokens > 0 && pricing.CachedInputPerMillionTokens.HasValue)
+            cacheInputCostUsd = cachedInputTokens * pricing.CachedInputPerMillionTokens.Value * PerMillionFactor;
+
+        var existing = (await GlobalDatabase.QueryAsync<TokenDailyEntity>(e => e.Id == id, ctx.Ct)).FirstOrDefault();
+        if (existing is not null)
+        {
+            existing.InputTokens += inputTokens;
+            existing.OutputTokens += outputTokens;
+            existing.CachedInputTokens += cachedInputTokens;
+            existing.InputCostUsd += inputCostUsd;
+            existing.OutputCostUsd += outputCostUsd;
+            existing.CacheInputCostUsd += cacheInputCostUsd;
+            existing.UpdatedAtMs = TimeUtils.NowMs();
+            await GlobalDatabase.UpdateAsync(existing, ctx.Ct);
+        }
+        else
+        {
+            await GlobalDatabase.AddAsync(new TokenDailyEntity
+            {
+                Id = id,
+                DayNumber = day,
+                ProviderId = Id,
+                ProviderName = DisplayName,
+                SessionId = sessionId ?? string.Empty,
+                Source = source,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                CachedInputTokens = cachedInputTokens,
+                InputCostUsd = inputCostUsd,
+                OutputCostUsd = outputCostUsd,
+                CacheInputCostUsd = cacheInputCostUsd,
+                UpdatedAtMs = TimeUtils.NowMs()
+            }, ctx.Ct);
+        }
+    }
+
     /// <summary>
     /// 刷新一下
     /// </summary>
-    public virtual void RefreshClient()
-    {
-        
-    }
+    public virtual void RefreshClient() { }
 }

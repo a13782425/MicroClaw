@@ -15,7 +15,7 @@ public abstract class EmbeddingModelClient : ModelProviderObject
     private readonly object _generatorLock = new();
     private IEmbeddingGenerator<string, Embedding<float>>? _generator;
 
-    protected EmbeddingModelClient(ProviderEntityConfig config, IUsageTracker usageTracker) : base(config, usageTracker)
+    protected EmbeddingModelClient(ProviderEntityConfig config) : base(config)
     {
         ModelKind kind = ProviderConfigOps.ParseModelKind(config.ModelKind);
         if (kind != ModelKind.Embedding)
@@ -54,30 +54,6 @@ public abstract class EmbeddingModelClient : ModelProviderObject
         var list = new List<Embedding<float>>(result.Count);
         list.AddRange(result);
         return list.AsReadOnly();
-    }
-
-    /// <inheritdoc />
-    public override async Task TrackUsageAsync(MicroChatContext ctx, long inputTokens, long outputTokens = 0L, long cachedInputTokens = 0L)
-    {
-        ArgumentNullException.ThrowIfNull(ctx);
-        if (inputTokens <= 0) return;
-
-        ModelPricing pricing = Pricing;
-        decimal inputCost = pricing.InputPerMillionTokens.HasValue
-            ? inputTokens * pricing.InputPerMillionTokens.Value / 1_000_000m : 0m;
-
-        try
-        {
-            await UsageTracker.TrackAsync(
-                ctx.Session.Id, Id, DisplayName, ctx.Source,
-                inputTokens, outputTokens: 0L, cachedInputTokens: 0L,
-                inputCost, outputCostUsd: 0m, cacheInputCostUsd: 0m, cacheOutputCostUsd: 0m,
-                agentId: null, monthlyBudgetUsd: null, ct: ctx.Ct);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Embedding usage tracking failed for provider {ProviderId} session {SessionId}", Id, ctx.Session.Id);
-        }
     }
 
     /// <inheritdoc />
