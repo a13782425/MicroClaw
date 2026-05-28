@@ -3,7 +3,7 @@ using MicroClaw.Configuration;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
 using MicroClaw.Providers.Anthropic;
-using MicroClaw.Providers.Mapping;
+
 using MicroClaw.Providers.OpenAI;
 using MicroClaw.Utils;
 
@@ -236,8 +236,8 @@ public sealed class ModelProviderService : MicroService
 
     private static ModelProviderObject CreateProvider(ProviderEntityConfig cfg)
     {
-        ModelProviderApiKind apiKind = ProviderConfigOps.ParseApiKind(cfg.ApiKind);
-        ModelKind kind = ProviderConfigOps.ParseModelKind(cfg.ModelKind);
+        ModelProviderApiKind apiKind = ProviderUtils.ParseApiKind(cfg.ApiKind);
+        ModelKind kind = ProviderUtils.ParseModelKind(cfg.ModelKind);
 
         return (apiKind, kind) switch
         {

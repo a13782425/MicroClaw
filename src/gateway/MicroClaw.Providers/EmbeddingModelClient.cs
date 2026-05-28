@@ -1,7 +1,7 @@
 using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
-using MicroClaw.Providers.Mapping;
+
 using Microsoft.Extensions.AI;
 
 namespace MicroClaw.Providers;
@@ -17,7 +17,7 @@ public abstract class EmbeddingModelClient : ModelProviderObject
 
     protected EmbeddingModelClient(ProviderEntityConfig config) : base(config)
     {
-        ModelKind kind = ProviderConfigOps.ParseModelKind(config.ModelKind);
+        ModelKind kind = ProviderUtils.ParseModelKind(config.ModelKind);
         if (kind != ModelKind.Embedding)
             throw new InvalidOperationException($"EmbeddingModelClient requires ModelKind.Embedding (got {kind}).");
     }

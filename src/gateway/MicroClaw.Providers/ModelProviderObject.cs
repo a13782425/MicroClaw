@@ -3,7 +3,7 @@ using MicroClaw.Configuration;
 using MicroClaw.Core;
 using MicroClaw.Core.Logging;
 using MicroClaw.Database;
-using MicroClaw.Providers.Mapping;
+
 using MicroClaw.Utils;
 using Microsoft.Extensions.AI;
 using System.Security.Cryptography;
@@ -17,7 +17,7 @@ namespace MicroClaw.Providers;
 /// <see cref="MicroService.StartAsync"/> 内部触发引擎执行门重入）。
 /// <para>
 /// 落地配置只有一份：<see cref="Config"/>（YAML DTO）。所有强类型视图（枚举、Flags、Pricing 等）
-/// 通过 <see cref="ProviderConfigOps"/> 在访问时解析；配置变更通过 <see cref="ModelProviderService"/>
+/// 通过 <see cref="ProviderUtils"/> 在访问时解析；配置变更通过 <see cref="ModelProviderService"/>
 /// 落盘 YAML 后替换 <see cref="ModelProviderObject"/> 实例。
 /// </para>
 /// </summary>
@@ -52,34 +52,31 @@ public abstract class ModelProviderObject : MicroObject
     // ── Strongly-typed views over Config (parsed on demand) ──────────────
 
     /// <summary>API 协议族。</summary>
-    protected ModelProviderApiKind ApiKind => ProviderConfigOps.ParseApiKind(Config.ApiKind);
+    public ModelProviderApiKind ApiKind => ProviderUtils.ParseApiKind(Config.ApiKind);
 
     /// <summary>模型用途（chat / embedding）。</summary>
-    protected ModelKind Kind => ProviderConfigOps.ParseModelKind(Config.ModelKind);
+    public ModelKind Kind => ProviderUtils.ParseModelKind(Config.ModelKind);
 
     /// <summary>解析 <c>${ENV}</c> 后的模型名称。</summary>
-    protected string ModelName => ProviderConfigOps.ResolveEnv(Config.ModelName) ?? string.Empty;
+    public string ModelName => MicroClawUtils.ResolveEnv(Config.ModelName) ?? string.Empty;
 
     /// <summary>解析 <c>${ENV}</c> 后的 API Key。</summary>
-    protected string ApiKey => ProviderConfigOps.ResolveEnv(Config.ApiKey) ?? string.Empty;
+    public string ApiKey => MicroClawUtils.ResolveEnv(Config.ApiKey) ?? string.Empty;
 
     /// <summary>解析后并 trim 末尾斜杠的 BaseUrl；空时返回 null。</summary>
-    protected string? BaseUrl => ProviderConfigOps.NormalizeBaseUrl(ProviderConfigOps.ResolveEnv(Config.BaseUrl));
+    public string? BaseUrl => ProviderUtils.NormalizeBaseUrl(MicroClawUtils.ResolveEnv(Config.BaseUrl));
 
     /// <summary>能力开关 Flags。</summary>
-    protected ModelCapability Capabilities => ProviderConfigOps.ParseCapabilities(Config.Capabilities);
+    public ModelCapability Capabilities => ProviderUtils.ParseCapabilities(Config.Capabilities);
 
     /// <summary>输入模态 Flags。</summary>
-    protected ModelModality InputModalities => ProviderConfigOps.ParseModalities(Config.InputModalities, ModelModality.Text);
+    public ModelModality InputModalities => ProviderUtils.ParseModalities(Config.InputModalities, ModelModality.Text);
 
     /// <summary>输出模态 Flags。</summary>
-    protected ModelModality OutputModalities => ProviderConfigOps.ParseModalities(Config.OutputModalities, ModelModality.Text);
-
-    /// <summary>价格视图（非负归一）。</summary>
-    protected ModelPricing Pricing => ProviderConfigOps.ToPricing(Config.Pricing);
+    public ModelModality OutputModalities => ProviderUtils.ParseModalities(Config.OutputModalities, ModelModality.Text);
 
     /// <summary>单次输出的最大 Token 数（无效值回退 8192）。</summary>
-    protected int MaxOutputTokens => Config.MaxOutputTokens > 0 ? Config.MaxOutputTokens : 8192;
+    public int MaxOutputTokens => Config.MaxOutputTokens > 0 ? Config.MaxOutputTokens : 8192;
 
     /// <summary>校验 <see cref="MicroChatContext"/> 的最小必需字段，并返回取消令牌。</summary>
     protected static CancellationToken ValidateContext(MicroChatContext ctx)

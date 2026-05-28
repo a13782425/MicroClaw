@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using MicroClaw.Common;
 using MicroClaw.Configuration;
 using MicroClaw.Core.Logging;
-using MicroClaw.Providers.Mapping;
+
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -26,7 +26,7 @@ public abstract class ChatModelClient : ModelProviderObject
 
     protected ChatModelClient(ProviderEntityConfig config) : base(config)
     {
-        ModelKind kind = ProviderConfigOps.ParseModelKind(config.ModelKind);
+        ModelKind kind = ProviderUtils.ParseModelKind(config.ModelKind);
         if (kind != ModelKind.Chat)
             throw new InvalidOperationException($"ChatModelClient requires ModelKind.Chat (got {kind}).");
     }

@@ -74,12 +74,10 @@ public sealed partial class ProvidersViewModel : RouteViewModelBase
     {
         if (value is null)
         {
-            // Don't blow away an in-progress new-item DetailVm just because
-            // the ListBox selection got cleared programmatically.
             return;
         }
         var cfg = _svc.Find(value.Id)?.Config;
-        DetailVm = cfg is not null ? BuildDetail(ProviderDetailVm.FromConfig(cfg)) : null;
+        DetailVm = cfg is not null ? BuildDetail(new ProviderDetailVm(cfg)) : null;
     }
 
     [RelayCommand]
@@ -93,28 +91,12 @@ public sealed partial class ProvidersViewModel : RouteViewModelBase
     }
 
     [RelayCommand]
-    private void SelectItem(ProviderListItemVm? item)
-    {
-        if (item is null) return;
-        SelectedItem = item;
-        var cfg = _svc.Find(item.Id)?.Config;
-        DetailVm = cfg is not null ? BuildDetail(ProviderDetailVm.FromConfig(cfg)) : null;
-    }
-
-    [RelayCommand]
     private void AddNew()
     {
         SelectedItem = null;
-        var vm = ProviderDetailVm.CreateNew(ActiveTab);
+        var vm = new ProviderDetailVm(ActiveTab);
         DetailVm = BuildDetail(vm);
     }
-
-    [RelayCommand]
-    private void Import()
-    {
-        // Placeholder: import flow not implemented in this milestone.
-    }
-
     private ProviderDetailVm BuildDetail(ProviderDetailVm vm)
     {
         vm.Saved += LoadProviders;
@@ -124,11 +106,6 @@ public sealed partial class ProvidersViewModel : RouteViewModelBase
             SelectedItem = null;
             LoadProviders();
         };
-        vm.Duplicated += cfg =>
-        {
-            _svc.Upsert(cfg, CancellationToken.None);
-            LoadProviders();
-        };
         return vm;
     }
 
@@ -136,10 +113,10 @@ public sealed partial class ProvidersViewModel : RouteViewModelBase
     {
         ChatItems.Clear();
         EmbeddingItems.Clear();
-        foreach (var p in _svc.ListAll())
+        foreach (ModelProviderObject p in _svc.ListAll())
         {
-            var item = ProviderListItemVm.FromConfig(p.Config);
-            if (string.Equals(item.ModelKind, "embedding", System.StringComparison.OrdinalIgnoreCase))
+            ProviderListItemVm item = new ProviderListItemVm(p);
+            if (string.Equals(item.ModelKind, ModelKind.Embedding.ToString(), System.StringComparison.OrdinalIgnoreCase))
                 EmbeddingItems.Add(item);
             else
                 ChatItems.Add(item);

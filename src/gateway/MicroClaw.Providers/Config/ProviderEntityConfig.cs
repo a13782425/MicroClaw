@@ -38,10 +38,11 @@ public sealed record ProviderEntityConfig
     /// <summary>单次输出的最大 Token 数。</summary>
     [YamlMember(Alias = "max_output_tokens", Description = "单次输出的最大 Token 数。")]
     public int MaxOutputTokens { get; set; } = 8192;
-
-    /// <summary>典型延迟（毫秒）；null 表示未提供。</summary>
-    [YamlMember(Alias = "latency_ms", Description = "典型延迟（毫秒）；null 表示未提供。")]
-    public int? LatencyMs { get; set; }
+    /// <summary>    
+    /// 单次调用的最大上下文长
+    /// </summary>
+    [YamlMember(Alias = "max_context_length", Description = "最大上下文长度")]
+    public long MaxContextLength { get; set; } = 128000;
 
     /// <summary>能力开关：tool_calling | responses_api。</summary>
     [YamlMember(Alias = "capabilities", Description = "能力开关：tool_calling | responses_api。")]

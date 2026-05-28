@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using MicroClaw.Configuration;
+using MicroClaw.Providers;
 
 namespace MicroClaw.Desktop.ViewModels;
 
@@ -9,6 +10,7 @@ namespace MicroClaw.Desktop.ViewModels;
 /// </summary>
 public sealed partial class ProviderListItemVm : ObservableObject
 {
+    private readonly ModelProviderObject _obj;
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private string _modelName = string.Empty;
@@ -20,21 +22,18 @@ public sealed partial class ProviderListItemVm : ObservableObject
     [ObservableProperty] private string _statusLabel = string.Empty;
     [ObservableProperty] private string _statusColor = "#0F172A";
 
-    public static ProviderListItemVm FromConfig(ProviderEntityConfig cfg)
+    public ProviderListItemVm(ModelProviderObject obj)
     {
-        var item = new ProviderListItemVm
-        {
-            Id = cfg.Id,
-            DisplayName = string.IsNullOrWhiteSpace(cfg.DisplayName) ? cfg.Id : cfg.DisplayName,
-            ModelName = cfg.ModelName,
-            ApiKindLabel = MapApiKindLabel(cfg.ApiKind),
-            ModelKind = cfg.ModelKind,
-            IsEnabled = cfg.IsEnabled,
-            IsDefault = cfg.IsDefault,
-            HasConfigIssue = string.IsNullOrWhiteSpace(cfg.ApiKey) || string.IsNullOrWhiteSpace(cfg.ModelName),
-        };
-        item.RefreshStatus();
-        return item;
+        _obj = obj;
+        Id = obj.Id;
+        DisplayName = obj.DisplayName;
+        ModelName = obj.ModelName;
+        ApiKindLabel = obj.ApiKind.ToString();
+        ModelKind = obj.Kind.ToString();
+        IsEnabled = obj.IsEnabled;
+        IsDefault = obj.IsDefault;
+        HasConfigIssue = string.IsNullOrWhiteSpace(obj.ApiKey) || string.IsNullOrWhiteSpace(obj.ModelName);
+        RefreshStatus();
     }
 
     public void RefreshStatus()

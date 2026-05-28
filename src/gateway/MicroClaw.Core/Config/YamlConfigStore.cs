@@ -14,7 +14,7 @@ public sealed class YamlConfigStore
     /// <summary>
     /// 用于序列化配置对象的 YAML 序列化器，使用下划线命名约定并保留默认值。
     /// </summary>
-    private static readonly ISerializer Serializer = new SerializerBuilder().WithNamingConvention(UnderscoredNamingConvention.Instance).ConfigureDefaultValuesHandling(DefaultValuesHandling.Preserve).Build();
+    private static readonly ISerializer Serializer = new SerializerBuilder().WithNamingConvention(UnderscoredNamingConvention.Instance).DisableAliases().ConfigureDefaultValuesHandling(DefaultValuesHandling.Preserve).Build();
     
     /// <summary>
     /// 用于反序列化配置的 YAML 反序列化器，使用下划线命名约定并忽略未匹配的属性。
