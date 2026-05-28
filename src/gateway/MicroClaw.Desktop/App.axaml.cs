@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using DotNetEnv;
@@ -14,13 +15,14 @@ using ShadUI;
 using Window = Avalonia.Controls.Window;
 
 namespace MicroClaw.Desktop;
+
 public partial class App : Application
 {
     public static Func<ShadUI.Window>? MainWindowFactory { get; set; }
-    
+
     public static ThemeWatcher ThemeWatcher { get; private set; } = null!;
-    
-    
+
+
     public override void Initialize()
     {
         // 读取本地 .env 文件（可指定路径，也可默认当前目录下 .env）
@@ -36,7 +38,7 @@ public partial class App : Application
         }
         AvaloniaXamlLoader.Load(this);
     }
-    
+
     public override async void OnFrameworkInitializationCompleted()
     {
         ThemeWatcher = new ThemeWatcher(this);
@@ -44,14 +46,53 @@ public partial class App : Application
         await MicroRuntime.StartAsync(new SerilogMicroLoggerFactory(Serilog.Log.Logger));
         await MicroRuntime.RegisterServiceAsync();
         await MicroRuntime.Engine.RegisterServiceAsync(new MicroViewRouteModule());
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = MainWindowFactory?.Invoke() ?? CreateFallbackMainWindow();
+            var mainWindow = MainWindowFactory?.Invoke() ?? CreateFallbackMainWindow();
+            ApplyDesktopSettings(mainWindow);
+            desktop.MainWindow = mainWindow;
+            mainWindow.Closing += (_, _) => SaveDesktopSettings(mainWindow);
         }
-        
+
         base.OnFrameworkInitializationCompleted();
     }
-    
+    private static void ApplyDesktopSettings(Window window)
+    {
+        var settings = MicroClawConfig.Get<MicroClawOptions>().Desktop;
+        // 窗口尺寸
+        window.Width = settings.WindowWidth;
+        window.Height = settings.WindowHeight;
+
+        // 主题
+        if (Enum.TryParse<ShadUI.ThemeMode>(settings.ThemeMode, out var themeMode))
+        {
+            ThemeWatcher.SwitchTheme(themeMode);
+        }
+    }
+    private static void SaveDesktopSettings(Window window)
+    {
+        try
+        {
+            var microClawOptions = MicroClawConfig.Get<MicroClawOptions>();
+            var settings = microClawOptions.Desktop;
+
+            // 仅在 Normal 状态下保存尺寸和位置，避免保存最大化后的尺寸
+            if (window.WindowState == WindowState.Normal)
+            {
+                settings.WindowWidth = window.Width;
+                settings.WindowHeight = window.Height;
+            }
+
+            MicroClawConfig.Save(microClawOptions);
+        }
+        catch (Exception ex)
+        {
+            // 静默失败，不阻塞关闭流程
+            Serilog.Log.Warning(ex, "保存桌面设置失败");
+        }
+    }
+
     private static void CreateSerilogLogger()
     {
         LoggingOptions logging = MicroClawConfig.Get<LoggingOptions>();
@@ -61,27 +102,27 @@ public partial class App : Application
             lc.WriteTo.File(ResolveLogFilePath(logging.File.Path, MicroClawConfig.HomeDir!), rollingInterval: ParseEnum(logging.File.RollingInterval, RollingInterval.Day), retainedFileCountLimit: logging.File.RetainDays, outputTemplate: logging.File.OutputTemplate);
         }
 #if DEBUG
-            lc.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+        lc.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
 #endif
         Serilog.Log.Logger = lc.CreateLogger();
-        
-        static string ResolveLogFilePath(string path, string baseDir)=>Path.IsPathRooted(path)? path : Path.Combine(baseDir, path.Replace('/', Path.DirectorySeparatorChar));
+
+        static string ResolveLogFilePath(string path, string baseDir) => Path.IsPathRooted(path) ? path : Path.Combine(baseDir, path.Replace('/', Path.DirectorySeparatorChar));
 
         static T ParseEnum<T>(string? v, T fallback) where T : struct, Enum => Enum.TryParse<T>(v, ignoreCase: true, out var r) ? r : fallback;
     }
-    
-    
+
+
     public static MainView CreateMainView()
     {
         return new MainView { DataContext = new MainWindowViewModel(), };
     }
-    
+
     private static Window CreateFallbackMainWindow()
     {
         return new Window
         {
             Title = "MicroClaw",
-            Width = 1164,
+            Width = 1366,
             Height = 768,
             MinWidth = 980,
             MinHeight = 640,
