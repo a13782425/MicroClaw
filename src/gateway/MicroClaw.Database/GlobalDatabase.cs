@@ -1,6 +1,5 @@
 using System.Linq.Expressions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using SQLite;
 
 namespace MicroClaw.Database;
 
@@ -9,7 +8,8 @@ namespace MicroClaw.Database;
 /// </summary>
 public static class GlobalDatabase
 {
-    private static IDbContextFactory<GlobalDbContext>? _factory;
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static SQLiteAsyncConnection? _db;
 
     /// <summary>
     /// 初始化数据库
@@ -17,49 +17,97 @@ public static class GlobalDatabase
     public static void Initialize(string dbPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dbPath);
-        var options = new DbContextOptionsBuilder<GlobalDbContext>()
-            .UseSqlite($"Data Source={dbPath}")
-            .Options;
-        _factory = new PooledDbContextFactory<GlobalDbContext>(options);
-        using var db = CreateContext();
-        db.Database.Migrate();
+        string? dir = Path.GetDirectoryName(dbPath);
+        if (!string.IsNullOrWhiteSpace(dir))
+            Directory.CreateDirectory(dir);
+
+        _db = new SQLiteAsyncConnection(
+            dbPath,
+            SQLiteOpenFlags.ReadWrite |
+            SQLiteOpenFlags.Create |
+            SQLiteOpenFlags.SharedCache);
+
+        InitializeAsync().GetAwaiter().GetResult();
     }
 
-    internal static GlobalDbContext CreateContext() => _factory?.CreateDbContext() ?? throw new InvalidOperationException("Not initialized.");
+    private static async Task InitializeAsync()
+    {
+        var db = CreateConnection();
+        await db.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        await db.ExecuteAsync("PRAGMA journal_mode = WAL;");
+        await db.CreateTableAsync<TokenDailyEntity>();
+        await db.CreateTableAsync<CallDailyEntity>();
+    }
+
+    internal static SQLiteAsyncConnection CreateConnection() =>
+        _db ?? throw new InvalidOperationException("GlobalDatabase is not initialized.");
 
     // ── Generic CRUD ──────────────────────────────────────────────────────
 
-    public static async Task<List<T>> GetAllAsync<T>(CancellationToken ct = default) where T : class, IDatabaseEntity
+    public static async Task<List<T>> GetAllAsync<T>(CancellationToken ct = default) where T : class, IDatabaseEntity, new()
     {
-        await using var db = CreateContext();
-        return await db.Set<T>().AsNoTracking().ToListAsync(ct);
+        ct.ThrowIfCancellationRequested();
+        return await CreateConnection().Table<T>().ToListAsync();
     }
 
-    public static async Task<List<T>> QueryAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken ct = default) where T : class, IDatabaseEntity
+    public static async Task<List<T>> QueryAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken ct = default) where T : class, IDatabaseEntity, new()
     {
-        await using var db = CreateContext();
-        return await db.Set<T>().AsNoTracking().Where(predicate).ToListAsync(ct);
+        ArgumentNullException.ThrowIfNull(predicate);
+        ct.ThrowIfCancellationRequested();
+        return await CreateConnection().Table<T>().Where(predicate).ToListAsync();
     }
 
-    public static async Task AddAsync<T>(T entity, CancellationToken ct = default) where T : class, IDatabaseEntity
+    public static async Task AddAsync<T>(T entity, CancellationToken ct = default) where T : class, IDatabaseEntity, new()
     {
         ArgumentNullException.ThrowIfNull(entity);
-        await using var db = CreateContext();
-        db.Set<T>().Add(entity);
-        await db.SaveChangesAsync(ct);
+        ct.ThrowIfCancellationRequested();
+
+        await Gate.WaitAsync(ct);
+        try
+        {
+            await CreateConnection().InsertAsync(entity);
+        }
+        finally
+        {
+            Gate.Release();
+        }
     }
 
-    public static async Task UpdateAsync<T>(T entity, CancellationToken ct = default) where T : class, IDatabaseEntity
+    public static async Task UpdateAsync<T>(T entity, CancellationToken ct = default) where T : class, IDatabaseEntity, new()
     {
         ArgumentNullException.ThrowIfNull(entity);
-        await using var db = CreateContext();
-        db.Set<T>().Update(entity);
-        await db.SaveChangesAsync(ct);
+        ct.ThrowIfCancellationRequested();
+
+        await Gate.WaitAsync(ct);
+        try
+        {
+            await CreateConnection().UpdateAsync(entity);
+        }
+        finally
+        {
+            Gate.Release();
+        }
     }
 
-    public static async Task DeleteAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken ct = default) where T : class, IDatabaseEntity
+    public static async Task DeleteAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken ct = default) where T : class, IDatabaseEntity, new()
     {
-        await using var db = CreateContext();
-        await db.Set<T>().Where(predicate).ExecuteDeleteAsync(ct);
+        ArgumentNullException.ThrowIfNull(predicate);
+        ct.ThrowIfCancellationRequested();
+
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var db = CreateConnection();
+            var rows = await db.Table<T>().Where(predicate).ToListAsync();
+            foreach (var row in rows)
+            {
+                ct.ThrowIfCancellationRequested();
+                await db.DeleteAsync(row);
+            }
+        }
+        finally
+        {
+            Gate.Release();
+        }
     }
 }
