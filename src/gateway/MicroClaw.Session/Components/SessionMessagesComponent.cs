@@ -29,7 +29,7 @@ public sealed class SessionMessagesComponent : MicroComponent
 
     private IMicroSession GetRequiredSession()
     {
-        object host = GetRequiredHost();
+        object host = RequireOwner();
         return host is IMicroSession session
             ? session
             : throw new InvalidOperationException($"{nameof(SessionMessagesComponent)} can only be attached to an {nameof(IMicroSession)} host.");
@@ -37,13 +37,13 @@ public sealed class SessionMessagesComponent : MicroComponent
 
     private string GetSessionDir() => Path.Combine(MicroClawConfig.Env.SessionsDir, SessionId);
 
-    protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask OnAwakeAsync(CancellationToken cancellationToken = default)
     {
         MicroClawUtils.CheckDirectory(GetSessionDir());
         return ValueTask.CompletedTask;
     }
 
-    protected override ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         _writeLock.Dispose();
         return ValueTask.CompletedTask;

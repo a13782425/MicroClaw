@@ -22,7 +22,7 @@ public sealed partial class MicroGameWorld : MicroGameObject, IMicroTickable
     public void Resume() => Status = MicroGameWorldStatus.Active;
     public void Archive() => Status = MicroGameWorldStatus.Archived;
 
-    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         await Database.DisposeAsync();
     }

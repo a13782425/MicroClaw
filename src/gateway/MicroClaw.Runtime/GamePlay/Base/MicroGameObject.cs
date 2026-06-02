@@ -30,7 +30,7 @@ public abstract class MicroGameObject : MicroObject, IEquatable<MicroGameObject>
         WorldId = worldId;
     }
     /// <summary>
-    /// 稳定领域标识（持久化主键），区别于基类的运行时 <see cref="MicroLifeCycle{T}.InstanceId"/>。
+    /// 稳定领域标识（持久化主键），区别于基类的运行时 <see cref="MicroLifeCycleState{T}.InstanceId"/>。
     /// </summary>
     public string Id { get; }
     /// <summary>

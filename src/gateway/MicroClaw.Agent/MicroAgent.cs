@@ -234,7 +234,7 @@ public sealed class MicroAgent : MicroObject, IMicroAgent
     /// MicroClaw.Core 生命周期钩子：从 DI 容器惰性解析所有运行时依赖。
     /// 不在构造函数中执行以遵循 "no IO in ctor" 约定。
     /// </summary>
-    protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask OnAwakeAsync(CancellationToken cancellationToken = default)
     {
         _providerService = _sp.GetRequiredService<ProviderService>();
         _toolCollector = _sp.GetRequiredService<ToolCollector>();

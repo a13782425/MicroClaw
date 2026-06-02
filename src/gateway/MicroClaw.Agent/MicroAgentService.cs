@@ -42,9 +42,9 @@ public sealed class MicroAgentService : MicroService, IMicroAgentService, IPlugi
     /// Materializes persisted agents as <see cref="MicroAgent"/> instances and registers them
     /// into the owning <see cref="MicroEngine"/> before the engine start sequence begins.
     /// </summary>
-    protected override async ValueTask OnAttachedAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnAwakeAsync(CancellationToken cancellationToken = default)
     {
-        await base.OnAttachedAsync(cancellationToken);
+        await base.OnAwakeAsync(cancellationToken);
         
         MicroEngine engine = Engine ?? throw new InvalidOperationException("MicroAgentService is not attached to a MicroEngine.");
         HashSet<string> registeredAgentIds = engine.Objects.OfType<MicroAgent>().Select(static agent => agent.Id).ToHashSet(StringComparer.Ordinal);

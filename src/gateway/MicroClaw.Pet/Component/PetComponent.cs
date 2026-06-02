@@ -49,7 +49,7 @@ namespace MicroClaw.Pet;
 public abstract class PetComponent : MicroClaw.Core.MicroComponent
 {
     /// <summary>Gets the current host as a <see cref="MicroPet"/> when this component is attached to one.</summary>
-    public MicroPet? Pet => Host as MicroPet;
+    public MicroPet? Pet => Owner as MicroPet;
 
     /// <summary>Gets the current host as a required <see cref="MicroPet"/>.</summary>
     public MicroPet GetRequiredPet()

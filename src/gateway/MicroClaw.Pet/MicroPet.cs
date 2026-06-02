@@ -122,7 +122,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     public IMicroSession MicroSession { get; }
     
     /// <inheritdoc/>
-    public bool IsEnabled => !IsDisposed && State == PetContextState.Active;
+    public bool IsEnabled => !IsDestroyed && State == PetContextState.Active;
     
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Microsoft.Extensions.AI.AIFunction>> CollectChannelToolsAsync(CancellationToken cancellationToken = default)
@@ -154,7 +154,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// </summary>
     public void UpdateEmotion(EmotionDelta delta)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ObjectDisposedException.ThrowIf(IsDestroyed, this);
         Emotion = Emotion.Apply(delta);
         MarkDirty();
     }
@@ -164,7 +164,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// </summary>
     public void UpdateEmotion(EmotionState newEmotion)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ObjectDisposedException.ThrowIf(IsDestroyed, this);
         Emotion = newEmotion ?? throw new ArgumentNullException(nameof(newEmotion));
         MarkDirty();
     }
@@ -174,7 +174,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// </summary>
     public void UpdateBehaviorState(PetBehaviorState newBehaviorState)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ObjectDisposedException.ThrowIf(IsDestroyed, this);
         _petState = _petState with { BehaviorState = newBehaviorState, UpdatedAt = DateTimeOffset.UtcNow, };
         MarkDirty();
     }
@@ -189,7 +189,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// </summary>
     public void Activate()
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ObjectDisposedException.ThrowIf(IsDestroyed, this);
         State = PetContextState.Active;
     }
 
@@ -198,7 +198,7 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// </summary>
     internal void Disable()
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ObjectDisposedException.ThrowIf(IsDestroyed, this);
         State = PetContextState.Disabled;
     }
     
@@ -915,9 +915,9 @@ public sealed class MicroPet : MicroClaw.Core.MicroObject, IPet
     /// 其余生命周期回调（Initialize / Activate / Deactivate / Uninitialize）沿用 <see cref="MicroClaw.Core.MicroObject"/>
     /// 的默认实现，会把已挂载的 <see cref="PetComponent"/> 同步推进/回退。
     /// </summary>
-    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         State = PetContextState.Disabled;
-        await base.OnDisposedAsync(cancellationToken);
+        await base.OnDestroyAsync(cancellationToken);
     }
 }

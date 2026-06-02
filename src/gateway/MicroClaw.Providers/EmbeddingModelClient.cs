@@ -57,7 +57,7 @@ public abstract class EmbeddingModelClient : ModelProviderObject
     }
 
     /// <inheritdoc />
-    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         IEmbeddingGenerator<string, Embedding<float>>? g = Interlocked.Exchange(ref _generator, null);
         switch (g)
@@ -69,6 +69,6 @@ public abstract class EmbeddingModelClient : ModelProviderObject
                 d.Dispose();
                 break;
         }
-        await base.OnDisposedAsync(cancellationToken);
+        await base.OnDestroyAsync(cancellationToken);
     }
 }

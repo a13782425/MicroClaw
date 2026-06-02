@@ -252,7 +252,7 @@ public abstract class ChatModelClient : ModelProviderObject
     }
 
     /// <inheritdoc />
-    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         IChatClient? client = Interlocked.Exchange(ref _client, null);
         switch (client)
@@ -264,7 +264,7 @@ public abstract class ChatModelClient : ModelProviderObject
                 d.Dispose();
                 break;
         }
-        await base.OnDisposedAsync(cancellationToken);
+        await base.OnDestroyAsync(cancellationToken);
     }
     public override void RefreshClient()
     {

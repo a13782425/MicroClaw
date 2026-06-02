@@ -7,7 +7,7 @@ public sealed class MicroViewRouteModule : MicroService
     private readonly Dictionary<string, RouteViewModelBase> _pageCache = new();
     private readonly Dictionary<string, Func<RouteViewModelBase>> _factoryCache = new();
     
-    protected override ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    protected override ValueTask OnAwakeAsync(CancellationToken cancellationToken = default)
     {
         Register<AboutViewModel>();
         Register<UsageViewModel>();
@@ -22,7 +22,7 @@ public sealed class MicroViewRouteModule : MicroService
         Register<SessionViewModel>();
         Register<SessionGameTabViewModel>();
         Register<SessionChatTabViewModel>();
-        return base.OnInitializedAsync(cancellationToken);
+        return base.OnAwakeAsync(cancellationToken);
     }
     
     private void Register<T>() where T : RouteViewModelBase, new()

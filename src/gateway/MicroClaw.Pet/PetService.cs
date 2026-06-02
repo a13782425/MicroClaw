@@ -71,7 +71,7 @@ public class PetService : MicroService
             return existingPet;
         
         MicroPet? petContext = existingPet as MicroPet;
-        if (petContext is null || petContext.IsDisposed)
+        if (petContext is null || petContext.IsDestroyed)
             petContext = await LoadContextAsync(session, ct);
         
         if (petContext is null)

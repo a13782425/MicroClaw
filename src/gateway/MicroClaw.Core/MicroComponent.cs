@@ -1,121 +1,43 @@
 namespace MicroClaw.Core;
 
 /// <summary>
-/// 组件抽象基类，挂载到 <see cref="MicroObject"/> 上提供特定功能。
-/// 生命周期：Detached → Attached → Initialized → Active，销毁时逆序回退。
+/// 组件：挂在 <see cref="MicroObject"/> 上提供具体行为，真正实现各生命周期钩子。
+/// 生命周期由所属 obj 转发驱动（同一 obj 内先全员 OnAwake、再全员 OnStart）。
 /// </summary>
-public abstract class MicroComponent : MicroLifeCycle<MicroObject>
+public abstract class MicroComponent : MicroLifecycle
 {
-    /// <summary>获取宿主对象上的指定类型组件。</summary>
-    public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
-        => Host?.GetComponent<TComponent>();
+    /// <summary>所属对象（Owner）；未挂载时为 null。由 <see cref="MicroObject"/> 在挂载/卸载时维护。</summary>
+    public MicroObject? Owner { get; internal set; }
 
-    /// <summary>Gets a required component from the host object.</summary>
+    /// <summary>获取必备 Owner，未挂载时抛出。</summary>
+    protected MicroObject RequireOwner()
+        => Owner ?? throw new InvalidOperationException($"Component '{GetType().Name}' is not attached to a MicroObject.");
+
+    /// <summary>获取宿主对象上的指定类型组件，不存在时返回 null。</summary>
+    public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent => Owner?.GetComponent<TComponent>();
+
+    /// <summary>获取宿主对象上必备的指定类型组件，缺失则抛出。</summary>
     public TComponent GetRequiredComponent<TComponent>() where TComponent : MicroComponent
-    {
-        TComponent? component = GetRequiredHost().GetComponent<TComponent>();
-        return component ?? throw new InvalidOperationException($"Component type '{typeof(TComponent).Name}' is required by '{GetType().Name}' but is not attached to the host MicroObject.");
-    }
+        => RequireOwner().GetComponent<TComponent>()
+           ?? throw new InvalidOperationException($"Component '{typeof(TComponent).Name}' is required by '{GetType().Name}' but is not attached to the owner MicroObject.");
 
-    /// <summary>Subscribes to an event type on the host object.</summary>
-    public IDisposable Subscribe<TEvent>(Func<TEvent, CancellationToken, ValueTask> handler) where TEvent : class
-        => GetRequiredHost().Subscribe(handler);
-
-    /// <summary>Publishes an event through the host object.</summary>
-    public ValueTask PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default) where TEvent : class
-        => GetRequiredHost().PublishAsync(domainEvent, cancellationToken);
-
-    /// <summary>向宿主对象追加一个已有组件实例。</summary>
-    public ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
-        => GetRequiredHost().AddComponentAsync(component, cancellationToken);
-
-    /// <summary>在宿主对象上创建并追加指定类型的组件。</summary>
+    /// <summary>在宿主对象上创建并追加指定类型组件（无参构造）。</summary>
     public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
-        => GetRequiredHost().AddComponentAsync<TComponent>(cancellationToken);
+        => RequireOwner().AddComponentAsync<TComponent>(cancellationToken);
+
+    /// <summary>在宿主对象上追加一个已有组件实例。</summary>
+    public ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
+        => RequireOwner().AddComponentAsync(component, cancellationToken);
 
     /// <summary>从宿主对象移除指定类型的组件。</summary>
     public ValueTask<bool> RemoveComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent
-        => GetRequiredHost().RemoveComponentAsync<TComponent>(cancellationToken);
+        => RequireOwner().RemoveComponentAsync<TComponent>(cancellationToken);
 
-    /// <summary>从宿主对象移除指定的组件实例。</summary>
-    public ValueTask<bool> RemoveComponentAsync(MicroComponent component, CancellationToken cancellationToken = default)
-        => GetRequiredHost().RemoveComponentAsync(component, cancellationToken);
+    /// <summary>销毁请求入口：挂在 obj 上时交给 obj 协调；脱离 obj 时直接本地实际拆毁。</summary>
+    internal override ValueTask DestroyCoreAsync(CancellationToken cancellationToken = default)
+        => Owner is { } owner ? owner.DestroyComponentAsync(this, cancellationToken) : DestroyFromOwnerAsync(cancellationToken);
 
-    /// <summary>先从宿主移除组件，再执行组件自身释放。</summary>
-    public override async ValueTask DisposeAsync()
-    {
-        Exception? removalException = null;
-        bool stillAttachedToHost = false;
-
-        if (Host is { } host)
-        {
-            try
-            {
-                await host.RemoveComponentAsync(this);
-            }
-            catch (Exception ex)
-            {
-                removalException = ex;
-                stillAttachedToHost = Host is not null;
-            }
-        }
-
-        if (removalException is not null && stillAttachedToHost)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(removalException).Throw();
-
-        Exception? disposeException = null;
-
-        try
-        {
-            await base.DisposeAsync();
-        }
-        catch (Exception ex)
-        {
-            disposeException = ex;
-        }
-
-        if (removalException is not null && disposeException is not null)
-            throw new AggregateException(removalException, disposeException);
-
-        if (removalException is not null)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(removalException).Throw();
-
-        if (disposeException is not null)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(disposeException).Throw();
-    }
-
-    /// <summary>将组件挂接到指定宿主对象。</summary>
-    internal ValueTask AttachToAsync(MicroObject host, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(host);
-
-        if (Host is not null && !ReferenceEquals(Host, host))
-            throw new InvalidOperationException("A component can only belong to one MicroObject at a time.");
-
-        return AttachToHostAsync(host, cancellationToken);
-    }
-
-    /// <summary>推进组件到已初始化状态。</summary>
-    internal ValueTask InitializeAsync(CancellationToken cancellationToken = default)
-        => InitializeCoreAsync(cancellationToken);
-
-    /// <summary>推进组件到激活状态。</summary>
-    internal ValueTask ActivateAsync(CancellationToken cancellationToken = default)
-        => ActivateCoreAsync(cancellationToken);
-
-    /// <summary>将组件从激活状态回退到已初始化状态。</summary>
-    internal ValueTask DeactivateAsync(CancellationToken cancellationToken = default)
-        => DeactivateCoreAsync(cancellationToken);
-
-    /// <summary>将组件从已初始化状态回退到已挂接状态。</summary>
-    internal ValueTask UninitializeAsync(CancellationToken cancellationToken = default)
-        => UninitializeCoreAsync(cancellationToken);
-
-    /// <summary>将组件从当前宿主对象上分离。</summary>
-    internal ValueTask DetachFromHostAsync(CancellationToken cancellationToken = default)
-        => DetachCoreAsync(cancellationToken: cancellationToken);
-
-    /// <summary>将组件回滚到指定的生命周期状态。</summary>
-    internal ValueTask RollbackToAsync(MicroLifeCycleState state, CancellationToken cancellationToken = default)
-        => RollbackToCoreAsync(state, cancellationToken);
+    /// <summary>由所属 obj 协调完成的实际拆毁（走 base，不再经 Owner 路由，避免递归）。</summary>
+    internal ValueTask DestroyFromOwnerAsync(CancellationToken cancellationToken = default)
+        => base.DestroyCoreAsync(cancellationToken);
 }

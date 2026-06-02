@@ -1,18 +1,25 @@
 namespace MicroClaw.Core;
+
 /// <summary>
-/// 引擎中的实体对象，采用组件模式（Component Pattern）。
-/// 通过 <see cref="AddComponentAsync{TComponent}(CancellationToken)"/> 挂载功能组件，生命周期随引擎同步变更。
+/// 引擎中的实体对象：组件容器 + 生命周期转发器 + 独立执行单元（采用组件模式）。
+/// <para>
+/// 自身不写业务逻辑，把两段生命周期（OnAwake→OnStart）与停用/销毁转发给其 components；
+/// 一致性边界为单个 obj：先全员 OnAwake、再全员 OnStart。
+/// </para>
+/// <para>
+/// 组件触发注册：首个 component 挂载时，该 obj 接入 <see cref="MicroEngine.Instance"/>；
+/// obj 仅在 <see cref="Destroy(MicroObject, CancellationToken)"/> 时离开引擎。
+/// </para>
 /// </summary>
-public class MicroObject : MicroLifeCycle<MicroEngine>
+public class MicroObject : MicroLifecycle
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<Type, MicroComponent> _components = new();
-    private bool _isTransitioning;
 
-    /// <summary>所属引擎，未注册时为 null。</summary>
-    public MicroEngine? Engine => Host;
+    /// <summary>所属引擎；未接入时为 null。由 <see cref="MicroEngine"/> 在注册/销毁时维护。</summary>
+    public MicroEngine? Engine { get; internal set; }
 
-    /// <summary>获取当前已挂载组件的快照。</summary>
+    /// <summary>当前已挂载组件的快照。</summary>
     public IReadOnlyList<MicroComponent> Components
     {
         get
@@ -24,10 +31,25 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
         }
     }
 
-    /// <summary>创建并挂载指定类型的组件（使用无参构造函数）。</summary>
-    public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new() => AddComponentAsync(new TComponent(), cancellationToken);
+    /// <summary>销毁一个对象（级联反序销毁其全部组件并离开引擎）。类比 Unity <c>Object.Destroy</c>。</summary>
+    public static ValueTask Destroy(MicroObject microObject, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(microObject);
+        return microObject.DestroyCoreAsync(cancellationToken);
+    }
 
-    /// <summary>挂载已有组件实例；若对象已激活则同步初始化并激活该组件。</summary>
+    /// <summary>销毁一个组件（从其 obj 与引擎调度移除）。类比 Unity <c>Object.Destroy</c>。</summary>
+    public static ValueTask Destroy(MicroComponent component, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        return component.DestroyCoreAsync(cancellationToken);
+    }
+
+    /// <summary>创建并挂载指定类型组件（无参构造）。</summary>
+    public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
+        => AddComponentAsync(new TComponent(), cancellationToken);
+
+    /// <summary>挂载组件实例；首个组件触发本 obj 接入引擎，并把组件推进到与 obj 一致的状态。</summary>
     public async ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
     {
         ArgumentNullException.ThrowIfNull(component);
@@ -35,25 +57,57 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
 
         lock (_gate)
         {
-            if (IsDisposed)
+            if (IsDestroyed)
                 throw new ObjectDisposedException(nameof(MicroObject));
-            if (component.Host is not null && !ReferenceEquals(component.Host, this))
+            if (component.Owner is not null && !ReferenceEquals(component.Owner, this))
                 throw new InvalidOperationException("A component can only belong to one MicroObject at a time.");
-            if (_components.ContainsKey(type))
+            if (!_components.TryAdd(type, component))
                 throw new InvalidOperationException($"Component type '{type.Name}' is already attached to this MicroObject.");
-            _components.Add(type, component);
+            component.Owner = this;
         }
 
-        // 只有对象处于激活态才让组件自动激活；否则先存“不激活”的意图。
-        if (!IsActive)
-            await component.SetActiveAsync(false, cancellationToken);
+        // 组件触发注册：首个组件令本 obj 接入引擎（若尚未接入且存在引擎实例）。
+        // 注册时会同步把 obj 及其当前全部组件 bring-online（经 *CoreAsync 转发），含本组件。
+        if (Engine is null && MicroEngine.Instance is { } instance)
+        {
+            await instance.RegisterObjectAsync(this, cancellationToken);
+            return component;
+        }
 
-        await component.AttachToHostAsync(this, cancellationToken);   // Start + 按 Enabled 自动 Active
+        // obj 已在引擎上：把新组件入队，由该 obj 的执行单元在下一帧安全点 bring-online
+        // （双缓冲：OnStart 不在本帧执行，避免在 tick 遍历途中改动集合）。
+        if (Engine is { } host)
+            await host.ScheduleComponentAddAsync(this, component, cancellationToken);
+        else
+            // 脱离引擎：无 tick 循环可冲突，本地直接 bring-online。
+            await AttachComponentCoreAsync(component, cancellationToken);
+
         return component;
     }
 
-    /// <summary>获取指定类型的组件，不存在时返回 null；支持按基类/接口查找（存在歧义时抛出异常）。</summary>
-    public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent => TryGetComponent<TComponent>(out TComponent? component) ? component : null;
+    /// <summary>把单个组件推进到与 obj 当前生命周期一致的状态（各驱动幂等）。</summary>
+    internal async ValueTask AttachComponentCoreAsync(MicroComponent component, CancellationToken cancellationToken)
+    {
+        switch (this.LifeCycleState)
+        {
+            case MicroLifeCycleState.PendingStart:
+                await component.AwakeCoreAsync(cancellationToken);
+                break;
+            case MicroLifeCycleState.Active:
+                await component.AwakeCoreAsync(cancellationToken);
+                await component.StartCoreAsync(cancellationToken);
+                break;
+            case MicroLifeCycleState.Disabled:
+                await component.AwakeCoreAsync(cancellationToken);
+                await component.StartCoreAsync(cancellationToken);
+                await component.DisableCoreAsync(cancellationToken);
+                break;
+        }
+    }
+
+    /// <summary>获取指定类型的组件，不存在时返回 null；支持按基类/接口查找（歧义时抛出）。</summary>
+    public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent
+        => TryGetComponent(out TComponent? component) ? component : null;
 
     /// <summary>尝试解析一个可赋值到指定类型的组件。</summary>
     public bool TryGetComponent<TComponent>(out TComponent? component) where TComponent : MicroComponent
@@ -66,11 +120,12 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
                 return true;
             }
         }
+
         component = null;
         return false;
     }
 
-    /// <summary>移除匹配指定类型的组件。</summary>
+    /// <summary>移除并销毁匹配指定类型的组件。</summary>
     public async ValueTask<bool> RemoveComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent
     {
         MicroComponent? component;
@@ -78,13 +133,13 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
         {
             if (!TryResolveComponent(typeof(TComponent), out component) || component is null)
                 return false;
-            _components.Remove(component.GetType());
         }
-        await component.DisposeAsync();
+
+        await DestroyComponentAsync(component, cancellationToken);
         return true;
     }
 
-    /// <summary>移除当前对象上的指定组件实例。</summary>
+    /// <summary>移除并销毁当前对象上的指定组件实例。</summary>
     public async ValueTask<bool> RemoveComponentAsync(MicroComponent component, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(component);
@@ -92,120 +147,209 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
         {
             if (!_components.TryGetValue(component.GetType(), out MicroComponent? existing) || !ReferenceEquals(existing, component))
                 return false;
-            _components.Remove(component.GetType());
         }
-        await component.DisposeAsync();
+
+        await DestroyComponentAsync(component, cancellationToken);
         return true;
     }
-    internal override async ValueTask DisposeCoreAsync(CancellationToken cancellationToken = default)
+
+    /// <summary>销毁指定组件：挂在引擎上时入队到本 obj 执行单元的安全点处理（双缓冲）；脱离引擎时本地直接处理。obj 本身保留。</summary>
+    public ValueTask DestroyComponentAsync(MicroComponent component, CancellationToken cancellationToken = default)
     {
-        if (Engine is { } engine)
+        ArgumentNullException.ThrowIfNull(component);
+
+        bool isOurs;
+        lock (_gate)
         {
-            await engine.DisposeObjectAsync(this);
+            isOurs = _components.TryGetValue(component.GetType(), out MicroComponent? existing) && ReferenceEquals(existing, component);
         }
-        await base.DisposeCoreAsync(cancellationToken);
+
+        if (!isOurs)
+            return ValueTask.CompletedTask;
+
+        return Engine is { } engine
+            ? engine.ScheduleComponentRemoveAsync(this, component, cancellationToken)
+            : DetachComponentCoreAsync(component, cancellationToken);
     }
 
-    /// <summary>将对象挂接到指定引擎宿主。</summary>
-    internal ValueTask AttachToEngineAsync(MicroEngine engine, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 实际把组件从本 obj 摘除并销毁（幂等）。由执行单元安全点或脱离引擎时调用。
+    /// </summary>
+    internal async ValueTask DetachComponentCoreAsync(MicroComponent component, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(engine);
+        bool removed;
+        lock (_gate)
+        {
+            removed = _components.TryGetValue(component.GetType(), out MicroComponent? existing)
+                      && ReferenceEquals(existing, component)
+                      && _components.Remove(component.GetType());
+        }
 
-        if (Host is not null && !ReferenceEquals(Host, engine))
-            throw new InvalidOperationException("A MicroObject can only belong to one MicroEngine at a time.");
+        if (!removed)
+            return;
 
-        return AttachToHostAsync(engine, cancellationToken);
+        await component.DestroyFromOwnerAsync(cancellationToken);
+        component.Owner = null;
     }
 
-    /// <summary>将对象从当前引擎宿主上分离。</summary>
-    internal ValueTask DetachFromEngineAsync(MicroEngine engine, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Object Core Awake：先执行对象自身 hook，再推进所有 component Awake。
+    /// 子类 override OnAwakeAsync 不会吞掉 component Awake。
+    /// </summary>
+    internal override async ValueTask AwakeCoreAsync(CancellationToken cancellationToken = default)
     {
-        if (ReferenceEquals(Host, engine))
-            return DetachCoreAsync(cancellationToken: cancellationToken);
+        if (LifeCycleState != MicroLifeCycleState.Created)
+            return;
 
-        return ValueTask.CompletedTask;
+        await base.AwakeCoreAsync(cancellationToken);
+
+        await ForEachComponentAsync(
+            static (component, ct) => component.AwakeCoreAsync(ct),
+            reverse: false,
+            cancellationToken);
     }
 
-    /// <summary>将对象回滚到指定的生命周期状态。</summary>
-    internal ValueTask RollbackToStateAsync(MicroLifeCycleState state, CancellationToken cancellationToken = default) => RollbackToCoreAsync(state, cancellationToken);
-
-    /// <summary>初始化当前已挂载的全部组件。</summary>
-    protected override async ValueTask OnInitializedAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Object Core Start：先启动 components，再执行对象自身 OnStartAsync。
+    /// 这样子类 OnStartAsync 中可以安全读取已 Start 的 components。
+    /// </summary>
+    internal override async ValueTask StartCoreAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteComponentTransitionAsync(snapshotFactory: static snapshot => snapshot, transition: static (component, ct) => component.InitializeAsync(ct), rollback: static (component, previousState, errors, ct) => CollectRollbackErrorAsync(component, previousState, errors, ct), ownsTransitionGuard: !_isTransitioning, cancellationToken: cancellationToken);
+        if (LifeCycleState != MicroLifeCycleState.PendingStart)
+            return;
+
+        await ForEachComponentAsync(
+            static (component, ct) => component.StartCoreAsync(ct),
+            reverse: false,
+            cancellationToken);
+
+        await base.StartCoreAsync(cancellationToken);
     }
 
-    /// <summary>激活当前已挂载的全部组件。</summary>
-    protected override async ValueTask OnActivatedAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Object Core Enable：先启用对象自身，再启用 components。
+    /// </summary>
+    internal override async ValueTask EnableCoreAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteComponentTransitionAsync(snapshotFactory: static snapshot => snapshot, transition: static (component, ct) => component.ActivateAsync(ct), rollback: static (component, previousState, errors, ct) => CollectRollbackErrorAsync(component, previousState, errors, ct), ownsTransitionGuard: !_isTransitioning, cancellationToken: cancellationToken);
+        bool shouldEnableComponents = LifeCycleState == MicroLifeCycleState.Disabled;
+
+        await base.EnableCoreAsync(cancellationToken);
+
+        if (!shouldEnableComponents || LifeCycleState != MicroLifeCycleState.Active)
+            return;
+
+        await ForEachComponentAsync(
+            static (component, ct) => component.EnableCoreAsync(ct),
+            reverse: false,
+            cancellationToken);
     }
 
-    /// <summary>按挂载逆序停用全部组件。</summary>
-    protected override async ValueTask OnDeactivatedAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Object Core Disable：先逆序停用 components，再停用对象自身。
+    /// </summary>
+    internal override async ValueTask DisableCoreAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteComponentTransitionAsync(snapshotFactory: static snapshot => snapshot.Reverse().ToArray(), transition: static (component, ct) => component.DeactivateAsync(ct), rollback: static (component, previousState, errors, ct) => CollectRollbackErrorAsync(component, previousState, errors, ct), ownsTransitionGuard: !_isTransitioning, preserveCompletedTransitionsOnFailure: true, cancellationToken: cancellationToken);
+        if (LifeCycleState != MicroLifeCycleState.Active)
+        {
+            await base.DisableCoreAsync(cancellationToken);
+            return;
+        }
+
+        await ForEachComponentAsync(
+            static (component, ct) => component.DisableCoreAsync(ct),
+            reverse: true,
+            cancellationToken);
+
+        await base.DisableCoreAsync(cancellationToken);
     }
 
-    /// <summary>将已初始化组件回滚到已挂载状态。</summary>
-    protected override async ValueTask OnUninitializedAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 销毁请求入口：挂在 Engine 上时交给 Engine 协调；脱离 Engine 时直接本地销毁。
+    /// </summary>
+    internal override ValueTask DestroyCoreAsync(CancellationToken cancellationToken = default)
+        => Engine is { } engine ? engine.DestroyObjectAsync(this) : DestroyFromEngineAsync(cancellationToken);
+    /// <summary>
+    /// Engine 已完成 drain / unregister 后调用的实际销毁入口。
+    /// 不走 Engine，避免 DestroyCoreAsync -> Engine -> DestroyCoreAsync 递归。
+    /// </summary>
+    internal async ValueTask DestroyFromEngineAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteComponentTransitionAsync(snapshotFactory: static snapshot => snapshot.Reverse().ToArray(), transition: static (component, ct) => component.RollbackToAsync(MicroLifeCycleState.Attached, ct), rollback: static (component, previousState, errors, ct) => CollectRollbackErrorAsync(component, previousState, errors, ct), ownsTransitionGuard: !_isTransitioning, preserveCompletedTransitionsOnFailure: true, cancellationToken: cancellationToken);
-    }
+        List<Exception> errors = [];
 
-    /// <summary>在对象释放阶段分离并释放全部已挂载组件。</summary>
-    protected override async ValueTask OnDisposedAsync(CancellationToken cancellationToken = default)
-    {
+        // Destroy 前先走正常 Disable 流程：
+        // component reverse disable -> object OnDisable。
+        if (LifeCycleState == MicroLifeCycleState.Active)
+        {
+            try
+            {
+                await DisableCoreAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
+
         MicroComponent[] snapshot;
-
         lock (_gate)
         {
             snapshot = _components.Values.Reverse().ToArray();
+            _components.Clear();
         }
 
-        List<Exception> errors = [];
-
+        // component OnDestroy 反序，且不通过 Owner 再次路由。
         foreach (MicroComponent component in snapshot)
         {
             try
             {
-                await component.DetachFromHostAsync(cancellationToken);
+                await component.DestroyFromOwnerAsync(cancellationToken);
+                component.Owner = null;
             }
             catch (Exception ex)
             {
                 errors.Add(ex);
-            }
-
-            try
-            {
-                await component.DisposeLifeCycleAsync(cancellationToken: cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                errors.Add(ex);
-            }
-            finally
-            {
-                lock (_gate)
-                {
-                    _components.Remove(component.GetType());
-                }
             }
         }
 
-        _events.Clear();
+        // 最后销毁 object 自身，触发业务子类 override 的 OnDestroyAsync。
+        try
+        {
+            await base.DestroyCoreAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            errors.Add(ex);
+        }
+
+        ThrowIfNeeded(errors);
+    }
+    /// <summary>对组件快照执行同一动作；收集异常后统一抛出。</summary>
+    private async ValueTask ForEachComponentAsync(Func<MicroComponent, CancellationToken, ValueTask> action, bool reverse, CancellationToken cancellationToken)
+    {
+        MicroComponent[] snapshot;
+        lock (_gate)
+        {
+            IEnumerable<MicroComponent> values = _components.Values;
+            snapshot = (reverse ? values.Reverse() : values).ToArray();
+        }
+
+        List<Exception> errors = [];
+        foreach (MicroComponent component in snapshot)
+        {
+            try
+            {
+                await action(component, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
 
         ThrowIfNeeded(errors);
     }
 
-    /// <summary>在生命周期变更进行中时抛出异常。</summary>
-    private void ThrowIfTransitioning()
-    {
-        if (_isTransitioning)
-            throw new InvalidOperationException("MicroObject cannot be mutated while a lifecycle transition is in progress.");
-    }
-
-    /// <summary>查找一个可赋值到指定运行时类型的组件。</summary>
+    /// <summary>查找一个可赋值到指定运行时类型的组件（歧义时抛出）。</summary>
     private bool TryResolveComponent(Type requestedType, out MicroComponent? component)
     {
         if (_components.TryGetValue(requestedType, out component))
@@ -226,89 +370,4 @@ public class MicroObject : MicroLifeCycle<MicroEngine>
         component = match;
         return component is not null;
     }
-
-    /// <summary>对组件快照执行同一类生命周期变更。</summary>
-    private async ValueTask ExecuteComponentTransitionAsync(Func<MicroComponent[], MicroComponent[]> snapshotFactory, Func<MicroComponent, CancellationToken, ValueTask> transition, Func<MicroComponent, MicroLifeCycleState, List<Exception>, CancellationToken, ValueTask> rollback, bool ownsTransitionGuard, CancellationToken cancellationToken, bool preserveCompletedTransitionsOnFailure = false)
-    {
-        MicroComponent[] snapshot;
-
-        lock (_gate)
-        {
-            if (ownsTransitionGuard)
-            {
-                ThrowIfTransitioning();
-                _isTransitioning = true;
-            }
-
-            snapshot = snapshotFactory(_components.Values.ToArray());
-        }
-
-        List<(MicroComponent Component, MicroLifeCycleState PreviousState)> transitioned = [];
-
-        try
-        {
-            foreach (MicroComponent component in snapshot)
-            {
-                MicroLifeCycleState previousState = component.LifeCycleState;
-
-                try
-                {
-                    await transition(component, cancellationToken);
-                    transitioned.Add((component, previousState));
-                }
-                catch (Exception ex)
-                {
-                    if (preserveCompletedTransitionsOnFailure)
-                        throw;
-
-                    List<Exception> rollbackErrors = [];
-                    await rollback(component, previousState, rollbackErrors, CancellationToken.None);
-
-                    foreach ((MicroComponent transitionedComponent, MicroLifeCycleState componentState) in transitioned.AsEnumerable().Reverse())
-                        await rollback(transitionedComponent, componentState, rollbackErrors, CancellationToken.None);
-
-                    if (rollbackErrors.Count == 0)
-                        throw;
-
-                    rollbackErrors.Insert(0, ex);
-                    throw new AggregateException(rollbackErrors);
-                }
-            }
-        }
-        finally
-        {
-            if (ownsTransitionGuard)
-            {
-                lock (_gate)
-                {
-                    _isTransitioning = false;
-                }
-            }
-        }
-    }
-
-    /// <summary>尝试回滚单个组件并记录失败。</summary>
-    private static async ValueTask CollectRollbackErrorAsync(MicroComponent component, MicroLifeCycleState targetState, List<Exception> rollbackErrors, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await component.RollbackToAsync(targetState, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            rollbackErrors.Add(ex);
-        }
-    }
-
-    /// <summary>将主异常与回滚异常合并为一个扁平化聚合异常，避免嵌套的 <see cref="AggregateException"/>。</summary>
-    private static AggregateException CreateAggregate(Exception primaryException, Exception rollbackException)
-    {
-        List<Exception> errors = [];
-
-        MicroEngine.FlattenInto(errors, primaryException);
-        MicroEngine.FlattenInto(errors, rollbackException);
-
-        return new AggregateException(errors);
-    }
-
 }

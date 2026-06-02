@@ -539,7 +539,7 @@ public sealed class MicroRag : MicroObject
         SqliteConnection.ClearPool(new SqliteConnection($"Data Source={DbPath}"));
     }
 
-    protected override ValueTask OnDisposedAsync(CancellationToken cancellationToken)
+    protected override ValueTask OnDestroyAsync(CancellationToken cancellationToken)
     {
         CloseDatabase();
         return ValueTask.CompletedTask;
