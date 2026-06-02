@@ -31,6 +31,13 @@ public class MicroObject : MicroLifecycle
         }
     }
 
+    public static async ValueTask<T> Create<T>() where T : MicroObject, new()
+    {
+        T obj = new T();
+        await MicroEngine.Instance.RegisterAsync(obj);
+        return obj;
+    }
+
     /// <summary>销毁一个对象（级联反序销毁其全部组件并离开引擎）。类比 Unity <c>Object.Destroy</c>。</summary>
     public static ValueTask Destroy(MicroObject microObject, CancellationToken cancellationToken = default)
     {
@@ -39,21 +46,13 @@ public class MicroObject : MicroLifecycle
     }
 
     /// <summary>销毁一个组件（从其 obj 与引擎调度移除）。类比 Unity <c>Object.Destroy</c>。</summary>
-    public static ValueTask Destroy(MicroComponent component, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(component);
-        return component.DestroyCoreAsync(cancellationToken);
-    }
+    public static ValueTask Destroy(MicroComponent component, CancellationToken cancellationToken = default) => MicroComponent.Destroy(component, cancellationToken);
 
     /// <summary>创建并挂载指定类型组件（无参构造）。</summary>
-    public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
-        => AddComponentAsync(new TComponent(), cancellationToken);
-
-    /// <summary>挂载组件实例；首个组件触发本 obj 接入引擎，并把组件推进到与 obj 一致的状态。</summary>
-    public async ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
+    public async ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
     {
-        ArgumentNullException.ThrowIfNull(component);
-        Type type = component.GetType();
+        TComponent component = new TComponent();
+        Type type = typeof(TComponent);
 
         lock (_gate)
         {
@@ -84,7 +83,6 @@ public class MicroObject : MicroLifecycle
 
         return component;
     }
-
     /// <summary>把单个组件推进到与 obj 当前生命周期一致的状态（各驱动幂等）。</summary>
     internal async ValueTask AttachComponentCoreAsync(MicroComponent component, CancellationToken cancellationToken)
     {

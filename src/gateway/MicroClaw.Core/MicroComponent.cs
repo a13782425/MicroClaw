@@ -10,8 +10,14 @@ public abstract class MicroComponent : MicroLifecycle
     public MicroObject? Owner { get; internal set; }
 
     /// <summary>获取必备 Owner，未挂载时抛出。</summary>
-    protected MicroObject RequireOwner()
-        => Owner ?? throw new InvalidOperationException($"Component '{GetType().Name}' is not attached to a MicroObject.");
+    protected MicroObject RequireOwner() => Owner ?? throw new InvalidOperationException($"Component '{GetType().Name}' is not attached to a MicroObject.");
+
+    /// <summary>销毁一个组件（从其 obj 与引擎调度移除）。类比 Unity <c>Object.Destroy</c>。</summary>
+    public static ValueTask Destroy(MicroComponent component, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        return component.DestroyCoreAsync(cancellationToken);
+    }
 
     /// <summary>获取宿主对象上的指定类型组件，不存在时返回 null。</summary>
     public TComponent? GetComponent<TComponent>() where TComponent : MicroComponent => Owner?.GetComponent<TComponent>();
@@ -24,10 +30,6 @@ public abstract class MicroComponent : MicroLifecycle
     /// <summary>在宿主对象上创建并追加指定类型组件（无参构造）。</summary>
     public ValueTask<TComponent> AddComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent, new()
         => RequireOwner().AddComponentAsync<TComponent>(cancellationToken);
-
-    /// <summary>在宿主对象上追加一个已有组件实例。</summary>
-    public ValueTask<TComponent> AddComponentAsync<TComponent>(TComponent component, CancellationToken cancellationToken = default) where TComponent : MicroComponent
-        => RequireOwner().AddComponentAsync(component, cancellationToken);
 
     /// <summary>从宿主对象移除指定类型的组件。</summary>
     public ValueTask<bool> RemoveComponentAsync<TComponent>(CancellationToken cancellationToken = default) where TComponent : MicroComponent

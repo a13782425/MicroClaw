@@ -1,5 +1,4 @@
 using MicroClaw.Core.Logging;
-using MicroClaw.Utils;
 
 namespace MicroClaw.Core;
 
@@ -49,8 +48,8 @@ public abstract class MicroLifecycle
     /// <summary>是否启用；仅 Active 且 Enabled 才会被引擎调度。</summary>
     public bool Enabled { get => _isEnabled; private set => _isEnabled = value; }
 
-    /// <summary>唯一标识，不带连字符的 32 位小写字母数字字符串。</summary>
-    public virtual string InstanceId { get; } = MicroClawUtils.GetUniqueId();
+    /// <summary>唯一标识，进程内自增唯一整数 id。</summary>
+    public int InstanceId { get; } = Interlocked.Increment(ref _counter);
 
     /// <summary>
     /// 当前节点的 logger，分类名取自运行时类型。惰性初始化以便宿主在启动阶段替换
@@ -220,4 +219,11 @@ public abstract class MicroLifecycle
         if (errors.Count > 1)
             throw new AggregateException(errors);
     }
+
+    public override int GetHashCode()
+    {
+        return InstanceId;
+    }
+
+    private static int _counter = int.MinValue;
 }

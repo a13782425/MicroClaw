@@ -45,7 +45,7 @@ public sealed class GameWorldService : MicroService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (_worlds.TryGetValue(worldId, out var world))
             return world;
-        world = new MicroGameWorld(worldId, name);
+        world = new MicroGameWorld(worldId, name, null);
         if (_worlds.TryAdd(worldId, world))
             return world;
         return null;

@@ -22,8 +22,8 @@ public sealed class MicroEngine : IAsyncDisposable
 {
     private readonly Lock _gate = new();
     private readonly MicroEvent _events = new();
-    private readonly List<MicroObject> _objects = [];
-    private readonly List<MicroService> _services = [];
+    private readonly HashSet<MicroObject> _objects = [];
+    private readonly HashSet<MicroService> _services = [];
     private readonly Dictionary<Type, object> _singletons = new();
     private readonly Dictionary<MicroLifecycle, MicroObjectRunner> _runners = new(ReferenceEqualityComparer.Instance);
     private readonly MicroTickSchedulerRunner _tickScheduler;
@@ -270,8 +270,32 @@ public sealed class MicroEngine : IAsyncDisposable
         }
     }
 
+    public async ValueTask<bool> RegisterAsync(MicroLifecycle lifecycle, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lifecycle);
+        ThrowIfEngineNotRunning();
+
+        if (lifecycle is MicroObject microObject)
+            return await RegisterObjectAsync(microObject, cancellationToken);
+
+        if (lifecycle is MicroService service)
+            return await RegisterServiceAsync(service, cancellationToken);
+
+        throw new ArgumentException("Unsupported lifecycle type.", nameof(lifecycle));
+    }
+
+    public async ValueTask<bool> UnregisterAsync(MicroLifecycle lifecycle, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lifecycle);
+        if (lifecycle is MicroObject microObject)
+            return await UnregisterObjectAsync(microObject, cancellationToken);
+        if (lifecycle is MicroService service)
+            return await UnregisterServiceAsync(service, cancellationToken);
+        throw new ArgumentException("Unsupported lifecycle type.", nameof(lifecycle));
+    }
+
     /// <summary>向引擎注册对象：驱动 OnAwake→OnStart 到 Active，并把可 tick 单元纳入调度。</summary>
-    public async ValueTask<bool> RegisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
+    private async ValueTask<bool> RegisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(microObject);
         ThrowIfEngineNotRunning();
@@ -321,7 +345,7 @@ public sealed class MicroEngine : IAsyncDisposable
     }
 
     /// <summary>从引擎注销对象（等价于 <see cref="MicroObject.Destroy(MicroObject, CancellationToken)"/>）。</summary>
-    public async ValueTask<bool> UnregisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
+    private async ValueTask<bool> UnregisterObjectAsync(MicroObject microObject, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(microObject);
 
@@ -337,7 +361,7 @@ public sealed class MicroEngine : IAsyncDisposable
     }
 
     /// <summary>动态注册服务：驱动到 Running，并把可 tick 服务纳入调度；失败回滚。</summary>
-    public async ValueTask<bool> RegisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
+    private async ValueTask<bool> RegisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
         ThrowIfEngineNotRunning();
@@ -392,7 +416,7 @@ public sealed class MicroEngine : IAsyncDisposable
     }
 
     /// <summary>从引擎注销服务（等价于销毁）。</summary>
-    public async ValueTask<bool> UnregisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
+    private async ValueTask<bool> UnregisterServiceAsync(MicroService service, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(service);
 
@@ -726,6 +750,11 @@ public sealed class MicroEngine : IAsyncDisposable
                     _engine.WriteTrace($"Object tick {_obj.GetType().Name} failed: {ex.Message}");
                 }
             }
+        }
+
+        public override int GetHashCode()
+        {
+            return _obj.GetHashCode();
         }
     }
 

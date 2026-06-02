@@ -25,37 +25,35 @@ public sealed class ModelProviderService : MicroService
     public override int Order => 15;
 
     /// <inheritdoc />
-    protected override ValueTask StartAsync(CancellationToken cancellationToken = default)
+    protected async override ValueTask OnStartAsync(CancellationToken cancellationToken = default)
     {
         //_usageTracker ??= Engine!.GetRequiredService<IUsageTracker>();
 
         ProvidersOptions options = MicroClawConfig.Get<ProvidersOptions>();
 
-        lock (_gate)
-        {
-            foreach (ProviderEntityConfig cfg in options.Items)
-            {
-                if (string.IsNullOrWhiteSpace(cfg.Id))
-                    continue;
 
-                try
-                {
-                    ModelProviderObject providerObject = CreateProvider(cfg);
-                    _providers[cfg.Id] = providerObject;
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "无法构造 Provider '{ProviderId}'：{Message}", cfg.Id, ex.Message);
-                }
+        foreach (ProviderEntityConfig cfg in options.Items)
+        {
+            if (string.IsNullOrWhiteSpace(cfg.Id))
+                continue;
+
+            try
+            {
+                ModelProviderObject providerObject = CreateProvider(cfg);
+                await MicroEngine.Instance.RegisterAsync(providerObject, cancellationToken);
+                _providers[cfg.Id] = providerObject;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "无法构造 Provider '{ProviderId}'：{Message}", cfg.Id, ex.Message);
             }
         }
 
         Logger.LogInformation("ModelProviderService started with {Count} provider(s).", _providers.Count);
-        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
-    protected override async ValueTask StopAsync(CancellationToken cancellationToken = default)
+    protected override async ValueTask OnDestroyAsync(CancellationToken cancellationToken = default)
     {
         ModelProviderObject[] snapshot;
         lock (_gate)
@@ -68,7 +66,7 @@ public sealed class ModelProviderService : MicroService
         {
             try
             {
-                await provider.DisposeAsync();
+                await MicroObject.Destroy(provider, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -206,7 +204,7 @@ public sealed class ModelProviderService : MicroService
         {
             try
             {
-                await removed.DisposeAsync();
+                await MicroObject.Destroy(removed, cancellationToken);
             }
             catch (Exception ex)
             {

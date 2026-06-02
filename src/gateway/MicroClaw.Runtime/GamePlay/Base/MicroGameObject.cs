@@ -42,8 +42,6 @@ public abstract class MicroGameObject : MicroObject, IEquatable<MicroGameObject>
     /// </summary>
     public virtual string Name { get; set; } = string.Empty;
 
-    public override string InstanceId => Id;
-
     public bool Equals(MicroGameObject? other) => other is not null && GetType() == other.GetType() && Id == other.Id;
 
     public override bool Equals(object? obj) => Equals(obj as MicroGameObject);
