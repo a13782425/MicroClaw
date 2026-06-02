@@ -7,8 +7,16 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
       <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="GamePlay\Events\" />
     </ItemGroup>
 
 </Project>

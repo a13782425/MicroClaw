@@ -21,17 +21,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MicroClaw.Core\MicroClaw.Core.csproj" />
-    <ProjectReference Include="..\MicroClaw\MicroClaw.csproj" />
-    <ProjectReference Include="..\MicroClaw.Providers\MicroClaw.Providers.csproj" />
-    <ProjectReference Include="..\MicroClaw.Channels\MicroClaw.Channels.csproj" />
-    <ProjectReference Include="..\MicroClaw.Abstractions\MicroClaw.Abstractions.csproj" />
-    <ProjectReference Include="..\MicroClaw.Configuration\MicroClaw.Configuration.csproj" />
-    <ProjectReference Include="..\MicroClaw.Infrastructure\MicroClaw.Infrastructure.csproj" />
-    <ProjectReference Include="..\MicroClaw.Tools\MicroClaw.Tools.csproj" />
-    <ProjectReference Include="..\MicroClaw.Agent\MicroClaw.Agent.csproj" />
-    <ProjectReference Include="..\MicroClaw.RAG\MicroClaw.RAG.csproj" />
-    <ProjectReference Include="..\MicroClaw.Pet\MicroClaw.Pet.csproj" />
-    <ProjectReference Include="..\MicroClaw.Session\MicroClaw.Session.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,6 +31,7 @@
 
   <ItemGroup>
     <Folder Include="Agent\" />
+    <Folder Include="Commands\" />
     <Folder Include="Providers\" />
   </ItemGroup>
 
