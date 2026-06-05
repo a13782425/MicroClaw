@@ -45,7 +45,7 @@ public partial class App : Application
         ThemeWatcher.Initialize();
         await MicroRuntime.StartAsync(new SerilogMicroLoggerFactory(Serilog.Log.Logger));
         await MicroRuntime.RegisterServiceAsync();
-        await MicroRuntime.Engine.RegisterServiceAsync(new MicroViewRouteModule());
+        await MicroRuntime.Engine.RegisterAsync(new MicroViewRouteModule());
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

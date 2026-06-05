@@ -3,13 +3,9 @@ using CommunityToolkit.Mvvm.Input;
 using MicroClaw.Configuration;
 using MicroClaw.Providers;
 using MicroClaw.Runtime;
-using Microsoft.EntityFrameworkCore.Metadata;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MicroClaw.Desktop.ViewModels;
 

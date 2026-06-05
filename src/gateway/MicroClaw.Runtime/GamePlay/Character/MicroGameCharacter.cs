@@ -13,7 +13,7 @@ public abstract class MicroGameCharacter : MicroGameObject
             throw new ArgumentException("角色必须有名字。", nameof(name));
         Name = name;
         Status = MicroGameCharacterStatus.Active;
-        World = new MicroGameWorld(worldId, name);
+        World = new MicroGameWorld(worldId, name, null);
     }
 
     public MicroGameWorld World { get; set; }

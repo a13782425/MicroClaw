@@ -69,7 +69,7 @@ public class MicroObject : MicroLifecycle
         // 注册时会同步把 obj 及其当前全部组件 bring-online（经 *CoreAsync 转发），含本组件。
         if (Engine is null && MicroEngine.Instance is { } instance)
         {
-            await instance.RegisterObjectAsync(this, cancellationToken);
+            await instance.RegisterAsync(this, cancellationToken);
             return component;
         }
 
