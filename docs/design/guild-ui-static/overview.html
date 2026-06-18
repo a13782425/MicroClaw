@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>江湖总览</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1 class="brand-title">江湖控制台</h1>
+        <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+      </div>
+      <nav class="nav-section">
+        <p class="nav-heading">江湖</p><a class="nav-link active" href="overview.html"><span
+            class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+            class="nav-dot"></span>悬赏与长约</a>
+          
+        <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span class="nav-dot"></span>门派</a><a
+          class="nav-link" href="people.html"><span class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link"
+          href="recruitment-hall.html"><span class="nav-dot"></span>聚贤庄</a>
+        <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span class="nav-dot"></span>江湖设置</a><a
+          class="nav-link" href="market.html"><span class="nav-dot"></span>三阁市集</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <div class="container">
+        <header class="page-header">
+          <div>
+            <p class="kicker">World Instance</p>
+            <h2 class="page-title">江湖总览</h2>
+            <p class="page-description">查看义仓、悬赏、门派、人口与晨钟暮鼓状态。</p>
+          </div>
+        </header>
+        <section class="card metrics">
+          <div class="metric">
+            <div class="metric-label">义仓余额</div>
+            <div class="metric-value">128,400 两</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">活跃悬赏</div>
+            <div class="metric-value">37 张</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">活跃门派</div>
+            <div class="metric-value">8 个</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">弟子 / 侠客</div>
+            <div class="metric-value">42 / 17</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">长约运行中</div>
+            <div class="metric-value">12 个</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">本周期净流入</div>
+            <div class="metric-value" style="color:var(--success)">+3,280</div>
+          </div>
+        </section>
+        <section class="grid cols-2" style="margin-top:16px">
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">江湖代谢</h3>
+              <p class="card-description">声望与银两共同决定生态健康度。</p>
+            </div>
+            <div class="card-content">
+              <div class="progress-row"><span>义仓水位</span>
+                <div class="progress" style="--value:75%"><span></span></div><span>75%</span>
+              </div>
+              <div class="progress-row"><span>门派存活率</span>
+                <div class="progress success" style="--value:90%"><span></span></div><span>90%</span>
+              </div>
+              <div class="progress-row"><span>平均气血</span>
+                <div class="progress danger" style="--value:71%"><span></span></div><span>71%</span>
+              </div>
+              <div class="progress-row"><span>悬赏积压</span>
+                <div class="progress warning" style="--value:25%"><span></span></div><span>偏低</span>
+              </div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">余额变化（占位）</h3>
+              <p class="card-description">后续可替换为义仓余额趋势、门派收支概览或其他总览信息。</p>
+            </div>
+            <div class="card-content">
+              <div class="placeholder">
+                义仓余额变化图占位<br>
+                可展示最近 7 / 30 个晨钟周期的余额、赏金支出、税收回流与市集回流
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="grid cols-2" style="margin-top:16px">
+          <article class="card" style="grid-column:1 / -1">
+            <div class="card-header">
+              <h3 class="card-title">最新事件</h3>
+              <p class="card-description">按事件类型标记：裁决、悬赏、长约、门派、人物、聚贤庄。</p>
+            </div>
+            <div class="card-content">
+              <div class="badges" style="margin-bottom:16px">
+                <span class="badge info">全部 26</span>
+                <span class="badge">裁决 9</span>
+                <span class="badge">悬赏 8</span>
+                <span class="badge">长约 4</span>
+                <span class="badge">生态 5</span>
+              </div>
+              <div class="timeline">
+                <div class="timeline-item"><span class="dot success"></span><span>【裁决】悬赏「搭建购物网站」已完成，等待主公终裁</span><span
+                    class="card-description">2 分钟前</span></div>
+                <div class="timeline-item"><span class="dot"></span><span>【门派】青岚门晋升为铜品，编制上限提升至 8 人</span><span
+                    class="card-description">18 分钟前</span></div>
+                <div class="timeline-item"><span class="dot warning"></span><span>【长约】每日销售汇总预算低于水位线，已进入续费提醒队列</span><span
+                    class="card-description">46 分钟前</span></div>
+                <div class="timeline-item"><span class="dot"></span><span>【悬赏】数据库巡检缺口收到 2 张竞价卡，等待青岚门掌门裁决</span><span
+                    class="card-description">1 小时前</span></div>
+                <div class="timeline-item"><span class="dot warning"></span><span>【人物】侠客阿七盘缠不足，AI 已生成邀约提案</span><span
+                    class="card-description">1 小时前</span></div>
+                <div class="timeline-item"><span class="dot success"></span><span>【聚贤庄】新人苏砚进入候选池，继承 Web / 工具功法</span><span
+                    class="card-description">2 小时前</span></div>
+                <div class="timeline-item"><span class="dot"></span><span>【悬赏】日志归档脚本被标记为新手专属，继续等待木品门派接榜</span><span
+                    class="card-description">2 小时前</span></div>
+                <div class="timeline-item"><span class="dot warning"></span><span>【长约】站点可用性巡检本次触发进入侠客代班</span><span
+                    class="card-description">3 小时前</span></div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+
+</html>

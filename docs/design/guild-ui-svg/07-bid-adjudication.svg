@@ -1,0 +1,54 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs><style>
+    .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.big{font:600 22px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.green{fill:#16A34A}.amber{fill:#B45309}.red{fill:#B91C1C}
+  </style></defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>竞价裁决</text><text x='32' y='84' class='muted'>谁贴的活谁挑接单门派；盟主只汇总呈报，不自动评分。</text>
+  <rect x='1148' y='36' width='100' height='36' rx='8' class='dark'/><text x='1167' y='59' class='btn' fill='#FAFAFA'>确认裁决</text>
+
+  <rect x='32' y='108' width='316' height='1116' rx='12' class='card'/>
+  <text x='52' y='140' class='h2'>待裁决</text>
+  <rect x='48' y='168' width='284' height='96' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.4'/><text x='64' y='192' class='h3'>搭建购物网站</text><text x='64' y='214' class='muted'>主公裁决 · 4 张竞价卡</text><text x='64' y='236' class='caption'>截止 18:00 · 基础赏金 8,000</text>
+  <rect x='48' y='276' width='284' height='96' rx='8' class='card'/><text x='64' y='300' class='h3'>数据库巡检缺口</text><text x='64' y='322' class='muted'>青岚门掌门裁决 · 2 张</text><text x='64' y='344' class='caption'>基础赏金 1,200</text>
+  <rect x='48' y='384' width='284' height='96' rx='8' class='card'/><text x='64' y='408' class='h3'>日志归档脚本</text><text x='64' y='430' class='muted'>主公裁决 · 新手专属</text><text x='64' y='452' class='caption' fill='#B45309'>仅 1 张竞价卡</text>
+
+  <text x='372' y='132' class='h2'>搭建购物网站</text><text x='372' y='154' class='muted'>裁决人：主公 · 呈报截止：今日 18:00 · 盟主已汇总。</text>
+
+  <rect x='364' y='180' width='270' height='424' rx='12' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.4'/>
+  <text x='384' y='212' class='h2'>青岚门</text><text x='384' y='236' class='caption'>铜品 · 当前推荐</text>
+  <text x='384' y='286' class='label'>报价</text><text x='384' y='320' class='big'>8,400 两</text>
+  <text x='384' y='358' class='label'>打法</text><text x='384' y='384' class='value'>前后端分治，支付缺口回榜</text>
+  <text x='384' y='430' class='label'>阵容与能力</text><text x='384' y='456' class='value'>陆小寒 · Web 92</text><text x='384' y='480' class='value'>沈问石 · 工具 88</text>
+  <text x='384' y='526' class='label'>声望 / 档期</text><text x='384' y='552' class='value'>门派 420 · 3 天</text>
+  <rect x='384' y='572' width='96' height='28' rx='6' fill='#DCFCE7' stroke='#86EFAC'/><text x='404' y='591' class='btn' fill='#166534'>能力最稳</text>
+
+  <rect x='654' y='180' width='270' height='424' rx='12' class='card'/>
+  <text x='674' y='212' class='h2'>赤松门</text><text x='674' y='236' class='caption'>木品 · 新手门派</text>
+  <text x='674' y='286' class='label'>报价</text><text x='674' y='320' class='big'>7,200 两</text>
+  <text x='674' y='358' class='label'>打法</text><text x='674' y='384' class='value'>模板快速搭建</text>
+  <text x='674' y='430' class='label'>阵容与能力</text><text x='674' y='456' class='value'>两名 Web 弟子</text><text x='674' y='480' class='value'>缺支付经验</text>
+  <text x='674' y='526' class='label'>声望 / 档期</text><text x='674' y='552' class='value'>门派 120 · 5 天</text>
+  <rect x='674' y='572' width='96' height='28' rx='6' fill='#FFF7ED' stroke='#FED7AA'/><text x='694' y='591' class='btn' fill='#9A3412'>报价最低</text>
+
+  <rect x='944' y='180' width='270' height='424' rx='12' class='card'/>
+  <text x='964' y='212' class='h2'>墨竹门</text><text x='964' y='236' class='caption'>银品 · 质量稳定</text>
+  <text x='964' y='286' class='label'>报价</text><text x='964' y='320' class='big'>9,600 两</text>
+  <text x='964' y='358' class='label'>打法</text><text x='964' y='384' class='value'>稳态交付，完整测试</text>
+  <text x='964' y='430' class='label'>阵容与能力</text><text x='964' y='456' class='value'>全栈 + DB + 工具</text><text x='964' y='480' class='value'>门派古籍丰富</text>
+  <text x='964' y='526' class='label'>声望 / 档期</text><text x='964' y='552' class='value'>门派 830 · 4 天</text>
+  <rect x='964' y='572' width='96' height='28' rx='6' class='soft'/><text x='984' y='591' class='btn' fill='#0F172A'>质量最高</text>
+
+  <rect x='364' y='628' width='884' height='232' rx='12' class='card'/>
+  <text x='384' y='660' class='h2'>对比矩阵</text>
+  <text x='384' y='696' class='label'>指标</text><text x='560' y='696' class='label'>青岚门</text><text x='750' y='696' class='label'>赤松门</text><text x='940' y='696' class='label'>墨竹门</text><line x1='384' y1='708' x2='1228' y2='708' class='line'/>
+  <text x='384' y='742' class='value'>报价</text><text x='560' y='742' class='value'>8,400</text><text x='750' y='742' class='value' fill='#16A34A'>7,200</text><text x='940' y='742' class='value'>9,600</text>
+  <text x='384' y='782' class='value'>相关能力</text><text x='560' y='782' class='value' fill='#16A34A'>Web 92 / 工具 88</text><text x='750' y='782' class='value'>Web 61</text><text x='940' y='782' class='value'>全栈 88</text>
+  <text x='384' y='822' class='value'>档期</text><text x='560' y='822' class='value' fill='#16A34A'>3 天</text><text x='750' y='822' class='value'>5 天</text><text x='940' y='822' class='value'>4 天</text>
+
+  <rect x='364' y='884' width='884' height='240' rx='12' class='card'/>
+  <text x='384' y='916' class='h2'>裁决</text><text x='384' y='938' class='caption'>必须记录一句话说明“哪条决定了我”。</text>
+  <text x='384' y='982' class='label'>选择中标门派</text><rect x='384' y='994' width='260' height='36' rx='6' class='soft'/><text x='400' y='1017' class='value'>青岚门</text>
+  <text x='384' y='1062' class='label'>决定项</text><rect x='384' y='1074' width='844' height='52' rx='8' fill='#FFFFFF' stroke='#E5E7EB'/><text x='404' y='1106' class='value'>青岚门报价不是最低，但 Web 与工具调用声望最高，且 3 天档期最稳。</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 07 竞价裁决</text>
+</svg>

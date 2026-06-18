@@ -1,0 +1,68 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs><style>
+    .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.big{font:600 24px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.red{fill:#DC2626}.blue{fill:#2563EB}.green{fill:#16A34A}.amber{fill:#B45309}
+  </style></defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>弟子 / 侠客</text><text x='32' y='84' class='muted'>查看个人气血、精力、盘缠、功法窍与分领域声望。</text>
+  <rect x='1004' y='36' width='92' height='36' rx='8' class='card'/><text x='1023' y='59' class='btn' fill='#0F172A'>购买口粮</text>
+  <rect x='1108' y='36' width='72' height='36' rx='8' class='card'/><text x='1127' y='59' class='btn' fill='#0F172A'>调息</text>
+  <rect x='1192' y='36' width='56' height='36' rx='8' class='dark'/><text x='1206' y='59' class='btn' fill='#FAFAFA'>闭关</text>
+
+  <rect x='32' y='108' width='316' height='1116' rx='12' class='card'/>
+  <rect x='48' y='124' width='284' height='32' rx='6' class='soft'/><text x='64' y='144' class='muted'>搜索弟子或侠客</text>
+  <rect x='48' y='176' width='284' height='76' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.4'/><text x='64' y='200' class='h3'>陆小寒</text><text x='64' y='220' class='muted'>女 · 青岚门弟子 · Web</text><text x='64' y='238' class='caption'>HP 88 · 精力 66 · 盘缠 1,260</text>
+  <rect x='48' y='264' width='284' height='76' rx='8' class='card'/><text x='64' y='288' class='h3'>许归舟</text><text x='64' y='308' class='muted'>男 · 青岚门弟子 · 数据库</text><text x='64' y='326' class='caption'>HP 72 · 精力 78 · 盘缠 980</text>
+  <rect x='48' y='352' width='284' height='76' rx='8' class='card'/><text x='64' y='376' class='h3'>阿七</text><text x='64' y='396' class='muted'>男 · 聚贤庄侠客 · 长约零工</text><text x='64' y='414' class='caption' fill='#B45309'>HP 38 · 精力 50 · 盘缠 120</text>
+  <rect x='48' y='440' width='284' height='76' rx='8' class='card'/><text x='64' y='464' class='h3'>林照夜</text><text x='64' y='484' class='muted'>女 · 青岚门弟子 · 摘要</text><text x='64' y='502' class='caption'>闭关中 · 剩余 2 周期</text>
+
+  <text x='372' y='132' class='h2'>陆小寒</text><text x='372' y='154' class='muted'>女 · 青岚门弟子 · Web 领域 · 当前状态：执行中</text>
+  <rect x='364' y='180' width='884' height='168' rx='12' class='card'/>
+  <text x='384' y='210' class='h2'>RPG 三围</text><text x='384' y='232' class='caption'>气血决定生死；精力决定负载；经验即分领域声望。</text>
+  <g transform='translate(384 262)'>
+    <text x='0' y='0' class='label'>气血 HP</text><text x='0' y='34' class='big'>88 / 100</text><rect x='0' y='52' width='220' height='10' rx='5' fill='#F1F1F2'/><rect x='0' y='52' width='194' height='10' rx='5' class='red'/>
+    <text x='300' y='0' class='label'>精力 / 负载</text><text x='300' y='34' class='big'>66 / 100</text><rect x='300' y='52' width='220' height='10' rx='5' fill='#F1F1F2'/><rect x='300' y='52' width='145' height='10' rx='5' class='blue'/>
+    <text x='600' y='0' class='label'>经验 / Web 声望</text><text x='600' y='34' class='big'>92</text><rect x='600' y='52' width='220' height='10' rx='5' fill='#F1F1F2'/><rect x='600' y='52' width='202' height='10' rx='5' class='green'/>
+  </g>
+
+  <rect x='364' y='368' width='428' height='208' rx='12' class='card'/>
+  <text x='384' y='398' class='h2'>盘缠与续命</text>
+  <text x='384' y='438' class='label'>当前盘缠</text><text x='384' y='470' class='big'>1,260 两</text>
+  <text x='574' y='438' class='label'>每周期进食</text><text x='574' y='470' class='big'>80 两</text>
+  <text x='384' y='514' class='label'>预计可维持</text><text x='384' y='540' class='value'>15 周期，不含个人修习功法支出</text>
+  <rect x='574' y='506' width='128' height='32' rx='6' fill='#FEF2F2' stroke='#FECACA'/><text x='594' y='527' class='btn' fill='#991B1B'>饿死风险低</text>
+
+  <rect x='812' y='368' width='436' height='208' rx='12' class='card'/>
+  <text x='832' y='398' class='h2'>当前状态</text>
+  <rect x='832' y='426' width='92' height='30' rx='6' class='soft'/><text x='852' y='446' class='btn' fill='#0F172A'>执行中</text>
+  <rect x='936' y='426' width='92' height='30' rx='6' class='soft'/><text x='956' y='446' class='btn' fill='#0F172A'>可调息</text>
+  <rect x='1040' y='426' width='116' height='30' rx='6' fill='#FFF7ED' stroke='#FED7AA'/><text x='1060' y='446' class='btn' fill='#9A3412'>负载偏高</text>
+  <text x='832' y='492' class='label'>当前悬赏</text><text x='832' y='520' class='value'>搭建购物网站 / 前端页面</text><text x='832' y='552' class='caption'>执行消耗由青岚门宗库承担。</text>
+
+  <rect x='364' y='596' width='884' height='356' rx='12' class='card'/>
+  <text x='384' y='626' class='h2'>功法窍</text><text x='384' y='648' class='caption'>功法挂个人、按领域计；买秘籍后需要闭关才学成。</text>
+  <rect x='384' y='680' width='392' height='268' rx='10' class='soft'/>
+  <text x='404' y='710' class='h2'>Web 领域</text><text x='404' y='732' class='caption'>已开窍 2 / 3 · 可买阶：铜</text>
+  <rect x='404' y='760' width='148' height='38' rx='8' fill='#FFFFFF' stroke='#0F172A' stroke-width='1.2'/><text x='424' y='784' class='value'>前端构建</text>
+  <rect x='568' y='760' width='148' height='38' rx='8' fill='#FFFFFF' stroke='#0F172A' stroke-width='1.2'/><text x='588' y='784' class='value'>浏览器自动化</text>
+  <rect x='404' y='812' width='148' height='38' rx='8' fill='#FFFFFF' stroke='#E5E7EB' stroke-dasharray='4 4'/><text x='424' y='836' class='muted'>空窍 · 可修习</text>
+  <text x='404' y='884' class='label'>下一窍条件</text><text x='404' y='912' class='value'>Web 声望达到 120</text>
+
+  <rect x='804' y='680' width='392' height='268' rx='10' class='soft'/>
+  <text x='824' y='710' class='h2'>数据库领域</text><text x='824' y='732' class='caption'>已开窍 1 / 2 · 可买阶：木</text>
+  <rect x='824' y='760' width='148' height='38' rx='8' fill='#FFFFFF' stroke='#0F172A' stroke-width='1.2'/><text x='844' y='784' class='value'>SQL 查询</text>
+  <rect x='988' y='760' width='148' height='38' rx='8' fill='#FFFFFF' stroke='#E5E7EB' stroke-dasharray='4 4'/><text x='1008' y='784' class='muted'>空窍 · 可修习</text>
+  <text x='824' y='884' class='label'>散功重修代价</text><text x='824' y='912' class='value'>作废旧功法 + 180 两 + 1 周期闭关</text>
+
+  <rect x='364' y='976' width='428' height='172' rx='12' class='card'/><text x='384' y='1006' class='h2'>分领域声望</text>
+  <text x='384' y='1042' class='label'>Web</text><rect x='474' y='1032' width='240' height='8' rx='4' fill='#F1F1F2'/><rect x='474' y='1032' width='221' height='8' rx='4' fill='#0F172A'/><text x='730' y='1040' class='caption'>92</text>
+  <text x='384' y='1082' class='label'>数据库</text><rect x='474' y='1072' width='240' height='8' rx='4' fill='#F1F1F2'/><rect x='474' y='1072' width='112' height='8' rx='4' fill='#0F172A'/><text x='730' y='1080' class='caption'>47</text>
+  <text x='384' y='1122' class='label'>工具调用</text><rect x='474' y='1112' width='240' height='8' rx='4' fill='#F1F1F2'/><rect x='474' y='1112' width='192' height='8' rx='4' fill='#0F172A'/><text x='730' y='1120' class='caption'>80</text>
+
+  <rect x='812' y='976' width='436' height='172' rx='12' class='card'/><text x='832' y='1006' class='h2'>个人古籍与道具</text>
+  <rect x='832' y='1030' width='116' height='28' rx='6' class='soft'/><text x='852' y='1049' class='btn' fill='#0F172A'>Web 手册</text>
+  <rect x='960' y='1030' width='84' height='28' rx='6' class='soft'/><text x='980' y='1049' class='btn' fill='#0F172A'>口粮 x4</text>
+  <rect x='1056' y='1030' width='84' height='28' rx='6' class='soft'/><text x='1076' y='1049' class='btn' fill='#0F172A'>丹药 x1</text>
+  <text x='832' y='1100' class='caption'>个人道具花盘缠；入派干活的操作消耗由宗库承担。</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 03 弟子 / 侠客</text>
+</svg>

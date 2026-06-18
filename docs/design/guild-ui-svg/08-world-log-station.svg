@@ -1,0 +1,67 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs><style>
+    .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.big{font:600 22px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.tab{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.blue{fill:#2563EB}.green{fill:#16A34A}.amber{fill:#B45309}.red{fill:#B91C1C}
+  </style><marker id='arrow' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'><path d='M0,0 L8,4 L0,8 Z' fill='#94A3B8'/></marker></defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>江湖录与驿站</text><text x='32' y='84' class='muted'>世界记忆、手札、淘汰经验，以及委托来处 / 回处参数。</text>
+  <rect x='1092' y='36' width='72' height='36' rx='8' class='card'/><text x='1111' y='59' class='btn' fill='#0F172A'>归档</text>
+  <rect x='1176' y='36' width='72' height='36' rx='8' class='dark'/><text x='1195' y='59' class='btn' fill='#FAFAFA'>新驿</text>
+
+  <rect x='32' y='108' width='316' height='1116' rx='12' class='card'/>
+  <rect x='48' y='124' width='284' height='36' rx='8' fill='#F1F1F2' stroke='#E5E7EB'/><rect x='52' y='128' width='86' height='28' rx='6' fill='#FFFFFF' stroke='#E5E7EB'/><text x='72' y='147' class='tab' fill='#0F172A'>江湖录</text><text x='158' y='147' class='tab' fill='#6B7280'>驿站</text><text x='222' y='147' class='tab' fill='#6B7280'>世界</text>
+  <text x='48' y='198' class='label'>分类</text>
+  <rect x='48' y='216' width='284' height='44' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.2'/><text x='64' y='244' class='h3'>江湖公告</text>
+  <rect x='48' y='272' width='284' height='44' rx='8' class='card'/><text x='64' y='300' class='h3'>门派手札</text>
+  <rect x='48' y='328' width='284' height='44' rx='8' class='card'/><text x='64' y='356' class='h3'>淘汰门派</text>
+  <rect x='48' y='384' width='284' height='44' rx='8' class='card'/><text x='64' y='412' class='h3'>亡者经验</text>
+  <rect x='48' y='440' width='284' height='44' rx='8' class='card'/><text x='64' y='468' class='h3'>世界 Lore</text>
+
+  <text x='48' y='540' class='label'>驿站状态</text>
+  <rect x='48' y='560' width='284' height='64' rx='8' class='card'/><text x='64' y='584' class='h3'>飞书驿</text><text x='64' y='604' class='caption'>启用 · 最近 12 个委托</text><circle cx='312' cy='582' r='5' class='green'/>
+  <rect x='48' y='636' width='284' height='64' rx='8' class='card'/><text x='64' y='660' class='h3'>微信驿</text><text x='64' y='680' class='caption'>启用 · 最近 4 个委托</text><circle cx='312' cy='658' r='5' class='green'/>
+  <rect x='48' y='712' width='284' height='64' rx='8' class='card'/><text x='64' y='736' class='h3'>默认驿</text><text x='64' y='756' class='caption'>启用 · 系统默认回呈</text><circle cx='312' cy='734' r='5' class='blue'/>
+
+  <rect x='364' y='108' width='884' height='268' rx='12' class='card'/>
+  <text x='384' y='140' class='h2'>江湖公告 · 条目详情</text>
+  <text x='384' y='172' class='label'>标题</text><text x='384' y='202' class='big'>青岚门晋升铜品</text>
+  <text x='384' y='242' class='label'>来源</text><text x='384' y='270' class='value'>晨钟暮鼓 · 声望结算</text>
+  <text x='560' y='242' class='label'>可见范围</text><text x='560' y='270' class='value'>全江湖</text>
+  <text x='736' y='242' class='label'>关联悬赏</text><text x='736' y='270' class='value'>购物网站 / 销售汇总</text>
+  <rect x='384' y='296' width='804' height='48' rx='8' fill='#F5F6F8' stroke='#E5E7EB'/><text x='404' y='326' class='value'>青岚门连续三次交付获得主公好评，声望达到铜品阈值，编制上限提升至 8 人。</text>
+
+  <rect x='364' y='400' width='428' height='316' rx='12' class='card'/>
+  <text x='384' y='432' class='h2'>关联图谱</text><text x='384' y='454' class='caption'>淘汰经验与手札可成为新门派或新人模板。</text>
+  <g>
+    <rect x='518' y='494' width='120' height='42' rx='8' class='dark'/><text x='550' y='521' class='h3' fill='#FFFFFF'>公告条目</text>
+    <rect x='404' y='586' width='108' height='42' rx='8' class='soft'/><text x='428' y='613' class='h3'>青岚门</text>
+    <rect x='538' y='586' width='108' height='42' rx='8' class='soft'/><text x='562' y='613' class='h3'>悬赏</text>
+    <rect x='672' y='586' width='88' height='42' rx='8' class='soft'/><text x='696' y='613' class='h3'>信报</text>
+    <path d='M548 536 L478 586' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M580 536 L592 586' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M620 536 L716 586' stroke='#94A3B8' marker-end='url(#arrow)'/>
+  </g>
+
+  <rect x='812' y='400' width='436' height='316' rx='12' class='card'/>
+  <text x='832' y='432' class='h2'>手札时间线</text>
+  <circle cx='846' cy='476' r='5' class='blue'/><text x='866' y='481' class='h3'>陆小寒写下前端页面下一步</text><text x='1120' y='481' class='caption'>10:40</text>
+  <circle cx='846' cy='524' r='5' class='amber'/><text x='866' y='529' class='h3'>数据库缺口回榜，等待掌门裁决</text><text x='1120' y='529' class='caption'>11:20</text>
+  <circle cx='846' cy='572' r='5' class='green'/><text x='866' y='577' class='h3'>盟主质检通过每日销售汇总</text><text x='1120' y='577' class='caption'>09:30</text>
+  <circle cx='846' cy='620' r='5' class='red'/><text x='866' y='625' class='h3'>白鹭门进入解散风险观察</text><text x='1120' y='625' class='caption'>昨日</text>
+  <text x='832' y='684' class='caption'>手札是给未来自己的日记，不是内存快照。</text>
+
+  <rect x='364' y='740' width='884' height='232' rx='12' class='card'/>
+  <text x='384' y='772' class='h2'>驿站详情 · 飞书驿</text><text x='384' y='794' class='caption'>驿不是江湖边界，只是最外层委托的来处 / 回处参数。</text>
+  <text x='384' y='838' class='label'>驿站 ID</text><text x='384' y='866' class='value'>feishu-main</text>
+  <text x='560' y='838' class='label'>类型</text><text x='560' y='866' class='value'>飞书</text>
+  <text x='736' y='838' class='label'>所属江湖</text><text x='736' y='866' class='value'>青石江湖</text>
+  <text x='936' y='838' class='label'>回呈格式</text><text x='936' y='866' class='value'>Markdown + 附件</text>
+  <line x1='384' y1='898' x2='1228' y2='898' class='line'/>
+  <text x='384' y='932' class='label'>入站主公映射</text><text x='560' y='932' class='value'>feishu:user:owner → 主公</text>
+  <text x='384' y='962' class='label'>回送策略</text><text x='560' y='962' class='value'>经原驿回送；子悬赏不携带驿戳</text>
+
+  <rect x='364' y='996' width='884' height='160' rx='12' class='card'/>
+  <text x='384' y='1028' class='h2'>最近委托</text>
+  <text x='384' y='1064' class='label'>委托</text><text x='620' y='1064' class='label'>主公</text><text x='760' y='1064' class='label'>入站时间</text><text x='940' y='1064' class='label'>状态</text><text x='1100' y='1064' class='label'>回呈</text><line x1='384' y1='1076' x2='1228' y2='1076' class='line'/>
+  <text x='384' y='1110' class='value'>搭建购物网站</text><text x='620' y='1110' class='value'>主公</text><text x='760' y='1110' class='value'>09:12</text><text x='940' y='1110' class='value'>竞价中</text><text x='1100' y='1110' class='value'>待完成</text>
+  <text x='384' y='1144' class='value'>每日销售汇总</text><text x='620' y='1144' class='value'>主公</text><text x='760' y='1144' class='value'>09:00</text><text x='940' y='1144' class='value'>已交付</text><text x='1100' y='1144' class='value'>已排信报</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 08 江湖录与驿站</text>
+</svg>

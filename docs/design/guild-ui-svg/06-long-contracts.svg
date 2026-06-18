@@ -1,0 +1,66 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs><style>
+    .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.big{font:600 22px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.green{fill:#16A34A}.amber{fill:#B45309}.red{fill:#B91C1C}.blue{fill:#2563EB}
+  </style><marker id='arrow' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'><path d='M0,0 L8,4 L0,8 Z' fill='#94A3B8'/></marker></defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>长约</text><text x='32' y='84' class='muted'>盟主保管作息表，到点拆成普通悬赏贴榜。</text>
+  <rect x='1068' y='36' width='84' height='36' rx='8' class='card'/><text x='1087' y='59' class='btn' fill='#0F172A'>续费</text>
+  <rect x='1164' y='36' width='84' height='36' rx='8' class='dark'/><text x='1183' y='59' class='btn' fill='#FAFAFA'>新长约</text>
+
+  <rect x='32' y='108' width='316' height='1116' rx='12' class='card'/>
+  <rect x='48' y='124' width='284' height='32' rx='6' class='soft'/><text x='64' y='144' class='muted'>搜索长约</text>
+  <rect x='48' y='176' width='284' height='88' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.4'/><text x='64' y='200' class='h3'>每日销售汇总</text><text x='64' y='220' class='muted'>青岚门 · 09:00 · 飞书驿</text><text x='64' y='240' class='caption'>预算 8,400 / 12,000 · 运行中</text><circle cx='312' cy='198' r='5' class='green'/>
+  <rect x='48' y='276' width='284' height='88' rx='8' class='card'/><text x='64' y='300' class='h3'>站点可用性巡检</text><text x='64' y='320' class='muted'>侠客代班 · 每小时</text><text x='64' y='340' class='caption'>窗口 15 分钟 · 偶发代班</text><circle cx='312' cy='298' r='5' class='amber'/>
+  <rect x='48' y='376' width='284' height='88' rx='8' class='card'/><text x='64' y='400' class='h3'>每周经营信报</text><text x='64' y='420' class='muted'>墨竹门 · 周一 08:00</text><text x='64' y='440' class='caption'>等待主公抽检</text><circle cx='312' cy='398' r='5' class='blue'/>
+  <rect x='48' y='476' width='284' height='88' rx='8' class='card'/><text x='64' y='500' class='h3'>日志归档</text><text x='64' y='520' class='muted'>无人承接 · 暂停</text><text x='64' y='540' class='caption' fill='#B91C1C'>预算耗尽</text><circle cx='312' cy='498' r='5' class='red'/>
+
+  <text x='372' y='132' class='h2'>每日销售汇总</text><text x='372' y='154' class='muted'>长约 · 中标转常驻契约 · 每次触发都是普通悬赏。</text>
+  <rect x='364' y='180' width='884' height='180' rx='12' class='card'/>
+  <text x='384' y='210' class='h2'>基础信息</text>
+  <g transform='translate(384 242)'>
+    <text x='0' y='0' class='label'>主公</text><text x='0' y='28' class='big'>主公</text>
+    <text x='150' y='0' class='label'>来源驿</text><text x='150' y='28' class='big'>飞书驿</text>
+    <text x='300' y='0' class='label'>承接方</text><text x='300' y='28' class='big'>青岚门</text>
+    <text x='480' y='0' class='label'>作息表</text><text x='480' y='28' class='big'>每日 09:00</text>
+    <text x='680' y='0' class='label'>窗口</text><text x='680' y='28' class='big'>09:00-11:00</text>
+    <text x='0' y='80' class='label'>基础赏金</text><text x='0' y='108' class='value'>800 两 / 次</text>
+    <text x='150' y='80' class='label'>质检</text><text x='150' y='108' class='value'>盟主每次兜底</text>
+    <text x='300' y='80' class='label'>主公验收</text><text x='300' y='108' class='value'>每周抽检 / 批量结算</text>
+    <text x='560' y='80' class='label'>状态</text><rect x='560' y='92' width='76' height='28' rx='6' class='soft'/><text x='580' y='111' class='btn' fill='#0F172A'>运行中</text>
+  </g>
+
+  <rect x='364' y='384' width='428' height='240' rx='12' class='card'/>
+  <text x='384' y='414' class='h2'>押金 / 预算</text><text x='384' y='436' class='caption'>押金即预授权；见底则提醒续费或暂停。</text>
+  <text x='384' y='486' class='label'>剩余预算</text><text x='384' y='520' class='big'>8,400 / 12,000 两</text>
+  <rect x='384' y='544' width='320' height='10' rx='5' fill='#F1F1F2'/><rect x='384' y='544' width='224' height='10' rx='5' fill='#0F172A'/><text x='720' y='554' class='caption'>70%</text>
+  <text x='384' y='594' class='label'>预计还能运行</text><text x='512' y='594' class='value'>10 次</text>
+
+  <rect x='812' y='384' width='436' height='240' rx='12' class='card'/>
+  <text x='832' y='414' class='h2'>兜底阶梯</text><text x='832' y='436' class='caption'>窗口越紧，越容易落到盟主自执。</text>
+  <g transform='translate(850 492)'>
+    <rect x='0' y='0' width='96' height='44' rx='8' fill='#0F172A'/><text x='18' y='28' class='h3' fill='#FFFFFF'>承接方</text>
+    <rect x='144' y='0' width='96' height='44' rx='8' class='soft'/><text x='166' y='28' class='h3'>回榜代班</text>
+    <rect x='288' y='0' width='96' height='44' rx='8' class='soft'/><text x='310' y='28' class='h3'>盟主自执</text>
+    <path d='M96 22 L144 22' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M240 22 L288 22' stroke='#94A3B8' marker-end='url(#arrow)'/>
+  </g>
+  <text x='832' y='590' class='label'>最近 30 次</text><text x='932' y='590' class='value'>承接方 26 · 代班 4 · 盟主 0</text>
+
+  <rect x='364' y='648' width='884' height='296' rx='12' class='card'/>
+  <text x='384' y='678' class='h2'>触发记录</text>
+  <text x='384' y='714' class='label'>触发时间</text><text x='560' y='714' class='label'>承接方</text><text x='700' y='714' class='label'>是否代班</text><text x='840' y='714' class='label'>盟主质检</text><text x='1000' y='714' class='label'>主公抽检</text><text x='1150' y='714' class='label'>赏金</text><line x1='384' y1='726' x2='1228' y2='726' class='line'/>
+  <text x='384' y='760' class='value'>06-02 09:00</text><text x='560' y='760' class='value'>青岚门</text><text x='700' y='760' class='value'>否</text><text x='840' y='760' class='value' fill='#16A34A'>通过</text><text x='1000' y='760' class='value'>待周结</text><text x='1150' y='760' class='value'>800</text>
+  <text x='384' y='808' class='value'>06-01 09:00</text><text x='560' y='808' class='value'>青岚门</text><text x='700' y='808' class='value'>否</text><text x='840' y='808' class='value' fill='#16A34A'>通过</text><text x='1000' y='808' class='value'>待周结</text><text x='1150' y='808' class='value'>800</text>
+  <text x='384' y='856' class='value'>05-31 09:00</text><text x='560' y='856' class='value'>段清</text><text x='700' y='856' class='value' fill='#B45309'>侠客代班</text><text x='840' y='856' class='value' fill='#16A34A'>通过</text><text x='1000' y='856' class='value'>未抽</text><text x='1150' y='856' class='value'>720</text>
+  <text x='384' y='904' class='value'>05-30 09:00</text><text x='560' y='904' class='value'>青岚门</text><text x='700' y='904' class='value'>否</text><text x='840' y='904' class='value' fill='#16A34A'>通过</text><text x='1000' y='904' class='value'>满意 +声望</text><text x='1150' y='904' class='value'>920</text>
+
+  <rect x='364' y='968' width='428' height='168' rx='12' class='card'/><text x='384' y='998' class='h2'>长约 → 普通悬赏</text>
+  <g transform='translate(398 1044)'><rect x='0' y='0' width='92' height='40' rx='8' class='soft'/><text x='20' y='25' class='h3'>作息表</text><rect x='142' y='0' width='92' height='40' rx='8' class='soft'/><text x='164' y='25' class='h3'>贴榜</text><rect x='284' y='0' width='92' height='40' rx='8' class='dark'/><text x='306' y='25' class='h3' fill='#FFFFFF'>悬赏</text><path d='M92 20 L142 20' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M234 20 L284 20' stroke='#94A3B8' marker-end='url(#arrow)'/></g>
+  <text x='384' y='1116' class='caption'>不另立协调原语，仍复用悬赏榜。</text>
+
+  <rect x='812' y='968' width='436' height='168' rx='12' class='card'/><text x='832' y='998' class='h2'>信报队列</text>
+  <circle cx='846' cy='1034' r='5' class='blue'/><text x='866' y='1039' class='value'>本周销售汇总等待主公抽检</text>
+  <circle cx='846' cy='1074' r='5' class='amber'/><text x='866' y='1079' class='value'>预算低水位提醒将在 3 次后触发</text>
+  <circle cx='846' cy='1114' r='5' class='green'/><text x='866' y='1119' class='value'>最近一次盟主质检通过</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 06 长约</text>
+</svg>

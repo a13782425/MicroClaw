@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>悬赏与长约</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link active" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span
+                        class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">Bounty Board</p>
+                        <h2 class="page-title">悬赏与长约</h2>
+                        <p class="page-description">左侧列表按状态选择，右侧展示该状态自己的信息栏。长约、待确认也作为榜上的类型处理。</p>
+                    </div>
+                </header>
+
+                <section class="split board">
+                    <input class="board-switch" type="radio" name="board-state" id="board-bidding" checked>
+                    <input class="board-switch" type="radio" name="board-state" id="board-executing">
+                    <input class="board-switch" type="radio" name="board-state" id="board-contract">
+                    <input class="board-switch" type="radio" name="board-state" id="board-confirmation">
+                    <input class="board-switch" type="radio" name="board-state" id="board-unclaimed">
+
+                    <aside class="card">
+                        <div class="card-content">
+                            <div class="search">搜索悬赏 / 长约 / 确认项</div>
+                            <div class="tabs"><span class="tab active">全部</span><span class="tab">竞价</span><span
+                                    class="tab">执行中</span><span class="tab">长约</span><span class="tab">待确认</span></div>
+
+                            <label class="item" for="board-bidding">
+                                <h3 class="item-title">搭建购物网站</h3>
+                                <p class="item-meta">主公委托 · 公开贴榜<br />竞价中 · 赏金 8,000 两 · 4 家竞价</p>
+                                <span class="badge warning">竞价中</span>
+                            </label>
+                            <label class="item" for="board-executing">
+                                <h3 class="item-title">数据库巡检缺口</h3>
+                                <p class="item-meta">掌门回榜 · 青岚门发起<br />执行中 · 等待子悬赏结果</p>
+                                <span class="badge info">执行中</span>
+                            </label>
+                            <label class="item" for="board-contract">
+                                <h3 class="item-title">每日销售汇总</h3>
+                                <p class="item-meta">长约触发 · 飞书驿<br />窗口 09:00-11:00 · 常驻契约</p>
+                                <span class="badge success">长约</span>
+                            </label>
+                            <label class="item" for="board-confirmation">
+                                <h3 class="item-title">支付接入信息确认</h3>
+                                <p class="item-meta">待主公补充 · 阻塞「搭建购物网站」<br />需要支付方式、回调地址、验收口径</p>
+                                <span class="badge warning">待确认</span>
+                            </label>
+                            <label class="item" for="board-unclaimed">
+                                <h3 class="item-title">日志归档脚本</h3>
+                                <p class="item-meta">新手专属 · 无人接<br />已等待 2 个晨钟周期</p>
+                                <span class="badge danger">无人接</span>
+                            </label>
+                        </div>
+                    </aside>
+
+                    <div class="board-detail">
+                        <div class="grid board-panel panel-bidding">
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">搭建购物网站</h3>
+                                    <p class="card-description">主公委托 · 飞书驿 · 公开贴榜 · 竞价中</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="field-grid">
+                                        <div><div class="field-label">发起人</div><div class="field-value">主公</div></div>
+                                        <div><div class="field-label">裁决人</div><div class="field-value">主公</div></div>
+                                        <div><div class="field-label">基础赏金</div><div class="field-value">8,000 两</div></div>
+                                        <div><div class="field-label">质量 × 难度</div><div class="field-value">1.8 × 2.4</div></div>
+                                        <div><div class="field-label">来源驿</div><div class="field-value">飞书驿</div></div>
+                                        <div><div class="field-label">截止窗口</div><div class="field-value">今日 18:00</div></div>
+                                        <div><div class="field-label">状态</div><div class="field-value">竞价中</div></div>
+                                        <div><div class="field-label">标签</div><div class="badges"><span class="badge">公开贴榜</span><span class="badge warning">非新手</span></div></div>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">竞价状态</h3></div>
+                                <div class="card-content">
+                                    <div class="progress-row"><span>竞价进度</span><div class="progress" style="--value:72%"><span></span></div><span>72%</span></div>
+                                    <div class="field-grid">
+                                        <div><div class="field-label">报价区间</div><div class="field-value">7,200 - 9,600 两</div></div>
+                                        <div><div class="field-label">平均档期</div><div class="field-value">3.5 天</div></div>
+                                        <div><div class="field-label">最高声望</div><div class="field-value">青岚门 · Web 92</div></div>
+                                        <div><div class="field-label">风险</div><div class="field-value" style="color:var(--warning)">支付接入缺口</div></div>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">标准竞价卡</h3><p class="card-description">裁决人凭判断挑选门派，选定后签订契约即告成立。</p></div>
+                                <div class="card-content table-wrap">
+                                    <table class="table bid-table"><thead><tr><th>门派</th><th>报价</th><th>打法</th><th>阵容与能力</th><th>声望</th><th>档期</th><th>操作</th></tr></thead><tbody><tr data-bid="qinglan"><td><strong>青岚门</strong><br /><span class="card-description">铜品 · 当前有空档</span></td><td>8,400</td><td>前后端分治</td><td>陆小寒 · Web；沈问石 · 工具</td><td>92</td><td>3 天</td><td><button class="button primary button-sm bid-select" data-bid="qinglan">选定</button></td></tr><tr data-bid="chisong"><td><strong>赤松门</strong><br /><span class="card-description">木品 · 报价最低</span></td><td>7,200</td><td>模板快速搭建</td><td>两名 Web 弟子，缺支付经验</td><td>61</td><td>5 天</td><td><button class="button primary button-sm bid-select" data-bid="chisong">选定</button></td></tr><tr data-bid="mozhu"><td><strong>墨竹门</strong><br /><span class="card-description">银品 · 质量稳定</span></td><td>9,600</td><td>稳态交付</td><td>全栈 + DB</td><td>88</td><td>4 天</td><td><button class="button primary button-sm bid-select" data-bid="mozhu">选定</button></td></tr></tbody></table>
+                                    <div class="bid-footer">
+                                        <span class="bid-selected-hint" style="display:none">已选定：<strong class="bid-selected-name"></strong></span>
+                                        <button class="button primary bid-sign" disabled>签订契约</button>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="card confirmation-card">
+                                <div class="card-header">
+                                    <h3 class="card-title">支付接入信息确认</h3>
+                                    <p class="card-description">悬赏执行前需要补充的信息。点击行展开输入或选择。</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="confirmation-list">
+                                        <div class="confirmation-row" data-item="payment-method">
+                                            <div class="confirmation-row-header">
+                                                <span class="row-label">支付方式范围</span>
+                                                <span class="row-confirmer">确认人：主公</span>
+                                                <span class="row-status"><span class="badge warning">待补充</span></span>
+                                                <span class="row-chevron">▾</span>
+                                            </div>
+                                            <div class="confirmation-row-body">
+                                                <div class="confirmation-field">
+                                                    <span class="confirmation-field-label">选择支持的支付方式（可多选）</span>
+                                                    <div class="confirmation-checkbox-group">
+                                                        <label class="confirmation-checkbox"><input type="checkbox" value="wechat"><span>微信支付</span></label>
+                                                        <label class="confirmation-checkbox"><input type="checkbox" value="alipay"><span>支付宝</span></label>
+                                                        <label class="confirmation-checkbox"><input type="checkbox" value="unionpay"><span>银联</span></label>
+                                                        <label class="confirmation-checkbox"><input type="checkbox" value="bankcard"><span>银行卡</span></label>
+                                                    </div>
+                                                </div>
+                                                <div class="confirmation-actions">
+                                                    <button class="button ghost cancel-btn">取消</button>
+                                                    <button class="button primary save-btn">保存</button>
+                                                </div>
+                                                <span class="confirmation-saved" style="display:none">✓ 已保存</span>
+                                            </div>
+                                        </div>
+                                        <div class="confirmation-row" data-item="callback-url">
+                                            <div class="confirmation-row-header">
+                                                <span class="row-label">支付回调地址</span>
+                                                <span class="row-confirmer">确认人：主公 / 飞书驿</span>
+                                                <span class="row-status"><span class="badge warning">待确认</span></span>
+                                                <span class="row-chevron">▾</span>
+                                            </div>
+                                            <div class="confirmation-row-body">
+                                                <div class="confirmation-field">
+                                                    <span class="confirmation-field-label">输入回调地址 URL</span>
+                                                    <input class="confirmation-input" type="url" placeholder="https://example.com/callback" />
+                                                </div>
+                                                <div class="confirmation-actions">
+                                                    <button class="button ghost cancel-btn">取消</button>
+                                                    <button class="button primary save-btn">保存</button>
+                                                </div>
+                                                <span class="confirmation-saved" style="display:none">✓ 已保存</span>
+                                            </div>
+                                        </div>
+                                        <div class="confirmation-row" data-item="acceptance">
+                                            <div class="confirmation-row-header">
+                                                <span class="row-label">验收口径</span>
+                                                <span class="row-confirmer">确认人：主公</span>
+                                                <span class="row-status"><span class="badge info">已发信报</span></span>
+                                                <span class="row-chevron">▾</span>
+                                            </div>
+                                            <div class="confirmation-row-body">
+                                                <div class="confirmation-field">
+                                                    <span class="confirmation-field-label">描述验收标准</span>
+                                                    <textarea class="confirmation-textarea" placeholder="请输入验收口径、测试环境等信息...">已完成基础流程联调，待补充边界用例</textarea>
+                                                </div>
+                                                <div class="confirmation-actions">
+                                                    <button class="button ghost cancel-btn">取消</button>
+                                                    <button class="button primary save-btn">保存</button>
+                                                </div>
+                                                <span class="confirmation-saved" style="display:none">✓ 已保存</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+
+                        <div class="grid board-panel panel-executing">
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">数据库巡检缺口</h3><p class="card-description">掌门回榜 · 青岚门发起 · 执行中</p></div>
+                                <div class="card-content">
+                                    <div class="field-grid">
+                                        <div><div class="field-label">承接方</div><div class="field-value">墨竹门</div></div>
+                                        <div><div class="field-label">发起掌门</div><div class="field-value">青岚门</div></div>
+                                        <div><div class="field-label">赏金</div><div class="field-value">1,200 两</div></div>
+                                        <div><div class="field-label">预计完成</div><div class="field-value">今日 17:30</div></div>
+                                    </div>
+                                </div>
+                            </article>
+                            <div class="grid cols-2">
+                                <article class="card"><div class="card-header"><h3 class="card-title">执行进度</h3></div><div class="card-content"><div class="progress-row"><span>完成度</span><div class="progress info" style="--value:58%"><span></span></div><span>58%</span></div><div class="progress-row"><span>精力消耗</span><div class="progress warning" style="--value:42%"><span></span></div><span>42%</span></div><p class="card-description">当前在等待 explain 结果与慢查询样本。</p></div></article>
+                                <article class="card"><div class="card-header"><h3 class="card-title">执行手札</h3></div><div class="card-content"><div class="timeline"><div class="timeline-item"><span class="dot"></span><span>已获取数据库连接信息</span><span class="card-description">11:20</span></div><div class="timeline-item"><span class="dot warning"></span><span>慢查询样本不足，已发待确认项</span><span class="card-description">12:10</span></div><div class="timeline-item"><span class="dot success"></span><span>索引初步建议已写入手札</span><span class="card-description">13:40</span></div></div></div></article>
+                            </div>
+                            <article class="card confirmation-card">
+                                <div class="card-header">
+                                    <h3 class="card-title">支付接入信息确认</h3>
+                                    <p class="card-description">悬赏执行前需要补充的信息。</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="confirmation-empty">
+                                        <span class="confirmation-empty-icon">📋</span>
+                                        <span class="confirmation-empty-text">暂无待确认项</span>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+
+                        <div class="grid board-panel panel-contract">
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">每日销售汇总</h3><p class="card-description">长约触发 · 飞书驿 · 常驻契约</p></div>
+                                <div class="card-content">
+                                    <div class="field-grid">
+                                        <div><div class="field-label">触发方式</div><div class="field-value">作息表到点贴榜</div></div>
+                                        <div><div class="field-label">承接方</div><div class="field-value">青岚门</div></div>
+                                        <div><div class="field-label">窗口</div><div class="field-value">09:00-11:00</div></div>
+                                        <div><div class="field-label">预算</div><div class="field-value">8,400 / 12,000 两</div></div>
+                                    </div>
+                                </div>
+                            </article>
+                            <div class="grid cols-2">
+                                <article class="card"><div class="card-header"><h3 class="card-title">预算水位</h3></div><div class="card-content"><div class="progress-row"><span>剩余预算</span><div class="progress" style="--value:70%"><span></span></div><span>70%</span></div><p class="card-description">预计还能运行 10 次；见底后进入续费提醒。</p></div></article>
+                                <article class="card"><div class="card-header"><h3 class="card-title">触发记录</h3></div><div class="card-content table-wrap"><table class="table"><thead><tr><th>触发时间</th><th>承接方</th><th>是否代班</th><th>盟主质检</th><th>主公抽检</th><th>赏金</th></tr></thead><tbody><tr><td>06-03 09:00</td><td>青岚门</td><td>否</td><td>通过</td><td>待周结</td><td>800</td></tr><tr><td>06-02 09:00</td><td>青岚门</td><td>否</td><td>通过</td><td>待周结</td><td>800</td></tr><tr><td>06-01 09:00</td><td>段清</td><td>侠客代班</td><td>通过</td><td>未抽</td><td>720</td></tr></tbody></table></div></article>
+                            </div>
+                            <article class="card confirmation-card">
+                                <div class="card-header">
+                                    <h3 class="card-title">支付接入信息确认</h3>
+                                    <p class="card-description">悬赏执行前需要补充的信息。</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="confirmation-empty">
+                                        <span class="confirmation-empty-icon">📋</span>
+                                        <span class="confirmation-empty-text">暂无待确认项</span>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+
+                        <div class="grid board-panel panel-confirmation">
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">支付接入信息确认</h3><p class="card-description">悬赏执行前需要主公或发起人补充的信息。确认完成后再进入竞价或执行。</p></div>
+                                <div class="card-content table-wrap">
+                                    <table class="table"><thead><tr><th>确认项</th><th>确认人</th><th>状态</th><th>是否阻塞</th></tr></thead><tbody><tr><td>支付方式范围</td><td>主公</td><td><span class="badge warning">待补充</span></td><td>是</td></tr><tr><td>支付回调地址</td><td>主公 / 飞书驿</td><td><span class="badge warning">待确认</span></td><td>是</td></tr><tr><td>验收口径</td><td>主公</td><td><span class="badge info">已发信报</span></td><td>否</td></tr></tbody></table>
+                                </div>
+                            </article>
+                            <article class="card"><div class="card-header"><h3 class="card-title">确认说明</h3></div><div class="card-content"><p class="readonly-note">这里不是人工操作入口，而是展示阻塞悬赏的信息缺口。实际确认可通过原驿信报或主公对话完成。</p></div></article>
+                        </div>
+
+                        <div class="grid board-panel panel-unclaimed">
+                            <article class="card">
+                                <div class="card-header"><h3 class="card-title">日志归档脚本</h3><p class="card-description">新手专属 · 无人接 · 已等待 2 个晨钟周期</p></div>
+                                <div class="card-content">
+                                    <div class="field-grid">
+                                        <div><div class="field-label">基础赏金</div><div class="field-value">600 两</div></div>
+                                        <div><div class="field-label">限制</div><div class="field-value">仅木品门派 / 侠客</div></div>
+                                        <div><div class="field-label">等待时长</div><div class="field-value">2 周期</div></div>
+                                        <div><div class="field-label">下一步</div><div class="field-value">继续等待或上报招新</div></div>
+                                    </div>
+                                </div>
+                            </article>
+                            <div class="grid cols-2">
+                                <article class="card"><div class="card-header"><h3 class="card-title">无人接原因</h3></div><div class="card-content"><div class="badges"><span class="badge warning">赏金偏低</span><span class="badge">窗口偏紧</span><span class="badge">新手专属</span></div></div></article>
+                                <article class="card"><div class="card-header"><h3 class="card-title">兜底建议</h3></div><div class="card-content"><p class="readonly-note">若继续无人接，盟主上报主公招募新门派；义仓不足则暂停该悬赏。</p></div></article>
+                            </div>
+                            <article class="card confirmation-card">
+                                <div class="card-header">
+                                    <h3 class="card-title">支付接入信息确认</h3>
+                                    <p class="card-description">悬赏执行前需要补充的信息。</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="confirmation-empty">
+                                        <span class="confirmation-empty-icon">📋</span>
+                                        <span class="confirmation-empty-text">暂无待确认项</span>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script>
+        // ── Confirmation row expand/collapse ──
+        document.querySelectorAll('.confirmation-row-header').forEach(header => {
+            header.addEventListener('click', function () {
+                const row = this.parentElement;
+                row.classList.toggle('expanded');
+            });
+        });
+
+        // ── Save button: update status badge and show "已保存" ──
+        document.querySelectorAll('.confirmation-row .save-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const row = this.closest('.confirmation-row');
+                const statusBadge = row.querySelector('.row-status .badge');
+                const savedHint = row.querySelector('.confirmation-saved');
+                const actions = row.querySelector('.confirmation-actions');
+
+                // Collect input values (demo purpose)
+                const checkboxGroup = row.querySelector('.confirmation-checkbox-group');
+                const textInput = row.querySelector('.confirmation-input');
+                const textarea = row.querySelector('.confirmation-textarea');
+
+                let hasValue = false;
+                if (checkboxGroup) {
+                    hasValue = Array.from(checkboxGroup.querySelectorAll('input:checked')).length > 0;
+                }
+                if (textInput && textInput.value.trim()) hasValue = true;
+                if (textarea && textarea.value.trim()) hasValue = true;
+
+                if (statusBadge) {
+                    if (hasValue) {
+                        statusBadge.className = 'badge success';
+                        statusBadge.textContent = '已确认';
+                    } else {
+                        statusBadge.className = 'badge warning';
+                        statusBadge.textContent = '待补充';
+                    }
+                }
+
+                if (actions) actions.style.display = 'none';
+                if (savedHint) {
+                    savedHint.style.display = 'inline-flex';
+                    setTimeout(() => { savedHint.style.display = 'none'; }, 2000);
+                }
+            });
+        });
+
+        // ── Cancel button: collapse row and restore ──
+        document.querySelectorAll('.confirmation-row .cancel-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const row = this.closest('.confirmation-row');
+                row.classList.remove('expanded');
+            });
+        });
+
+        // ── Bid selection & sign contract ──
+        const bidTable = document.querySelector('.bid-table');
+        const signBtn = document.querySelector('.bid-sign');
+        const selectedHint = document.querySelector('.bid-selected-hint');
+        const selectedName = document.querySelector('.bid-selected-name');
+        let selectedBid = null;
+
+        if (bidTable) {
+            bidTable.addEventListener('click', function (e) {
+                const selectBtn = e.target.closest('.bid-select');
+                if (!selectBtn) return;
+
+                // Deselect all
+                bidTable.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selected'));
+                bidTable.querySelectorAll('.bid-select').forEach(b => {
+                    b.textContent = '选定';
+                    b.classList.remove('muted');
+                });
+
+                // Select this one
+                const row = selectBtn.closest('tr');
+                row.classList.add('selected');
+                selectBtn.textContent = '已选';
+                selectBtn.classList.add('muted');
+                selectedBid = selectBtn.dataset.bid;
+
+                // Show hint & enable sign button
+                const name = row.querySelector('td:first-child strong').textContent;
+                selectedName.textContent = name;
+                selectedHint.style.display = '';
+                signBtn.disabled = false;
+            });
+
+            signBtn.addEventListener('click', function () {
+                if (!selectedBid) return;
+                const name = selectedName.textContent;
+                if (confirm(`确认与「${name}」签订契约？签订后悬赏将进入执行阶段。`)) {
+                    signBtn.textContent = '✓ 已签订';
+                    signBtn.classList.add('success');
+                    signBtn.disabled = true;
+                    // Disable further selection
+                    bidTable.querySelectorAll('.bid-select').forEach(b => b.disabled = true);
+                    selectedHint.textContent = `已与「${name}」签订契约，悬赏进入执行阶段。`;
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

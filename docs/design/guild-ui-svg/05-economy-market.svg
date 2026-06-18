@@ -1,0 +1,69 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs><style>
+    .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.big{font:600 24px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.tab{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.green{fill:#16A34A}.amber{fill:#B45309}.red{fill:#B91C1C}
+  </style><marker id='arrow' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'><path d='M0,0 L8,4 L0,8 Z' fill='#94A3B8'/></marker></defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>义仓经济与三阁市集</text><text x='32' y='84' class='muted'>追踪唯一活水、税收回流、市场消费与能力投资。</text>
+  <rect x='1036' y='36' width='96' height='36' rx='8' class='card'/><text x='1055' y='59' class='btn' fill='#0F172A'>税率设置</text>
+  <rect x='1144' y='36' width='104' height='36' rx='8' class='dark'/><text x='1163' y='59' class='btn' fill='#FAFAFA'>主公注资</text>
+
+  <rect x='32' y='108' width='1216' height='132' rx='12' class='card'/>
+  <text x='52' y='140' class='h2'>义仓余额</text>
+  <text x='52' y='188' class='big'>128,400 两</text>
+  <text x='244' y='150' class='label'>长约预算锁定</text><text x='244' y='184' class='big'>24,000</text>
+  <text x='436' y='150' class='label'>可用余额</text><text x='436' y='184' class='big'>104,400</text>
+  <text x='628' y='150' class='label'>本周期净流入</text><text x='628' y='184' class='big' fill='#16A34A'>+3,280</text>
+  <text x='820' y='150' class='label'>赏金支出</text><text x='820' y='184' class='big'>-18,600</text>
+  <text x='1012' y='150' class='label'>市集回流</text><text x='1012' y='184' class='big' fill='#16A34A'>+7,900</text>
+
+  <rect x='32' y='264' width='592' height='360' rx='12' class='card'/>
+  <text x='52' y='296' class='h2'>资金流向</text><text x='52' y='318' class='caption'>税收与市集只是循环水；主公才是唯一新钱来源。</text>
+  <g>
+    <rect x='78' y='376' width='100' height='52' rx='10' fill='#FEF3C7' stroke='#F59E0B'/><text x='108' y='408' class='h3'>主公</text>
+    <rect x='262' y='376' width='100' height='52' rx='10' fill='#DBEAFE' stroke='#60A5FA'/><text x='292' y='408' class='h3'>义仓</text>
+    <rect x='446' y='376' width='100' height='52' rx='10' class='soft'/><text x='476' y='408' class='h3'>门派</text>
+    <rect x='446' y='500' width='100' height='52' rx='10' class='soft'/><text x='476' y='532' class='h3'>弟子</text>
+    <rect x='262' y='500' width='100' height='52' rx='10' class='soft'/><text x='292' y='532' class='h3'>市集</text>
+    <path d='M178 402 L262 402' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='192' y='390' class='caption'>注资</text>
+    <path d='M362 402 L446 402' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='376' y='390' class='caption'>赏金</text>
+    <path d='M496 428 L496 500' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='510' y='468' class='caption'>薪水</text>
+    <path d='M446 526 L362 526' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='374' y='514' class='caption'>功法 / 口粮</text>
+    <path d='M262 526 C210 526 210 430 262 412' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='198' y='472' class='caption'>回流</text>
+    <path d='M446 392 C404 340 350 346 318 376' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='370' y='340' class='caption'>门派税</text>
+    <path d='M466 500 C420 460 370 460 322 500' stroke='#94A3B8' stroke-width='2' marker-end='url(#arrow)'/><text x='370' y='456' class='caption'>个税</text>
+  </g>
+
+  <rect x='648' y='264' width='600' height='360' rx='12' class='card'/>
+  <text x='668' y='296' class='h2'>收入 / 支出</text>
+  <text x='668' y='332' class='label'>收入来源</text><text x='948' y='332' class='label'>金额</text><line x1='668' y1='344' x2='1216' y2='344' class='line'/>
+  <text x='668' y='374' class='value'>主公注资</text><text x='948' y='374' class='value'>40,000</text>
+  <text x='668' y='410' class='value'>门派所得税</text><text x='948' y='410' class='value'>3,200</text>
+  <text x='668' y='446' class='value'>弟子所得税</text><text x='948' y='446' class='value'>760</text>
+  <text x='668' y='482' class='value'>市集回流</text><text x='948' y='482' class='value'>7,900</text>
+  <text x='668' y='518' class='value'>招募费 / 生育成本回流</text><text x='948' y='518' class='value'>2,400</text>
+  <line x1='668' y1='544' x2='1216' y2='544' class='line'/>
+  <text x='668' y='574' class='label'>支出方向</text><text x='948' y='574' class='label'>金额</text>
+  <text x='668' y='606' class='value'>基础赏金</text><text x='948' y='606' class='value'>18,600</text>
+
+  <rect x='32' y='648' width='1216' height='84' rx='12' class='card'/>
+  <rect x='52' y='672' width='260' height='36' rx='8' fill='#F1F1F2' stroke='#E5E7EB'/><rect x='56' y='676' width='78' height='28' rx='6' fill='#FFFFFF' stroke='#E5E7EB'/><text x='76' y='695' class='tab' fill='#0F172A'>藏经阁</text><text x='154' y='695' class='tab' fill='#6B7280'>天问阁</text><text x='230' y='695' class='tab' fill='#6B7280'>百宝阁</text>
+  <text x='348' y='694' class='muted'>藏经阁卖功法：个人盘缠购买，闭关修习，收入回流义仓。</text>
+
+  <rect x='32' y='756' width='1216' height='308' rx='12' class='card'/>
+  <text x='52' y='788' class='h2'>藏经阁 · 秘籍列表</text>
+  <text x='52' y='824' class='label'>秘籍</text><text x='260' y='824' class='label'>领域</text><text x='360' y='824' class='label'>阶</text><text x='450' y='824' class='label'>价格</text><text x='560' y='824' class='label'>闭关期</text><text x='690' y='824' class='label'>所需声望</text><text x='850' y='824' class='label'>工具组</text><text x='1130' y='824' class='label'>操作</text><line x1='52' y1='836' x2='1228' y2='836' class='line'/>
+  <text x='52' y='872' class='h3'>浏览器自动化</text><text x='260' y='872' class='value'>Web</text><text x='360' y='872' class='value'>铜</text><text x='450' y='872' class='value'>1,200</text><text x='560' y='872' class='value'>2 周期</text><text x='690' y='872' class='value'>80</text><text x='850' y='872' class='value'>Playwright / Fetch</text><text x='1130' y='872' class='value'>购买</text>
+  <text x='52' y='920' class='h3'>SQL 调优</text><text x='260' y='920' class='value'>数据库</text><text x='360' y='920' class='value'>银</text><text x='450' y='920' class='value'>2,600</text><text x='560' y='920' class='value'>3 周期</text><text x='690' y='920' class='value'>160</text><text x='850' y='920' class='value'>SQL / Explain</text><text x='1130' y='920' class='value'>购买</text>
+  <text x='52' y='968' class='h3'>长文摘要</text><text x='260' y='968' class='value'>摘要</text><text x='360' y='968' class='value'>木</text><text x='450' y='968' class='value'>600</text><text x='560' y='968' class='value'>1 周期</text><text x='690' y='968' class='value'>20</text><text x='850' y='968' class='value'>RAG / 文本压缩</text><text x='1130' y='968' class='value'>购买</text>
+  <text x='52' y='1016' class='h3'>MCP 工具编排</text><text x='260' y='1016' class='value'>工具</text><text x='360' y='1016' class='value'>银</text><text x='450' y='1016' class='value'>3,000</text><text x='560' y='1016' class='value'>4 周期</text><text x='690' y='1016' class='value'>180</text><text x='850' y='1016' class='value'>MCP / Tool</text><text x='1130' y='1016' class='value'>购买</text>
+
+  <rect x='32' y='1088' width='592' height='116' rx='12' class='card'/><text x='52' y='1118' class='h2'>税收设置</text>
+  <text x='52' y='1156' class='label'>门派所得税</text><text x='52' y='1184' class='big'>12%</text><text x='220' y='1156' class='label'>弟子所得税</text><text x='220' y='1184' class='big'>6%</text><text x='388' y='1156' class='label'>生存线免税</text><text x='388' y='1184' class='big'>500 两</text>
+  <rect x='648' y='1088' width='600' height='116' rx='12' class='card'/><text x='668' y='1118' class='h2'>三阁分工</text>
+  <rect x='668' y='1140' width='108' height='28' rx='6' class='soft'/><text x='688' y='1159' class='btn' fill='#0F172A'>功法=能做</text>
+  <rect x='788' y='1140' width='120' height='28' rx='6' class='soft'/><text x='808' y='1159' class='btn' fill='#0F172A'>古籍=做得好</text>
+  <rect x='920' y='1140' width='132' height='28' rx='6' class='soft'/><text x='940' y='1159' class='btn' fill='#0F172A'>口粮=撑住命</text>
+  <text x='668' y='1192' class='caption'>市场收入、招募费、生育成本均回流义仓，避免通缩。</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 05 义仓经济与三阁市集</text>
+</svg>

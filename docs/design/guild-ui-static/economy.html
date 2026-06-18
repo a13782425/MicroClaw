@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>江湖设置</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span
+                        class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link active" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">Settings</p>
+                        <h2 class="page-title">江湖设置</h2>
+                        <p class="page-description">配置税率、免税线等经济参数，调控江湖经济运行。</p>
+                    </div>
+                    <div class="actions">
+                        <button class="button" id="btnReset">重置</button>
+                        <button class="button primary" id="btnSave">保存设置</button>
+                        <span class="save-feedback" id="saveFeedback"></span>
+                    </div>
+                </header>
+                <section class="card" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden">
+                    <div class="metric">
+                        <div class="metric-label">当前余额</div>
+                        <div class="metric-value" id="overviewBalance">128,400</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">可用余额</div>
+                        <div class="metric-value" id="overviewAvailable">104,400</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">门派税率</div>
+                        <div class="metric-value" id="overviewSectRate">12%</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">弟子税率</div>
+                        <div class="metric-value" id="overviewDiscipleRate">6%</div>
+                    </div>
+                </section>
+                <section class="grid cols-2" style="margin-top:16px">
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">门派所得税</h3>
+                            <p class="card-description">对门派收入征收的税率与免税额度。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="setting-row">
+                                <span class="setting-label">税率</span>
+                                <div class="input-group">
+                                    <input type="number" class="setting-input" id="sectRate" value="12" min="0" max="100" step="0.1" />
+                                    <span class="input-unit">%</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">门派免税线</span>
+                                <div class="input-group">
+                                    <input type="number" class="setting-input" id="sectExempt" value="500" min="0" step="10" />
+                                    <span class="input-unit">两</span>
+                                </div>
+                            </div>
+                            <p class="card-description" style="margin-top:12px">门派收入不高于免税线时免征所得税，避免抽死新门派。</p>
+                        </div>
+                    </article>
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">弟子所得税</h3>
+                            <p class="card-description">对弟子收入征收的税率与免税额度。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="setting-row">
+                                <span class="setting-label">税率</span>
+                                <div class="input-group">
+                                    <input type="number" class="setting-input" id="discipleRate" value="6" min="0" max="100" step="0.1" />
+                                    <span class="input-unit">%</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">弟子免税线</span>
+                                <div class="input-group">
+                                    <input type="number" class="setting-input" id="discipleExempt" value="200" min="0" step="10" />
+                                    <span class="input-unit">两</span>
+                                </div>
+                            </div>
+                            <p class="card-description" style="margin-top:12px">弟子收入不高于免税线时免征所得税，保护新人存活。</p>
+                        </div>
+                    </article>
+                </section>
+                <section class="grid cols-2" style="margin-top:16px">
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">飞书驿</h3>
+                            <p class="card-description">飞书渠道的来处 / 回处参数。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="setting-row">
+                                <span class="setting-label">启用</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="feishuEnabled" checked />
+                                    <span class="toggle-track"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">驿站 ID</span>
+                                <div class="input-group">
+                                    <input type="text" class="setting-input setting-input-text" id="feishuId" value="feishu-main" />
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">回呈格式</span>
+                                <select class="setting-select" id="feishuFormat">
+                                    <option value="markdown">Markdown + 附件</option>
+                                    <option value="text">纯文本</option>
+                                    <option value="rich">富文本</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">所属江湖</span>
+                                <div class="input-group">
+                                    <input type="text" class="setting-input setting-input-text" id="feishuWorld" value="青石江湖" />
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Webhook 地址</span>
+                                <div class="input-group" style="flex:1">
+                                    <input type="text" class="setting-input setting-input-text" id="feishuWebhook" value="https://open.feishu.cn/open-apis/bot/v2/hook/****" style="width:100%" />
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">企微驿</h3>
+                            <p class="card-description">企业微信渠道的来处 / 回处参数。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="setting-row">
+                                <span class="setting-label">启用</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="wecomEnabled" />
+                                    <span class="toggle-track"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">驿站 ID</span>
+                                <div class="input-group">
+                                    <input type="text" class="setting-input setting-input-text" id="wecomId" value="wecom-main" />
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">回呈格式</span>
+                                <select class="setting-select" id="wecomFormat">
+                                    <option value="markdown">Markdown + 附件</option>
+                                    <option value="text" selected>纯文本</option>
+                                    <option value="rich">富文本</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">所属江湖</span>
+                                <div class="input-group">
+                                    <input type="text" class="setting-input setting-input-text" id="wecomWorld" value="青石江湖" />
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <span class="setting-label">Corp ID</span>
+                                <div class="input-group" style="flex:1">
+                                    <input type="text" class="setting-input setting-input-text" id="wecomCorpId" value="" placeholder="ww****" style="width:100%" />
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+                <section class="card" style="margin-top:16px">
+                    <div class="card-header">
+                        <h3 class="card-title">微信驿</h3>
+                        <p class="card-description">微信公众号 / 小程序渠道的来处 / 回处参数。</p>
+                    </div>
+                    <div class="card-content">
+                        <div class="setting-row">
+                            <span class="setting-label">启用</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="wechatEnabled" />
+                                <span class="toggle-track"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-label">驿站 ID</span>
+                            <div class="input-group">
+                                <input type="text" class="setting-input setting-input-text" id="wechatId" value="wechat-main" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-label">回呈格式</span>
+                            <select class="setting-select" id="wechatFormat">
+                                <option value="markdown">Markdown + 附件</option>
+                                <option value="text" selected>纯文本</option>
+                                <option value="rich">富文本</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-label">所属江湖</span>
+                            <div class="input-group">
+                                <input type="text" class="setting-input setting-input-text" id="wechatWorld" value="青石江湖" />
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-label">App ID</span>
+                            <div class="input-group" style="flex:1">
+                                <input type="text" class="setting-input setting-input-text" id="wechatAppId" value="" placeholder="wx****" style="width:100%" />
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+        <script>
+        (function() {
+            const defaults = {
+                sectRate: 12, sectExempt: 500, discipleRate: 6, discipleExempt: 200,
+                balance: 128400, available: 104400,
+                feishu: { enabled: true, id: 'feishu-main', format: 'markdown', world: '青石江湖', webhook: 'https://open.feishu.cn/open-apis/bot/v2/hook/****' },
+                wecom:  { enabled: false, id: 'wecom-main', format: 'text', world: '青石江湖', corpId: '' },
+                wechat: { enabled: false, id: 'wechat-main', format: 'text', world: '青石江湖', appId: '' }
+            };
+
+            const $ = id => document.getElementById(id);
+
+            function loadSettings() {
+                const saved = localStorage.getItem('jianghu-settings');
+                return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(defaults));
+            }
+
+            function applySettings(s) {
+                $('sectRate').value = s.sectRate;
+                $('sectExempt').value = s.sectExempt;
+                $('discipleRate').value = s.discipleRate;
+                $('discipleExempt').value = s.discipleExempt;
+                $('overviewBalance').textContent = s.balance.toLocaleString();
+                $('overviewAvailable').textContent = s.available.toLocaleString();
+                $('overviewSectRate').textContent = s.sectRate + '%';
+                $('overviewDiscipleRate').textContent = s.discipleRate + '%';
+
+                // Stations
+                ['feishu','wecom','wechat'].forEach(st => {
+                    const d = s[st] || {};
+                    $(st + 'Enabled').checked = !!d.enabled;
+                    $(st + 'Id').value = d.id || '';
+                    $(st + 'Format').value = d.format || 'text';
+                    $(st + 'World').value = d.world || '';
+                });
+                $('feishuWebhook').value = (s.feishu || {}).webhook || '';
+                $('wecomCorpId').value = (s.wecom || {}).corpId || '';
+                $('wechatAppId').value = (s.wechat || {}).appId || '';
+            }
+
+            function collectSettings() {
+                return {
+                    sectRate: parseFloat($('sectRate').value) || 0,
+                    sectExempt: parseInt($('sectExempt').value) || 0,
+                    discipleRate: parseFloat($('discipleRate').value) || 0,
+                    discipleExempt: parseInt($('discipleExempt').value) || 0,
+                    balance: 128400,
+                    available: 104400,
+                    feishu: {
+                        enabled: $('feishuEnabled').checked,
+                        id: $('feishuId').value,
+                        format: $('feishuFormat').value,
+                        world: $('feishuWorld').value,
+                        webhook: $('feishuWebhook').value
+                    },
+                    wecom: {
+                        enabled: $('wecomEnabled').checked,
+                        id: $('wecomId').value,
+                        format: $('wecomFormat').value,
+                        world: $('wecomWorld').value,
+                        corpId: $('wecomCorpId').value
+                    },
+                    wechat: {
+                        enabled: $('wechatEnabled').checked,
+                        id: $('wechatId').value,
+                        format: $('wechatFormat').value,
+                        world: $('wechatWorld').value,
+                        appId: $('wechatAppId').value
+                    }
+                };
+            }
+
+            function showFeedback(msg, ok) {
+                const fb = $('saveFeedback');
+                fb.textContent = msg;
+                fb.className = 'save-feedback ' + (ok ? 'save-ok' : 'save-err');
+                fb.style.display = 'inline';
+                setTimeout(() => { fb.style.display = 'none'; }, 2400);
+            }
+
+            // Live preview in overview
+            ['sectRate','discipleRate'].forEach(id => {
+                $(id).addEventListener('input', () => {
+                    $('overview' + (id==='sectRate'?'SectRate':'DiscipleRate')).textContent = $(id).value + '%';
+                });
+            });
+
+            $('btnSave').addEventListener('click', () => {
+                const s = collectSettings();
+                localStorage.setItem('jianghu-settings', JSON.stringify(s));
+                applySettings(s);
+                showFeedback('✓ 已保存', true);
+            });
+
+            $('btnReset').addEventListener('click', () => {
+                localStorage.removeItem('jianghu-settings');
+                applySettings(JSON.parse(JSON.stringify(defaults)));
+                showFeedback('↺ 已重置为默认值', true);
+            });
+
+            // Init
+            applySettings(loadSettings());
+        })();
+        </script>
+    </div>
+</body>
+
+</html>

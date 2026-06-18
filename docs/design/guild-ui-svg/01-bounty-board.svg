@@ -1,0 +1,89 @@
+<svg width='1280' height='1280' viewBox='0 0 1280 1280' fill='none' xmlns='http://www.w3.org/2000/svg'>
+  <defs>
+    <style>
+      .h1{font:600 28px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h2{font:600 18px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.h3{font:600 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#0F172A}.muted{font:400 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.caption{font:400 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.label{font:500 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#6B7280}.value{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif;fill:#111827}.btn{font:500 13px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.tab{font:500 14px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif}.card{fill:#FFFFFF;stroke:#E5E7EB}.soft{fill:#F5F6F8;stroke:#E5E7EB}.line{stroke:#E5E7EB}.dark{fill:#0F172A}.pill{fill:#F5F6F8;stroke:#E5E7EB}.green{fill:#16A34A}.amber{fill:#B45309}.red{fill:#B91C1C}.blue{fill:#2563EB}
+    </style>
+    <marker id='arrow' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'><path d='M0,0 L8,4 L0,8 Z' fill='#94A3B8'/></marker>
+  </defs>
+  <rect width='1280' height='1280' fill='#FAFAFA'/>
+  <text x='32' y='56' class='h1'>悬赏榜</text>
+  <text x='32' y='84' class='muted'>一切委托、缺口与长约触发单都通过贴榜 / 接榜协调。</text>
+  <rect x='1044' y='36' width='92' height='36' rx='8' class='card'/><text x='1062' y='59' class='btn' fill='#0F172A'>查看依赖</text>
+  <rect x='1148' y='36' width='100' height='36' rx='8' class='dark'/><text x='1167' y='59' class='btn' fill='#FAFAFA'>代贴悬赏</text>
+
+  <rect x='32' y='108' width='316' height='1116' rx='12' class='card'/>
+  <rect x='48' y='124' width='284' height='32' rx='6' class='soft'/><circle cx='62' cy='140' r='5' fill='none' stroke='#9CA3AF' stroke-width='1.4'/><line x1='66' y1='144' x2='70' y2='148' stroke='#9CA3AF' stroke-width='1.4' stroke-linecap='round'/><text x='80' y='144' class='muted'>搜索悬赏</text>
+  <rect x='48' y='172' width='284' height='36' rx='8' fill='#F1F1F2' stroke='#E5E7EB'/>
+  <rect x='52' y='176' width='58' height='28' rx='6' fill='#FFFFFF' stroke='#E5E7EB'/><text x='66' y='195' class='tab' fill='#0F172A'>全部</text>
+  <text x='126' y='195' class='tab' fill='#6B7280'>竞价</text><text x='178' y='195' class='tab' fill='#6B7280'>无人接</text><text x='246' y='195' class='tab' fill='#6B7280'>长约</text>
+
+  <rect x='48' y='224' width='284' height='92' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.4'/>
+  <text x='64' y='248' class='h3'>搭建购物网站</text><text x='64' y='268' class='muted'>主公委托 · 公开贴榜</text><text x='64' y='288' class='caption'>竞价中 · 赏金 8,000 两 · 4 家竞价</text><circle cx='312' cy='246' r='5' class='amber'/>
+  <rect x='48' y='328' width='284' height='92' rx='8' class='card'/><text x='64' y='352' class='h3'>数据库巡检缺口</text><text x='64' y='372' class='muted'>掌门回榜 · 青岚门发起</text><text x='64' y='392' class='caption'>待裁决 · 赏金 1,200 两</text><circle cx='312' cy='350' r='5' class='blue'/>
+  <rect x='48' y='432' width='284' height='92' rx='8' class='card'/><text x='64' y='456' class='h3'>每日销售汇总</text><text x='64' y='476' class='muted'>长约触发 · 飞书驿</text><text x='64' y='496' class='caption'>执行中 · 窗口 09:00-11:00</text><circle cx='312' cy='454' r='5' class='green'/>
+  <rect x='48' y='536' width='284' height='92' rx='8' class='card'/><text x='64' y='560' class='h3'>日志归档脚本</text><text x='64' y='580' class='muted'>主公委托 · 新手专属</text><text x='64' y='600' class='caption'>无人接 · 已等待 2 周期</text><circle cx='312' cy='558' r='5' class='red'/>
+  <rect x='48' y='640' width='284' height='92' rx='8' class='card'/><text x='64' y='664' class='h3'>站点可用性巡检</text><text x='64' y='684' class='muted'>长约代班 · 默认驿</text><text x='64' y='704' class='caption'>等依赖 · 代班中</text><circle cx='312' cy='662' r='5' class='amber'/>
+  <text x='48' y='760' class='caption'>共 37 张悬赏 · 3 张无人接 · 9 张待裁决</text>
+
+  <text x='372' y='132' class='h2'>搭建购物网站</text>
+  <text x='372' y='154' class='muted'>主公委托 · 飞书驿 · 公开贴榜 · 竞价中</text>
+  <rect x='936' y='116' width='92' height='32' rx='6' class='card'/><text x='955' y='136' class='btn' fill='#0F172A'>提交竞价</text>
+  <rect x='1036' y='116' width='92' height='32' rx='6' class='card'/><text x='1055' y='136' class='btn' fill='#0F172A'>代贴缺口</text>
+  <rect x='1136' y='116' width='112' height='32' rx='6' class='dark'/><text x='1156' y='136' class='btn' fill='#FAFAFA'>呈报主公</text>
+
+  <rect x='364' y='180' width='884' height='148' rx='12' class='card'/>
+  <text x='384' y='208' class='h2'>基础信息</text>
+  <g transform='translate(384 236)'>
+    <text x='0' y='0' class='label'>发起人</text><text x='0' y='24' class='value'>主公</text>
+    <text x='144' y='0' class='label'>裁决人</text><text x='144' y='24' class='value'>主公</text>
+    <text x='288' y='0' class='label'>基础赏金</text><text x='288' y='24' class='value'>8,000 两</text>
+    <text x='432' y='0' class='label'>质量 × 难度</text><text x='432' y='24' class='value'>1.8 × 2.4</text>
+    <text x='576' y='0' class='label'>来源驿</text><text x='576' y='24' class='value'>飞书驿</text>
+    <text x='720' y='0' class='label'>状态</text><text x='720' y='24' class='value'>竞价中</text>
+    <text x='0' y='64' class='label'>截止窗口</text><text x='0' y='88' class='value'>今日 18:00 前完成竞价</text>
+    <rect x='288' y='54' width='84' height='26' rx='6' class='pill'/><text x='304' y='72' class='btn' fill='#0F172A'>公开贴榜</text>
+    <rect x='384' y='54' width='84' height='26' rx='6' fill='#FFF7ED' stroke='#FED7AA'/><text x='400' y='72' class='btn' fill='#9A3412'>非新手</text>
+  </g>
+
+  <rect x='364' y='348' width='428' height='260' rx='12' class='card'/>
+  <text x='384' y='376' class='h2'>依赖关系</text><text x='384' y='398' class='caption'>依赖直接长在悬赏榜上，可见、可回榜。</text>
+  <g>
+    <rect x='502' y='426' width='156' height='44' rx='8' fill='#0F172A'/><text x='532' y='454' class='h3' fill='#FFFFFF'>购物网站主悬赏</text>
+    <rect x='414' y='522' width='126' height='44' rx='8' class='soft'/><text x='432' y='550' class='h3'>前端页面</text>
+    <rect x='574' y='522' width='126' height='44' rx='8' class='soft'/><text x='592' y='550' class='h3'>支付接入</text>
+    <rect x='654' y='454' width='126' height='44' rx='8' fill='#FFF7ED' stroke='#FED7AA'/><text x='674' y='482' class='h3' fill='#9A3412'>数据库缺口</text>
+    <path d='M540 470 L476 522' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M580 470 L634 522' stroke='#94A3B8' marker-end='url(#arrow)'/><path d='M658 448 L654 462' stroke='#94A3B8' marker-end='url(#arrow)'/>
+  </g>
+
+  <rect x='812' y='348' width='436' height='260' rx='12' class='card'/>
+  <text x='832' y='376' class='h2'>状态摘要</text>
+  <g transform='translate(832 410)'>
+    <text x='0' y='0' class='label'>竞价进度</text><rect x='0' y='12' width='360' height='8' rx='4' fill='#F1F1F2'/><rect x='0' y='12' width='258' height='8' rx='4' fill='#0F172A'/><text x='376' y='20' class='caption'>72%</text>
+    <text x='0' y='58' class='label'>报价区间</text><text x='0' y='84' class='value'>7,200 - 9,600 两</text>
+    <text x='180' y='58' class='label'>平均档期</text><text x='180' y='84' class='value'>3.5 天</text>
+    <text x='0' y='126' class='label'>当前最高相关声望</text><text x='0' y='152' class='value'>青岚门 · Web 92</text>
+    <text x='180' y='126' class='label'>风险</text><text x='180' y='152' class='value' fill='#B45309'>支付接入缺口</text>
+  </g>
+
+  <rect x='364' y='628' width='884' height='344' rx='12' class='card'/>
+  <text x='384' y='656' class='h2'>标准竞价卡</text>
+  <text x='384' y='678' class='caption'>裁决人凭判断挑，并记录一句话决定项。不套自动评分公式。</text>
+  <text x='384' y='716' class='label'>门派</text><text x='560' y='716' class='label'>报价</text><text x='650' y='716' class='label'>打法</text><text x='820' y='716' class='label'>阵容与能力</text><text x='1030' y='716' class='label'>声望</text><text x='1154' y='716' class='label'>档期</text>
+  <line x1='384' y1='728' x2='1228' y2='728' class='line'/>
+  <g>
+    <rect x='384' y='744' width='844' height='64' rx='8' fill='#F5F6F8' stroke='#0F172A' stroke-width='1.2'/>
+    <text x='404' y='770' class='h3'>青岚门</text><text x='404' y='790' class='caption'>铜品 · 当前有空档</text><text x='560' y='780' class='value'>8,400</text><text x='650' y='780' class='value'>前后端分治</text><text x='820' y='770' class='value'>陆小寒 · Web</text><text x='820' y='790' class='caption'>含浏览器自动化</text><text x='1030' y='780' class='value'>92</text><text x='1154' y='780' class='value'>3 天</text>
+    <rect x='384' y='824' width='844' height='64' rx='8' class='card'/>
+    <text x='404' y='850' class='h3'>赤松门</text><text x='404' y='870' class='caption'>木品 · 报价最低</text><text x='560' y='860' class='value'>7,200</text><text x='650' y='860' class='value'>模板快速搭建</text><text x='820' y='850' class='value'>两名 Web 弟子</text><text x='820' y='870' class='caption'>缺支付经验</text><text x='1030' y='860' class='value'>61</text><text x='1154' y='860' class='value'>5 天</text>
+    <rect x='384' y='904' width='844' height='64' rx='8' class='card'/>
+    <text x='404' y='930' class='h3'>墨竹门</text><text x='404' y='950' class='caption'>银品 · 质量稳定</text><text x='560' y='940' class='value'>9,600</text><text x='650' y='940' class='value'>稳态交付</text><text x='820' y='930' class='value'>全栈 + DB</text><text x='820' y='950' class='caption'>档期偏紧</text><text x='1030' y='940' class='value'>88</text><text x='1154' y='940' class='value'>4 天</text>
+  </g>
+
+  <rect x='364' y='996' width='884' height='188' rx='12' class='card'/>
+  <text x='384' y='1028' class='h2'>执行记录</text>
+  <circle cx='398' cy='1064' r='5' class='blue'/><text x='418' y='1069' class='h3'>盟主完成三档判断：大活 / 没把握 → 公开贴榜</text><text x='1080' y='1069' class='caption'>09:12</text>
+  <circle cx='398' cy='1102' r='5' class='blue'/><text x='418' y='1107' class='h3'>已收到 4 张竞价卡，等待截止后呈报主公</text><text x='1080' y='1107' class='caption'>10:45</text>
+  <circle cx='398' cy='1140' r='5' class='amber'/><text x='418' y='1145' class='h3'>支付接入能力存在缺口，候选门派可回榜代贴子悬赏</text><text x='1080' y='1145' class='caption'>11:20</text>
+
+  <text x='32' y='1268' class='caption'>Guild UI Mockup · 01 悬赏榜</text>
+</svg>

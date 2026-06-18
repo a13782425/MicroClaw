@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>江湖控制台 · 静态原型入口</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1 class="brand-title">江湖控制台</h1>
+        <p class="brand-subtitle">ShadUI 风格静态 HTML · 入口页</p>
+      </div>
+      <nav class="nav-section">
+        <p class="nav-heading">江湖</p>
+        <a class="nav-link" href="overview.html"><span class="nav-dot"></span>江湖总览</a>
+        <a class="nav-link" href="bounty-board.html"><span class="nav-dot"></span>悬赏与长约</a>
+          
+        <p class="nav-heading">门派与人物</p>
+        <a class="nav-link" href="sects.html"><span class="nav-dot"></span>门派</a>
+        <a class="nav-link" href="people.html"><span class="nav-dot"></span>弟子 / 侠客</a>
+        <a class="nav-link" href="recruitment-hall.html"><span class="nav-dot"></span>聚贤庄</a>
+        <p class="nav-heading">经济与记忆</p>
+        <a class="nav-link" href="economy.html"><span class="nav-dot"></span>江湖设置</a>
+        <a class="nav-link" href="market.html"><span class="nav-dot"></span>三阁市集</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <div class="container">
+        <header class="page-header">
+          <div>
+            <p class="kicker">MicroClaw Guild UI Prototype</p>
+            <h2 class="page-title">江湖世界静态页面入口</h2>
+            <p class="page-description">每个页签拆成独立 HTML，便于后续逐页修改，并可作为 WPF/XAML 页面结构参考。</p>
+          </div>
+          <div class="actions">
+            <a class="button" href="../guild-ui-svg/README.md">SVG 设计稿</a>
+            <a class="button primary" href="overview.html">进入总览</a>
+          </div>
+        </header>
+
+        <section class="page-grid">
+          <a class="card entry-card" href="overview.html"><h3 class="entry-title">江湖总览</h3><p class="entry-desc">义仓、悬赏、门派、人口、晨钟暮鼓。</p></a>
+          <a class="card entry-card" href="bounty-board.html"><h3 class="entry-title">悬赏与长约</h3><p class="entry-desc">统一管理公开悬赏、缺口、长约触发单与待确认信息。</p></a>
+          <a class="card entry-card" href="sects.html"><h3 class="entry-title">门派</h3><p class="entry-desc">声望、品阶、宗库、编制、能力边界。</p></a>
+          <a class="card entry-card" href="people.html"><h3 class="entry-title">弟子 / 侠客</h3><p class="entry-desc">气血、精力、盘缠、功法窍、领域声望。</p></a>
+          <a class="card entry-card" href="recruitment-hall.html"><h3 class="entry-title">聚贤庄</h3><p class="entry-desc">新人唯一入口，AI 招募策略与侠客零工市场。</p></a>
+          <a class="card entry-card" href="economy.html"><h3 class="entry-title">江湖设置</h3><p class="entry-desc">税率设定、免税线、主公注资。</p></a>
+          <a class="card entry-card" href="market.html"><h3 class="entry-title">三阁市集</h3><p class="entry-desc">藏经阁、天问阁、百宝阁。</p></a>
+        </section>
+        <p class="footer">无框架、无构建、无脚本依赖；直接打开任意 HTML 即可浏览。</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

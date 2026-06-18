@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>门派</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link active" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span
+                        class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">Sects</p>
+                        <h2 class="page-title">门派</h2>
+                        <p class="page-description">查看门派声望、宗库、品阶、编制与能力边界。</p>
+                    </div>
+
+                </header>
+                <section class="split board">
+                    <aside class="card">
+                        <div class="card-content">
+                            <div class="search">搜索门派</div><a class="item active" href="sects.html">
+                                <h3 class="item-title">青岚门</h3>
+                                <p class="item-meta">铜品 · 声望 420 · 宗库 12,800<br />编制 6 / 8 · 活跃</p>
+                            </a><a class="item" href="sects.html">
+                                <h3 class="item-title">墨竹门</h3>
+                                <p class="item-meta">银品 · 声望 830 · 宗库 34,200</p>
+                            </a><a class="item" href="sects.html">
+                                <h3 class="item-title">赤松门</h3>
+                                <p class="item-meta">木品 · 声望 120 · 宗库 3,100</p>
+                            </a>
+                        </div>
+                    </aside>
+                    <div class="board-detail">
+                    <div class="grid">
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">青岚门</h3>
+                                <p class="card-description">铜品 · 声望 420 · 宗库 12,800 两 · 编制 6 / 8</p>
+                            </div>
+                            <div class="card-content">
+                                <div class="field-grid">
+                                    <div>
+                                        <div class="field-label">当前品阶</div>
+                                        <div class="field-value">铜品</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">当前声望</div>
+                                        <div class="field-value">420</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">下一阶</div>
+                                        <div class="field-value">银品 · 800</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">编制上限</div>
+                                        <div class="field-value">8 人</div>
+                                    </div>
+                                </div>
+                                <div class="tier-bar" style="margin-top:18px"><span class="tier">木</span><span
+                                        class="tier active">铜</span><span class="tier">银</span><span
+                                        class="tier">金</span><span class="tier">玉</span></div>
+                            </div>
+                        </article>
+                        <div class="grid cols-2">
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">宗库</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="field-grid" style="grid-template-columns:1fr 1fr">
+                                        <div>
+                                            <div class="field-label">当前宗库</div>
+                                            <div class="field-value">12,800 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">本周期收入</div>
+                                            <div class="field-value" style="color:var(--success)">+6,400</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">薪水 / 维持烧</div>
+                                            <div class="field-value">-2,100</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">操作烧 / 税</div>
+                                            <div class="field-value">-1,380</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">宗库收入曲线</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="placeholder" style="display:flex;align-items:flex-end;gap:12px;height:80px">
+                                        <div style="flex:1;background:var(--muted);border-radius:4px 4px 0 0;height:30%"></div>
+                                        <div style="flex:1;background:var(--muted);border-radius:4px 4px 0 0;height:45%"></div>
+                                        <div style="flex:1;background:var(--success);border-radius:4px 4px 0 0;height:60%"></div>
+                                        <div style="flex:1;background:var(--success);border-radius:4px 4px 0 0;height:80%"></div>
+                                        <div style="flex:1;background:var(--success);border-radius:4px 4px 0 0;height:65%"></div>
+                                        <div style="flex:1;background:var(--success);border-radius:4px 4px 0 0;height:90%"></div>
+                                    </div>
+                                    <p style="margin-top:10px;font-size:13px;color:var(--muted-foreground)">近 6 周期宗库余额趋势</p>
+                                </div>
+                            </article>
+                        </div>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">弟子编制</h3>
+                            </div>
+                            <div class="card-content table-wrap">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>弟子</th>
+                                            <th>性别</th>
+                                            <th>功法</th>
+                                            <th>领域声望</th>
+                                            <th>精力</th>
+                                            <th>气血</th>
+                                            <th>薪水</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>陆小寒</td>
+                                            <td>女</td>
+                                            <td>浏览器自动化 / 前端构建</td>
+                                            <td>Web 92</td>
+                                            <td>66%</td>
+                                            <td>88%</td>
+                                            <td>420</td>
+                                        </tr>
+                                        <tr>
+                                            <td>许归舟</td>
+                                            <td>男</td>
+                                            <td>SQL 查询 / 数据建模</td>
+                                            <td>DB 76</td>
+                                            <td>78%</td>
+                                            <td>72%</td>
+                                            <td>390</td>
+                                        </tr>
+                                        <tr>
+                                            <td>林照夜</td>
+                                            <td>女</td>
+                                            <td>摘要 / 信报整理</td>
+                                            <td>摘要 81</td>
+                                            <td>31%</td>
+                                            <td>95%</td>
+                                            <td>360</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">藏经阁 · 古籍</h3>
+                                <p class="card-description">门派已购古籍，提升弟子交付质量与领域声望。</p>
+                            </div>
+                            <div class="card-content table-wrap">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>古籍</th>
+                                            <th>领域</th>
+                                            <th>品阶</th>
+                                            <th>效果</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Web 质量论</td>
+                                            <td>Web</td>
+                                            <td><span class="badge">银品</span></td>
+                                            <td>前端交付质量 中幅提升</td>
+                                            <td><span class="badge success">可阅</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>信报范式</td>
+                                            <td>摘要</td>
+                                            <td><span class="badge">铜品</span></td>
+                                            <td>信报可读性 小幅提升</td>
+                                            <td><span class="badge success">可阅</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>数据建模经</td>
+                                            <td>数据库</td>
+                                            <td><span class="badge">金品</span></td>
+                                            <td>查询效率 大幅提升，建模评分 中幅提升</td>
+                                            <td><span class="badge success">可阅</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

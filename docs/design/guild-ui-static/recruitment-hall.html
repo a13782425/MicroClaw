@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>聚贤庄</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span
+                        class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link active" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">Recruitment Hall</p>
+                        <h2 class="page-title">聚贤庄</h2>
+                        <p class="page-description">新人唯一入口；AI 掌门在此评估招募，主公只看规则与提案。</p>
+                    </div>
+                    <div class="actions"><a class="button" href="recruitment-hall.html">AI 策略</a><a
+                            class="button primary" href="recruitment-hall.html">刷新建议</a></div>
+                </header>
+                <section class="card metrics">
+                    <div class="metric">
+                        <div class="metric-label">候选新人</div>
+                        <div class="metric-value">24</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">活跃侠客</div>
+                        <div class="metric-value">17</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">亡者回响</div>
+                        <div class="metric-value">9</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">后代等待成熟</div>
+                        <div class="metric-value">6</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">今日招募费回流</div>
+                        <div class="metric-value" style="color:var(--success)">+2,400</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">气血风险</div>
+                        <div class="metric-value" style="color:var(--warning)">3 人</div>
+                    </div>
+                </section>
+                <section class="split" style="margin-top:16px">
+                    <aside class="card">
+                        <div class="card-content">
+                            <div class="tabs"><span class="tab active">候选池</span><span class="tab">侠客</span><span
+                                    class="tab">回响</span></div><a class="item active" href="recruitment-hall.html">
+                                <h3 class="item-title">苏砚</h3>
+                                <p class="item-meta">女 · 后代 · Web / 工具<br />出生窍 2 · 招募费 1,800 两</p>
+                            </a><a class="item" href="recruitment-hall.html">
+                                <h3 class="item-title">秦松</h3>
+                                <p class="item-meta">男 · 亡者回响 · 数据库<br />继承 SQL 查询 · 声望从零</p>
+                            </a><a class="item" href="recruitment-hall.html">
+                                <h3 class="item-title">阿七</h3>
+                                <p class="item-meta">男 · 侠客 · 简单长约<br />AI 可发邀约</p>
+                            </a>
+                        </div>
+                    </aside>
+                    <div class="grid">
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">苏砚</h3>
+                                <p class="card-description">女 · 男女后代 · 一律先进聚贤庄，不直接入派。</p>
+                            </div>
+                            <div class="card-content">
+                                <div class="field-grid">
+                                    <div>
+                                        <div class="field-label">来源</div>
+                                        <div class="field-value">男女后代</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">性别</div>
+                                        <div class="field-value">女</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">出生窍数</div>
+                                        <div class="field-value">2</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">招募费</div>
+                                        <div class="field-value">1,800 两</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">继承功法</div>
+                                        <div class="badges"><span class="badge">前端构建</span><span
+                                                class="badge">工具调用</span></div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">声望</div>
+                                        <div class="field-value">从零起步</div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label">首薪引荐费</div>
+                                        <div class="field-value">一次性 · 父母对半</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                        <div class="grid cols-2">
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">AI 招募约束</h3>
+                                    <p class="card-description">只展示 AI 掌门招募判断；不提供人工直接招募。</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="progress-row"><span>青岚门编制</span>
+                                        <div class="progress" style="--value:75%"><span></span></div><span>6 / 8</span>
+                                    </div>
+                                    <div class="field-grid" style="grid-template-columns:1fr 1fr">
+                                        <div>
+                                            <div class="field-label">宗库余额</div>
+                                            <div class="field-value">12,800 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">招募后余额</div>
+                                            <div class="field-value">11,000 两</div>
+                                        </div>
+                                    </div>
+                                    <div class="actions" style="margin-top:16px"><a class="button primary"
+                                            href="recruitment-hall.html">查看提案</a><a class="button"
+                                            href="recruitment-hall.html">策略规则</a></div>
+                                </div>
+                            </article>
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">遗传说明</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="placeholder">父 + 母 → 子<br />功法概率继承 · 最多继承出生窍数<br />小概率变异 · 声望归零</div>
+                                </div>
+                            </article>
+                        </div>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">侠客零工市场</h3>
+                                <p class="card-description">现行口子：只接简单长约；严格弱于入派，自烧盘缠。</p>
+                            </div>
+                            <div class="card-content table-wrap">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>侠客</th>
+                                            <th>可接活</th>
+                                            <th>盘缠</th>
+                                            <th>气血</th>
+                                            <th>功法</th>
+                                            <th>AI 动作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>阿七</td>
+                                            <td>销售汇总</td>
+                                            <td style="color:var(--warning)">120</td>
+                                            <td>38%</td>
+                                            <td>摘要</td>
+                                            <td>邀约提案</td>
+                                        </tr>
+                                        <tr>
+                                            <td>段清</td>
+                                            <td>站点巡检</td>
+                                            <td>540</td>
+                                            <td>78%</td>
+                                            <td>浏览器自动化</td>
+                                            <td>分配提案</td>
+                                        </tr>
+                                        <tr>
+                                            <td>柳白</td>
+                                            <td>日志归档</td>
+                                            <td>780</td>
+                                            <td>90%</td>
+                                            <td>Shell 工具</td>
+                                            <td>分配提案</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>三阁市集</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span
+                        class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link active" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">Market</p>
+                        <h2 class="page-title">三阁市集</h2>
+                        <p class="page-description">藏经阁卖功法，天问阁卖古籍，百宝阁卖口粮与辅助道具。</p>
+                    </div>
+                    <div class="actions"><a class="button" href="market.html">藏经阁</a><a class="button"
+                            href="market.html">天问阁</a><a class="button primary" href="market.html">百宝阁</a></div>
+                </header>
+                <section class="grid cols-3">
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">藏经阁</h3>
+                            <p class="card-description">功法 = 能做什么。个人盘缠购买，闭关修习。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="badges"><span class="badge">浏览器自动化</span><span class="badge">SQL 调优</span><span
+                                    class="badge">MCP 编排</span></div>
+                        </div>
+                    </article>
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">天问阁</h3>
+                            <p class="card-description">古籍 = 做得多好。门派或个人购买，提升质量。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="badges"><span class="badge">Web 质量论</span><span class="badge">接口契约集</span><span
+                                    class="badge">信报范式</span></div>
+                        </div>
+                    </article>
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">百宝阁</h3>
+                            <p class="card-description">辅助道具 = 撑住命。口粮、丹药、一次性小增益。</p>
+                        </div>
+                        <div class="card-content">
+                            <div class="badges"><span class="badge">口粮</span><span class="badge">回血丹</span><span
+                                    class="badge">精力茶</span></div>
+                        </div>
+                    </article>
+                </section>
+                <article class="card" style="margin-top:16px">
+                    <div class="card-header">
+                        <h3 class="card-title">商品列表</h3>
+                    </div>
+                    <div class="card-content table-wrap">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>商品</th>
+                                    <th>市集</th>
+                                    <th>领域 / 类型</th>
+                                    <th>价格</th>
+                                    <th>条件</th>
+                                    <th>效果</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>浏览器自动化</td>
+                                    <td>藏经阁</td>
+                                    <td>Web · 铜</td>
+                                    <td>1,200</td>
+                                    <td>Web 声望 80</td>
+                                    <td>获得工具组，闭关 2 周期</td>
+                                </tr>
+                                <tr>
+                                    <td>接口契约集</td>
+                                    <td>天问阁</td>
+                                    <td>Web 古籍</td>
+                                    <td>2,000</td>
+                                    <td>无门槛</td>
+                                    <td>提高交付质量</td>
+                                </tr>
+                                <tr>
+                                    <td>口粮</td>
+                                    <td>百宝阁</td>
+                                    <td>消耗品</td>
+                                    <td>80</td>
+                                    <td>个人盘缠</td>
+                                    <td>恢复气血</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

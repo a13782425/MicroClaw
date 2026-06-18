@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>人员</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="brand-title">江湖控制台</h1>
+                <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+            </div>
+            <nav class="nav-section">
+                <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span
+                        class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span
+                        class="nav-dot"></span>悬赏与长约</a>
+          
+                <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span
+                        class="nav-dot"></span>门派</a><a class="nav-link active" href="people.html"><span
+                        class="nav-dot"></span>人员</a><a class="nav-link" href="recruitment-hall.html"><span
+                        class="nav-dot"></span>聚贤庄</a>
+                <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
+                        class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
+                        class="nav-dot"></span>三阁市集</a>
+            </nav>
+        </aside>
+        <main class="main">
+            <div class="container">
+                <header class="page-header">
+                    <div>
+                        <p class="kicker">People</p>
+                        <h2 class="page-title">人员</h2>
+                        <p class="page-description">查看个人气血、精力、盘缠、功法槽与分领域声望。</p>
+                    </div>
+                </header>
+                <section class="split board">
+                    <aside class="card">
+                        <div class="card-content">
+                            <div class="search">搜索人员</div><a class="item active" href="people.html">
+                                <h3 class="item-title">陆小寒</h3>
+                                <p class="item-meta">女 · 青岚门 · 执行中</p>
+                            </a><a class="item" href="people.html">
+                                <h3 class="item-title">许归舟</h3>
+                                <p class="item-meta">男 · 青岚门 · 待命中</p>
+                            </a><a class="item" href="people.html">
+                                <h3 class="item-title">阿七</h3>
+                                <p class="item-meta">男 · 聚贤庄 · 长约零工</p>
+                            </a>
+                        </div>
+                    </aside>
+                    <div class="board-detail">
+                    <div class="grid">
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">陆小寒</h3>
+                                <p class="card-description">女 · 青岚门 · Web 领域 · 当前状态：执行中</p>
+                            </div>
+                            <div class="card-content">
+                                <div class="grid cols-2" style="align-items:start">
+                                    <div>
+                                        <div class="field-label" style="margin-bottom:12px">气血与精力</div>
+                                        <div style="margin-bottom:18px">
+                                            <div class="field-label">气血 HP</div>
+                                            <div class="field-value">88 / 100</div>
+                                            <div class="progress danger" style="--value:88%"><span></span></div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">精力 / 负载</div>
+                                            <div class="field-value">66 / 100</div>
+                                            <div class="progress info" style="--value:66%"><span></span></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="field-label" style="margin-bottom:12px">经验 / 六维声望</div>
+                                        <div style="display:flex;justify-content:center">
+                                        <svg viewBox="0 0 280 270" style="width:100%;max-width:320px;height:auto" aria-label="六维声望雷达图">
+                                            <defs>
+                                                <linearGradient id="dataFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                    <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.35"/>
+                                                    <stop offset="100%" stop-color="var(--primary)" stop-opacity="0.12"/>
+                                                </linearGradient>
+                                            </defs>
+
+                                            <!-- Grid hexagons: 20% 40% 60% 80% 100% -->
+                                            <polygon points="140,112 155.6,121 155.6,139 140,148 124.4,139 124.4,121" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                            <polygon points="140,94 171.2,112 171.2,148 140,166 108.8,148 108.8,112" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                            <polygon points="140,76 186.8,103 186.8,157 140,184 93.2,157 93.2,103" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                            <polygon points="140,58 202.4,94 202.4,166 140,202 77.6,166 77.6,94" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                            <polygon points="140,40 217.9,85 217.9,175 140,220 62.1,175 62.1,85" fill="none" stroke="var(--border)" stroke-width="1"/>
+
+                                            <!-- Axis lines -->
+                                            <line x1="140" y1="40" x2="140" y2="220" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+                                            <line x1="62.1" y1="85" x2="217.9" y2="175" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+                                            <line x1="217.9" y1="85" x2="62.1" y2="175" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+
+                                            <!-- Data polygon -->
+                                            <polygon points="140,49 182.9,105.3 202.4,166 140,184 108.8,148 101,107.5"
+                                                     fill="url(#dataFill)" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round"/>
+
+                                            <!-- Data points -->
+                                            <circle cx="140" cy="49" r="3.5" fill="var(--primary)"/>
+                                            <circle cx="182.9" cy="105.3" r="3.5" fill="var(--primary)"/>
+                                            <circle cx="202.4" cy="166" r="3.5" fill="var(--primary)"/>
+                                            <circle cx="140" cy="184" r="3.5" fill="var(--primary)"/>
+                                            <circle cx="108.8" cy="148" r="3.5" fill="var(--primary)"/>
+                                            <circle cx="101" cy="107.5" r="3.5" fill="var(--primary)"/>
+
+                                            <!-- Labels with values -->
+                                            <text x="140" y="24" text-anchor="middle" fill="var(--foreground)" font-size="12" font-weight="500">Web前端</text>
+                                            <text x="140" y="38" text-anchor="middle" fill="var(--muted-foreground)" font-size="11">90</text>
+
+                                            <text x="228" y="80" text-anchor="start" fill="var(--foreground)" font-size="12" font-weight="500">后端服务</text>
+                                            <text x="228" y="94" text-anchor="start" fill="var(--muted-foreground)" font-size="11">55</text>
+
+                                            <text x="228" y="185" text-anchor="start" fill="var(--foreground)" font-size="12" font-weight="500">数据库</text>
+                                            <text x="228" y="199" text-anchor="start" fill="var(--muted-foreground)" font-size="11">80</text>
+
+                                            <text x="140" y="252" text-anchor="middle" fill="var(--foreground)" font-size="12" font-weight="500">架构设计</text>
+                                            <text x="140" y="266" text-anchor="middle" fill="var(--muted-foreground)" font-size="11">60</text>
+
+                                            <text x="52" y="185" text-anchor="end" fill="var(--foreground)" font-size="12" font-weight="500">安全攻防</text>
+                                            <text x="52" y="199" text-anchor="end" fill="var(--muted-foreground)" font-size="11">40</text>
+
+                                            <text x="52" y="80" text-anchor="end" fill="var(--foreground)" font-size="12" font-weight="500">运维部署</text>
+                                            <text x="52" y="94" text-anchor="end" fill="var(--muted-foreground)" font-size="11">50</text>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </article>
+                        <div class="grid cols-2">
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">盘缠与续命</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="field-grid" style="grid-template-columns:1fr 1fr">
+                                        <div>
+                                            <div class="field-label">当前盘缠</div>
+                                            <div class="field-value">1,260 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">每周期进食</div>
+                                            <div class="field-value">80 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">预计可维持</div>
+                                            <div class="field-value">15 周期</div>
+                                        </div><span class="badge success">饿死风险低</span>
+                                    </div>
+                                </div>
+                            </article>
+                            <article class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title">当前状态</h3>
+                                </div>
+                                <div class="card-content">
+                                    <div class="badges"><span class="badge">执行中</span><span
+                                            class="badge">可调息</span><span class="badge warning">负载偏高</span></div>
+                                    <p class="card-description" style="margin-top:18px">当前悬赏：搭建购物网站 / 前端页面。</p>
+                                </div>
+                            </article>
+                        </div>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">功法槽（2/3）</h3>
+                                <p class="card-description">槽位挂个人、按领域计，分领域声望驱动开槽数。出生约 2 窍。</p>
+                            </div>
+                            <div class="card-content">
+                                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+                                    <div class="card">
+                                        <div class="card-content">
+                                            <h4 class="card-title" style="display:inline-flex;align-items:center;gap:8px">Web 领域<span class="badge warning">铜品</span></h4>
+                                            <div class="badges" style="margin-top:10px"><span class="badge">前端构建</span><span
+                                                    class="badge">浏览器自动化</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="card">
+                                        <div class="card-content">
+                                            <h4 class="card-title" style="display:inline-flex;align-items:center;gap:8px">数据库领域<span class="badge success">木品</span></h4>
+                                            <div class="badges" style="margin-top:10px"><span class="badge">SQL 查询</span><span
+                                                    class="badge">数据建模</span></div>
+                                        </div>
+                                    </div>
+                                     <div class="card" style="border-style:dashed;background:var(--muted)">
+                                        <div class="card-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px;text-align:center">
+                                            <span style="font-size:22px;margin-bottom:6px;opacity:0.3">+</span>
+                                            <span style="font-size:12px;color:var(--muted-foreground)">空槽位</span>
+                                        </div>
+                                    </div>
+                                     <div class="card" style="border-style:dashed;background:var(--muted)">
+                                        <div class="card-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px;text-align:center">
+                                            <span style="font-size:22px;margin-bottom:6px;opacity:0.3">+</span>
+                                            <span style="font-size:12px;color:var(--muted-foreground)">空槽位</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">个人古籍</h3>
+                                <p class="card-description">自天问阁购得，仅自己用，提升交付质量。</p>
+                            </div>
+                            <div class="card-content table-wrap">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>古籍</th>
+                                            <th>领域</th>
+                                            <th>品阶</th>
+                                            <th>效果</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Web 质量论</td>
+                                            <td>Web</td>
+                                            <td><span class="badge">银品</span></td>
+                                            <td>前端交付质量 中幅提升</td>
+                                        </tr>
+                                        <tr>
+                                            <td>接口契约集</td>
+                                            <td>API</td>
+                                            <td><span class="badge">铜品</span></td>
+                                            <td>接口一致性 小幅提升</td>
+                                        </tr>
+                                        <tr>
+                                            <td>信报范式</td>
+                                            <td>摘要</td>
+                                            <td><span class="badge">铜品</span></td>
+                                            <td>信报可读性 小幅提升</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>
