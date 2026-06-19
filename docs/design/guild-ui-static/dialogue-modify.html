@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>修改方案 · 盟主传音</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1 class="brand-title">江湖控制台</h1>
+        <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+      </div>
+      <nav class="nav-section">
+        <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span class="nav-dot"></span>悬赏与长约</a>
+
+        <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span class="nav-dot"></span>聚贤庄</a>
+        <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span class="nav-dot"></span>三阁市集</a>
+        <p class="nav-heading">交流</p><a class="nav-link" href="dialogue.html"><span class="nav-dot"></span>盟主传音</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <div class="container">
+        <!-- 面包屑 & 返回 -->
+        <header class="page-header">
+          <div>
+            <p class="kicker"><a href="dialogue.html" style="color:var(--muted-foreground);text-decoration:none">← 返回盟主传音</a></p>
+            <h2 class="page-title">修改裁决方案</h2>
+            <p class="page-description">调整盟主拟定的悬赏裁决，修改后提交盟主重新执行。</p>
+          </div>
+          <div class="actions">
+            <button class="button muted">重置</button>
+            <button class="button primary">提交修改</button>
+          </div>
+        </header>
+
+        <!-- 原始方案摘要 -->
+        <article class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <h3 class="card-title">盟主原案</h3>
+            <p class="card-description">辰时二刻拟定，针对 8 张逾期悬赏的裁决方案。</p>
+          </div>
+          <div class="card-content">
+            <div class="notice" style="margin-bottom:0">
+              <strong>原方案要点：</strong>青岚门 4 张悬赏延期三日；无人接榜 4 张撤回重发，赏金上浮 20%。
+            </div>
+          </div>
+        </article>
+
+        <!-- 方案一：延期 -->
+        <article class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <h3 class="card-title">方案一 · 青岚门悬赏延期</h3>
+                <p class="card-description">4 张悬赏因青岚门人手不足迟迟未动工，予以延期。</p>
+              </div>
+              <label class="toggle-switch" title="启用/禁用此方案">
+                <input type="checkbox" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+          <div class="card-content">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:32px"></th>
+                    <th>悬赏名称</th>
+                    <th>领域</th>
+                    <th>承接门派</th>
+                    <th>原定截止</th>
+                    <th>延期至</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>搭建购物网站</td>
+                    <td>Web 前端</td>
+                    <td>青岚门</td>
+                    <td>霜月初一</td>
+                    <td>
+                      <select class="setting-select" style="width:auto;min-width:100px">
+                        <option>霜月初四</option>
+                        <option>霜月初五</option>
+                        <option selected>霜月初六</option>
+                        <option>霜月初七</option>
+                        <option>霜月初八</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>后台管理面板</td>
+                    <td>Web 前端</td>
+                    <td>青岚门</td>
+                    <td>霜月初一</td>
+                    <td>
+                      <select class="setting-select" style="width:auto;min-width:100px">
+                        <option>霜月初四</option>
+                        <option>霜月初五</option>
+                        <option selected>霜月初六</option>
+                        <option>霜月初七</option>
+                        <option>霜月初八</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>API 文档生成</td>
+                    <td>后端服务</td>
+                    <td>青岚门</td>
+                    <td>霜月初一</td>
+                    <td>
+                      <select class="setting-select" style="width:auto;min-width:100px">
+                        <option>霜月初四</option>
+                        <option>霜月初五</option>
+                        <option selected>霜月初六</option>
+                        <option>霜月初七</option>
+                        <option>霜月初八</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>浏览器兼容测试</td>
+                    <td>Web 前端</td>
+                    <td>青岚门</td>
+                    <td>霜月初一</td>
+                    <td>
+                      <select class="setting-select" style="width:auto;min-width:100px">
+                        <option>霜月初四</option>
+                        <option>霜月初五</option>
+                        <option selected>霜月初六</option>
+                        <option>霜月初七</option>
+                        <option>霜月初八</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 统一延期天数 -->
+            <div class="setting-row" style="margin-top:16px;padding-top:16px">
+              <span class="setting-label">统一延期天数</span>
+              <div class="input-group">
+                <input class="setting-input" type="number" value="3" min="1" max="30" style="width:80px" />
+                <span class="input-unit">日</span>
+              </div>
+            </div>
+
+            <!-- 备注 -->
+            <div class="confirmation-field" style="margin-top:5px">
+              <label class="confirmation-field-label">备注（可选）</label>
+              <textarea class="confirmation-textarea" rows="2" placeholder="附加说明，将随方案一并呈报盟主……">青岚门目前编制 8 人，实际在岗 5 人，望主公考虑扩编。</textarea>
+            </div>
+          </div>
+        </article>
+
+        <!-- 方案二：撤回重发 -->
+        <article class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <h3 class="card-title">方案二 · 无人接榜撤回重发</h3>
+                <p class="card-description">4 张悬赏无人接榜，撤回后提高赏金重新发布。</p>
+              </div>
+              <label class="toggle-switch" title="启用/禁用此方案">
+                <input type="checkbox" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+          <div class="card-content">
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:32px"></th>
+                    <th>悬赏名称</th>
+                    <th>领域</th>
+                    <th>原赏金</th>
+                    <th>新赏金</th>
+                    <th>上浮</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>日志归档脚本</td>
+                    <td>运维部署</td>
+                    <td>800 两</td>
+                    <td><strong>960 两</strong></td>
+                    <td><span class="badge warning">+20%</span></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>数据库巡检</td>
+                    <td>数据库</td>
+                    <td>1,200 两</td>
+                    <td><strong>1,440 两</strong></td>
+                    <td><span class="badge warning">+20%</span></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>站点可用性巡检</td>
+                    <td>运维部署</td>
+                    <td>600 两</td>
+                    <td><strong>720 两</strong></td>
+                    <td><span class="badge warning">+20%</span></td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" checked /></td>
+                    <td>CI/CD 流水线搭建</td>
+                    <td>运维部署</td>
+                    <td>1,500 两</td>
+                    <td><strong>1,800 两</strong></td>
+                    <td><span class="badge warning">+20%</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 统一上浮比例 -->
+            <div class="setting-row" style="margin-top:16px;padding-top:16px">
+              <span class="setting-label">统一赏金上浮比例</span>
+              <div class="input-group">
+                <input class="setting-input" type="number" value="20" min="5" max="100" style="width:80px" />
+                <span class="input-unit">%</span>
+              </div>
+            </div>
+
+            <!-- 附加标签 -->
+            <div class="confirmation-field" style="margin-top:5px">
+              <label class="confirmation-field-label">重发附加标签</label>
+              <div class="confirmation-checkbox-group">
+                <label class="confirmation-checkbox"><input type="checkbox" checked />新手可接</label>
+                <label class="confirmation-checkbox"><input type="checkbox" />木品专属</label>
+                <label class="confirmation-checkbox"><input type="checkbox" />限时加急</label>
+                <label class="confirmation-checkbox"><input type="checkbox" />长约优先</label>
+              </div>
+            </div>
+
+            <!-- 备注 -->
+            <div class="confirmation-field">
+              <label class="confirmation-field-label">备注（可选）</label>
+              <textarea class="confirmation-textarea" rows="2" placeholder="附加说明……">建议标注"新手可接"，吸引聚贤庄候补侠客练手。</textarea>
+            </div>
+          </div>
+        </article>
+
+        <!-- 新增方案 -->
+        <article class="card" style="border-style:dashed;background:var(--muted);margin-bottom:16px">
+          <div class="card-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80px;text-align:center;gap:6px;cursor:pointer">
+            <span style="font-size:24px;opacity:0.25">+</span>
+            <span style="font-size:13px;color:var(--muted-foreground)">新增裁决项</span>
+          </div>
+        </article>
+
+        <!-- 底部操作栏 -->
+        <div style="display:flex;justify-content:flex-end;gap:12px;margin-bottom:32px">
+          <a class="button" href="dialogue.html">取消</a>
+          <button class="button muted">预览方案</button>
+          <button class="button primary">提交修改</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+
+</html>

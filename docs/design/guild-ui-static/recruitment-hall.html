@@ -27,6 +27,7 @@
                 <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
                         class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
                         class="nav-dot"></span>三阁市集</a>
+                <p class="nav-heading">交流</p><a class="nav-link" href="dialogue.html"><span class="nav-dot"></span>盟主传音</a>
             </nav>
         </aside>
         <main class="main">
@@ -69,16 +70,42 @@
                 <section class="split" style="margin-top:16px">
                     <aside class="card">
                         <div class="card-content">
-                            <div class="tabs"><span class="tab active">候选池</span><span class="tab">侠客</span><span
-                                    class="tab">回响</span></div><a class="item active" href="recruitment-hall.html">
+                            <div class="tabs"><span class="tab active" data-tab="pool">候选池</span><span class="tab" data-tab="hero">侠客</span><span class="tab" data-tab="echo">回响</span></div>
+                            <a class="item active" href="javascript:void(0)" data-category="pool" data-id="suyan">
                                 <h3 class="item-title">苏砚</h3>
                                 <p class="item-meta">女 · 后代 · Web / 工具<br />出生窍 2 · 招募费 1,800 两</p>
-                            </a><a class="item" href="recruitment-hall.html">
-                                <h3 class="item-title">秦松</h3>
-                                <p class="item-meta">男 · 亡者回响 · 数据库<br />继承 SQL 查询 · 声望从零</p>
-                            </a><a class="item" href="recruitment-hall.html">
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="pool" data-id="jiyan">
+                                <h3 class="item-title">纪嫣</h3>
+                                <p class="item-meta">女 · 后代 · 数据分析<br />出生窍 3 · 招募费 2,200 两</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="pool" data-id="muchen">
+                                <h3 class="item-title">沐辰</h3>
+                                <p class="item-meta">男 · 后代 · 安全审计<br />出生窍 1 · 招募费 1,500 两</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="hero" data-id="aqi" style="display:none">
                                 <h3 class="item-title">阿七</h3>
                                 <p class="item-meta">男 · 侠客 · 简单长约<br />AI 可发邀约</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="hero" data-id="duanqing" style="display:none">
+                                <h3 class="item-title">段清</h3>
+                                <p class="item-meta">男 · 侠客 · 站点巡检<br />盘缠 540 · 气血 78%</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="hero" data-id="liubai" style="display:none">
+                                <h3 class="item-title">柳白</h3>
+                                <p class="item-meta">男 · 侠客 · 日志归档<br />盘缠 780 · 气血 90%</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="echo" data-id="qinsong" style="display:none">
+                                <h3 class="item-title">秦松</h3>
+                                <p class="item-meta">男 · 亡者回响 · 数据库<br />继承 SQL 查询 · 声望从零</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="echo" data-id="xuanji" style="display:none">
+                                <h3 class="item-title">璇玑</h3>
+                                <p class="item-meta">女 · 亡者回响 · 前端<br />继承 UI 设计 · 声望从零</p>
+                            </a>
+                            <a class="item" href="javascript:void(0)" data-category="echo" data-id="tiexin" style="display:none">
+                                <h3 class="item-title">铁心</h3>
+                                <p class="item-meta">男 · 亡者回响 · 运维<br />继承 Shell 脚本 · 声望从零</p>
                             </a>
                         </div>
                     </aside>
@@ -111,102 +138,188 @@
                                         <div class="badges"><span class="badge">前端构建</span><span
                                                 class="badge">工具调用</span></div>
                                     </div>
-                                    <div>
-                                        <div class="field-label">声望</div>
-                                        <div class="field-value">从零起步</div>
-                                    </div>
-                                    <div>
-                                        <div class="field-label">首薪引荐费</div>
-                                        <div class="field-value">一次性 · 父母对半</div>
-                                    </div>
                                 </div>
                             </div>
                         </article>
                         <div class="grid cols-2">
                             <article class="card">
                                 <div class="card-header">
-                                    <h3 class="card-title">AI 招募约束</h3>
-                                    <p class="card-description">只展示 AI 掌门招募判断；不提供人工直接招募。</p>
+                                    <h3 class="card-title">六维声望</h3>
+                                    <p class="card-description">后代声望从零起步，随功法习得逐步成长。</p>
                                 </div>
                                 <div class="card-content">
-                                    <div class="progress-row"><span>青岚门编制</span>
-                                        <div class="progress" style="--value:75%"><span></span></div><span>6 / 8</span>
+                                    <div style="display:flex;justify-content:center">
+                                    <svg viewBox="0 0 280 270" style="width:100%;max-width:220px;height:auto" aria-label="六维声望雷达图">
+                                        <defs>
+                                            <linearGradient id="radarFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.35"/>
+                                                <stop offset="100%" stop-color="var(--primary)" stop-opacity="0.12"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <!-- Grid hexagons -->
+                                        <polygon points="140,112 155.6,121 155.6,139 140,148 124.4,139 124.4,121" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                        <polygon points="140,94 171.2,112 171.2,148 140,166 108.8,148 108.8,112" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                        <polygon points="140,76 186.8,103 186.8,157 140,184 93.2,157 93.2,103" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                        <polygon points="140,58 202.4,94 202.4,166 140,202 77.6,166 77.6,94" fill="none" stroke="var(--border)" stroke-width="0.5"/>
+                                        <polygon points="140,40 217.9,85 217.9,175 140,220 62.1,175 62.1,85" fill="none" stroke="var(--border)" stroke-width="1"/>
+                                        <!-- Axis lines -->
+                                        <line x1="140" y1="40" x2="140" y2="220" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+                                        <line x1="62.1" y1="85" x2="217.9" y2="175" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+                                        <line x1="217.9" y1="85" x2="62.1" y2="175" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+                                        <!-- Data polygon: 新生后代，继承父母 Web/工具功法，声望从零起步 -->
+                                        <polygon points="140,103 146.2,126.4 143.9,132.3 140,134.5 136.1,132.3 130.7,124.6"
+                                                 fill="url(#radarFill)" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round"/>
+                                        <!-- Data points -->
+                                        <circle cx="140" cy="103" r="3.5" fill="var(--primary)"/>
+                                        <circle cx="146.2" cy="126.4" r="3.5" fill="var(--primary)"/>
+                                        <circle cx="143.9" cy="132.3" r="3.5" fill="var(--primary)"/>
+                                        <circle cx="140" cy="134.5" r="3.5" fill="var(--primary)"/>
+                                        <circle cx="136.1" cy="132.3" r="3.5" fill="var(--primary)"/>
+                                        <circle cx="130.7" cy="124.6" r="3.5" fill="var(--primary)"/>
+                                        <!-- Labels -->
+                                        <text x="140" y="24" text-anchor="middle" fill="var(--foreground)" font-size="11" font-weight="500">Web前端</text>
+                                        <text x="140" y="37" text-anchor="middle" fill="var(--muted-foreground)" font-size="10">30</text>
+                                        <text x="228" y="80" text-anchor="start" fill="var(--foreground)" font-size="11" font-weight="500">后端服务</text>
+                                        <text x="228" y="93" text-anchor="start" fill="var(--muted-foreground)" font-size="10">8</text>
+                                        <text x="228" y="185" text-anchor="start" fill="var(--foreground)" font-size="11" font-weight="500">数据库</text>
+                                        <text x="228" y="198" text-anchor="start" fill="var(--muted-foreground)" font-size="10">5</text>
+                                        <text x="140" y="252" text-anchor="middle" fill="var(--foreground)" font-size="11" font-weight="500">架构设计</text>
+                                        <text x="140" y="265" text-anchor="middle" fill="var(--muted-foreground)" font-size="10">5</text>
+                                        <text x="52" y="185" text-anchor="end" fill="var(--foreground)" font-size="11" font-weight="500">安全攻防</text>
+                                        <text x="52" y="198" text-anchor="end" fill="var(--muted-foreground)" font-size="10">5</text>
+                                        <text x="52" y="80" text-anchor="end" fill="var(--foreground)" font-size="11" font-weight="500">运维部署</text>
+                                        <text x="52" y="93" text-anchor="end" fill="var(--muted-foreground)" font-size="10">12</text>
+                                    </svg>
                                     </div>
-                                    <div class="field-grid" style="grid-template-columns:1fr 1fr">
-                                        <div>
-                                            <div class="field-label">宗库余额</div>
-                                            <div class="field-value">12,800 两</div>
-                                        </div>
-                                        <div>
-                                            <div class="field-label">招募后余额</div>
-                                            <div class="field-value">11,000 两</div>
-                                        </div>
-                                    </div>
-                                    <div class="actions" style="margin-top:16px"><a class="button primary"
-                                            href="recruitment-hall.html">查看提案</a><a class="button"
-                                            href="recruitment-hall.html">策略规则</a></div>
                                 </div>
                             </article>
                             <article class="card">
                                 <div class="card-header">
-                                    <h3 class="card-title">遗传说明</h3>
+                                    <h3 class="card-title">盘缠与续命</h3>
+                                    <p class="card-description">聚贤庄候选中，由宗库供养基本盘缠。</p>
                                 </div>
                                 <div class="card-content">
-                                    <div class="placeholder">父 + 母 → 子<br />功法概率继承 · 最多继承出生窍数<br />小概率变异 · 声望归零</div>
+                                    <div class="field-grid" style="grid-template-columns:1fr 1fr">
+                                        <div>
+                                            <div class="field-label">当前盘缠</div>
+                                            <div class="field-value">200 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">每周期进食</div>
+                                            <div class="field-value">50 两</div>
+                                        </div>
+                                        <div>
+                                            <div class="field-label">预计可维持</div>
+                                            <div class="field-value">4 周期</div>
+                                        </div>
+                                        <div><span class="badge warning">需尽快招募</span></div>
+                                    </div>
                                 </div>
                             </article>
                         </div>
                         <article class="card">
                             <div class="card-header">
-                                <h3 class="card-title">侠客零工市场</h3>
-                                <p class="card-description">现行口子：只接简单长约；严格弱于入派，自烧盘缠。</p>
+                                <h3 class="card-title">功法槽（1/2）</h3>
+                                <p class="card-description">出生窍 2 · 已继承 1 门功法 · 剩余 1 空槽。</p>
+                            </div>
+                            <div class="card-content">
+                                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+                                    <div class="card">
+                                        <div class="card-content">
+                                            <h4 class="card-title" style="display:inline-flex;align-items:center;gap:8px">Web 领域<span class="badge warning">铜品</span></h4>
+                                            <div class="badges" style="margin-top:10px"><span class="badge">前端构建</span><span class="badge">工具调用</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="card" style="border-style:dashed;background:var(--muted)">
+                                        <div class="card-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100px;text-align:center">
+                                            <span style="font-size:22px;margin-bottom:6px;opacity:0.3">+</span>
+                                            <span style="font-size:12px;color:var(--muted-foreground)">空槽位</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                        <article class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">个人古籍</h3>
+                                <p class="card-description">继承自父母或自天问阁购得，仅自己用，提升交付质量。</p>
                             </div>
                             <div class="card-content table-wrap">
                                 <table class="table">
                                     <thead>
                                         <tr>
-                                            <th>侠客</th>
-                                            <th>可接活</th>
-                                            <th>盘缠</th>
-                                            <th>气血</th>
-                                            <th>功法</th>
-                                            <th>AI 动作</th>
+                                            <th>古籍</th>
+                                            <th>领域</th>
+                                            <th>品阶</th>
+                                            <th>效果</th>
+                                            <th>来源</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td>阿七</td>
-                                            <td>销售汇总</td>
-                                            <td style="color:var(--warning)">120</td>
-                                            <td>38%</td>
-                                            <td>摘要</td>
-                                            <td>邀约提案</td>
+                                            <td>Web 质量论</td>
+                                            <td>Web</td>
+                                            <td><span class="badge">银品</span></td>
+                                            <td>前端交付质量 中幅提升</td>
+                                            <td>母·继承</td>
                                         </tr>
                                         <tr>
-                                            <td>段清</td>
-                                            <td>站点巡检</td>
-                                            <td>540</td>
-                                            <td>78%</td>
-                                            <td>浏览器自动化</td>
-                                            <td>分配提案</td>
-                                        </tr>
-                                        <tr>
-                                            <td>柳白</td>
-                                            <td>日志归档</td>
-                                            <td>780</td>
-                                            <td>90%</td>
-                                            <td>Shell 工具</td>
-                                            <td>分配提案</td>
+                                            <td>接口契约集</td>
+                                            <td>API</td>
+                                            <td><span class="badge">铜品</span></td>
+                                            <td>接口一致性 小幅提升</td>
+                                            <td>父·继承</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </article>
-                    </div>
                 </section>
             </div>
         </main>
     </div>
+    <script>
+    (function() {
+        const tabs = document.querySelectorAll('.tab');
+        const items = document.querySelectorAll('[data-category]');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab style
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+
+                const category = this.dataset.tab;
+
+                // Show/hide items based on category
+                let firstVisible = null;
+                items.forEach(item => {
+                    if (item.dataset.category === category) {
+                        item.style.display = '';
+                        if (!firstVisible) firstVisible = item;
+                    } else {
+                        item.style.display = 'none';
+                        item.classList.remove('active');
+                    }
+                });
+
+                // Auto-select first item of the new category
+                if (firstVisible) {
+                    firstVisible.classList.add('active');
+                }
+            });
+        });
+
+        // Click item to highlight it
+        items.forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                items.forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    })();
+    </script>
 </body>
 
 </html>

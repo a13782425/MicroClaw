@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>盟主传音</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1 class="brand-title">江湖控制台</h1>
+        <p class="brand-subtitle">ShadUI 风格静态 HTML</p>
+      </div>
+      <nav class="nav-section">
+        <p class="nav-heading">江湖</p><a class="nav-link" href="overview.html"><span class="nav-dot"></span>江湖总览</a><a class="nav-link" href="bounty-board.html"><span class="nav-dot"></span>悬赏与长约</a>
+
+        <p class="nav-heading">门派与人物</p><a class="nav-link" href="sects.html"><span class="nav-dot"></span>门派</a><a class="nav-link" href="people.html"><span class="nav-dot"></span>弟子 / 侠客</a><a class="nav-link" href="recruitment-hall.html"><span class="nav-dot"></span>聚贤庄</a>
+        <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span class="nav-dot"></span>三阁市集</a>
+        <p class="nav-heading">交流</p><a class="nav-link active" href="dialogue.html"><span class="nav-dot"></span>盟主传音</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <div class="container">
+        <header class="page-header">
+          <div>
+            <p class="kicker">Dialogue</p>
+            <h2 class="page-title">盟主传音</h2>
+            <p class="page-description">与盟主单独联络，汇报江湖态势、请命决策。</p>
+          </div>
+        </header>
+
+        <!-- 对话区域 -->
+        <div class="dialogue-main-full">
+          <!-- 对话头部 -->
+          <div class="card dialogue-header">
+            <div class="card-content" style="padding:14px 18px">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div class="dci-avatar lg">盟</div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <h3 class="card-title" style="margin:0;font-size:18px">盟主</h3>
+                    <span class="badge success">在线</span>
+                  </div>
+                  <p class="card-description" style="margin:2px 0 0">江湖盟 · 统帅 · 裁决天下事</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 消息列表 -->
+          <div class="card dialogue-messages">
+            <div class="card-content" style="padding:20px">
+              <!-- 日期分割线 -->
+              <div class="dialogue-date-sep"><span>今日 · 甲子年 霜月 初三</span></div>
+
+              <!-- 盟主消息 -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">主公，今晨江湖态势已出。义仓水位 75%，尚算平稳；活跃悬赏 37 张，其中 8 张已逾期两日，需主公定夺是延期还是撤回。</div>
+                  <div class="msg-meta">辰时正</div>
+                </div>
+              </div>
+
+              <!-- 主公消息 -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">逾期的 8 张悬赏分别是什么？先列个概要。</div>
+                  <div class="msg-meta">辰时一刻</div>
+                </div>
+              </div>
+
+              <!-- 盟主消息 -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">3 张属 Web 前端、2 张后端服务、2 张数据库、1 张运维部署。其中青岚门接了 4 张但因人手不足迟迟未动工，其余 4 张尚无门派接榜。</div>
+                  <div class="msg-meta">辰时一刻</div>
+                </div>
+              </div>
+
+              <!-- 主公消息 -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">青岚门的 4 张再宽限三日，无人接的 4 张撤回重发，赏金提高两成。</div>
+                  <div class="msg-meta">辰时二刻</div>
+                </div>
+              </div>
+
+              <!-- 盟主消息（带确认卡片） -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">领命。已拟好裁决方案，请主公过目确认：</div>
+                  <div class="msg-attach">
+                    <div class="attach-item">
+                      <span class="attach-icon">📋</span>
+                      <div>
+                        <div class="attach-name">青岚门 4 张悬赏 — 延期三日</div>
+                        <div class="attach-desc">搭建购物网站、后台管理面板、API 文档生成、浏览器兼容测试</div>
+                      </div>
+                    </div>
+                    <div class="attach-item">
+                      <span class="attach-icon">📋</span>
+                      <div>
+                        <div class="attach-name">无人接榜 4 张 — 撤回重发 + 赏金上浮 20%</div>
+                        <div class="attach-desc">日志归档脚本、数据库巡检、站点可用性巡检、CI/CD 流水线搭建</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="msg-actions">
+                    <button class="button primary button-sm">确认执行</button>
+                    <a class="button button-sm" href="dialogue-modify.html">修改方案</a>
+                  </div>
+                  <div class="msg-meta">辰时二刻</div>
+                </div>
+              </div>
+
+              <!-- 主公消息 -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">确认，即刻执行。</div>
+                  <div class="msg-meta">辰时三刻</div>
+                </div>
+              </div>
+
+              <!-- 主公消息（带图片） -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">对了，这是昨日市集账目的流水截图，你看一下三阁的出入是否有异常。</div>
+                  <div class="msg-media">
+                    <div class="media-image">
+                      <div class="media-image-placeholder">
+                        <span style="font-size:36px">📊</span>
+                        <span style="font-size:12px;color:var(--muted-foreground);margin-top:4px">市集流水 · 霜月初二</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="msg-meta">辰时四刻</div>
+                </div>
+              </div>
+
+              <!-- 盟主消息（带视频 + 附件） -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">已核查。藏经阁有一笔异常出账，我录了一段说明视频，同时附上明细清单：</div>
+                  <div class="msg-media">
+                    <div class="media-video">
+                      <div class="media-video-placeholder">
+                        <span style="font-size:36px">▶️</span>
+                        <span style="font-size:12px;color:var(--muted-foreground);margin-top:4px">异常出账说明 · 00:42</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="msg-attach" style="margin-top:8px">
+                    <div class="attach-item">
+                      <span class="attach-icon">📄</span>
+                      <div>
+                        <div class="attach-name">藏经阁出账明细.csv</div>
+                        <div class="attach-desc">12 条记录 · 8.4 KB</div>
+                      </div>
+                    </div>
+                    <div class="attach-item">
+                      <span class="attach-icon">📄</span>
+                      <div>
+                        <div class="attach-name">天问阁调用日志.json</div>
+                        <div class="attach-desc">346 行 · 24.1 KB</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="msg-meta">辰时五刻</div>
+                </div>
+              </div>
+
+              <!-- 主公消息（带音频） -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">我在外面，不方便打字，语音说两句：</div>
+                  <div class="msg-media">
+                    <div class="media-audio lord-audio">
+                      <button class="audio-play-btn">▶</button>
+                      <div class="audio-waveform">
+                        <span class="wave-bar" style="height:40%"></span>
+                        <span class="wave-bar" style="height:70%"></span>
+                        <span class="wave-bar" style="height:100%"></span>
+                        <span class="wave-bar" style="height:55%"></span>
+                        <span class="wave-bar" style="height:85%"></span>
+                        <span class="wave-bar" style="height:30%"></span>
+                        <span class="wave-bar" style="height:90%"></span>
+                        <span class="wave-bar" style="height:60%"></span>
+                        <span class="wave-bar" style="height:75%"></span>
+                        <span class="wave-bar" style="height:45%"></span>
+                        <span class="wave-bar" style="height:95%"></span>
+                        <span class="wave-bar" style="height:50%"></span>
+                      </div>
+                      <span class="audio-dur">0:18</span>
+                    </div>
+                  </div>
+                  <div class="msg-meta">巳时初</div>
+                </div>
+              </div>
+
+              <!-- 盟主消息（回复音频） -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">收到，已记录。藏经阁异常我已标记为待主公裁决，详情见附件。</div>
+                  <div class="msg-attach" style="margin-top:8px">
+                    <div class="attach-item">
+                      <span class="attach-icon">📋</span>
+                      <div>
+                        <div class="attach-name">藏经阁异常裁决单</div>
+                        <div class="attach-desc">待主公确认 · 优先级：高</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="msg-meta">巳时一刻</div>
+                </div>
+              </div>
+
+              <!-- 日期分割线 -->
+              <div class="dialogue-date-sep"><span>昨日 · 甲子年 霜月 初二</span></div>
+
+              <!-- 盟主消息 -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">主公，昨日汇总如下：义仓净流入 +3,280 两，主要来自市集税收与悬赏抽成。青岚门陆小寒的购物网站前端已近完工，预计两日内可提请终裁。另，聚贤庄新人苏砚已通过入门试炼，主公若有安排可随时调遣。</div>
+                  <div class="msg-meta">酉时正</div>
+                </div>
+              </div>
+
+              <!-- 主公消息 -->
+              <div class="dialogue-msg from-lord">
+                <div class="msg-bubble lord">
+                  <div class="msg-text">苏砚先放聚贤庄跟着阿七做长约零工，熟悉江湖规则再说。</div>
+                  <div class="msg-meta">酉时一刻</div>
+                </div>
+              </div>
+
+              <!-- 盟主消息 -->
+              <div class="dialogue-msg from-char">
+                <div class="dci-avatar sm">盟</div>
+                <div class="msg-bubble">
+                  <div class="msg-text">明白，已安排。另外提醒主公——青岚门库中《Webpack 5 实战》功法缺货，百宝阁需主公批复方可入库。</div>
+                  <div class="msg-meta">酉时一刻</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入区域 -->
+          <div class="card dialogue-input-area">
+            <div class="card-content" style="padding:0">
+              <!-- 附件工具栏 -->
+              <div class="media-toolbar">
+                <button class="media-tool-btn primary-attach" title="发送附件（图片 / 视频 / 音频 / 文档）">📎 附件</button>
+                <span class="media-toolbar-hint">支持图片、视频、音频、文档等任意文件</span>
+              </div>
+              <!-- 预览区（有文件时显示） -->
+              <div class="media-preview" id="mediaPreview">
+                <div class="media-preview-item">
+                  <span class="media-preview-icon">🖼</span>
+                  <span class="media-preview-name">市集流水_霜月初二.png</span>
+                  <span class="media-preview-size">1.2 MB</span>
+                  <button class="media-preview-remove" title="移除">×</button>
+                </div>
+                <div class="media-preview-item">
+                  <span class="media-preview-icon">📄</span>
+                  <span class="media-preview-name">裁决修订意见.xlsx</span>
+                  <span class="media-preview-size">48 KB</span>
+                  <button class="media-preview-remove" title="移除">×</button>
+                </div>
+                <div class="media-preview-item">
+                  <span class="media-preview-icon">🎵</span>
+                  <span class="media-preview-name">语音消息_巳时.mp3</span>
+                  <span class="media-preview-size">0:32</span>
+                  <button class="media-preview-remove" title="移除">×</button>
+                </div>
+              </div>
+              <!-- 文本输入行 -->
+              <div style="padding:8px 16px 12px">
+                <div class="dialogue-input-row">
+                  <button class="button ghost dialogue-input-btn" title="快捷指令">⚡</button>
+                  <textarea class="dialogue-textarea" placeholder="输入传音内容……（Enter 发送，Shift+Enter 换行）" rows="1"></textarea>
+                  <button class="button primary dialogue-input-btn" title="发送传音" style="width:40px;height:40px;padding:0">➤</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+
+</html>

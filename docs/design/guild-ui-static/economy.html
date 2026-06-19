@@ -6,6 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>江湖设置</title>
     <link rel="stylesheet" href="styles.css" />
+    <style>
+        /* 该页面所有网格始终两列 */
+        .economy-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        /* 余额概览固定在顶部 */
+        .economy-container {
+            height: 100%;
+            overflow: hidden;
+        }
+        .economy-top {
+            flex-shrink: 0;
+        }
+        .economy-scroll {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -27,10 +47,12 @@
                 <p class="nav-heading">经济与记忆</p><a class="nav-link active" href="economy.html"><span
                         class="nav-dot"></span>江湖设置</a><a class="nav-link" href="market.html"><span
                         class="nav-dot"></span>三阁市集</a>
+                <p class="nav-heading">交流</p><a class="nav-link" href="dialogue.html"><span class="nav-dot"></span>盟主传音</a>
             </nav>
         </aside>
         <main class="main">
-            <div class="container">
+            <div class="container economy-container">
+                <div class="economy-top">
                 <header class="page-header">
                     <div>
                         <p class="kicker">Settings</p>
@@ -43,7 +65,7 @@
                         <span class="save-feedback" id="saveFeedback"></span>
                     </div>
                 </header>
-                <section class="card" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden">
+                <section class="card economy-overview" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden">
                     <div class="metric">
                         <div class="metric-label">当前余额</div>
                         <div class="metric-value" id="overviewBalance">128,400</div>
@@ -61,7 +83,9 @@
                         <div class="metric-value" id="overviewDiscipleRate">6%</div>
                     </div>
                 </section>
-                <section class="grid cols-2" style="margin-top:16px">
+                </div>
+                <div class="economy-scroll">
+                <section class="grid cols-2 economy-grid" style="margin-top:16px">
                     <article class="card">
                         <div class="card-header">
                             <h3 class="card-title">门派所得税</h3>
@@ -109,7 +133,7 @@
                         </div>
                     </article>
                 </section>
-                <section class="grid cols-2" style="margin-top:16px">
+                <section class="grid cols-2 economy-grid" style="margin-top:16px">
                     <article class="card">
                         <div class="card-header">
                             <h3 class="card-title">飞书驿</h3>
@@ -193,9 +217,10 @@
                         </div>
                     </article>
                 </section>
-                <section class="card" style="margin-top:16px">
-                    <div class="card-header">
-                        <h3 class="card-title">微信驿</h3>
+                <section class="grid cols-2 economy-grid" style="margin-top:16px">
+                    <article class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">微信驿</h3>
                         <p class="card-description">微信公众号 / 小程序渠道的来处 / 回处参数。</p>
                     </div>
                     <div class="card-content">
@@ -233,7 +258,9 @@
                             </div>
                         </div>
                     </div>
+                    </article>
                 </section>
+                </div>
             </div>
         </main>
         <script>

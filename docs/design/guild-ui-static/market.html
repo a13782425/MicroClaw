@@ -6,6 +6,147 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>三阁市集</title>
     <link rel="stylesheet" href="styles.css" />
+    <style>
+        /* 市集商品卡片网格 */
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        /* 市集顶部概览卡片 */
+        .market-summary-cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .market-summary-card {
+            cursor: pointer;
+            transition: box-shadow 0.18s, border-color 0.18s, transform 0.15s;
+            border: 2px solid var(--border);
+        }
+
+        .market-summary-card .card-header {
+            padding: 24px 24px 24px;
+        }
+
+        .market-summary-card:hover {
+            box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+            transform: translateY(-1px);
+        }
+
+        .market-summary-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgb(24 24 27 / 0.12);
+        }
+
+        /* 商品卡片 */
+        .product-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+            transition: box-shadow 0.18s, border-color 0.18s;
+        }
+
+        .product-card:hover {
+            border-color: #c4c4c9;
+            box-shadow: 0 4px 14px rgb(0 0 0 / 0.06);
+        }
+
+        .product-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .product-card-title {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--foreground);
+        }
+
+        .product-card .price {
+            font-size: 18px;
+            font-weight: 750;
+            color: var(--primary);
+            white-space: nowrap;
+            letter-spacing: -0.02em;
+        }
+
+        .product-card .price .unit {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted-foreground);
+            margin-left: 2px;
+        }
+
+        .product-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .product-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .product-card-desc {
+            margin: 0;
+            color: var(--muted-foreground);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .product-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .product-card-footer .condition {
+            font-size: 12px;
+            color: var(--muted-foreground);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .product-card-footer .condition::before {
+            content: "⚡";
+            font-size: 13px;
+        }
+
+        .empty-hint {
+            display: none;
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--muted-foreground);
+            font-size: 14px;
+        }
+
+        .empty-hint.visible {
+            display: block;
+        }
+    </style>
 </head>
 
 <body>
@@ -27,6 +168,7 @@
                 <p class="nav-heading">经济与记忆</p><a class="nav-link" href="economy.html"><span
                         class="nav-dot"></span>江湖设置</a><a class="nav-link active" href="market.html"><span
                         class="nav-dot"></span>三阁市集</a>
+                <p class="nav-heading">交流</p><a class="nav-link" href="dialogue.html"><span class="nav-dot"></span>盟主传音</a>
             </nav>
         </aside>
         <main class="main">
@@ -37,89 +179,319 @@
                         <h2 class="page-title">三阁市集</h2>
                         <p class="page-description">藏经阁卖功法，天问阁卖古籍，百宝阁卖口粮与辅助道具。</p>
                     </div>
-                    <div class="actions"><a class="button" href="market.html">藏经阁</a><a class="button"
-                            href="market.html">天问阁</a><a class="button primary" href="market.html">百宝阁</a></div>
                 </header>
-                <section class="grid cols-3">
-                    <article class="card">
+
+                <!-- 三阁概览卡片（点击可切换） -->
+                <section class="market-summary-cards" id="summaryCards">
+                    <article class="card market-summary-card active" data-market="cangjing">
                         <div class="card-header">
                             <h3 class="card-title">藏经阁</h3>
                             <p class="card-description">功法 = 能做什么。个人盘缠购买，闭关修习。</p>
                         </div>
-                        <div class="card-content">
-                            <div class="badges"><span class="badge">浏览器自动化</span><span class="badge">SQL 调优</span><span
-                                    class="badge">MCP 编排</span></div>
-                        </div>
                     </article>
-                    <article class="card">
+                    <article class="card market-summary-card" data-market="tianwen">
                         <div class="card-header">
                             <h3 class="card-title">天问阁</h3>
                             <p class="card-description">古籍 = 做得多好。门派或个人购买，提升质量。</p>
                         </div>
-                        <div class="card-content">
-                            <div class="badges"><span class="badge">Web 质量论</span><span class="badge">接口契约集</span><span
-                                    class="badge">信报范式</span></div>
-                        </div>
                     </article>
-                    <article class="card">
+                    <article class="card market-summary-card" data-market="baibao">
                         <div class="card-header">
                             <h3 class="card-title">百宝阁</h3>
                             <p class="card-description">辅助道具 = 撑住命。口粮、丹药、一次性小增益。</p>
                         </div>
-                        <div class="card-content">
-                            <div class="badges"><span class="badge">口粮</span><span class="badge">回血丹</span><span
-                                    class="badge">精力茶</span></div>
-                        </div>
                     </article>
                 </section>
-                <article class="card" style="margin-top:16px">
-                    <div class="card-header">
-                        <h3 class="card-title">商品列表</h3>
+
+                <!-- 商品卡片列表 -->
+                <div id="productGrid" class="market-grid">
+                    <!-- 藏经阁商品 -->
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">浏览器自动化</h4>
+                            <div class="price">1,200<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">Web</span><span class="badge warning">铜品</span>
+                            </div>
+                            <p class="product-card-desc">获得浏览器自动化工具组，可操控页面、填写表单、抓取数据。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">Web 声望 ≥ 80</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 2 周期</span>
+                        </div>
                     </div>
-                    <div class="card-content table-wrap">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>商品</th>
-                                    <th>市集</th>
-                                    <th>领域 / 类型</th>
-                                    <th>价格</th>
-                                    <th>条件</th>
-                                    <th>效果</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>浏览器自动化</td>
-                                    <td>藏经阁</td>
-                                    <td>Web · 铜</td>
-                                    <td>1,200</td>
-                                    <td>Web 声望 80</td>
-                                    <td>获得工具组，闭关 2 周期</td>
-                                </tr>
-                                <tr>
-                                    <td>接口契约集</td>
-                                    <td>天问阁</td>
-                                    <td>Web 古籍</td>
-                                    <td>2,000</td>
-                                    <td>无门槛</td>
-                                    <td>提高交付质量</td>
-                                </tr>
-                                <tr>
-                                    <td>口粮</td>
-                                    <td>百宝阁</td>
-                                    <td>消耗品</td>
-                                    <td>80</td>
-                                    <td>个人盘缠</td>
-                                    <td>恢复气血</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">SQL 调优</h4>
+                            <div class="price">1,500<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">数据库</span><span class="badge">银品</span>
+                            </div>
+                            <p class="product-card-desc">习得慢查询分析与索引优化，数据库声望大幅提升。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">数据库声望 ≥ 60</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 3 周期</span>
+                        </div>
                     </div>
-                </article>
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">MCP 编排</h4>
+                            <div class="price">1,800<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">架构</span><span class="badge info">金品</span>
+                            </div>
+                            <p class="product-card-desc">掌握多工具编排调度，可同时操控多个 MCP 服务协同工作。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">架构声望 ≥ 120</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 4 周期</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">API 网关设计</h4>
+                            <div class="price">2,000<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">后端</span><span class="badge info">金品</span>
+                            </div>
+                            <p class="product-card-desc">精通限流熔断、路由转发，后端声望大幅提升。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">后端声望 ≥ 100</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 3 周期</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">容器化部署</h4>
+                            <div class="price">900<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">运维</span><span class="badge warning">铜品</span>
+                            </div>
+                            <p class="product-card-desc">习得 Docker 与 K8s 基础编排，可独立完成服务容器化。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">运维声望 ≥ 40</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 2 周期</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="cangjing">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">渗透测试入门</h4>
+                            <div class="price">1,300<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">安全</span><span class="badge">银品</span>
+                            </div>
+                            <p class="product-card-desc">掌握常见漏洞扫描与渗透技术，安全审计能力增强。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">安全声望 ≥ 50</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">闭关 2 周期</span>
+                        </div>
+                    </div>
+
+                    <!-- 天问阁商品 -->
+                    <div class="product-card" data-market="tianwen" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">Web 质量论</h4>
+                            <div class="price">2,000<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">Web</span><span class="badge">银品</span>
+                            </div>
+                            <p class="product-card-desc">前端交付质量中幅提升，减少返工率约 30%。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">无门槛</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">永久有效</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="tianwen" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">接口契约集</h4>
+                            <div class="price">1,500<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">API</span><span class="badge warning">铜品</span>
+                            </div>
+                            <p class="product-card-desc">接口一致性小幅提升，减少前后端对接摩擦。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">无门槛</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">永久有效</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="tianwen" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">信报范式</h4>
+                            <div class="price">2,800<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">安全</span><span class="badge info">金品</span>
+                            </div>
+                            <p class="product-card-desc">建立标准化安全通报流程，漏洞响应速度大幅提升。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">安全声望 ≥ 80</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">永久有效</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="tianwen" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">日志归元术</h4>
+                            <div class="price">1,200<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">运维</span><span class="badge warning">铜品</span>
+                            </div>
+                            <p class="product-card-desc">日志分析效率小幅提升，故障定位时间缩短。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">无门槛</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">永久有效</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="tianwen" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">数据库设计范式</h4>
+                            <div class="price">2,400<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge">数据库</span><span class="badge">银品</span>
+                            </div>
+                            <p class="product-card-desc">数据库建模规范化，表结构设计质量中幅提升。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">数据库声望 ≥ 60</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">永久有效</span>
+                        </div>
+                    </div>
+
+                    <!-- 百宝阁商品 -->
+                    <div class="product-card" data-market="baibao" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">口粮</h4>
+                            <div class="price">80<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge success">消耗品</span>
+                            </div>
+                            <p class="product-card-desc">基础口粮，恢复气血 20 点，每周期最多进食 3 次。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">个人盘缠购买</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">即买即用</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="baibao" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">回血丹</h4>
+                            <div class="price">350<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge danger">丹药</span>
+                            </div>
+                            <p class="product-card-desc">紧急恢复气血 60 点，战斗或重伤后使用效果最佳。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">气血 < 40% 可用</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">冷却 2 周期</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="baibao" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">精力茶</h4>
+                            <div class="price">200<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge info">增益</span>
+                            </div>
+                            <p class="product-card-desc">下一周期行动力 +1，闭关修习效率提升 25%。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">无门槛</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">持续 1 周期</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="baibao" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">护身符</h4>
+                            <div class="price">500<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge warning">防御</span>
+                            </div>
+                            <p class="product-card-desc">抵挡一次致命伤害，气血归零时自动触发，触发后销毁。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">无门槛</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">一次性</span>
+                        </div>
+                    </div>
+                    <div class="product-card" data-market="baibao" style="display:none">
+                        <div class="product-card-header">
+                            <h4 class="product-card-title">悟道香</h4>
+                            <div class="price">800<span class="unit">两</span></div>
+                        </div>
+                        <div class="product-card-body">
+                            <div class="product-card-meta">
+                                <span class="badge info">增益</span>
+                            </div>
+                            <p class="product-card-desc">闭关修习时间缩短 1 周期，功法领悟速度 +50%。</p>
+                        </div>
+                        <div class="product-card-footer">
+                            <span class="condition">闭关中可用</span>
+                            <span style="font-size:12px;color:var(--muted-foreground)">一次性</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
+
+    <script>
+    (function() {
+        const summaryCards = document.querySelectorAll('.market-summary-card');
+        const productCards = document.querySelectorAll('.product-card');
+
+        function switchMarket(market) {
+            // 更新概览卡片高亮
+            summaryCards.forEach(c => c.classList.toggle('active', c.dataset.market === market));
+            // 显示/隐藏商品卡片（只操作 .product-card，不影响概览卡片）
+            productCards.forEach(card => {
+                card.style.display = card.dataset.market === market ? '' : 'none';
+            });
+        }
+
+        summaryCards.forEach(card => {
+            card.addEventListener('click', function() {
+                switchMarket(this.dataset.market);
+            });
+        });
+    })();
+    </script>
 </body>
 
 </html>
