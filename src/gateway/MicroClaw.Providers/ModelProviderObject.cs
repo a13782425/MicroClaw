@@ -70,10 +70,10 @@ public abstract class ModelProviderObject : MicroObject
     public ModelCapability Capabilities => ProviderUtils.ParseCapabilities(Config.Capabilities);
 
     /// <summary>输入模态 Flags。</summary>
-    public ModelModality InputModalities => ProviderUtils.ParseModalities(Config.InputModalities, ModelModality.Text);
+    public ModelOutputModality InputModalities => ProviderUtils.ParseModalities(Config.InputModalities, ModelOutputModality.Text);
 
     /// <summary>输出模态 Flags。</summary>
-    public ModelModality OutputModalities => ProviderUtils.ParseModalities(Config.OutputModalities, ModelModality.Text);
+    public ModelOutputModality OutputModalities => ProviderUtils.ParseModalities(Config.OutputModalities, ModelOutputModality.Text);
 
     /// <summary>单次输出的最大 Token 数（无效值回退 8192）。</summary>
     public int MaxOutputTokens => Config.MaxOutputTokens > 0 ? Config.MaxOutputTokens : 8192;

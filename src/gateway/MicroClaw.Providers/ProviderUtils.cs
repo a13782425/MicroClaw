@@ -60,13 +60,13 @@ public static class ProviderUtils
     }
 
     /// <summary>
-    /// 将 YAML 中的 <c>input_modalities</c> / <c>output_modalities</c> 字符串列表解析为 <see cref="ModelModality"/> 位标志。
+    /// 将 YAML 中的 <c>input_modalities</c> / <c>output_modalities</c> 字符串列表解析为 <see cref="ModelOutputModality"/> 位标志。
     /// 未匹配到任何已知模态时返回 <paramref name="defaultModality"/>。
     /// </summary>
-    public static ModelModality ParseModalities(IEnumerable<string>? values, ModelModality defaultModality)
+    public static ModelOutputModality ParseModalities(IEnumerable<string>? values, ModelOutputModality defaultModality)
     {
         if (values is null) return defaultModality;
-        var acc = ModelModality.None;
+        var acc = ModelOutputModality.None;
         bool any = false;
         foreach (string v in values)
         {
@@ -74,15 +74,15 @@ public static class ProviderUtils
             any = true;
             acc |= v.Trim().ToLowerInvariant() switch
             {
-                "text" => ModelModality.Text,
-                "image" => ModelModality.Image,
-                "audio" => ModelModality.Audio,
-                "video" => ModelModality.Video,
-                "file" => ModelModality.File,
-                _ => ModelModality.None,
+                "text" => ModelOutputModality.Text,
+                "image" => ModelOutputModality.Image,
+                "audio" => ModelOutputModality.Audio,
+                "video" => ModelOutputModality.Video,
+                "file" => ModelOutputModality.File,
+                _ => ModelOutputModality.None,
             };
         }
-        return any && acc != ModelModality.None ? acc : defaultModality;
+        return any && acc != ModelOutputModality.None ? acc : defaultModality;
     }
 
     /// <summary>
@@ -109,21 +109,21 @@ public static class ProviderUtils
         };
 
     /// <summary>
-    /// 将 <see cref="ModelModality"/> 位标志展开为中文显示名列表（用于 UI 展示）。
+    /// 将 <see cref="ModelOutputModality"/> 位标志展开为中文显示名列表（用于 UI 展示）。
     /// </summary>
-    public static IReadOnlyList<string> GetModalityLabels(ModelModality modality)
+    public static IReadOnlyList<string> GetModalityLabels(ModelOutputModality modality)
     {
         var labels = new List<string>(5);
         foreach (var kvp in ModalityDescriptions)
         {
-            ModelModality flag = kvp.Key.ToLowerInvariant() switch
+            ModelOutputModality flag = kvp.Key.ToLowerInvariant() switch
             {
-                "text" => ModelModality.Text,
-                "image" => ModelModality.Image,
-                "audio" => ModelModality.Audio,
-                "video" => ModelModality.Video,
-                "file" => ModelModality.File,
-                _ => ModelModality.None,
+                "text" => ModelOutputModality.Text,
+                "image" => ModelOutputModality.Image,
+                "audio" => ModelOutputModality.Audio,
+                "video" => ModelOutputModality.Video,
+                "file" => ModelOutputModality.File,
+                _ => ModelOutputModality.None,
             };
             if ((modality & flag) != 0)
                 labels.Add(kvp.Value);
