@@ -14,7 +14,7 @@ public static class GlobalDatabase
     /// <summary>
     /// 初始化数据库
     /// </summary>
-    public static void Initialize(string dbPath)
+    public static async Task InitializeAsync(string dbPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dbPath);
         string? dir = Path.GetDirectoryName(dbPath);
@@ -24,17 +24,11 @@ public static class GlobalDatabase
         _db = new SQLiteAsyncConnection(
             dbPath,
             SQLiteOpenFlags.ReadWrite |
-            SQLiteOpenFlags.Create |
-            SQLiteOpenFlags.SharedCache);
-
-        InitializeAsync().GetAwaiter().GetResult();
-    }
-
-    private static async Task InitializeAsync()
-    {
+            SQLiteOpenFlags.Create);
         var db = CreateConnection();
         await db.ExecuteAsync("PRAGMA foreign_keys = ON;");
-        await db.ExecuteAsync("PRAGMA journal_mode = WAL;");
+        string mode = await db.ExecuteScalarAsync<string>("PRAGMA journal_mode = WAL;");
+        // mode 正常会是 "wal"；可选做个校验
         await db.CreateTableAsync<TokenDailyEntity>();
         await db.CreateTableAsync<CallDailyEntity>();
     }

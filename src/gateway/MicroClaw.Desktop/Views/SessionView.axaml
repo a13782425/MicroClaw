@@ -14,10 +14,13 @@
 
     <Grid RowDefinitions="*,Auto">
 
-        <!-- Content area — routed via ContentControl + ViewLocator -->
-        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled">
-            <ContentControl Content="{Binding CurrentTabPage}" HorizontalAlignment="Center" MaxWidth="668" />
-        </ScrollViewer>
+        <!-- Content area — routed via ContentControl + ViewLocator.
+             Each tab page manages its own scrolling and width. -->
+        <ContentControl
+            Grid.Row="0"
+            Content="{Binding CurrentTabPage}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch" />
 
         <!-- Bottom tab bar -->
         <Border

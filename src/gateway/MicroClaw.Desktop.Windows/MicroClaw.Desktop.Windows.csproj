@@ -9,7 +9,7 @@
         <PublishSingleFile>true</PublishSingleFile>
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
         <ApplicationIcon>icon.ico</ApplicationIcon>
-        <PublishAot>true</PublishAot>
+		<PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
         <DebugType>none</DebugType>

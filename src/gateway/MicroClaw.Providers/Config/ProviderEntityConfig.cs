@@ -44,10 +44,6 @@ public sealed record ProviderEntityConfig
     [YamlMember(Alias = "max_context_length", Description = "最大上下文长度")]
     public long MaxContextLength { get; set; } = 128000;
 
-    /// <summary>能力开关：tool_calling | responses_api。</summary>
-    [YamlMember(Alias = "capabilities", Description = "能力开关：tool_calling | responses_api。")]
-    public List<string> Capabilities { get; set; } = [];
-
     /// <summary>支持的输入模态：text | image | audio | video | file。</summary>
     [YamlMember(Alias = "input_modalities", Description = "支持的输入模态：text | image | audio | video | file。")]
     public List<string> InputModalities { get; set; } = ["text"];

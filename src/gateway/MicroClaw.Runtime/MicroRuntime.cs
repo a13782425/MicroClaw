@@ -1,11 +1,14 @@
-﻿using MicroClaw.Core;
+﻿using MicroClaw.Configuration;
+using MicroClaw.Core;
 using MicroClaw.Core.Logging;
+using MicroClaw.Database;
 using MicroClaw.Providers;
 namespace MicroClaw.Runtime;
+
 public static class MicroRuntime
 {
     private static volatile bool _isStart = false;
-    
+
     private static MicroEngine _engine = null!;
     public static MicroEngine Engine
     {
@@ -16,7 +19,7 @@ public static class MicroRuntime
             return _engine;
         }
     }
-    
+
     /// <summary>
     /// 开始运行引擎。调用此方法后将无法访问 Engine 属性。
     /// </summary>
@@ -36,7 +39,7 @@ public static class MicroRuntime
         // await Engine.RegisterServiceAsync(new PetService(), cancellationToken);
         // await Engine.RegisterServiceAsync(new SessionService(), cancellationToken);
     }
-    
+
     public static async Task StopAsync(CancellationToken cancellationToken = default)
     {
         if (!_isStart)

@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using DotNetEnv;
 using MicroClaw.Configuration;
+using MicroClaw.Database;
 using MicroClaw.Desktop.Config;
 using MicroClaw.Desktop.Modules;
 using MicroClaw.Desktop.ViewModels;
@@ -44,6 +45,7 @@ public partial class App : Application
         ThemeWatcher = new ThemeWatcher(this);
         ThemeWatcher.Initialize();
         await MicroRuntime.StartAsync(new SerilogMicroLoggerFactory(Serilog.Log.Logger));
+        await GlobalDatabase.InitializeAsync(Path.Combine(MicroClawConfig.ConfigDir, "microclaw.db"));
         await MicroRuntime.RegisterServiceAsync();
         await MicroRuntime.Engine.RegisterAsync(new MicroViewRouteModule());
 
@@ -53,6 +55,7 @@ public partial class App : Application
             ApplyDesktopSettings(mainWindow);
             desktop.MainWindow = mainWindow;
             mainWindow.Closing += (_, _) => SaveDesktopSettings(mainWindow);
+            mainWindow.Show();
         }
 
         base.OnFrameworkInitializationCompleted();

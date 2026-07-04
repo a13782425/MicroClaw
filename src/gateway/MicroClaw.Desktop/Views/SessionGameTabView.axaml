@@ -12,7 +12,7 @@
     x:DataType="vm:SessionGameTabViewModel"
     x:CompileBindings="True">
 
-    <Border CornerRadius="10" ClipToBounds="True" Height="200" Width="668" Margin="0,52,0,0" VerticalAlignment="Top">
+    <Border CornerRadius="10" ClipToBounds="True" Height="200" Width="668" Margin="0,52,0,0" HorizontalAlignment="Center" VerticalAlignment="Top">
         <monoGame:MonoGameControl Game="{Binding PongGame}" />
     </Border>
 
