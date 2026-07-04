@@ -66,14 +66,11 @@ public abstract class ModelProviderObject : MicroObject
     /// <summary>解析后并 trim 末尾斜杠的 BaseUrl；空时返回 null。</summary>
     public string? BaseUrl => ProviderUtils.NormalizeBaseUrl(MicroClawUtils.ResolveEnv(Config.BaseUrl));
 
-    /// <summary>能力开关 Flags。</summary>
-    public ModelCapability Capabilities => ProviderUtils.ParseCapabilities(Config.Capabilities);
-
-    /// <summary>输入模态 Flags。</summary>
-    public ModelOutputModality InputModalities => ProviderUtils.ParseModalities(Config.InputModalities, ModelOutputModality.Text);
+    /// <summary>输入模态 Flags（含 <see cref="ModelInputModality.ToolCall"/> 工具调用能力）。</summary>
+    public ModelInputModality InputModalities => ProviderUtils.ParseInputModalities(Config.InputModalities, ModelInputModality.Text);
 
     /// <summary>输出模态 Flags。</summary>
-    public ModelOutputModality OutputModalities => ProviderUtils.ParseModalities(Config.OutputModalities, ModelOutputModality.Text);
+    public ModelOutputModality OutputModalities => ProviderUtils.ParseOutputModalities(Config.OutputModalities, ModelOutputModality.Text);
 
     /// <summary>单次输出的最大 Token 数（无效值回退 8192）。</summary>
     public int MaxOutputTokens => Config.MaxOutputTokens > 0 ? Config.MaxOutputTokens : 8192;

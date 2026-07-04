@@ -39,7 +39,6 @@ public sealed partial class ProviderDetailVm : ObservableObject
 
     public ObservableCollection<ToggleItemVm> InputModalities { get; } = [];
     public ObservableCollection<ToggleItemVm> OutputModalities { get; } = [];
-    public ObservableCollection<ToggleItemVm> Features { get; } = [];
 
     // ── Pricing (string-backed for free editing) ────────────────────
     [ObservableProperty] private string _inputPrice = string.Empty;
@@ -47,7 +46,7 @@ public sealed partial class ProviderDetailVm : ObservableObject
     [ObservableProperty] private string _cacheInputPrice = string.Empty;
     [ObservableProperty] private string _cacheOutputPrice = string.Empty;
 
-    public static string[] ApiKindOptions { get; } = ["openai", "anthropic", "other"];
+    public static string[] ApiKindOptions { get; } = ["openai", "openai-responses", "anthropic"];
     public static string[] ModelKindOptions { get; } = ["chat", "embedding"];
 
     // ── Scenario scores ─────────────────────────────────────────────
@@ -65,7 +64,7 @@ public sealed partial class ProviderDetailVm : ObservableObject
         IsNew = true;
         IsEnabled = true;
         IsDefault = false;
-        InitModalitiesAndCapabilities(inputs: ["text"], outputs: ["text"], features: []);
+        InitModalities(inputs: ["text"], outputs: ["text"]);
         InitScenarioScores(null);
     }
 
@@ -86,7 +85,7 @@ public sealed partial class ProviderDetailVm : ObservableObject
         OutputPrice = FormatPrice(providerEntityConfig.Pricing?.OutputPerMillionTokens);
         CacheInputPrice = FormatPrice(providerEntityConfig.Pricing?.CachedInputPerMillionTokens);
         CacheOutputPrice = FormatPrice(providerEntityConfig.Pricing?.CachedOutputPerMillionTokens);
-        InitModalitiesAndCapabilities(providerEntityConfig.InputModalities, providerEntityConfig.OutputModalities, providerEntityConfig.Capabilities);
+        InitModalities(providerEntityConfig.InputModalities, providerEntityConfig.OutputModalities);
         InitScenarioScores(providerEntityConfig.ScenarioScores);
     }
 
@@ -97,25 +96,19 @@ public sealed partial class ProviderDetailVm : ObservableObject
     partial void OnIsDefaultChanged(bool value) => OnPropertyChanged(nameof(HeaderSubtitle));
 
 
-    private void InitModalitiesAndCapabilities(IEnumerable<string>? inputs, IEnumerable<string>? outputs, IEnumerable<string>? features)
+    private void InitModalities(IEnumerable<string>? inputs, IEnumerable<string>? outputs)
     {
         InputModalities.Clear();
-        foreach (var (key, label) in ProviderUtils.ModalityDescriptions)
+        foreach (var (key, label) in ProviderUtils.InputModalityDescriptions)
         {
-            var on = inputs?.Any(v => string.Equals(v, key, System.StringComparison.OrdinalIgnoreCase)) ?? false;
+            bool on = inputs?.Any(v => string.Equals(v, key, System.StringComparison.OrdinalIgnoreCase)) ?? false;
             InputModalities.Add(new ToggleItemVm { Key = key, Label = label, IsOn = on });
         }
         OutputModalities.Clear();
         foreach (var (key, label) in ProviderUtils.ModalityDescriptions)
         {
-            var on = outputs?.Any(v => string.Equals(v, key, System.StringComparison.OrdinalIgnoreCase)) ?? false;
+            bool on = outputs?.Any(v => string.Equals(v, key, System.StringComparison.OrdinalIgnoreCase)) ?? false;
             OutputModalities.Add(new ToggleItemVm { Key = key, Label = label, IsOn = on });
-        }
-        Features.Clear();
-        foreach (var (key, label) in ProviderUtils.FeatureDescriptions)
-        {
-            var on = features?.Any(v => string.Equals(v, key, System.StringComparison.OrdinalIgnoreCase)) ?? false;
-            Features.Add(new ToggleItemVm { Key = key, Label = label, IsOn = on });
         }
     }
 
@@ -163,7 +156,6 @@ public sealed partial class ProviderDetailVm : ObservableObject
                 CachedInputPerMillionTokens = ParsePrice(CacheInputPrice),
                 CachedOutputPerMillionTokens = ParsePrice(CacheOutputPrice),
             },
-            Capabilities = Features.Where(f => f.IsOn).Select(f => f.Key).ToList(),
             InputModalities = InputModalities.Where(m => m.IsOn).Select(m => m.Key).ToList(),
             OutputModalities = OutputModalities.Where(m => m.IsOn).Select(m => m.Key).ToList(),
             ScenarioScores = ScenarioScores.ToDictionary(

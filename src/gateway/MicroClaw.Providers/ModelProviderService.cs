@@ -237,15 +237,18 @@ public sealed class ModelProviderService : MicroService
         ModelProviderApiKind apiKind = ProviderUtils.ParseApiKind(cfg.ApiKind);
         ModelKind kind = ProviderUtils.ParseModelKind(cfg.ModelKind);
 
-        return (apiKind, kind) switch
+        // 目前仅支持 Chat 类 Provider；其余 ModelKind 暂不支持。
+        if (kind != ModelKind.Chat)
+            throw new NotSupportedException($"Unsupported provider ModelKind: {kind}");
+
+        return apiKind switch
         {
-            (ModelProviderApiKind.OpenAI, ModelKind.Chat) => new OpenAIChatModelClient(cfg),
-            (ModelProviderApiKind.OpenAI, ModelKind.Embedding) => new OpenAIEmbeddingModelClient(cfg),
-            (ModelProviderApiKind.Anthropic, ModelKind.Chat) => new AnthropicChatModelClient(cfg),
-            // 其他 OpenAI 兼容厂商（必须自定义 BaseUrl）：复用 OpenAI 客户端实现。
-            (ModelProviderApiKind.Other, ModelKind.Chat) => new OpenAIChatModelClient(cfg),
-            (ModelProviderApiKind.Other, ModelKind.Embedding) => new OpenAIEmbeddingModelClient(cfg),
-            _ => throw new NotSupportedException($"Unsupported provider combination: ApiKind={apiKind}, Kind={kind}"),
+            // OpenAI Chat Completions 及兼容厂商。
+            ModelProviderApiKind.OpenChat => new OpenAIChatModelClient(cfg),
+            // OpenAI Responses API（专用 Chat 客户端）。
+            ModelProviderApiKind.OpenResponses => new OpenAIResponsesChatModelClient(cfg),
+            ModelProviderApiKind.Anthropic => new AnthropicChatModelClient(cfg),
+            _ => throw new NotSupportedException($"Unsupported provider ApiKind: {apiKind}"),
         };
     }
 }

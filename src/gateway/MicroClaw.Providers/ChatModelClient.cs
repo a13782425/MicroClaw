@@ -78,7 +78,7 @@ public abstract class ChatModelClient : ModelProviderObject
         string agentName = "agent"; // !string.IsNullOrWhiteSpace(ctx.TargetAgentName) ? ctx.TargetAgentName : !string.IsNullOrWhiteSpace(ctx.TargetAgentId) ? ctx.TargetAgentId : "agent";
 
         ChatOptions resolvedOptions = BuildDefaultChatOptions();
-        if (resolvedOptions.Tools is null && tools.Count > 0 && Capabilities.HasFlag(ModelCapability.ToolCalling))
+        if (resolvedOptions.Tools is null && tools.Count > 0 && InputModalities.HasFlag(ModelInputModality.ToolCall))
             resolvedOptions.Tools = [.. tools];
 
         Channel<ChatStreamItem> output = Channel.CreateUnbounded<ChatStreamItem>(new UnboundedChannelOptions { SingleReader = true });

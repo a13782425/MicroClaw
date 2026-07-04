@@ -16,15 +16,14 @@ public static class ProviderUtils
 
     /// <summary>
     /// 将 YAML 中的 <c>api_kind</c> 字符串解析为 <see cref="ModelProviderApiKind"/>。
-    /// 未识别值默认回退为 <see cref="ModelProviderApiKind.OpenAI"/>。
+    /// 未识别值默认回退为 <see cref="ModelProviderApiKind.OpenChat"/>。
     /// </summary>
     public static ModelProviderApiKind ParseApiKind(string? value) =>
         value?.Trim().ToLowerInvariant() switch
         {
             "anthropic" or "claude" => ModelProviderApiKind.Anthropic,
-            "openai" or "openai-responses" => ModelProviderApiKind.OpenAI,
-            "other" or "openai-compatible" => ModelProviderApiKind.Other,
-            _ => ModelProviderApiKind.OpenAI,
+            "openai-responses" or "responses" => ModelProviderApiKind.OpenResponses,
+            _ => ModelProviderApiKind.OpenChat,
         };
 
     /// <summary>
@@ -39,34 +38,40 @@ public static class ProviderUtils
         };
 
     /// <summary>
-    /// 将 YAML 中的 <c>capabilities</c> 字符串列表解析为 <see cref="ModelCapability"/> 位标志。
-    /// 空或 null 返回 <see cref="ModelCapability.None"/>。
+    /// 将 YAML 中的 <c>input_modalities</c> 字符串列表解析为 <see cref="ModelInputModality"/> 位标志。
+    /// 支持 <c>tool_call</c>（工具调用能力）。未匹配到任何已知模态时返回 <paramref name="defaultModality"/>。
     /// </summary>
-    public static ModelCapability ParseCapabilities(IEnumerable<string>? values)
+    public static ModelInputModality ParseInputModalities(IEnumerable<string>? values, ModelInputModality defaultModality)
     {
-        if (values is null) return ModelCapability.None;
-        var acc = ModelCapability.None;
+        if (values is null) return defaultModality;
+        ModelInputModality acc = ModelInputModality.None;
+        bool any = false;
         foreach (string v in values)
         {
             if (string.IsNullOrWhiteSpace(v)) continue;
+            any = true;
             acc |= v.Trim().ToLowerInvariant() switch
             {
-                "tool_calling" or "function_calling" or "tools" => ModelCapability.ToolCalling,
-                "responses_api" or "responses" => ModelCapability.ResponsesApi,
-                _ => ModelCapability.None,
+                "text" => ModelInputModality.Text,
+                "image" => ModelInputModality.Image,
+                "audio" => ModelInputModality.Audio,
+                "video" => ModelInputModality.Video,
+                "file" => ModelInputModality.File,
+                "tool_call" or "tool_calling" => ModelInputModality.ToolCall,
+                _ => ModelInputModality.None,
             };
         }
-        return acc;
+        return any && acc != ModelInputModality.None ? acc : defaultModality;
     }
 
     /// <summary>
-    /// 将 YAML 中的 <c>input_modalities</c> / <c>output_modalities</c> 字符串列表解析为 <see cref="ModelOutputModality"/> 位标志。
+    /// 将 YAML 中的 <c>output_modalities</c> 字符串列表解析为 <see cref="ModelOutputModality"/> 位标志。
     /// 未匹配到任何已知模态时返回 <paramref name="defaultModality"/>。
     /// </summary>
-    public static ModelOutputModality ParseModalities(IEnumerable<string>? values, ModelOutputModality defaultModality)
+    public static ModelOutputModality ParseOutputModalities(IEnumerable<string>? values, ModelOutputModality defaultModality)
     {
         if (values is null) return defaultModality;
-        var acc = ModelOutputModality.None;
+        ModelOutputModality acc = ModelOutputModality.None;
         bool any = false;
         foreach (string v in values)
         {
@@ -96,7 +101,7 @@ public static class ProviderUtils
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// 模态标识 → 中文显示名映射（key 与 YAML 中 <c>input_modalities</c> / <c>output_modalities</c> 的值一致）。
+    /// 输出模态标识 → 中文显示名映射（key 与 YAML 中 <c>output_modalities</c> 的值一致）。
     /// </summary>
     public static IReadOnlyDictionary<string, string> ModalityDescriptions { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -109,40 +114,18 @@ public static class ProviderUtils
         };
 
     /// <summary>
-    /// 将 <see cref="ModelOutputModality"/> 位标志展开为中文显示名列表（用于 UI 展示）。
+    /// 输入模态标识 → 中文显示名映射（key 与 YAML 中 <c>input_modalities</c> 的值一致）。
+    /// 相比输出模态多出 <c>tool_call</c>（工具调用能力）。
     /// </summary>
-    public static IReadOnlyList<string> GetModalityLabels(ModelOutputModality modality)
-    {
-        var labels = new List<string>(5);
-        foreach (var kvp in ModalityDescriptions)
-        {
-            ModelOutputModality flag = kvp.Key.ToLowerInvariant() switch
-            {
-                "text" => ModelOutputModality.Text,
-                "image" => ModelOutputModality.Image,
-                "audio" => ModelOutputModality.Audio,
-                "video" => ModelOutputModality.Video,
-                "file" => ModelOutputModality.File,
-                _ => ModelOutputModality.None,
-            };
-            if ((modality & flag) != 0)
-                labels.Add(kvp.Value);
-        }
-        return labels;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  能力/功能中文显示名（面向 UI）
-    // ═══════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// 能力标识 → 中文显示名映射（key 与 YAML 中 <c>capabilities</c> 的值一致）。
-    /// </summary>
-    public static IReadOnlyDictionary<string, string> FeatureDescriptions { get; } =
+    public static IReadOnlyDictionary<string, string> InputModalityDescriptions { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["tool_calling"] = "工具调用",
-            ["responses_api"] = "Responses API",
+            ["text"] = "文本",
+            ["image"] = "图像",
+            ["audio"] = "音频",
+            ["video"] = "视频",
+            ["file"] = "文件",
+            ["tool_call"] = "工具调用",
         };
 
     // ═══════════════════════════════════════════════════════════════
